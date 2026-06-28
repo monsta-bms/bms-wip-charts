@@ -37,24 +37,37 @@ export function isCorsAllowed(request: Request, env: Env): boolean {
   return allowedOrigin === "*" || allowedOrigin === origin;
 }
 
-export function corsHeaders(request: Request, env: Env): HeadersInit {
+export function corsHeaders(request: Request, env: Env): Headers {
+  const headers = new Headers({
+    "Vary": "Origin"
+  });
+
   const origin = getRequestOrigin(request);
   const allowedOrigin = getAllowedOrigin(env);
-  const accessControlAllowOrigin = allowedOrigin === "*" ? "*" : origin;
 
   if (!origin || !isCorsAllowed(request, env)) {
-    return {
-      "Vary": "Origin"
-    };
+    return headers;
   }
 
-  return {
-    "Access-Control-Allow-Origin": accessControlAllowOrigin,
-    "Access-Control-Allow-Methods": allowedMethods,
-    "Access-Control-Allow-Headers": allowedHeaders,
-    "Access-Control-Max-Age": "86400",
-    "Vary": "Origin"
-  };
+  headers.set("Access-Control-Allow-Origin", allowedOrigin === "*" ? "*" : origin);
+  headers.set("Access-Control-Allow-Methods", allowedMethods);
+  headers.set("Access-Control-Allow-Headers", allowedHeaders);
+  headers.set("Access-Control-Max-Age", "86400");
+
+  return headers;
+}
+
+function buildJsonHeaders(request: Request, env: Env, initHeaders?: HeadersInit): Headers {
+  const headers = corsHeaders(request, env);
+  headers.set("Content-Type", "application/json; charset=utf-8");
+
+  if (initHeaders) {
+    new Headers(initHeaders).forEach((value, key) => {
+      headers.set(key, value);
+    });
+  }
+
+  return headers;
 }
 
 export function jsonResponse(
@@ -65,11 +78,7 @@ export function jsonResponse(
 ): Response {
   return new Response(JSON.stringify(body, null, 2), {
     ...init,
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      ...corsHeaders(request, env),
-      ...(init.headers ?? {})
-    }
+    headers: buildJsonHeaders(request, env, init.headers)
   });
 }
 
