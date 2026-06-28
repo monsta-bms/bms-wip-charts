@@ -51,22 +51,13 @@ APIエラーは必ず以下のJSON形式で返す。
 
 Workerが動いているか確認する。
 
-Phase 9ではbindingやsecretの存在有無もbooleanで返す。
-
 レスポンス例:
 
 ```json
 {
   "status": "ok",
   "service": "bms-wip-charts-worker",
-  "phase": "phase-9",
-  "bindings": {
-    "db": true,
-    "files": true,
-    "allowedOrigin": true,
-    "hashSecret": true,
-    "adminToken": true
-  }
+  "phase": "phase-9"
 }
 ```
 
