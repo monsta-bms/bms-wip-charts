@@ -200,7 +200,7 @@ APIエラーは必ず JSON で `code`, `message`, `detail` を返す。
 
 Workerが動いているか確認する。
 
-Phase 9ではD1/R2 bindingやsecret設定の有無をbooleanで返す。
+Phase 9では `status`, `service`, `phase` のみを返す。
 
 ### GET /api/charts
 
