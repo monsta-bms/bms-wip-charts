@@ -132,7 +132,7 @@ D1 database:
 R2 bucket:
 
 - bucket_name: `wip-bms-charts-files`
-- Worker binding: `CHART_FILES`
+- Worker binding: `FILES`
 - 保存形式は Standard のみとする。
 
 ### R2使用量監視
@@ -141,11 +141,22 @@ R2使用量が8GBを超えた場合、管理ログに警告を出す。
 
 警告は通常ユーザー向けAPIエラーではなく、管理者が後から確認できる運用ログとして扱う。
 
+### CORS
+
+Worker APIは `ALLOWED_ORIGIN` 環境変数で許可Originを制御する。
+
+公開URLが確定するまでは仮値を使い、deploy前に実際のフロントURLへ更新する。
+
 ### 秘密情報
 
 秘密情報、APIキー、トークンをソースコードに直書きしない。
 
 秘密情報は Cloudflare secrets を使う前提にする。
+
+以下のsecretを想定する。
+
+- `HASH_SECRET`
+- `ADMIN_TOKEN`
 
 ## 荒らし対策
 
@@ -184,6 +195,12 @@ User-Agent も生保存せず、ハッシュ化して保存・照合する。
 ## API仕様
 
 APIエラーは必ず JSON で `code`, `message`, `detail` を返す。
+
+### GET /api/health
+
+Workerが動いているか確認する。
+
+Phase 9ではD1/R2 bindingやsecret設定の有無をbooleanで返す。
 
 ### GET /api/charts
 
@@ -380,6 +397,9 @@ APIエラーは以下の形式で返す。
 | `DB_READ_FAILED` | データ取得に失敗しました。 | D1の読み取り処理で失敗しました。 |
 | `DB_WRITE_FAILED` | データ保存に失敗しました。 | D1の書き込み処理で失敗しました。 |
 | `ADMIN_AUTH_REQUIRED` | 管理者認証が必要です。 | 管理APIに認証なしでアクセスしました。 |
+| `CORS_ORIGIN_NOT_ALLOWED` | 許可されていないOriginです。 | `ALLOWED_ORIGIN` とリクエストOriginが一致しません。 |
+| `METHOD_NOT_ALLOWED` | 許可されていないHTTPメソッドです。 | 対象APIで許可されていないHTTPメソッドです。 |
+| `CONFIG_MISSING` | 必要な設定が不足しています。 | 必須の環境変数またはsecretが未設定です。 |
 | `INTERNAL_ERROR` | 予期しないエラーが発生しました。 | 未分類の例外が発生しました。 |
 
 ### 管理ログ用コード
