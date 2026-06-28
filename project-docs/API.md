@@ -2,9 +2,9 @@
 
 ## 概要
 
-Phase 9ではCloudflare Workerの雛形だけを実装する。
+Phase 10-AではD1 schema / migrationを追加した。
 
-D1書き込み、R2保存、BMSメタデータ読取、zip検査、IP/UAレート制限、Turnstile、フロント接続はまだ実装しない。
+WorkerのAPIはPhase 9と同じくスタブ応答のままで、D1読み取り、D1書き込み、R2保存、BMSメタデータ読取、zip検査、IP/UAレート制限、Turnstile、フロント接続はまだ実装しない。
 
 ## 共通仕様
 
@@ -45,6 +45,30 @@ APIエラーは必ず以下のJSON形式で返す。
 
 秘密情報はソースコードや `wrangler.toml` に直書きしない。
 
+## D1 schema
+
+Phase 10-Aで以下のテーブルを追加する。
+
+- `charts`: 曲単位
+- `versions`: バージョン単位
+- `post_logs`: 投稿試行ログ
+- `bans`: IPハッシュ、UAハッシュ、ファイルSHA256のBAN
+- `admin_logs`: 管理人操作ログ
+
+schemaファイル:
+
+- `worker/migrations/0001_initial.sql`
+- `schema/d1.sql`
+
+設計方針:
+
+- `version_number` は整数で保存する。
+- APIや表示側で `ver1.0`, `ver2.0` の形式に変換する。
+- `charts` と `versions` は `is_hidden` で論理非表示にする。
+- 外部キー制約を使う。
+- cascade削除は使わず、基本はhiddenによる論理削除とする。
+- よく使う検索条件にはindexを貼る。
+
 ## エンドポイント
 
 ### GET /api/health
@@ -65,25 +89,25 @@ Workerが動いているか確認する。
 
 投稿一覧を取得する。
 
-Phase 9ではD1読み取り未実装のため、空配列のダミー応答を返す。
+Phase 10-AではD1読み取り未実装のため、空配列のダミー応答を返す。
 
 ### POST /api/charts
 
 新規曲として初回投稿する。
 
-Phase 9ではD1書き込み、R2保存、BMSメタデータ読取、zip検査は行わず、ダミー応答を返す。
+Phase 10-AではD1書き込み、R2保存、BMSメタデータ読取、zip検査は行わず、ダミー応答を返す。
 
 ### POST /api/charts/:chartId/versions
 
 既存曲へ追記投稿する。
 
-Phase 9ではD1書き込み、R2保存、zip検査は行わず、ダミー応答を返す。
+Phase 10-AではD1書き込み、R2保存、zip検査は行わず、ダミー応答を返す。
 
 ### GET /api/files/:fileId
 
 投稿ファイルを取得する。
 
-Phase 9ではR2取得未実装のため、JSONのダミー応答を返す。
+Phase 10-AではR2取得未実装のため、JSONのダミー応答を返す。
 
 ### POST /api/admin/hide-version
 
@@ -91,17 +115,17 @@ Phase 9ではR2取得未実装のため、JSONのダミー応答を返す。
 
 `Authorization: Bearer <ADMIN_TOKEN>` が必要。
 
-Phase 9では実際のD1更新は行わず、ダミー応答を返す。
+Phase 10-Aでは実際のD1更新は行わず、ダミー応答を返す。
 
 ### POST /api/admin/ban
 
-管理人がIPハッシュまたはUAハッシュをBANする。
+管理人がIPハッシュ、UAハッシュ、ファイルSHA256をBANする。
 
 `Authorization: Bearer <ADMIN_TOKEN>` が必要。
 
-Phase 9では実際のD1更新は行わず、ダミー応答を返す。
+Phase 10-Aでは実際のD1更新は行わず、ダミー応答を返す。
 
-## Phase 9で返す主なエラー
+## Phase 10-Aで返す主なエラー
 
 | code | HTTP status | 内容 |
 | --- | --- | --- |
