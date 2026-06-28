@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>BMS差分共有</title>
+    <link rel="stylesheet" href="./style.css">
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="site-header">
+        <div>
+          <p class="site-label">BMS Diff Share</p>
+          <h1>BMS差分共有</h1>
+        </div>
+      </header>
+
+      <main>
+        <section class="notice" id="errorBox" role="alert" aria-live="polite" hidden></section>
+
+        <section class="panel submit-panel" aria-labelledby="submitTitle">
+          <div class="section-heading">
+            <h2 id="submitTitle">投稿フォーム</h2>
+            <span class="version-badge">初回投稿 ver1.0</span>
+          </div>
+
+          <form id="chartForm" novalidate>
+            <div class="form-grid">
+              <label class="field field-wide">
+                <span>譜面ファイル</span>
+                <input id="chartFile" name="chartFile" type="file" accept=".bms,.bme,.bml,.zip" required>
+              </label>
+
+              <label class="field">
+                <span>曲名</span>
+                <input id="title" name="title" type="text" autocomplete="off" required>
+              </label>
+
+              <label class="field">
+                <span>アーティスト</span>
+                <input id="artist" name="artist" type="text" autocomplete="off" required>
+              </label>
+
+              <label class="field">
+                <span>想定難易度</span>
+                <input id="difficulty" name="difficulty" type="text" autocomplete="off" placeholder="例: ★12">
+              </label>
+
+              <label class="field">
+                <span>差分作者</span>
+                <input id="author" name="author" type="text" autocomplete="off" required>
+              </label>
+
+              <label class="field">
+                <span>進捗度</span>
+                <input id="progress" name="progress" type="number" min="0" max="100" step="1" value="100" required>
+              </label>
+
+              <label class="field field-wide">
+                <span>コメント</span>
+                <textarea id="comment" name="comment" rows="4"></textarea>
+              </label>
+            </div>
+
+            <div class="form-actions">
+              <button type="submit">投稿内容を確認</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="list-section" aria-labelledby="listTitle">
+          <div class="section-heading">
+            <h2 id="listTitle">投稿一覧</h2>
+          </div>
+          <div class="chart-list" id="chartList"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
