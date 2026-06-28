@@ -1,9 +1,11 @@
 name = "bms-wip-charts-worker"
+main = "src/index.ts"
 compatibility_date = "2026-06-28"
 workers_dev = true
 
-# Worker本体はまだ未実装。
-# 実装開始時に main = "src/index.ts" などのエントリポイントを追加する。
+[vars]
+# Deploy前にGitHub Pagesなどの実際のフロントURLへ変更する。
+ALLOWED_ORIGIN = "http://localhost:8787"
 
 [[d1_databases]]
 binding = "DB"
@@ -11,7 +13,7 @@ database_name = "wip-bms-charts-db"
 database_id = "d55ed399-5a31-43a0-89d4-9bd2f32ba3a7"
 
 [[r2_buckets]]
-binding = "CHART_FILES"
+binding = "FILES"
 bucket_name = "wip-bms-charts-files"
 
 # 秘密情報はこのファイルに書かず、Cloudflare secrets で設定する。
