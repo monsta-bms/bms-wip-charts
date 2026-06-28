@@ -19,14 +19,7 @@ function handleHealth(request: Request, env: Env): Response {
   return ok(request, env, {
     status: "ok",
     service: "bms-wip-charts-worker",
-    phase: "phase-9",
-    bindings: {
-      db: Boolean(env.DB),
-      files: Boolean(env.FILES),
-      allowedOrigin: Boolean(env.ALLOWED_ORIGIN),
-      hashSecret: Boolean(env.HASH_SECRET),
-      adminToken: Boolean(env.ADMIN_TOKEN)
-    }
+    phase: "phase-9"
   });
 }
 
