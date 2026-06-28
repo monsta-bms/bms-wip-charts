@@ -21,8 +21,6 @@ https://monsta-bms.github.io/wipbmschart/
 
 ## Cloudflare Worker
 
-Phase 9ではCloudflare Workerの雛形を `worker/` 配下に作成する。
-
 Worker本体:
 
 - `worker/src/index.ts`
@@ -52,6 +50,43 @@ binding = "DB"
 database_name = "wip-bms-charts-db"
 database_id = "d55ed399-5a31-43a0-89d4-9bd2f32ba3a7"
 ```
+
+### D1 schema / migration
+
+Phase 10-Aで以下を追加した。
+
+- `worker/migrations/0001_initial.sql`
+- `schema/d1.sql`
+
+作成されるテーブル:
+
+- `charts`
+- `versions`
+- `post_logs`
+- `bans`
+- `admin_logs`
+
+### Wranglerで適用する場合
+
+```bash
+cd worker
+npx wrangler d1 migrations list wip-bms-charts-db
+npx wrangler d1 migrations apply wip-bms-charts-db
+```
+
+本番DBに適用する前に、必要ならpreview/local環境でSQLを確認する。
+
+### DashboardからSQL実行する場合
+
+1. Cloudflare Dashboardを開く。
+2. Workers & Pages から D1 を開く。
+3. database `wip-bms-charts-db` を選択する。
+4. Console または Query 画面を開く。
+5. `schema/d1.sql` の内容を貼り付ける。
+6. SQLを実行する。
+7. `charts`, `versions`, `post_logs`, `bans`, `admin_logs` が作成されたことを確認する。
+
+Dashboard実行時はmigration履歴には記録されないため、以後Wrangler migrationsで管理する場合は適用済み状態との重複に注意する。
 
 ## Cloudflare R2
 
@@ -119,6 +154,13 @@ curl http://localhost:8787/api/health
 curl http://localhost:8787/api/charts
 ```
 
+D1 migrationをローカルで確認する場合:
+
+```bash
+cd worker
+npx wrangler d1 migrations apply wip-bms-charts-db --local
+```
+
 管理APIのスタブ確認には `ADMIN_TOKEN` secret またはローカル用のsecret設定が必要。
 
 ## デプロイ手順
@@ -137,6 +179,7 @@ npm run deploy
 - GitHub Pages の公開元が `main` ブランチの `/docs` になっていることを確認する。
 - `worker/wrangler.toml` にD1 binding `DB` とR2 binding `FILES` が設定されていることを確認する。
 - Cloudflare側でD1 database `wip-bms-charts-db` とR2 bucket `wip-bms-charts-files` が存在することを確認する。
+- D1に `0001_initial.sql` を適用し、5つのテーブルが存在することを確認する。
 - `ALLOWED_ORIGIN` を実際のフロントURLに設定する。
 - `HASH_SECRET` と `ADMIN_TOKEN` をCloudflare secretsに設定する。
 - `/api/health` がJSONで `status: "ok"` を返すことを確認する。
