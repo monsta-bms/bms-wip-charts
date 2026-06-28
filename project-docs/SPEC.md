@@ -67,6 +67,11 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。
 
 上記以外の拡張子は拒否する。
 
+ファイルサイズ上限は以下とする。
+
+- 単体譜面ファイル: 2MBまで
+- zipファイル: 5MBまで
+
 ### 音源ファイルの扱い
 
 音源ファイルのアップロードは禁止する。
@@ -116,6 +121,26 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。
 - Cloudflare R2 をファイル保存先として使用する。
 - Turnstile は後で追加できる設計にする。
 
+### Cloudflareリソース
+
+D1 database:
+
+- database_name: `wip-bms-charts-db`
+- database_id: `d55ed399-5a31-43a0-89d4-9bd2f32ba3a7`
+- Worker binding: `DB`
+
+R2 bucket:
+
+- bucket_name: `wip-bms-charts-files`
+- Worker binding: `CHART_FILES`
+- 保存形式は Standard のみとする。
+
+### R2使用量監視
+
+R2使用量が8GBを超えた場合、管理ログに警告を出す。
+
+警告は通常ユーザー向けAPIエラーではなく、管理者が後から確認できる運用ログとして扱う。
+
 ### 秘密情報
 
 秘密情報、APIキー、トークンをソースコードに直書きしない。
@@ -138,10 +163,12 @@ User-Agent も生保存せず、ハッシュ化して保存・照合する。
 
 - IPハッシュごとの投稿間隔制限
 - IPハッシュごとの1日投稿数制限
+- 1IPあたり1日10投稿まで
 - UA空欄の拒否
 - botっぽいUAの拒否
 - ファイルSHA256重複の拒否
 - zip内の禁止拡張子検査
+- 音源拡張子入りzipの拒否
 - コメント内URL数制限
 
 ### 管理機能
@@ -150,6 +177,7 @@ User-Agent も生保存せず、ハッシュ化して保存・照合する。
 
 - バージョンの非表示
 - IPハッシュまたはUAハッシュに基づくBAN
+- 管理ログの確認
 
 管理機能は通常ユーザー向け画面とは分離し、管理操作には認証を設ける前提とする。
 
@@ -174,6 +202,7 @@ APIエラーは必ず JSON で `code`, `message`, `detail` を返す。
 主な処理:
 
 - 投稿ファイルの検証
+- ファイルサイズ上限の検証
 - zip内ファイルの検査
 - BMSメタ情報の読み取り
 - ファイルSHA256の計算
@@ -191,6 +220,7 @@ APIエラーは必ず JSON で `code`, `message`, `detail` を返す。
 
 - 対象曲の存在確認
 - 投稿ファイルの検証
+- ファイルサイズ上限の検証
 - zip内ファイルの検査
 - ファイルSHA256の計算
 - 荒らし対策チェック
@@ -278,6 +308,21 @@ BAN情報を保存する。
 
 `target_type` は `ip_hash` または `ua_hash` を想定する。
 
+### admin_logs
+
+管理者向けの運用ログを保存する。
+
+想定カラム:
+
+- `id`
+- `level`
+- `code`
+- `message`
+- `detail`
+- `created_at`
+
+R2使用量が8GBを超えた場合は、`level` を `warning`、`code` を `R2_USAGE_EXCEEDED_8GB` として記録する。
+
 ## エラー設計
 
 ### エラーレスポンス形式
@@ -315,6 +360,7 @@ APIエラーは以下の形式で返す。
 | code | message | detailの例 |
 | --- | --- | --- |
 | `INVALID_FILE_TYPE` | 投稿できないファイル形式です。 | 許可拡張子は `.bms`, `.bme`, `.bml`, `.zip` のみです。 |
+| `FILE_TOO_LARGE` | ファイルサイズが上限を超えています。 | 単体譜面は2MB、zipは5MBまでです。 |
 | `AUDIO_FILE_NOT_ALLOWED` | 音源ファイルはアップロードできません。 | zip内に禁止拡張子のファイルが含まれています。 |
 | `ZIP_INSPECTION_FAILED` | zipファイルの検査に失敗しました。 | zipの読み取りまたは展開前検査に失敗しました。 |
 | `TITLE_ARTIST_PARSE_FAILED` | 譜面情報の読み取りに失敗しました。 | `#TITLE` または `#ARTIST` を読み取れませんでした。 |
@@ -323,7 +369,7 @@ APIエラーは以下の形式で返す。
 | `EMPTY_USER_AGENT` | User-Agentが確認できません。 | UA空欄のため投稿を拒否しました。 |
 | `BOT_USER_AGENT_REJECTED` | 自動投稿の可能性があるため拒否しました。 | botっぽいUAパターンに一致しました。 |
 | `RATE_LIMITED` | 投稿間隔が短すぎます。 | IPハッシュごとの投稿間隔制限に該当しました。 |
-| `DAILY_LIMIT_EXCEEDED` | 1日の投稿数上限に達しました。 | IPハッシュごとの1日投稿数制限に該当しました。 |
+| `DAILY_LIMIT_EXCEEDED` | 1日の投稿数上限に達しました。 | 1IPあたり1日10投稿の上限に該当しました。 |
 | `DUPLICATE_FILE` | 同じファイルは投稿できません。 | ファイルSHA256が既存投稿と一致しました。 |
 | `BANNED_POSTER` | 投稿が制限されています。 | IPハッシュまたはUAハッシュがBAN対象です。 |
 | `CHART_NOT_FOUND` | 対象の曲が見つかりません。 | 指定されたchartIdが存在しません。 |
@@ -335,3 +381,9 @@ APIエラーは以下の形式で返す。
 | `DB_WRITE_FAILED` | データ保存に失敗しました。 | D1の書き込み処理で失敗しました。 |
 | `ADMIN_AUTH_REQUIRED` | 管理者認証が必要です。 | 管理APIに認証なしでアクセスしました。 |
 | `INTERNAL_ERROR` | 予期しないエラーが発生しました。 | 未分類の例外が発生しました。 |
+
+### 管理ログ用コード
+
+| code | level | 内容 |
+| --- | --- | --- |
+| `R2_USAGE_EXCEEDED_8GB` | `warning` | R2使用量が8GBを超えた。 |
