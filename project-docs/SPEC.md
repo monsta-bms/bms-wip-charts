@@ -110,6 +110,8 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。
 - 2回目: `ver2.0`
 - 3回目: `ver3.0`
 
+DB上は `version_number` を整数で保存し、表示時だけ `ver1.0`, `ver2.0` の形式に変換する。
+
 各バージョンは過去verとして保持し、DL可能にする。
 
 ## バックエンド想定
@@ -186,8 +188,8 @@ User-Agent も生保存せず、ハッシュ化して保存・照合する。
 
 管理人が後から以下を行える設計にする。
 
-- バージョンの非表示
-- IPハッシュまたはUAハッシュに基づくBAN
+- chart/versionの非表示
+- IPハッシュ、UAハッシュ、ファイルSHA256に基づくBAN
 - 管理ログの確認
 
 管理機能は通常ユーザー向け画面とは分離し、管理操作には認証を設ける前提とする。
@@ -200,7 +202,7 @@ APIエラーは必ず JSON で `code`, `message`, `detail` を返す。
 
 Workerが動いているか確認する。
 
-Phase 9では `status`, `service`, `phase` のみを返す。
+Phase 9以降は `status`, `service`, `phase` のみを返す。
 
 ### GET /api/charts
 
@@ -208,41 +210,19 @@ Phase 9では `status`, `service`, `phase` のみを返す。
 
 返却内容には、曲情報と各バージョン情報を含める。
 
-非表示にされたバージョンは通常一覧には含めない。
+非表示にされたchart/versionは通常一覧には含めない。
 
 ### POST /api/charts
 
 新規曲として初回投稿する。
 
-成功時は `ver1.0` のバージョンを作成する。
-
-主な処理:
-
-- 投稿ファイルの検証
-- ファイルサイズ上限の検証
-- zip内ファイルの検査
-- BMSメタ情報の読み取り
-- ファイルSHA256の計算
-- 荒らし対策チェック
-- R2へのファイル保存
-- D1への曲情報・バージョン情報・投稿ログ保存
+成功時は `version_number = 1` のバージョンを作成する。
 
 ### POST /api/charts/:chartId/versions
 
 既存曲へ追記投稿する。
 
-成功時は既存の最新バージョン番号をもとに、次の `verX.0` を作成する。
-
-主な処理:
-
-- 対象曲の存在確認
-- 投稿ファイルの検証
-- ファイルサイズ上限の検証
-- zip内ファイルの検査
-- ファイルSHA256の計算
-- 荒らし対策チェック
-- R2へのファイル保存
-- D1へのバージョン情報・投稿ログ保存
+成功時は既存の最新 `version_number` をもとに次の整数を作成する。
 
 ### GET /api/files/:fileId
 
@@ -258,29 +238,53 @@ Phase 9では `status`, `service`, `phase` のみを返す。
 
 ### POST /api/admin/ban
 
-管理人がIPハッシュまたはUAハッシュをBANする。
+管理人がIPハッシュ、UAハッシュ、ファイルSHA256をBANする。
 
 BAN対象からの投稿は拒否する。
 
 ## DB仕様
 
+Phase 10-AでD1 schema / migrationを追加する。
+
+schemaファイル:
+
+- `worker/migrations/0001_initial.sql`
+- `schema/d1.sql`
+
+設計方針:
+
+- 外部キー制約を使う。
+- cascade削除は安易に使わない。
+- chart/versionは `is_hidden` による論理非表示を基本にする。
+- 全テーブルに `created_at`, `updated_at` を持たせる。
+- よく使う検索条件にはindexを貼る。
+
 ### charts
 
 曲単位の情報を保存する。
 
-想定カラム:
+主なカラム:
 
 - `id`
 - `title`
 - `artist`
+- `normalized_title`
+- `normalized_artist`
+- `is_hidden`
+- `hidden_reason`
 - `created_at`
+- `updated_at`
+
+主なindex:
+
+- `is_hidden`, `normalized_title`, `normalized_artist`
 - `updated_at`
 
 ### versions
 
 投稿バージョン単位の情報を保存する。
 
-想定カラム:
+主なカラム:
 
 - `id`
 - `chart_id`
@@ -290,55 +294,111 @@ BAN対象からの投稿は拒否する。
 - `progress`
 - `comment`
 - `file_id`
-- `file_sha256`
 - `file_name`
 - `file_size`
+- `file_sha256`
+- `r2_key`
 - `is_hidden`
+- `hidden_reason`
+- `created_at`
+- `updated_at`
+
+制約:
+
+- `chart_id` は `charts.id` への外部キー。
+- `chart_id`, `version_number` は一意。
+- `file_id`, `file_sha256`, `r2_key` は一意。
+- `progress` は0から100。
+
+主なindex:
+
+- `chart_id`, `is_hidden`, `version_number`
+- `file_sha256`
 - `created_at`
 
 ### post_logs
 
-荒らし対策と監査用の投稿ログを保存する。
+投稿試行ログを保存する。
 
-想定カラム:
+主なカラム:
 
 - `id`
+- `chart_id`
+- `version_id`
 - `ip_hash`
 - `ua_hash`
 - `file_sha256`
 - `action`
 - `result`
 - `error_code`
+- `detail`
 - `created_at`
+- `updated_at`
+
+制約:
+
+- `chart_id` は `charts.id` への外部キー。
+- `version_id` は `versions.id` への外部キー。
+- 投稿対象が後から非表示・削除検討になってもログを残せるよう、外部キーは `ON DELETE SET NULL` とする。
+
+主なindex:
+
+- `ip_hash`, `created_at`
+- `ua_hash`, `created_at`
+- `file_sha256`
+- `result`, `error_code`, `created_at`
 
 ### bans
 
 BAN情報を保存する。
 
-想定カラム:
+主なカラム:
 
 - `id`
 - `target_type`
 - `target_hash`
 - `reason`
+- `is_active`
 - `created_at`
+- `updated_at`
 
-`target_type` は `ip_hash` または `ua_hash` を想定する。
+`target_type` は以下を想定する。
+
+- `ip_hash`
+- `ua_hash`
+- `file_sha256`
+
+制約:
+
+- `target_type`, `target_hash` は一意。
+
+主なindex:
+
+- `target_type`, `target_hash`, `is_active`
 
 ### admin_logs
 
-管理者向けの運用ログを保存する。
+管理者向けの操作ログ・運用ログを保存する。
 
-想定カラム:
+主なカラム:
 
 - `id`
+- `action`
+- `target_type`
+- `target_id`
 - `level`
 - `code`
 - `message`
 - `detail`
 - `created_at`
+- `updated_at`
 
 R2使用量が8GBを超えた場合は、`level` を `warning`、`code` を `R2_USAGE_EXCEEDED_8GB` として記録する。
+
+主なindex:
+
+- `action`, `created_at`
+- `level`, `created_at`
 
 ## エラー設計
 
@@ -362,14 +422,6 @@ APIエラーは以下の形式で返す。
 
 初心者でも原因追跡しやすいログを残す。
 
-ログには以下を含める。
-
-- 処理段階名
-- APIパス
-- 対象ID
-- エラーコード
-- 失敗理由
-
 秘密情報、APIキー、トークン、生IP、生UAはログに出力しない。
 
 ### 想定エラーコード一覧
@@ -388,7 +440,7 @@ APIエラーは以下の形式で返す。
 | `RATE_LIMITED` | 投稿間隔が短すぎます。 | IPハッシュごとの投稿間隔制限に該当しました。 |
 | `DAILY_LIMIT_EXCEEDED` | 1日の投稿数上限に達しました。 | 1IPあたり1日10投稿の上限に該当しました。 |
 | `DUPLICATE_FILE` | 同じファイルは投稿できません。 | ファイルSHA256が既存投稿と一致しました。 |
-| `BANNED_POSTER` | 投稿が制限されています。 | IPハッシュまたはUAハッシュがBAN対象です。 |
+| `BANNED_POSTER` | 投稿が制限されています。 | IPハッシュ、UAハッシュ、ファイルSHA256がBAN対象です。 |
 | `CHART_NOT_FOUND` | 対象の曲が見つかりません。 | 指定されたchartIdが存在しません。 |
 | `VERSION_NOT_FOUND` | 対象のバージョンが見つかりません。 | 指定されたversionIdが存在しません。 |
 | `FILE_NOT_FOUND` | ファイルが見つかりません。 | 指定されたfileIdが存在しないか非表示です。 |
