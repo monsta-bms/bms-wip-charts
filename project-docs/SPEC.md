@@ -1,8 +1,13 @@
-# BMS差分共有サイト 仕様書
+# BMS WIP Charts 仕様書
 
 ## 目的
 
 BMS差分をログイン不要で共有できる1ページサイトを作る。
+
+## 公開情報
+
+- リポジトリ名: `bms-wip-charts`
+- GitHub Pages URL: https://monsta-bms.github.io/wipbmschart/
 
 ## 画面仕様
 
@@ -330,12 +335,3 @@ APIエラーは以下の形式で返す。
 | `DB_WRITE_FAILED` | データ保存に失敗しました。 | D1の書き込み処理で失敗しました。 |
 | `ADMIN_AUTH_REQUIRED` | 管理者認証が必要です。 | 管理APIに認証なしでアクセスしました。 |
 | `INTERNAL_ERROR` | 予期しないエラーが発生しました。 | 未分類の例外が発生しました。 |
-
-## 今回の変更ファイル
-
-- `project-docs/SPEC.md`
-
-## 確認手順
-
-- `project-docs/SPEC.md` を開き、BMS差分共有サイトの仕様が整理されていることを確認する。
-- コードファイルが追加・変更されていないことを確認する。
