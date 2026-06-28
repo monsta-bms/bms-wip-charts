@@ -35,4 +35,4 @@ Cloudflare Worker 実装時は Cloudflare secrets を使う。
 
 - GitHub Pages の公開元が `main` ブランチの `/docs` になっていることを確認する。
 - https://monsta-bms.github.io/wipbmschart/ を開き、静的UIが表示されることを確認する。
-- リポジトリ内に旧名 `bms-diff-share` が残っていないことを確認する。
+- リポジトリ名と公開URLが新しい内容になっていることを確認する。
