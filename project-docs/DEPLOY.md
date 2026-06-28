@@ -21,11 +21,20 @@ https://monsta-bms.github.io/wipbmschart/
 
 ## Cloudflare Worker
 
-バックエンドは今後 Cloudflare Worker として実装する想定。
+Phase 9ではCloudflare Workerの雛形を `worker/` 配下に作成する。
 
-現時点では Worker本体は未実装で、`worker/wrangler.toml` にはD1/R2 binding設定案のみを置く。
+Worker本体:
 
-Worker本体の実装開始時に、`worker/wrangler.toml` へ `main = "src/index.ts"` などのエントリポイントを追加する。
+- `worker/src/index.ts`
+
+主な設定:
+
+- TypeScript
+- CORS対応
+- `ALLOWED_ORIGIN` 環境変数
+- D1 binding `DB`
+- R2 binding `FILES`
+- secrets `HASH_SECRET`, `ADMIN_TOKEN`
 
 ## Cloudflare D1
 
@@ -49,24 +58,37 @@ database_id = "d55ed399-5a31-43a0-89d4-9bd2f32ba3a7"
 作成済みR2 bucket:
 
 - bucket_name: `wip-bms-charts-files`
-- Worker binding: `CHART_FILES`
+- Worker binding: `FILES`
 - 保存形式: Standardのみ
 
 `worker/wrangler.toml` の設定:
 
 ```toml
 [[r2_buckets]]
-binding = "CHART_FILES"
+binding = "FILES"
 bucket_name = "wip-bms-charts-files"
 ```
 
 R2使用量が8GBを超えた場合は、管理ログに警告を出す仕様とする。
 
+## 環境変数
+
+`ALLOWED_ORIGIN` は通常のCloudflare Worker環境変数として扱う。
+
+公開URLが確定したら、`worker/wrangler.toml` の `[vars]` またはCloudflare Dashboardで実際のフロントURLに更新する。
+
+例:
+
+```toml
+[vars]
+ALLOWED_ORIGIN = "https://example.com"
+```
+
 ## 秘密情報
 
 APIキー、トークン、ハッシュ用secretなどの秘密情報はソースコードに直書きしない。
 
-Cloudflare Worker 実装時は Cloudflare secrets を使う。
+Cloudflare WorkerではCloudflare secretsを使う。
 
 想定secret:
 
@@ -76,14 +98,45 @@ Cloudflare Worker 実装時は Cloudflare secrets を使う。
 設定例:
 
 ```bash
-wrangler secret put HASH_SECRET
-wrangler secret put ADMIN_TOKEN
+cd worker
+npx wrangler secret put HASH_SECRET
+npx wrangler secret put ADMIN_TOKEN
+```
+
+## ローカル確認手順
+
+```bash
+cd worker
+npm install
+npm run typecheck
+npm run dev
+```
+
+別のターミナルで確認する。
+
+```bash
+curl http://localhost:8787/api/health
+curl http://localhost:8787/api/charts
+```
+
+管理APIのスタブ確認には `ADMIN_TOKEN` secret またはローカル用のsecret設定が必要。
+
+## デプロイ手順
+
+公開URLと `ALLOWED_ORIGIN` が確定してから実行する。
+
+```bash
+cd worker
+npm install
+npm run typecheck
+npm run deploy
 ```
 
 ## 確認手順
 
 - GitHub Pages の公開元が `main` ブランチの `/docs` になっていることを確認する。
-- https://monsta-bms.github.io/wipbmschart/ を開き、静的UIが表示されることを確認する。
-- `worker/wrangler.toml` にD1 binding `DB` とR2 binding `CHART_FILES` が設定されていることを確認する。
+- `worker/wrangler.toml` にD1 binding `DB` とR2 binding `FILES` が設定されていることを確認する。
 - Cloudflare側でD1 database `wip-bms-charts-db` とR2 bucket `wip-bms-charts-files` が存在することを確認する。
-- secrets が必要になった段階で、Cloudflare secrets に設定し、ソースコードに直書きしていないことを確認する。
+- `ALLOWED_ORIGIN` を実際のフロントURLに設定する。
+- `HASH_SECRET` と `ADMIN_TOKEN` をCloudflare secretsに設定する。
+- `/api/health` がJSONで `status: "ok"` を返すことを確認する。
