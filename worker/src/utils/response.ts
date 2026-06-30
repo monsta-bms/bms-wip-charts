@@ -86,6 +86,18 @@ function buildJsonHeaders(request: Request, env: Env, initHeaders?: HeadersInit)
   return headers;
 }
 
+export function buildResponseHeaders(request: Request, env: Env, initHeaders?: HeadersInit): Headers {
+  const headers = corsHeaders(request, env);
+
+  if (initHeaders) {
+    new Headers(initHeaders).forEach((value, key) => {
+      headers.set(key, value);
+    });
+  }
+
+  return headers;
+}
+
 export function jsonResponse(
   request: Request,
   env: Env,
@@ -95,6 +107,18 @@ export function jsonResponse(
   return new Response(JSON.stringify(body, null, 2), {
     ...init,
     headers: buildJsonHeaders(request, env, init.headers)
+  });
+}
+
+export function fileResponse(
+  request: Request,
+  env: Env,
+  body: BodyInit | null,
+  init: ResponseInit = {}
+): Response {
+  return new Response(body, {
+    ...init,
+    headers: buildResponseHeaders(request, env, init.headers)
   });
 }
 
