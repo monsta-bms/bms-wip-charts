@@ -2,9 +2,19 @@
 
 ## 概要
 
-Phase 10-A改では追加仕様込みでD1 schema / migrationを再設計した。
+Phase 10-Cでは `GET /api/charts` をD1実データ読み取りに変更した。
 
-WorkerのAPIはPhase 9のスタブ応答のままで、D1読み取り、D1書き込み、R2保存、BMSメタデータ読取、zip検査、IP/UAレート制限、Turnstile、フロント接続はまだ実装しない。
+まだ実装しないもの:
+
+- `POST /api/charts`
+- `POST /api/charts/:chartId/versions`
+- R2保存
+- zip検査
+- BMSメタデータ読取
+- 取り下げAPI
+- 削除申請API
+- 難易度表API
+- フロント接続
 
 ## 共通仕様
 
@@ -47,7 +57,7 @@ APIエラーは必ず以下のJSON形式で返す。
 
 ## D1 schema
 
-Phase 10-A改で以下のテーブルへ再設計する。
+Phase 10-A改で以下のテーブルへ再設計済み。
 
 - `songs`: 元曲単位
 - `charts`: 差分単位
@@ -73,7 +83,7 @@ schemaファイル:
 - cascade削除は使わず、基本はhiddenによる論理削除とする。
 - よく使う検索条件にはindexを貼る。
 
-## 既存エンドポイント
+## 実装済みエンドポイント
 
 ### GET /api/health
 
@@ -85,31 +95,140 @@ Workerが動いているか確認する。
 {
   "status": "ok",
   "service": "bms-wip-charts-worker",
-  "phase": "phase-9"
+  "phase": "phase-10-c"
 }
 ```
 
 ### GET /api/charts
 
-投稿一覧を取得する。
+D1から投稿一覧を取得する。
 
-Phase 10-A改ではD1読み取り未実装のため、まだスタブ応答のまま。
+返却単位:
 
-実装時はchart単位で100件ごとにページングし、versionツリーを `branch_path` 順で返す。version単位ではページを分断しない。
+- chart単位でページングする。
+- 各chartに `song` / `chart` / `versions` を含める。
+- `charts.is_hidden=1` のchartは通常一覧に出さない。
+- `versions.is_hidden=1` のversionは通常一覧に出さない。
+- versionsは `branch_path` 昇順で返す。
+- `displayVersion` はDB保存値ではなくAPI側で生成する。
+- `progress=100` のversionは `completed: true` を返す。
+- `downloadBlocked` と `downloadBlockReason` を返す。
+- 取り下げ、削除申請、非表示状態を判定できる状態フィールドを返す。
 
-想定クエリ:
+クエリ:
 
-```text
-GET /api/charts?page=1&q=keyword
+| name | default | 内容 |
+| --- | ---: | --- |
+| `page` | `1` | 1始まりのページ番号。 |
+| `pageSize` | `100` | chart件数。最大 `200`。 |
+| `q` | 空 | 検索語。Phase 10-Cでは受け取るだけで、絞り込みはまだ未実装。 |
+
+空DB時のレスポンス例:
+
+```json
+{
+  "charts": [],
+  "pagination": {
+    "page": 1,
+    "pageSize": 100,
+    "hasNext": false
+  }
+}
 ```
 
-検索結果は該当versionだけではなく、該当chart全体を返す。
+レスポンス例:
+
+```json
+{
+  "charts": [
+    {
+      "song": {
+        "id": "song_test_1",
+        "title": "Test Song",
+        "subtitle": "",
+        "artist": "Test Artist",
+        "subartist": "",
+        "createdAt": "2026-06-30 00:00:00",
+        "updatedAt": "2026-06-30 00:00:00"
+      },
+      "chart": {
+        "id": "chart_test_another",
+        "name": "[ANOTHER]",
+        "hidden": false,
+        "hiddenReason": null,
+        "createdAt": "2026-06-30 00:00:00",
+        "updatedAt": "2026-06-30 00:00:00"
+      },
+      "versions": [
+        {
+          "id": "version_test_root",
+          "parentVersionId": null,
+          "versionNumber": 1,
+          "branchLabel": "",
+          "branchPath": "root",
+          "displayVersion": "ver1.0",
+          "author": "tester",
+          "authorsJson": null,
+          "progress": 30,
+          "completed": false,
+          "completedAt": null,
+          "withdrawn": false,
+          "withdrawnAt": null,
+          "deleteRequested": false,
+          "deleteRequestedAt": null,
+          "hidden": false,
+          "hiddenReason": null,
+          "hiddenAt": null,
+          "downloadBlocked": false,
+          "downloadBlockReason": null,
+          "downloadBlockedAt": null,
+          "comment": "root version",
+          "difficulty": "★1",
+          "level": "1",
+          "title": "Test Song",
+          "subtitle": "",
+          "artist": "Test Artist",
+          "subartist": "",
+          "md5": "11111111111111111111111111111111",
+          "isRejected": false,
+          "file": {
+            "id": "file_test_root",
+            "name": "root.bms",
+            "size": 1024,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "downloadUrl": "/api/files/file_test_root"
+          },
+          "createdAt": "2026-06-30 00:00:00",
+          "updatedAt": "2026-06-30 00:00:00"
+        }
+      ]
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "pageSize": 100,
+    "hasNext": false
+  }
+}
+```
+
+D1読み取りに失敗した場合:
+
+```json
+{
+  "code": "D1_QUERY_FAILED",
+  "message": "投稿一覧の取得に失敗しました。",
+  "detail": "D1 read failed in charts-list-d1-read: ..."
+}
+```
+
+## スタブのままのエンドポイント
 
 ### POST /api/charts
 
 新規song/chart/versionを投稿する。
 
-Phase 10-A改ではD1書き込み、R2保存、BMSメタデータ読取、zip検査は未実装。
+Phase 10-CではD1書き込み、R2保存、BMSメタデータ読取、zip検査は未実装。
 
 実装時は以下を作成する。
 
@@ -122,7 +241,7 @@ Phase 10-A改ではD1書き込み、R2保存、BMSメタデータ読取、zip検
 
 既存chartへ追記投稿する。
 
-Phase 10-A改ではD1書き込み、R2保存、zip検査は未実装。
+Phase 10-CではD1書き込み、R2保存、zip検査は未実装。
 
 実装時は以下を行う。
 
@@ -132,13 +251,15 @@ Phase 10-A改ではD1書き込み、R2保存、zip検査は未実装。
 - `parent_version_id` 設定
 - 自動分岐名生成
 - `branch_path` 生成
-- `display_version` をレスポンス時に生成
+- `displayVersion` をレスポンス時に生成
 
 同じbase versionから複数投稿があっても、`VERSION_CONFLICT` で拒否しない。
 
 ### GET /api/files/:fileId
 
 投稿ファイルを取得する。
+
+Phase 10-CではR2からの実ファイル取得は未実装。
 
 実装時は `versions.download_blocked=0` かつ `versions.is_hidden=0` のファイルだけDL可能にする。
 
@@ -147,6 +268,8 @@ Phase 10-A改ではD1書き込み、R2保存、zip検査は未実装。
 ### POST /api/admin/hide-version
 
 管理人が指定versionを非表示にする。
+
+Phase 10-Cではスタブ応答のまま。
 
 実装時は以下を更新する。
 
@@ -162,11 +285,13 @@ Phase 10-A改ではD1書き込み、R2保存、zip検査は未実装。
 
 管理人がIPハッシュ、UAハッシュ、ファイルSHA256をBANする。
 
+Phase 10-Cではスタブ応答のまま。
+
 実装時は `bans` に保存する。
 
 ## 追加設計エンドポイント
 
-Phase 10-A改では設計のみ行い、Worker実装は後続Phaseで行う。
+Phase 10-Cでは設計のみ行い、Worker実装は後続Phaseで行う。
 
 ### GET /api/table
 
@@ -192,14 +317,6 @@ Phase 10-A改では設計のみ行い、Worker実装は後続Phaseで行う。
 - `is_rejected`
 - `dl_link`
 - `completed_at`
-
-想定クエリ:
-
-```text
-GET /api/table
-GET /api/table?level=12
-GET /api/table?sort=completed_at
-```
 
 ### GET /api/table/search?q=...
 
@@ -251,12 +368,6 @@ MVPではLIKE検索でよい。高度な検索やFTSは後回しとする。
 
 管理人が削除申請一覧を確認する。
 
-想定クエリ:
-
-```text
-GET /api/admin/delete-requests?status=pending
-```
-
 ### POST /api/admin/delete-requests/:requestId/approve
 
 管理人が削除申請を承認する。
@@ -269,9 +380,9 @@ GET /api/admin/delete-requests?status=pending
 
 却下時にDLブロックを戻すかどうかは、対象versionの現在状態を確認して判断する。
 
-## display_version生成方針
+## displayVersion生成方針
 
-DBには `display_version` を保存しない。
+DBには `displayVersion` / `display_version` を保存しない。
 
 レスポンス時に以下から生成する。
 
@@ -281,7 +392,7 @@ DBには `display_version` を保存しない。
 
 例:
 
-| branch_path | version_number | branch_label | display_version |
+| branch_path | version_number | branch_label | displayVersion |
 | --- | ---: | --- | --- |
 | `root` | 1 | `` | `ver1.0` |
 | `root/a` | 2 | `a` | `ver2.0-a` |
@@ -291,10 +402,12 @@ DBには `display_version` を保存しない。
 ## 主なエラー
 
 | code | HTTP status | 内容 |
-| --- | --- | --- |
+| --- | ---: | --- |
 | `CORS_ORIGIN_NOT_ALLOWED` | 403 | `ALLOWED_ORIGIN` とリクエストOriginが一致しない。 |
 | `METHOD_NOT_ALLOWED` | 405 | 許可されていないHTTPメソッド。 |
 | `NOT_FOUND` | 404 | 対応するAPIがない。 |
+| `INVALID_QUERY_PARAM` | 400 | `page` / `pageSize` が不正。 |
+| `D1_QUERY_FAILED` | 500 | D1から投稿一覧を取得できなかった。 |
 | `INVALID_CHART_ID` | 400 | `chartId` が空または不正。 |
 | `INVALID_VERSION_ID` | 400 | `versionId` が空または不正。 |
 | `TITLE_ARTIST_MISMATCH` | 400 | 追記先chartとアップロード譜面の曲情報が一致しない。 |
