@@ -43,10 +43,14 @@ function getContentType(fileName: string): string {
 }
 
 function escapeFallbackFileName(fileName: string): string {
-  return fileName
+  const escaped = fileName
     .replace(/[\\/\x00-\x1f\x7f]+/g, "_")
+    .replace(/[^\x20-\x7e]+/g, "_")
     .replace(/"/g, "'")
-    .slice(0, 160) || "download";
+    .slice(0, 160)
+    .trim();
+
+  return escaped || "download";
 }
 
 function buildContentDisposition(fileName: string): string {
