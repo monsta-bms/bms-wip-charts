@@ -4,6 +4,7 @@ import { handleFileRoute } from "./routes/files";
 import {
   apiError,
   Env,
+  errorDetail,
   isCorsAllowed,
   methodNotAllowed,
   notFound,
@@ -19,11 +20,11 @@ function handleHealth(request: Request, env: Env): Response {
   return ok(request, env, {
     status: "ok",
     service: "bms-wip-charts-worker",
-    phase: "phase-9"
+    phase: "phase-10-c"
   });
 }
 
-function routeRequest(request: Request, env: Env): Response {
+async function routeRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname;
 
@@ -69,15 +70,15 @@ function routeRequest(request: Request, env: Env): Response {
 }
 
 export default {
-  fetch(request: Request, env: Env): Response {
+  async fetch(request: Request, env: Env): Promise<Response> {
     try {
-      return routeRequest(request, env);
+      return await routeRequest(request, env);
     } catch (error) {
       const url = new URL(request.url);
       console.error("[request-dispatch] unhandled Worker error", {
         code: "INTERNAL_ERROR",
         path: url.pathname,
-        message: error instanceof Error ? error.message : String(error)
+        message: errorDetail(error)
       });
 
       return apiError(
