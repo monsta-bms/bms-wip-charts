@@ -1,3 +1,6 @@
+import { normalizeText, parseBmsMetadata } from "../utils/bms";
+import { sanitizeFileName, validateUploadFile } from "../utils/fileValidation";
+import { hashWithSecret, md5HexFromBuffer, sha256HexFromBuffer } from "../utils/hash";
 import { apiError, Env, errorDetail, methodNotAllowed, ok } from "../utils/response";
 
 const DEFAULT_PAGE_SIZE = 100;
@@ -66,6 +69,61 @@ type VersionRow = {
   download_blocked_at: string | null;
 };
 
+type ExistingSongRow = {
+  id: string;
+};
+
+type ExistingChartRow = {
+  id: string;
+};
+
+type ExistingVersionRow = {
+  id: string;
+};
+
+type PostLogContext = {
+  ipHash: string;
+  uaHash: string;
+  songId?: string | null;
+  chartId?: string | null;
+  versionId?: string | null;
+  fileSha256?: string | null;
+};
+
+type ApiFailure = {
+  status: number;
+  code: string;
+  message: string;
+  detail: string;
+};
+
+type CreateChartInput = {
+  file: File;
+  fileName: string;
+  fileBytes: ArrayBuffer;
+  fileSha256: string;
+  md5: string | null;
+  title: string;
+  subtitle: string;
+  artist: string;
+  subartist: string;
+  chartName: string;
+  difficulty: string;
+  level: string;
+  author: string;
+  progress: number;
+  comment: string;
+  isRejected: boolean;
+  passwordHash: string;
+  metadataWarning: { code: string; message: string } | null;
+  parsedMetadata: {
+    title: string | null;
+    artist: string | null;
+    encoding: string | null;
+  };
+  extension: string;
+};
+
 function parsePositiveInteger(
   rawValue: string | null,
   name: string,
@@ -88,6 +146,20 @@ function parsePositiveInteger(
 
   if (maxValue !== undefined && value > maxValue) {
     return { ok: false, detail: `${name} must be ${maxValue} or less.` };
+  }
+
+  return { ok: true, value };
+}
+
+function parseProgress(rawValue: string): { ok: true; value: number } | { ok: false; detail: string } {
+  const valueText = rawValue.trim();
+  if (!/^\d+$/.test(valueText)) {
+    return { ok: false, detail: "progress must be an integer between 0 and 100." };
+  }
+
+  const value = Number(valueText);
+  if (!Number.isSafeInteger(value) || value < 0 || value > 100) {
+    return { ok: false, detail: "progress must be an integer between 0 and 100." };
   }
 
   return { ok: true, value };
@@ -142,6 +214,47 @@ function parseListParams(url: URL): ParseResult {
 
 function toBoolean(value: number): boolean {
   return value === 1;
+}
+
+function parseBooleanField(value: string): boolean {
+  return ["1", "true", "on", "yes"].includes(value.trim().toLowerCase());
+}
+
+function isFormFile(value: FormDataEntryValue | null): value is File {
+  return typeof value === "object" &&
+    value !== null &&
+    "arrayBuffer" in value &&
+    "name" in value &&
+    "size" in value;
+}
+
+function getFormText(form: FormData, name: string): string {
+  const value = form.get(name);
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function makeId(prefix: string): string {
+  return `${prefix}_${crypto.randomUUID()}`;
+}
+
+function getClientIpMarker(request: Request): string {
+  const cfIp = request.headers.get("CF-Connecting-IP")?.trim();
+  if (cfIp) {
+    return cfIp;
+  }
+
+  const forwardedFor = request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim();
+  return forwardedFor || "unknown";
+}
+
+function getUserAgentMarker(request: Request): string {
+  return request.headers.get("User-Agent")?.trim() || "unknown";
+}
+
+async function buildPostLogContext(request: Request, secret: string): Promise<PostLogContext> {
+  const ipHash = await hashWithSecret(`ip:${getClientIpMarker(request)}`, secret);
+  const uaHash = await hashWithSecret(`ua:${getUserAgentMarker(request)}`, secret);
+  return { ipHash, uaHash };
 }
 
 function buildBranchSuffix(row: VersionRow): string {
@@ -233,6 +346,106 @@ function buildChartEntry(chartRow: ChartRow, versionRows: VersionRow[]) {
     },
     versions: versionRows.map(buildVersion)
   };
+}
+
+async function writePostLog(
+  env: Env,
+  context: PostLogContext,
+  result: "accepted" | "rejected",
+  errorCode: string | null,
+  detail: string
+): Promise<void> {
+  await env.DB.prepare(`
+    INSERT INTO post_logs (
+      id,
+      action,
+      song_id,
+      chart_id,
+      version_id,
+      ip_hash,
+      ua_hash,
+      file_sha256,
+      result,
+      error_code,
+      detail
+    ) VALUES (?, 'create_chart', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    makeId("post_log"),
+    context.songId ?? null,
+    context.chartId ?? null,
+    context.versionId ?? null,
+    context.ipHash,
+    context.uaHash,
+    context.fileSha256 ?? null,
+    result,
+    errorCode,
+    detail
+  ).run();
+}
+
+async function failCreateChart(
+  request: Request,
+  env: Env,
+  context: PostLogContext,
+  failure: ApiFailure
+): Promise<Response> {
+  try {
+    await writePostLog(env, context, "rejected", failure.code, failure.detail);
+  } catch (error) {
+    console.error("[post-log-write] failed to write rejected create_chart log", {
+      code: "POST_LOG_WRITE_FAILED",
+      errorCode: failure.code,
+      message: errorDetail(error)
+    });
+  }
+
+  return apiError(request, env, failure.status, failure.code, failure.message, failure.detail);
+}
+
+async function cleanupR2AfterDbFailure(
+  env: Env,
+  r2Key: string,
+  fileId: string,
+  originalError: unknown
+): Promise<void> {
+  try {
+    await env.FILES.delete(r2Key);
+  } catch (cleanupError) {
+    console.error("[r2-orphan-cleanup] failed to delete R2 object after DB insert failure", {
+      code: "R2_ORPHAN_CLEANUP_FAILED",
+      fileId,
+      r2Key,
+      dbMessage: errorDetail(originalError),
+      cleanupMessage: errorDetail(cleanupError)
+    });
+
+    try {
+      await env.DB.prepare(`
+        INSERT INTO admin_logs (
+          id,
+          action,
+          target_type,
+          target_id,
+          level,
+          code,
+          reason,
+          detail
+        ) VALUES (?, 'r2_orphan_file', 'r2_key', ?, 'error', 'R2_ORPHAN_FILE', ?, ?)
+      `).bind(
+        makeId("admin_log"),
+        r2Key,
+        "D1 insert failed after R2 upload, and R2 cleanup also failed.",
+        `fileId=${fileId}; dbError=${errorDetail(originalError)}; cleanupError=${errorDetail(cleanupError)}`
+      ).run();
+    } catch (adminLogError) {
+      console.error("[admin-log-write] failed to write R2 orphan admin log", {
+        code: "ADMIN_LOG_WRITE_FAILED",
+        fileId,
+        r2Key,
+        message: errorDetail(adminLogError)
+      });
+    }
+  }
 }
 
 async function selectVisibleChartRows(env: Env, params: ListParams): Promise<ChartRow[]> {
@@ -379,18 +592,587 @@ async function handleChartList(request: Request, env: Env): Promise<Response> {
   }
 }
 
+async function parseCreateChartInput(
+  request: Request,
+  env: Env,
+  context: PostLogContext,
+  secret: string
+): Promise<{ ok: true; value: CreateChartInput } | { ok: false; response: Response }> {
+  const contentType = request.headers.get("Content-Type") ?? "";
+  if (!contentType.toLowerCase().includes("multipart/form-data")) {
+    return {
+      ok: false,
+      response: await failCreateChart(request, env, context, {
+        status: 400,
+        code: "INVALID_FORM",
+        message: "投稿フォームが不正です。",
+        detail: "Content-Type must be multipart/form-data."
+      })
+    };
+  }
+
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch (error) {
+    console.error("[create-chart-form-parse] failed to parse multipart form", {
+      code: "INVALID_FORM",
+      message: errorDetail(error)
+    });
+
+    return {
+      ok: false,
+      response: await failCreateChart(request, env, context, {
+        status: 400,
+        code: "INVALID_FORM",
+        message: "投稿フォームが不正です。",
+        detail: `Failed to parse multipart/form-data: ${errorDetail(error)}`
+      })
+    };
+  }
+
+  const file = form.get("file");
+  if (!isFormFile(file) || file.size <= 0) {
+    return {
+      ok: false,
+      response: await failCreateChart(request, env, context, {
+        status: 400,
+        code: "INVALID_FORM",
+        message: "投稿ファイルが見つかりません。",
+        detail: "file field must contain a non-empty file."
+      })
+    };
+  }
+
+  const password = getFormText(form, "password");
+  if (!password) {
+    return {
+      ok: false,
+      response: await failCreateChart(request, env, context, {
+        status: 400,
+        code: "PASSWORD_REQUIRED",
+        message: "管理パスワードを入力してください。",
+        detail: "password field is required."
+      })
+    };
+  }
+
+  const validation = validateUploadFile(file);
+  if (!validation.ok) {
+    return {
+      ok: false,
+      response: await failCreateChart(request, env, context, {
+        status: 400,
+        code: validation.code,
+        message: validation.message,
+        detail: validation.detail
+      })
+    };
+  }
+
+  const progress = parseProgress(getFormText(form, "progress"));
+  if (!progress.ok) {
+    return {
+      ok: false,
+      response: await failCreateChart(request, env, context, {
+        status: 400,
+        code: "INVALID_PROGRESS",
+        message: "進捗度の値が不正です。",
+        detail: progress.detail
+      })
+    };
+  }
+
+  const fileBytes = await file.arrayBuffer();
+  const fileSha256 = await sha256HexFromBuffer(fileBytes);
+  context.fileSha256 = fileSha256;
+
+  let md5: string | null = null;
+  let metadataWarning: { code: string; message: string } | null = null;
+  let parsedMetadata = {
+    title: null as string | null,
+    artist: null as string | null,
+    encoding: null as string | null
+  };
+
+  if (validation.isBmsText) {
+    md5 = md5HexFromBuffer(fileBytes);
+
+    try {
+      const metadata = parseBmsMetadata(fileBytes);
+      parsedMetadata = {
+        title: metadata.title ?? null,
+        artist: metadata.artist ?? null,
+        encoding: metadata.encoding ?? null
+      };
+    } catch (error) {
+      console.error("[bms-metadata-parse] failed to parse BMS metadata", {
+        code: "BMS_METADATA_PARSE_FAILED",
+        fileSha256,
+        message: errorDetail(error)
+      });
+
+      metadataWarning = {
+        code: "BMS_METADATA_PARSE_FAILED",
+        message: "譜面情報の自動読み取りに失敗したため、フォーム入力値を使用しました。"
+      };
+    }
+  }
+
+  const title = getFormText(form, "title") || parsedMetadata.title || "";
+  const subtitle = getFormText(form, "subtitle");
+  const artist = getFormText(form, "artist") || parsedMetadata.artist || "";
+  const subartist = getFormText(form, "subartist");
+  const chartName = getFormText(form, "chartName");
+  const difficulty = getFormText(form, "difficulty");
+  const level = getFormText(form, "level");
+  const author = getFormText(form, "author");
+  const comment = getFormText(form, "comment");
+  const isRejected = parseBooleanField(getFormText(form, "isRejected"));
+
+  const missingFields = [
+    ["title", title],
+    ["artist", artist],
+    ["chartName", chartName],
+    ["author", author]
+  ]
+    .filter(([, value]) => !value)
+    .map(([name]) => name);
+
+  if (missingFields.length > 0) {
+    return {
+      ok: false,
+      response: await failCreateChart(request, env, context, {
+        status: 400,
+        code: "INVALID_FORM",
+        message: "必須項目が不足しています。",
+        detail: `Required fields are missing: ${missingFields.join(", ")}. BMS metadata can fill title/artist only when readable.`
+      })
+    };
+  }
+
+  return {
+    ok: true,
+    value: {
+      file,
+      fileName: sanitizeFileName(file.name),
+      fileBytes,
+      fileSha256,
+      md5,
+      title,
+      subtitle,
+      artist,
+      subartist,
+      chartName,
+      difficulty,
+      level,
+      author,
+      progress: progress.value,
+      comment,
+      isRejected,
+      passwordHash: await hashWithSecret(`password:${password}`, secret),
+      metadataWarning,
+      parsedMetadata,
+      extension: validation.extension
+    }
+  };
+}
+
+async function handleCreateChart(request: Request, env: Env): Promise<Response> {
+  const secret = env.HASH_SECRET?.trim();
+  if (!secret) {
+    console.error("[create-chart-config] HASH_SECRET secret is not configured", {
+      code: "SERVER_CONFIG_ERROR",
+      target: "HASH_SECRET"
+    });
+
+    return apiError(
+      request,
+      env,
+      500,
+      "SERVER_CONFIG_ERROR",
+      "サーバー設定が不足しています。",
+      "HASH_SECRET secret is not configured."
+    );
+  }
+
+  let context: PostLogContext | null = null;
+
+  try {
+    context = await buildPostLogContext(request, secret);
+    const parsed = await parseCreateChartInput(request, env, context, secret);
+    if (!parsed.ok) {
+      return parsed.response;
+    }
+
+    const input = parsed.value;
+    const normalizedTitle = normalizeText(input.title);
+    const normalizedSubtitle = normalizeText(input.subtitle);
+    const normalizedArtist = normalizeText(input.artist);
+    const normalizedSubartist = normalizeText(input.subartist);
+    const normalizedChartName = normalizeText(input.chartName);
+
+    let existingDuplicate: ExistingVersionRow | null;
+    try {
+      existingDuplicate = await env.DB.prepare(`
+        SELECT id
+        FROM versions
+        WHERE file_sha256 = ?
+        LIMIT 1
+      `).bind(input.fileSha256).first<ExistingVersionRow>();
+    } catch (error) {
+      console.error("[create-chart-duplicate-check] failed to check duplicate file", {
+        code: "DB_INSERT_FAILED",
+        fileSha256: input.fileSha256,
+        message: errorDetail(error)
+      });
+
+      return failCreateChart(request, env, context, {
+        status: 500,
+        code: "DB_INSERT_FAILED",
+        message: "投稿前の確認に失敗しました。",
+        detail: `Failed to check duplicate file_sha256: ${errorDetail(error)}`
+      });
+    }
+
+    if (existingDuplicate) {
+      return failCreateChart(request, env, context, {
+        status: 409,
+        code: "DUPLICATE_FILE",
+        message: "同じファイルは投稿できません。",
+        detail: "A version with the same file_sha256 already exists."
+      });
+    }
+
+    let existingSong: ExistingSongRow | null;
+    try {
+      existingSong = await env.DB.prepare(`
+        SELECT id
+        FROM songs
+        WHERE normalized_title = ?
+          AND normalized_subtitle = ?
+          AND normalized_artist = ?
+          AND normalized_subartist = ?
+        LIMIT 1
+      `).bind(
+        normalizedTitle,
+        normalizedSubtitle,
+        normalizedArtist,
+        normalizedSubartist
+      ).first<ExistingSongRow>();
+    } catch (error) {
+      console.error("[create-chart-song-lookup] failed to find existing song", {
+        code: "DB_INSERT_FAILED",
+        message: errorDetail(error)
+      });
+
+      return failCreateChart(request, env, context, {
+        status: 500,
+        code: "DB_INSERT_FAILED",
+        message: "投稿前の確認に失敗しました。",
+        detail: `Failed to lookup song: ${errorDetail(error)}`
+      });
+    }
+
+    const songId = existingSong?.id ?? makeId("song");
+    context.songId = songId;
+
+    if (existingSong) {
+      let existingChart: ExistingChartRow | null;
+      try {
+        existingChart = await env.DB.prepare(`
+          SELECT id
+          FROM charts
+          WHERE song_id = ?
+            AND normalized_chart_name = ?
+          LIMIT 1
+        `).bind(songId, normalizedChartName).first<ExistingChartRow>();
+      } catch (error) {
+        console.error("[create-chart-chart-lookup] failed to find existing chart", {
+          code: "DB_INSERT_FAILED",
+          songId,
+          message: errorDetail(error)
+        });
+
+        return failCreateChart(request, env, context, {
+          status: 500,
+          code: "DB_INSERT_FAILED",
+          message: "投稿前の確認に失敗しました。",
+          detail: `Failed to lookup chart: ${errorDetail(error)}`
+        });
+      }
+
+      if (existingChart) {
+        context.chartId = existingChart.id;
+        return failCreateChart(request, env, context, {
+          status: 409,
+          code: "CHART_ALREADY_EXISTS",
+          message: "同じ曲の同じ差分は既に存在します。",
+          detail: "Use POST /api/charts/:chartId/versions in a later phase to append to an existing chart."
+        });
+      }
+    }
+
+    const chartId = makeId("chart");
+    const versionId = makeId("version");
+    const fileId = makeId("file");
+    const r2Key = `charts/${chartId}/versions/root/${fileId}${input.extension}`;
+    const completedAt = input.progress === 100 ? new Date().toISOString() : null;
+    context.chartId = chartId;
+    context.versionId = versionId;
+
+    try {
+      await env.FILES.put(input.fileBytes, input.fileBytes);
+    } catch {
+      // This branch is intentionally unreachable; it keeps TypeScript from accepting an accidental signature change.
+    }
+
+    try {
+      await env.FILES.put(r2Key, input.fileBytes, {
+        httpMetadata: {
+          contentType: input.file.type || "application/octet-stream"
+        },
+        customMetadata: {
+          fileId,
+          fileSha256: input.fileSha256
+        }
+      });
+    } catch (error) {
+      console.error("[create-chart-r2-upload] failed to upload chart file to R2", {
+        code: "R2_UPLOAD_FAILED",
+        chartId,
+        versionId,
+        fileId,
+        message: errorDetail(error)
+      });
+
+      return failCreateChart(request, env, context, {
+        status: 500,
+        code: "R2_UPLOAD_FAILED",
+        message: "ファイル保存に失敗しました。",
+        detail: `R2 upload failed: ${errorDetail(error)}`
+      });
+    }
+
+    const statements: D1PreparedStatement[] = [];
+    if (!existingSong) {
+      statements.push(env.DB.prepare(`
+        INSERT INTO songs (
+          id,
+          title,
+          subtitle,
+          artist,
+          subartist,
+          normalized_title,
+          normalized_subtitle,
+          normalized_artist,
+          normalized_subartist
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        songId,
+        input.title,
+        input.subtitle,
+        input.artist,
+        input.subartist,
+        normalizedTitle,
+        normalizedSubtitle,
+        normalizedArtist,
+        normalizedSubartist
+      ));
+    }
+
+    statements.push(env.DB.prepare(`
+      INSERT INTO charts (
+        id,
+        song_id,
+        chart_name,
+        normalized_chart_name
+      ) VALUES (?, ?, ?, ?)
+    `).bind(
+      chartId,
+      songId,
+      input.chartName,
+      normalizedChartName
+    ));
+
+    statements.push(env.DB.prepare(`
+      INSERT INTO versions (
+        id,
+        chart_id,
+        parent_version_id,
+        version_number,
+        branch_label,
+        branch_path,
+        author,
+        authors_json,
+        progress,
+        comment,
+        difficulty,
+        level,
+        title,
+        subtitle,
+        artist,
+        subartist,
+        md5,
+        is_rejected,
+        file_id,
+        file_name,
+        file_size,
+        file_sha256,
+        r2_key,
+        password_hash,
+        download_blocked,
+        download_block_reason,
+        completed_at
+      ) VALUES (?, ?, NULL, 1, '', 'root', ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?)
+    `).bind(
+      versionId,
+      chartId,
+      input.author,
+      input.progress,
+      input.comment,
+      input.difficulty || null,
+      input.level || null,
+      input.title,
+      input.subtitle,
+      input.artist,
+      input.subartist,
+      input.md5,
+      input.isRejected ? 1 : 0,
+      fileId,
+      input.fileName,
+      input.file.size,
+      input.fileSha256,
+      r2Key,
+      input.passwordHash,
+      completedAt
+    ));
+
+    statements.push(env.DB.prepare(`
+      INSERT INTO post_logs (
+        id,
+        action,
+        song_id,
+        chart_id,
+        version_id,
+        ip_hash,
+        ua_hash,
+        file_sha256,
+        result,
+        error_code,
+        detail
+      ) VALUES (?, 'create_chart', ?, ?, ?, ?, ?, ?, 'accepted', NULL, ?)
+    `).bind(
+      makeId("post_log"),
+      songId,
+      chartId,
+      versionId,
+      context.ipHash,
+      context.uaHash,
+      input.fileSha256,
+      "Initial chart version created."
+    ));
+
+    try {
+      await env.DB.batch(statements);
+    } catch (error) {
+      console.error("[create-chart-db-insert] failed to insert initial chart", {
+        code: "DB_INSERT_FAILED",
+        songId,
+        chartId,
+        versionId,
+        fileId,
+        message: errorDetail(error)
+      });
+
+      await cleanupR2AfterDbFailure(env, r2Key, fileId, error);
+
+      try {
+        await writePostLog(
+          env,
+          context,
+          "rejected",
+          "DB_INSERT_FAILED",
+          `D1 insert failed after R2 upload: ${errorDetail(error)}`
+        );
+      } catch (postLogError) {
+        console.error("[post-log-write] failed to write DB insert failure log", {
+          code: "POST_LOG_WRITE_FAILED",
+          chartId,
+          versionId,
+          message: errorDetail(postLogError)
+        });
+      }
+
+      return apiError(
+        request,
+        env,
+        500,
+        "DB_INSERT_FAILED",
+        "投稿データの保存に失敗しました。",
+        `D1 insert failed after R2 upload: ${errorDetail(error)}`
+      );
+    }
+
+    return ok(request, env, {
+      songId,
+      chartId,
+      versionId,
+      fileId,
+      displayVersion: "ver1.0",
+      completed: input.progress === 100,
+      completedAt,
+      file: {
+        name: input.fileName,
+        size: input.file.size,
+        sha256: input.fileSha256,
+        md5: input.md5,
+        downloadUrl: `/api/files/${encodeURIComponent(fileId)}`
+      },
+      metadata: input.parsedMetadata,
+      warnings: input.metadataWarning ? [input.metadataWarning] : []
+    }, { status: 201 });
+  } catch (error) {
+    console.error("[create-chart-unknown] unexpected create chart failure", {
+      code: "UNKNOWN_ERROR",
+      message: errorDetail(error)
+    });
+
+    if (context) {
+      try {
+        await writePostLog(
+          env,
+          context,
+          "rejected",
+          "UNKNOWN_ERROR",
+          `Unexpected create chart failure: ${errorDetail(error)}`
+        );
+      } catch (postLogError) {
+        console.error("[post-log-write] failed to write unknown failure log", {
+          code: "POST_LOG_WRITE_FAILED",
+          message: errorDetail(postLogError)
+        });
+      }
+    }
+
+    return apiError(
+      request,
+      env,
+      500,
+      "UNKNOWN_ERROR",
+      "予期しないエラーが発生しました。",
+      `Unexpected create chart failure: ${errorDetail(error)}`
+    );
+  }
+}
+
 export function handleChartsRoute(request: Request, env: Env): Promise<Response> | Response {
   if (request.method === "GET") {
     return handleChartList(request, env);
   }
 
   if (request.method === "POST") {
-    return ok(request, env, {
-      chartId: null,
-      version: "ver1.0",
-      mode: "stub",
-      message: "D1 write, R2 upload, BMS metadata parsing, and zip inspection are not implemented in Phase 9."
-    }, { status: 201 });
+    return handleCreateChart(request, env);
   }
 
   return methodNotAllowed(request, env, request.method);
