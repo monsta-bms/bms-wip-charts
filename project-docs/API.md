@@ -2,13 +2,14 @@
 
 ## 概要
 
-Phase 10-Dでは `POST /api/charts` の初回投稿APIを実装した。
+Phase 10-Eでは `GET /api/files/:fileId` をR2実ダウンロードに接続した。
 
 実装済み:
 
 - `GET /api/health`
 - `GET /api/charts`
 - `POST /api/charts` 初回投稿のみ
+- `GET /api/files/:fileId`
 
 まだ実装しないもの:
 
@@ -18,6 +19,7 @@ Phase 10-Dでは `POST /api/charts` の初回投稿APIを実装した。
 - 取り下げAPI
 - 削除申請API
 - 難易度表API
+- 高度な権限管理
 - 高度なzip内検査
 - Turnstile
 - フロント接続
@@ -40,6 +42,8 @@ CORSは `ALLOWED_ORIGIN` 環境変数で許可Originを制御する。
 
 `Origin` ヘッダーがあるリクエストで `ALLOWED_ORIGIN` と一致しない場合は、JSONエラーを返す。
 
+ファイルDL成功時も、許可Originの場合はCORSヘッダーを付与する。
+
 ### エラーレスポンス
 
 APIエラーは必ず以下のJSON形式で返す。
@@ -57,11 +61,9 @@ APIエラーは必ず以下のJSON形式で返す。
 以下はCloudflare secretsで設定する。
 
 - `HASH_SECRET`: password_hash、IPハッシュ、UAハッシュの生成に使う。
-- `ADMIN_TOKEN`: 管理API用。Phase 10-Dの初回投稿では使用しない。
+- `ADMIN_TOKEN`: 管理API用。
 
 秘密情報はソースコードや `wrangler.toml` に直書きしない。
-
-`HASH_SECRET` が未設定の場合、`POST /api/charts` は `SERVER_CONFIG_ERROR` を返す。
 
 ## D1 schema
 
@@ -92,7 +94,7 @@ Workerが動いているか確認する。
 {
   "status": "ok",
   "service": "bms-wip-charts-worker",
-  "phase": "phase-10-d"
+  "phase": "phase-10-e"
 }
 ```
 
@@ -117,7 +119,7 @@ D1から投稿一覧を取得する。
 | --- | ---: | --- |
 | `page` | `1` | 1始まりのページ番号。 |
 | `pageSize` | `100` | chart件数。最大 `200`。 |
-| `q` | 空 | 検索語。Phase 10-Dでは受け取るだけで、絞り込みはまだ未実装。 |
+| `q` | 空 | 検索語。Phase 10-Eでは受け取るだけで、絞り込みはまだ未実装。 |
 
 空DB時のレスポンス例:
 
@@ -138,56 +140,20 @@ D1から投稿一覧を取得する。
 
 `multipart/form-data` のみ受け付ける。
 
-受け取るフォーム項目:
+主な仕様:
 
-| name | 必須 | 内容 |
-| --- | --- | --- |
-| `file` | yes | `.bms`, `.bme`, `.bml`, `.zip` のいずれか。 |
-| `title` | 条件付き | 曲名。BMS本文から読める場合は空でもよい。 |
-| `subtitle` | no | サブタイトル。 |
-| `artist` | 条件付き | アーティスト。BMS本文から読める場合は空でもよい。 |
-| `subartist` | no | サブアーティスト。 |
-| `chartName` | yes | 差分名。例: `[ANOTHER]`。 |
-| `difficulty` | no | 想定難易度。 |
-| `level` | no | 難易度表向けlevel。 |
-| `author` | yes | 差分作者。 |
-| `progress` | yes | 0〜100の整数。 |
-| `comment` | no | コメント。音源URLはここに貼る。 |
-| `isRejected` | no | `true`, `1`, `on`, `yes` の場合に没譜面扱い。 |
-| `password` | yes | 管理パスワード。DBには生保存しない。 |
-
-ファイル仕様:
-
+- `file`, `chartName`, `author`, `progress`, `password` は必須。
+- `title` / `artist` はBMS本文から読める場合は空でもよい。
 - 許可拡張子は `.bms`, `.bme`, `.bml`, `.zip` のみ。
 - 単体譜面ファイルは2MBまで。
 - zipファイルは5MBまで。
 - 音源ファイルのアップロードは禁止する。
 - 音源URLが必要な場合は `comment` にURLを貼る。
-- Phase 10-Dではzip内検査は簡易扱いで、zip内の音源拡張子検査は後続Phaseで本実装する。
-- zip内音源検査の想定エラーは `AUDIO_FILE_NOT_ALLOWED` または `ZIP_INSPECTION_FAILED` とする。
-
-BMS/BME/BML単体投稿時:
-
-- ファイル本文から `#TITLE` と `#ARTIST` を可能な範囲で読み取る。
-- 文字コードはUTF-8とShift_JISを試す。
-- 読み取りに失敗しても、フォームの `title` / `artist` があれば投稿可能。
-- BMS/BME/BML本体のMD5を計算し、`versions.md5` に保存する。
-- `file_sha256` も計算し、同一SHA256が既にある場合は拒否する。
-
-保存仕様:
-
-- 同じ `normalized_title + normalized_artist + normalized_subtitle + normalized_subartist` のsongがあれば再利用する。
-- 同じ `song_id + normalized_chart_name` のchartがある場合、初回投稿ではなく既存chart扱いのため `CHART_ALREADY_EXISTS` を返す。
-- 既存chartに追記したい場合は、将来の `POST /api/charts/:chartId/versions` を使う。
+- BMS/BME/BML単体投稿では `#TITLE` / `#ARTIST` を可能な範囲で読み取る。
+- BMS/BME/BML本体のMD5と `file_sha256` を計算する。
+- 同一 `file_sha256` は `DUPLICATE_FILE` で拒否する。
 - 作成するversionは `ver1.0` 相当。
-- `parent_version_id` は `null`。
-- `version_number` は `1`。
-- `branch_path` は `root`。
 - `progress=100` の場合は `completed_at` を保存する。
-- `progress=100` のversion自体はDL可能。
-- `isRejected` は没譜面フラグとして保存する。
-- R2には安全な `r2_key` で保存する。
-- D1登録に失敗した場合は、先に保存したR2ファイルの削除を試みる。削除にも失敗した場合は管理ログへの記録を試みる。
 - 成功/失敗は可能な範囲で `post_logs` に記録する。
 
 成功レスポンス例:
@@ -217,23 +183,70 @@ BMS/BME/BML単体投稿時:
 }
 ```
 
+### GET /api/files/:fileId
+
+投稿ファイルをダウンロードする。
+
+処理:
+
+1. `versions.file_id` からversion/file情報を取得する。
+2. 親chartの `charts.is_hidden` を確認する。
+3. versionの `versions.is_hidden` を確認する。
+4. versionの `versions.download_blocked` を確認する。
+5. `versions.r2_key` を使ってR2 bucket `FILES` からファイル本体を取得する。
+6. 成功時はファイル本体を返す。
+
+成功時の主なヘッダー:
+
+| header | 内容 |
+| --- | --- |
+| `Content-Type` | `.bms/.bme/.bml` は `text/plain; charset=utf-8`、`.zip` は `application/zip`。 |
+| `Content-Disposition` | `attachment`。元ファイル名で保存できるよう `filename` / `filename*` を設定する。 |
+| `Content-Length` | D1に保存された `file_size`。 |
+| `X-Content-Type-Options` | `nosniff`。 |
+
+エラー:
+
+- fileIdに対応するversionがない場合は `FILE_NOT_FOUND`。
+- versionが非表示の場合は `FILE_NOT_AVAILABLE`。
+- 親chartが非表示の場合も `FILE_NOT_AVAILABLE`。
+- `download_blocked=1` の場合は `FILE_DOWNLOAD_BLOCKED`。
+- D1にはあるがR2にない場合は `R2_FILE_NOT_FOUND`。
+- R2取得処理が失敗した場合は `R2_DOWNLOAD_FAILED`。
+
+`download_blocked` 時のレスポンス例:
+
+```json
+{
+  "code": "FILE_DOWNLOAD_BLOCKED",
+  "message": "このファイルはダウンロードできません。",
+  "detail": "Download is blocked. reason=withdrawn"
+}
+```
+
+`is_hidden` 時のレスポンス例:
+
+```json
+{
+  "code": "FILE_NOT_AVAILABLE",
+  "message": "このファイルは現在利用できません。",
+  "detail": "The version is hidden. reason=test hidden"
+}
+```
+
 ## スタブのままのエンドポイント
 
 ### POST /api/charts/:chartId/versions
 
-既存chartへ追記投稿する。Phase 10-Dでは未実装。
-
-### GET /api/files/:fileId
-
-投稿ファイルを取得する。Phase 10-DではR2からの実ファイル取得は未実装。
+既存chartへ追記投稿する。Phase 10-Eでは未実装。
 
 ### POST /api/admin/hide-version
 
-管理人が指定versionを非表示にする。Phase 10-Dではスタブ応答のまま。
+管理人が指定versionを非表示にする。Phase 10-Eではスタブ応答のまま。
 
 ### POST /api/admin/ban
 
-管理人がIPハッシュ、UAハッシュ、ファイルSHA256をBANする。Phase 10-Dではスタブ応答のまま。
+管理人がIPハッシュ、UAハッシュ、ファイルSHA256をBANする。Phase 10-Eではスタブ応答のまま。
 
 ## 追加設計エンドポイント
 
@@ -275,7 +288,7 @@ DBには `displayVersion` / `display_version` を保存しない。
 | `METHOD_NOT_ALLOWED` | 405 | 許可されていないHTTPメソッド。 |
 | `NOT_FOUND` | 404 | 対応するAPIがない。 |
 | `INVALID_QUERY_PARAM` | 400 | `page` / `pageSize` が不正。 |
-| `D1_QUERY_FAILED` | 500 | D1から投稿一覧を取得できなかった。 |
+| `D1_QUERY_FAILED` | 500 | D1からデータを取得できなかった。 |
 | `INVALID_FORM` | 400 | multipart/form-dataや必須項目が不正。 |
 | `PASSWORD_REQUIRED` | 400 | 管理パスワードが未入力。 |
 | `SERVER_CONFIG_ERROR` | 500 | `HASH_SECRET` などサーバー設定が不足。 |
@@ -289,6 +302,12 @@ DBには `displayVersion` / `display_version` を保存しない。
 | `ZIP_INSPECTION_FAILED` | 400 | zip検査に失敗した。後続Phaseで使用予定。 |
 | `R2_UPLOAD_FAILED` | 500 | R2への保存に失敗。 |
 | `DB_INSERT_FAILED` | 500 | D1への保存に失敗。 |
+| `INVALID_FILE_ID` | 400 | `fileId` が空または不正。 |
+| `FILE_NOT_FOUND` | 404 | fileIdに対応するversionがない。 |
+| `FILE_NOT_AVAILABLE` | 403 | versionまたはchartが非表示。 |
+| `FILE_DOWNLOAD_BLOCKED` | 403 | versionのDLがブロックされている。 |
+| `R2_FILE_NOT_FOUND` | 404 | D1 metadataはあるがR2 objectがない。 |
+| `R2_DOWNLOAD_FAILED` | 500 | R2からの取得に失敗。 |
 | `INVALID_CHART_ID` | 400 | `chartId` が空または不正。 |
 | `INVALID_VERSION_ID` | 400 | `versionId` が空または不正。 |
 | `TITLE_ARTIST_MISMATCH` | 400 | 追記先chartとアップロード譜面の曲情報が一致しない。 |
@@ -297,5 +316,5 @@ DBには `displayVersion` / `display_version` を保存しない。
 | `DELETE_REQUEST_ALREADY_EXISTS` | 409 | 未処理の削除申請が既にある。 |
 | `ADMIN_AUTH_REQUIRED` | 401 | 管理APIの認証が不足または不一致。 |
 | `CONFIG_MISSING` | 500 | 管理APIなどの必須secretが未設定。 |
-| `UNKNOWN_ERROR` | 500 | 初回投稿中の想定外エラー。 |
+| `UNKNOWN_ERROR` | 500 | 想定外エラー。 |
 | `INTERNAL_ERROR` | 500 | 未処理例外。 |
