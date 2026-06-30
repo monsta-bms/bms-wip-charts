@@ -1,90 +1,112 @@
 # テスト手順
 
-## Phase 10-A改の対象
+## Phase 10-Cの対象
 
-Phase 10-A改ではD1 schema / migrationのみを確認する。
+Phase 10-Cでは `GET /api/charts` のD1読み取りを確認する。
 
 今回確認するもの:
 
-- `worker/migrations/0001_initial.sql`
-- `schema/d1.sql`
-- D1テーブル作成
-- 外部キー制約
-- 分岐versionを表現できること
-- DL制御カラム
-- 削除申請テーブル
-- index作成
+- `GET /api/charts` がD1の `songs` / `charts` / `versions` を読めること
+- `song` / `chart` / `versions` の3層JSONで返ること
+- `charts.is_hidden=1` のchartが通常一覧に出ないこと
+- `versions.is_hidden=1` のversionが通常一覧に出ないこと
+- versionsが `branch_path` 昇順で返ること
+- `displayVersion` がAPI側で生成されること
+- `progress=100` のversionで `completed: true` と `completedAt` が返ること
+- `downloadBlocked` / `downloadBlockReason` が返ること
+- 取り下げ、削除申請、非表示状態のフィールドが返ること
+- 空DB時に `charts: []` が返ること
+- D1エラー時に `code`, `message`, `detail` のJSONエラーが返ること
 
 今回確認しないもの:
 
-- WorkerのD1読み取り実装
-- 投稿APIの本実装
+- `POST /api/charts`
+- `POST /api/charts/:chartId/versions`
 - R2保存
-- BMSメタデータ読取
 - zip検査
-- IP/UAレート制限
+- BMSメタデータ読取
+- 取り下げAPI
+- 削除申請API
+- 難易度表API
 - フロント接続
 
-## 静的確認
+## 事前確認
 
-以下のテーブルが定義されていることを確認する。
-
-- `songs`
-- `charts`
-- `versions`
-- `delete_requests`
-- `post_logs`
-- `bans`
-- `admin_logs`
-
-確認観点:
-
-- `songs` は元曲単位の情報を持つ。
-- `charts` は差分単位の情報を持ち、`songs` へ外部キーを持つ。
-- `versions` は分岐・履歴単位の情報を持ち、`charts` へ外部キーを持つ。
-- `versions.parent_version_id` でversion同士の親子関係を表現できる。
-- `versions.branch_path` でツリー表示、ページング、祖先DL制御、並び順を扱える。
-- root versionだけ `parent_version_id` がNULLで、それ以外は親を持つ。
-- `display_version` はDB保存されていない。
-- `versions.password_hash` があり、生パスワードを保存しない設計になっている。
-- `versions.download_blocked`, `download_block_reason`, `download_blocked_at` がある。
-- `versions.completed_at`, `withdrawn_at`, `delete_requested_at`, `hidden_at` がある。
-- `delete_requests` がある。
-- `bans` は `ip_hash`, `ua_hash`, `file_sha256` をBAN対象にできる。
-- cascade削除ではなく、基本はhidden / DLブロックによる論理管理になっている。
-- よく使う検索条件にindexがある。
-
-## Wranglerでの確認
+依存関係を入れていない環境では、先に `worker` ディレクトリで依存関係を入れる。
 
 ```bash
 cd worker
-npx wrangler d1 migrations list wip-bms-charts-db
+npm install
+```
+
+型チェック:
+
+```bash
+npm run typecheck
+```
+
+この環境で `npm install` や `npm run typecheck` が実行できない場合は、実行できなかった旨を作業報告に残す。
+
+## ローカルD1で確認する場合
+
+ローカルD1にmigrationを適用する。
+
+```bash
+cd worker
 npx wrangler d1 migrations apply wip-bms-charts-db --local
 ```
 
-ローカルD1に対してテーブル一覧を確認する。
+Workerを起動する。
 
 ```bash
-npx wrangler d1 execute wip-bms-charts-db --local --command "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
+npm run dev
 ```
 
-index一覧を確認する。
+別ターミナルで確認する。
 
 ```bash
-npx wrangler d1 execute wip-bms-charts-db --local --command "SELECT name FROM sqlite_master WHERE type='index' ORDER BY name;"
+curl http://localhost:8787/api/health
+curl http://localhost:8787/api/charts
+curl "http://localhost:8787/api/charts?page=1&pageSize=100"
 ```
 
-## Dashboardでの確認
+空DB時の期待レスポンス:
 
-1. Cloudflare Dashboardを開く。
-2. D1 database `wip-bms-charts-db` を開く。
-3. Query画面で `schema/d1.sql` の内容を実行する。
-4. `songs`, `charts`, `versions`, `delete_requests`, `post_logs`, `bans`, `admin_logs` が存在することを確認する。
-5. indexが作成されていることを確認する。
+```json
+{
+  "charts": [],
+  "pagination": {
+    "page": 1,
+    "pageSize": 100,
+    "hasNext": false
+  }
+}
+```
 
-## 最小SQL確認
+## remote D1で確認する場合
 
-テーブル作成後、以下のSQLで3層構造と分岐versionを確認する。
+remote D1にはPhase 10-A改のmigrationが適用済みであること。
+
+Wranglerのremote devを使う場合:
+
+```bash
+cd worker
+npx wrangler dev --remote
+```
+
+別ターミナルで確認する。
+
+```bash
+curl http://localhost:8787/api/charts
+curl "http://localhost:8787/api/charts?page=1&pageSize=10"
+curl "http://localhost:8787/api/charts?page=1&pageSize=10&q=test"
+```
+
+`q` はPhase 10-Cでは受け取るだけで、検索絞り込みはまだ行わない。
+
+## 最小テストデータ
+
+空DBではない状態を確認したい場合は、D1に以下のデータを入れる。
 
 ```sql
 INSERT INTO songs (
@@ -210,75 +232,123 @@ INSERT INTO versions (
   'hashed-password-a',
   CURRENT_TIMESTAMP
 );
-
-SELECT
-  songs.title,
-  charts.chart_name,
-  versions.version_number,
-  versions.branch_path,
-  versions.progress,
-  versions.completed_at
-FROM versions
-JOIN charts ON charts.id = versions.chart_id
-JOIN songs ON songs.id = charts.song_id
-WHERE charts.id = 'chart_test_another'
-ORDER BY versions.branch_path;
 ```
 
-DL不可状態の確認例:
+期待する主な確認点:
 
-```sql
-UPDATE versions
-SET
-  download_blocked = 1,
-  download_block_reason = 'superseded_by_completed_descendant',
-  download_blocked_at = CURRENT_TIMESTAMP,
-  updated_at = CURRENT_TIMESTAMP
-WHERE id = 'version_test_root';
-
-SELECT id, download_blocked, download_block_reason
-FROM versions
-WHERE chart_id = 'chart_test_another'
-ORDER BY branch_path;
-```
-
-削除申請の確認例:
-
-```sql
-INSERT INTO delete_requests (
-  id,
-  version_id,
-  chart_id,
-  message,
-  requester_ip_hash,
-  requester_ua_hash
-) VALUES (
-  'delete_request_test_1',
-  'version_test_a',
-  'chart_test_another',
-  'test delete request',
-  'ip_hash_test',
-  'ua_hash_test'
-);
-
-SELECT id, status, created_at
-FROM delete_requests
-WHERE chart_id = 'chart_test_another';
-```
+- `charts[0].song.title` が `Test Song` になる。
+- `charts[0].chart.name` が `[ANOTHER]` になる。
+- `charts[0].versions[0].displayVersion` が `ver1.0` になる。
+- `charts[0].versions[1].displayVersion` が `ver2.0-a` になる。
+- `charts[0].versions[1].completed` が `true` になる。
+- `charts[0].versions[1].completedAt` に日時が入る。
 
 確認後、テストデータは必要に応じて削除する。
 
 ```sql
-DELETE FROM delete_requests WHERE id = 'delete_request_test_1';
 DELETE FROM versions WHERE id IN ('version_test_a', 'version_test_root');
 DELETE FROM charts WHERE id = 'chart_test_another';
 DELETE FROM songs WHERE id = 'song_test_1';
 ```
 
-## 注意
+## 非表示の確認
 
-Dashboardから `schema/d1.sql` を直接実行した場合、Wrangler migration履歴には残らない。
+version非表示:
 
-以後Wrangler migrationsで管理する場合は、Dashboard実行とWrangler実行を混在させない。
+```sql
+UPDATE versions
+SET is_hidden = 1,
+    hidden_reason = 'test hidden',
+    hidden_at = CURRENT_TIMESTAMP,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = 'version_test_root';
+```
 
-Phase 10-A改は本番データなし前提で `0001_initial.sql` を上書き再設計している。旧schemaを既に適用済みの場合は、リセット手順を確認してから適用する。
+`GET /api/charts` で `version_test_root` が返らないことを確認する。
+
+chart非表示:
+
+```sql
+UPDATE charts
+SET is_hidden = 1,
+    hidden_reason = 'test hidden',
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = 'chart_test_another';
+```
+
+`GET /api/charts` で `chart_test_another` が返らないことを確認する。
+
+## DLブロック状態の確認
+
+```sql
+UPDATE versions
+SET download_blocked = 1,
+    download_block_reason = 'withdrawn',
+    withdrawn_at = CURRENT_TIMESTAMP,
+    download_blocked_at = CURRENT_TIMESTAMP,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = 'version_test_root';
+```
+
+`GET /api/charts` で以下を確認する。
+
+- `downloadBlocked` が `true`
+- `downloadBlockReason` が `withdrawn`
+- `withdrawn` が `true`
+- `file.downloadUrl` が `null`
+
+## 異常系の確認
+
+不正な `page`:
+
+```bash
+curl "http://localhost:8787/api/charts?page=0"
+```
+
+期待レスポンス:
+
+```json
+{
+  "code": "INVALID_QUERY_PARAM",
+  "message": "クエリパラメータが不正です。",
+  "detail": "page must be a positive safe integer."
+}
+```
+
+不正な `pageSize`:
+
+```bash
+curl "http://localhost:8787/api/charts?pageSize=999"
+```
+
+期待レスポンス:
+
+```json
+{
+  "code": "INVALID_QUERY_PARAM",
+  "message": "クエリパラメータが不正です。",
+  "detail": "pageSize must be 200 or less."
+}
+```
+
+CORS確認:
+
+```bash
+curl -H "Origin: https://example.invalid" http://localhost:8787/api/charts
+```
+
+`ALLOWED_ORIGIN` と一致しない場合は `CORS_ORIGIN_NOT_ALLOWED` が返る。
+
+## D1エラー時の確認
+
+D1 binding名が誤っている、migration未適用、または対象テーブルが存在しない場合、`GET /api/charts` は以下の形式で失敗する。
+
+```json
+{
+  "code": "D1_QUERY_FAILED",
+  "message": "投稿一覧の取得に失敗しました。",
+  "detail": "D1 read failed in charts-list-d1-read: ..."
+}
+```
+
+Workerログには `[charts-list-d1-read]` を含む `console.error` が出る。
