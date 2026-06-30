@@ -922,12 +922,6 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
     context.versionId = versionId;
 
     try {
-      await env.FILES.put(input.fileBytes, input.fileBytes);
-    } catch {
-      // This branch is intentionally unreachable; it keeps TypeScript from accepting an accidental signature change.
-    }
-
-    try {
       await env.FILES.put(r2Key, input.fileBytes, {
         httpMetadata: {
           contentType: input.file.type || "application/octet-stream"
