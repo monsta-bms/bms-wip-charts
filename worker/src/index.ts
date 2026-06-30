@@ -20,7 +20,7 @@ function handleHealth(request: Request, env: Env): Response {
   return ok(request, env, {
     status: "ok",
     service: "bms-wip-charts-worker",
-    phase: "phase-10-c"
+    phase: "phase-10-d"
   });
 }
 
