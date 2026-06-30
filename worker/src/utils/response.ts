@@ -23,6 +23,22 @@ function getRequestOrigin(request: Request): string {
   return request.headers.get("Origin") ?? "";
 }
 
+export function errorDetail(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
 export function isCorsAllowed(request: Request, env: Env): boolean {
   const origin = getRequestOrigin(request);
   if (!origin) {
