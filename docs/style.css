@@ -49,6 +49,14 @@ button:focus-visible {
   background: var(--primary-dark);
 }
 
+button:disabled,
+button:disabled:hover,
+button:disabled:focus-visible {
+  background: #b7c5c0;
+  color: #f8fbfa;
+  cursor: not-allowed;
+}
+
 button.secondary {
   background: #e4ece9;
   color: var(--primary-dark);
@@ -57,6 +65,13 @@ button.secondary {
 button.secondary:hover,
 button.secondary:focus-visible {
   background: #d3e1dc;
+}
+
+button.secondary:disabled,
+button.secondary:disabled:hover,
+button.secondary:disabled:focus-visible {
+  background: #eef3f1;
+  color: #82918d;
 }
 
 button:focus-visible,
@@ -157,6 +172,7 @@ h2 {
   font-weight: 700;
   margin-bottom: 16px;
   padding: 12px 14px;
+  white-space: pre-wrap;
 }
 
 .form-grid {
@@ -180,6 +196,23 @@ h2 {
   font-weight: 700;
 }
 
+.checkbox-field {
+  align-content: end;
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  min-height: 42px;
+}
+
+.checkbox-field input {
+  min-height: 0;
+  width: auto;
+}
+
+.checkbox-field span {
+  color: var(--text);
+}
+
 input,
 textarea {
   background: #ffffff;
@@ -189,6 +222,11 @@ textarea {
   min-height: 42px;
   padding: 9px 11px;
   width: 100%;
+}
+
+input.readonly-input {
+  background: #eef3f6;
+  color: var(--muted);
 }
 
 textarea {
@@ -215,6 +253,15 @@ input[aria-invalid="true"] {
   gap: 16px;
 }
 
+.list-status {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  font-weight: 700;
+  padding: 18px;
+}
+
 .chart-group {
   overflow: hidden;
 }
@@ -238,6 +285,16 @@ input[aria-invalid="true"] {
 .chart-artist {
   color: var(--muted);
   font-weight: 700;
+}
+
+.chart-name-badge {
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 2px 8px;
 }
 
 .version-list {
@@ -290,12 +347,29 @@ input[aria-invalid="true"] {
   padding: 2px 9px;
 }
 
+.rejected-badge {
+  background: var(--danger-bg);
+  border: 1px solid rgba(180, 35, 24, 0.22);
+  border-radius: 999px;
+  color: var(--danger);
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 800;
+  margin-left: 6px;
+  padding: 2px 8px;
+}
+
 .version-actions {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
+}
+
+.download-disabled {
+  color: var(--muted);
+  font-weight: 800;
 }
 
 @media (max-width: 840px) {
@@ -336,7 +410,9 @@ input[aria-invalid="true"] {
   }
 
   .version-actions a,
-  .version-actions button {
+  .version-actions button,
+  .download-disabled {
     text-align: center;
+    width: 100%;
   }
 }
