@@ -2,7 +2,7 @@
 
 ## 概要
 
-Phase 10-FEでは、GitHub Pages の静的フロント画面を本番Worker APIへ接続した。
+GitHub Pages の静的フロント画面を本番Worker APIへ接続している。
 
 本番Worker URL:
 
@@ -110,18 +110,43 @@ GitHub Pages側では `code`, `message`, `detail` を画面上部のエラー欄
 - 将来の難易度表APIでは `level` を返してよい。
 - DB上の `versions.level` カラムは残す。
 
-`POST /api/charts` では、`level` が未入力の場合に `difficulty` から可能な範囲で自動抽出する。
+GitHub Pagesの初回投稿フォームでは、想定難易度をテキスト入力ではなく「シンボルタブ + 数字チップ式UI」で選択する。
 
-抽出例:
+選択UI:
 
-| difficulty | 表示 | 保存するlevel |
+- シンボルタブ: `★`, `★★`, `sl`, `st`, `手入力`
+- `★`: 1〜25
+- `★★`: 1〜7
+- `sl`: 1〜12
+- `st`: 1〜15
+- `手入力`: 2桁までの数字を含む自由入力
+
+シンボル変更時に現在の数字が新しいシンボルの上限を超える場合、フロント側で最大値へ丸める。
+
+例:
+
+- `★25` から `★★` へ変更した場合、`★★7` に補正する。
+- `★25` から `sl` へ変更した場合、`sl12` に補正する。
+- `★25` から `st` へ変更した場合、`st15` に補正する。
+
+送信値:
+
+| UI入力 | 送信するdifficulty | 送信するlevel |
 | --- | --- | --- |
-| `★12` | `★12` | `12` |
-| `st5` | `st5` | `5` |
-| `sl8` | `sl8` | `8` |
-| `12` | `12` | `12` |
+| `★` + `12` | `★12` | `12` |
+| `★★` + `7` | `★★7` | `7` |
+| `sl` + `8` | `sl8` | `8` |
+| `st` + `15` | `st15` | `15` |
+| 手入力 `★12` | `★12` | `12` |
+| 手入力 `★★7` | `★★7` | `7` |
+| 手入力 `sl10` | `sl10` | `10` |
+| 手入力 `st15` | `st15` | `15` |
+| 手入力 `12` | `12` | `12` |
+| 手入力 `overjoy` | `overjoy` | 空文字または `null` |
 
-抽出できない場合、`level` は空または `null` として扱う。
+手入力では、入力された文字列を `difficulty` として扱う。1〜2桁の数字を抽出できる場合のみ `level` を送る。3桁以上の数字部分はフロント側で拒否する。
+
+`POST /api/charts` では、既存互換のため引き続き `difficulty` と `level` を受け取る。`level` が未入力の場合は、Worker側でも `difficulty` から可能な範囲で自動抽出する。
 
 ## D1 schema
 
@@ -228,9 +253,10 @@ GitHub Pages側は `multipart/form-data` で本番Workerへ送信する。
 
 主な仕様:
 
-- `file`, `chartName`, `author`, `progress`, `password` は必須。
-- `title` / `artist` はBMS本文から読める場合は空でもよい。
+- `file`, `chartName`, `difficulty`, `author`, `progress`, `password` はGitHub Pagesフォーム上で必須。
+- `title` / `artist` はBMS本文から読める場合は自動入力され、読み取り結果が違う場合は手修正できる。
 - 通常フォームでは `level` を見える入力欄として表示しない。
+- GitHub Pages側は選択UIから `difficulty` と `level` を組み立てて送信する。
 - `level` が未入力の場合は `difficulty` から可能な範囲で自動抽出する。
 - 許可拡張子は `.bms`, `.bme`, `.bml`, `.zip` のみ。
 - 単体譜面ファイルは2MBまで。
