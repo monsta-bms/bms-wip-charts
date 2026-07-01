@@ -20,7 +20,10 @@ https://monsta-bms.github.io/bms-wip-charts/
 
 - GitHub Pages画面から `GET /api/charts` を呼び、一覧を表示できること
 - 投稿フォームから `multipart/form-data` で `POST /api/charts` へ送信できること
+- 初回投稿フォームに見える `level` 入力欄がないこと
 - 投稿成功後に `GET /api/charts` を再取得して一覧が更新されること
+- 一覧の想定難易度が `difficulty` のみで表示され、`★11 / 12` のような併記にならないこと
+- `difficulty` から内部値 `level` が可能な範囲で保存されること
 - APIエラーの `code`, `message`, `detail` が画面上部に表示されること
 - 送信中に投稿ボタンがdisabledになり、二重送信を防げること
 - 管理パスワードをlocalStorageへ保存できること
@@ -30,6 +33,7 @@ https://monsta-bms.github.io/bms-wip-charts/
 
 今回確認しないもの:
 
+- DB migration
 - `POST /api/charts/:chartId/versions`
 - 追記投稿
 - 取り下げ
@@ -83,7 +87,7 @@ npm run typecheck
 npm run deploy
 ```
 
-`ALLOWED_ORIGINS` の変更を反映するにはdeployが必要。
+`worker/src/routes/charts.ts` を変更しているため、level自動抽出を本番反映するにはWorker deployが必要。
 
 ## API単体確認
 
@@ -113,9 +117,12 @@ Access-Control-Allow-Headers: Content-Type,Authorization
 ## GitHub Pages表示確認
 
 1. `https://monsta-bms.github.io/bms-wip-charts/` を開く。
-2. 投稿一覧に本番Workerの `GET /api/charts` の結果が表示されることを確認する。
-3. データが0件の場合は「投稿はまだありません。」が表示されることを確認する。
-4. ブラウザの開発者ツールでCORSエラーが出ていないことを確認する。
+2. 初回投稿フォームに「想定難易度」はあり、「level」の見える入力欄がないことを確認する。
+3. 投稿一覧に本番Workerの `GET /api/charts` の結果が表示されることを確認する。
+4. 一覧の想定難易度が `difficulty` のみで表示されることを確認する。
+5. `★11 / 12` や `st5 / 5` のような `level` 併記が表示されないことを確認する。
+6. データが0件の場合は「投稿はまだありません。」が表示されることを確認する。
+7. ブラウザの開発者ツールでCORSエラーが出ていないことを確認する。
 
 ## テスト用BMSファイル作成例
 
@@ -124,24 +131,48 @@ PowerShell例:
 ```powershell
 @"
 #PLAYER 1
-#TITLE Test Song Phase 10-FE
+#TITLE Test Song Difficulty Display
 #ARTIST Test Artist
 #PLAYLEVEL 3
 #BPM 120
 #00111:01
-"@ | Set-Content -Encoding UTF8 .\phase10fe-test.bms
+"@ | Set-Content -Encoding UTF8 .\difficulty-display-test.bms
 ```
 
 ## GitHub Pagesから初回投稿確認
 
 1. GitHub Pages画面を開く。
-2. `phase10fe-test.bms` を選択する。
+2. `difficulty-display-test.bms` を選択する。
 3. `#TITLE` と `#ARTIST` が曲名/アーティスト欄へ自動入力されることを確認する。
-4. 差分名、想定難易度、level、差分作者、進捗度、コメント、管理パスワードを入力する。
-5. 「投稿する」を押す。
-6. 送信中は投稿ボタンがdisabledになることを確認する。
-7. 投稿成功後、一覧が再取得され、新しい投稿が表示されることを確認する。
-8. DLリンクが `https://bms-wip-charts-worker.monsta3228gsl.workers.dev/api/files/...` を指すことを確認する。
+4. 差分名、想定難易度、差分作者、進捗度、コメント、管理パスワードを入力する。
+5. 想定難易度に `★12` を入力する。
+6. 「投稿する」を押す。
+7. 送信中は投稿ボタンがdisabledになることを確認する。
+8. 投稿成功後、一覧が再取得され、新しい投稿が表示されることを確認する。
+9. 一覧の想定難易度が `★12` と表示され、`★12 / 12` にならないことを確認する。
+10. DLリンクが `https://bms-wip-charts-worker.monsta3228gsl.workers.dev/api/files/...` を指すことを確認する。
+
+## level内部値確認
+
+`difficulty` から `level` が抽出されることをAPIまたはD1で確認する。
+
+確認例:
+
+| difficulty | 期待するlevel |
+| --- | --- |
+| `★12` | `12` |
+| `st5` | `5` |
+| `sl8` | `8` |
+| `12` | `12` |
+
+D1確認例:
+
+```bash
+cd worker
+npx wrangler d1 execute wip-bms-charts-db --command "SELECT difficulty, level FROM versions WHERE title LIKE '%Difficulty Display%' ORDER BY created_at DESC LIMIT 5;"
+```
+
+抽出できない `difficulty` の場合、`level` は空または `NULL` でよい。
 
 ## isRejected=true確認
 
@@ -189,9 +220,9 @@ D1は外部キーがあるため、versionから順に削除する。
 
 ```sql
 DELETE FROM post_logs WHERE detail LIKE '%Initial chart version created.%' OR error_code IS NOT NULL;
-DELETE FROM versions WHERE title LIKE '%Phase 10-FE%' OR title LIKE '%Phase10FE%';
+DELETE FROM versions WHERE title LIKE '%Difficulty Display%';
 DELETE FROM charts WHERE chart_name IN ('[REJECTED]', '[NORMAL]', '[INVALID]');
-DELETE FROM songs WHERE title LIKE '%Phase 10-FE%' OR title LIKE '%Phase10FE%';
+DELETE FROM songs WHERE title LIKE '%Difficulty Display%';
 ```
 
 R2は `charts/{chartId}/versions/root/` 配下のテストファイルをDashboardから削除する。
