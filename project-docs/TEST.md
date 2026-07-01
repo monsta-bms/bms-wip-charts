@@ -1,52 +1,72 @@
 # テスト手順
 
-## Phase 10-Fの対象
+## Phase 10-FEの対象
 
-Phase 10-Fでは、没譜面仕様と自動削除準備の最小修正を確認する。
+Phase 10-FEでは、GitHub Pages の静的フロント画面が本番Worker APIへ接続できることを確認する。
+
+本番Worker URL:
+
+```text
+https://bms-wip-charts-worker.monsta3228gsl.workers.dev
+```
+
+GitHub Pages URL:
+
+```text
+https://monsta-bms.github.io/bms-wip-charts/
+```
 
 今回確認するもの:
 
-- `worker/migrations/0002_file_delete_and_rejected_rules.sql` をD1へ適用できること
-- `versions.file_deleted_at` と `versions.file_delete_reason` が追加されること
-- `POST /api/charts` で `isRejected=true` の場合、入力 `progress` に関係なく保存値が `100` になること
-- `isRejected=true` の場合、`completedAt` が返ること
-- `POST /api/charts` の成功レスポンスに `progress`, `isRejected`, `completedAt` が含まれること
-- `GET /api/charts` で対象versionが `progress: 100`, `completed: true`, `isRejected: true` として返ること
-- エラーが必ず `code`, `message`, `detail` のJSONになること
+- GitHub Pages画面から `GET /api/charts` を呼び、一覧を表示できること
+- 投稿フォームから `multipart/form-data` で `POST /api/charts` へ送信できること
+- 投稿成功後に `GET /api/charts` を再取得して一覧が更新されること
+- APIエラーの `code`, `message`, `detail` が画面上部に表示されること
+- 送信中に投稿ボタンがdisabledになり、二重送信を防げること
+- 管理パスワードをlocalStorageへ保存できること
+- `isRejected=true` の場合、画面上でも `progress=100` 扱いに見えること
+- DLリンクが本番Worker URLへ向いていること
+- CORSで `https://monsta-bms.github.io` が許可されていること
 
 今回確認しないもの:
 
-- Cron Trigger実装
-- R2自動削除処理
-- `POST /api/charts/:chartId/versions` の本実装
-- 取り下げAPI
-- 削除申請API
+- `POST /api/charts/:chartId/versions`
+- 追記投稿
+- 取り下げ
+- 削除申請
 - 難易度表API
-- フロント接続
+- 検索
+- ページング本実装
+- 管理画面
+- Cron Trigger
+- R2自動削除処理
 
-## 事前準備
+## Worker deploy前の確認
 
-依存関係を入れていない環境では、先に `worker` ディレクトリで依存関係を入れる。
+`worker/wrangler.toml` の `[vars]` に以下が入っていることを確認する。
 
-```bash
-cd worker
-npm install
+```toml
+ALLOWED_ORIGINS = "https://monsta-bms.github.io,http://localhost:8787"
 ```
 
-型チェック:
+D1/R2 bindingが設定済みであることを確認する。
 
-```bash
-npm run typecheck
+```toml
+[[d1_databases]]
+binding = "DB"
+database_name = "wip-bms-charts-db"
+
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "wip-bms-charts-files"
 ```
 
-ローカル確認用のsecretは、コミットしない `.dev.vars` などで設定する。
+必要なCloudflare secrets:
 
-```text
-HASH_SECRET=local-dev-hash-secret
-ADMIN_TOKEN=local-dev-admin-token
-```
+- `HASH_SECRET`
+- `ADMIN_TOKEN`
 
-remoteに設定する場合:
+設定例:
 
 ```bash
 cd worker
@@ -54,67 +74,48 @@ npx wrangler secret put HASH_SECRET
 npx wrangler secret put ADMIN_TOKEN
 ```
 
-## 0002 migration適用
-
-ローカルD1へ適用する。
+## Worker deploy
 
 ```bash
 cd worker
-npx wrangler d1 migrations apply wip-bms-charts-db --local
+npm install
+npm run typecheck
+npm run deploy
 ```
 
-remote D1へ適用する場合は `--local` を外す。
+`ALLOWED_ORIGINS` の変更を反映するにはdeployが必要。
+
+## API単体確認
 
 ```bash
-cd worker
-npx wrangler d1 migrations apply wip-bms-charts-db
+curl.exe "https://bms-wip-charts-worker.monsta3228gsl.workers.dev/api/health"
+curl.exe "https://bms-wip-charts-worker.monsta3228gsl.workers.dev/api/charts?page=1&pageSize=100"
 ```
 
-DashboardからSQL実行する場合は、以下を実行する。
-
-```sql
-ALTER TABLE versions ADD COLUMN file_deleted_at TEXT;
-ALTER TABLE versions ADD COLUMN file_delete_reason TEXT;
-```
-
-## 追加カラム確認
-
-ローカルD1で確認する。
+CORS preflight確認例:
 
 ```bash
-cd worker
-npx wrangler d1 execute wip-bms-charts-db --local --command "PRAGMA table_info(versions);"
+curl.exe -i -X OPTIONS "https://bms-wip-charts-worker.monsta3228gsl.workers.dev/api/charts" ^
+  -H "Origin: https://monsta-bms.github.io" ^
+  -H "Access-Control-Request-Method: POST" ^
+  -H "Access-Control-Request-Headers: Content-Type"
 ```
 
-remote確認の場合は `--local` を外す。
+期待する主なヘッダー:
 
-期待すること:
-
-- `file_deleted_at` が存在する
-- `file_delete_reason` が存在する
-
-## Worker起動
-
-ローカルD1/R2で確認する場合:
-
-```bash
-cd worker
-npm run dev
+```text
+HTTP/1.1 204 No Content
+Access-Control-Allow-Origin: https://monsta-bms.github.io
+Access-Control-Allow-Methods: GET,POST,OPTIONS
+Access-Control-Allow-Headers: Content-Type,Authorization
 ```
 
-remote D1/R2で確認する場合:
+## GitHub Pages表示確認
 
-```bash
-cd worker
-npx wrangler dev --remote
-```
-
-別ターミナルで確認する。
-
-```bash
-curl.exe http://localhost:8787/api/health
-curl.exe http://localhost:8787/api/charts
-```
+1. `https://monsta-bms.github.io/bms-wip-charts/` を開く。
+2. 投稿一覧に本番Workerの `GET /api/charts` の結果が表示されることを確認する。
+3. データが0件の場合は「投稿はまだありません。」が表示されることを確認する。
+4. ブラウザの開発者ツールでCORSエラーが出ていないことを確認する。
 
 ## テスト用BMSファイル作成例
 
@@ -123,224 +124,62 @@ PowerShell例:
 ```powershell
 @"
 #PLAYER 1
-#TITLE Test Song Phase 10-F Rejected
+#TITLE Test Song Phase 10-FE
 #ARTIST Test Artist
 #PLAYLEVEL 3
 #BPM 120
 #00111:01
-"@ | Set-Content -Encoding UTF8 .\phase10f-rejected.bms
+"@ | Set-Content -Encoding UTF8 .\phase10fe-test.bms
 ```
 
-## isRejected=true 初回投稿確認
+## GitHub Pagesから初回投稿確認
 
-`progress=30` を送っても、保存値とレスポンスは `progress=100` になることを確認する。
+1. GitHub Pages画面を開く。
+2. `phase10fe-test.bms` を選択する。
+3. `#TITLE` と `#ARTIST` が曲名/アーティスト欄へ自動入力されることを確認する。
+4. 差分名、想定難易度、level、差分作者、進捗度、コメント、管理パスワードを入力する。
+5. 「投稿する」を押す。
+6. 送信中は投稿ボタンがdisabledになることを確認する。
+7. 投稿成功後、一覧が再取得され、新しい投稿が表示されることを確認する。
+8. DLリンクが `https://bms-wip-charts-worker.monsta3228gsl.workers.dev/api/files/...` を指すことを確認する。
 
-```powershell
-curl.exe -X POST "http://localhost:8787/api/charts" `
-  -F "file=@.\phase10f-rejected.bms;type=text/plain" `
-  -F "title=" `
-  -F "subtitle=" `
-  -F "artist=" `
-  -F "subartist=" `
-  -F "chartName=[REJECTED]" `
-  -F "difficulty=★3" `
-  -F "level=3" `
-  -F "author=tester" `
-  -F "progress=30" `
-  -F "comment=https://example.com/sound-source" `
-  -F "isRejected=true" `
-  -F "password=test-password"
-```
+## isRejected=true確認
 
-期待レスポンス例:
+1. 没譜面チェックをONにする。
+2. 進捗度欄が `100` 表示になり、編集不可に見えることを確認する。
+3. 投稿する。
+4. 一覧で `100%` と没譜面バッジが表示されることを確認する。
 
-```json
-{
-  "songId": "song_...",
-  "chartId": "chart_...",
-  "versionId": "version_...",
-  "fileId": "file_...",
-  "displayVersion": "ver1.0",
-  "progress": 100,
-  "isRejected": true,
-  "completed": true,
-  "completedAt": "2026-07-01T12:00:00.000Z",
-  "file": {
-    "name": "phase10f-rejected.bms",
-    "size": 1024,
-    "sha256": "...",
-    "md5": "...",
-    "downloadUrl": "/api/files/file_..."
-  },
-  "metadata": {
-    "title": "Test Song Phase 10-F Rejected",
-    "artist": "Test Artist",
-    "encoding": "utf-8"
-  },
-  "warnings": []
-}
-```
+API側でも `progress=100` に強制されるため、ブラウザ側の表示は補助扱いとする。
 
-確認ポイント:
+## 管理パスワード保存確認
 
-- `progress` が `100`
-- `isRejected` が `true`
-- `completed` が `true`
-- `completedAt` が `null` ではない
+1. 管理パスワードを入力する。
+2. 「パスワードを保存」をONにする。
+3. 投稿する、またはチェック状態を変更する。
+4. ページを再読み込みする。
+5. 管理パスワード欄に保存値が復元されることを確認する。
+6. 「パスワードを保存」をOFFにするとlocalStorageから削除されることを確認する。
 
-## D1保存値確認
+## APIエラー表示確認
 
-レスポンスの `<versionId>` を使って確認する。
+意図的に重複ファイルを投稿するなどしてAPIエラーを発生させる。
 
-```bash
-cd worker
-npx wrangler d1 execute wip-bms-charts-db --local --command "SELECT id, progress, is_rejected, completed_at, file_deleted_at, file_delete_reason FROM versions WHERE id = '<versionId>';"
-```
-
-remote確認の場合は `--local` を外す。
-
-期待する値:
+期待表示例:
 
 ```text
-progress = 100
-is_rejected = 1
-completed_at = NULLではない
-file_deleted_at = NULL
-file_delete_reason = NULL
+code: DUPLICATE_FILE
+message: 同じファイルは投稿できません。
+detail: A version with the same file_sha256 already exists.
 ```
 
-## GET /api/chartsでの確認
+## CORSエラー時の確認
 
-```powershell
-curl.exe "http://localhost:8787/api/charts?page=1&pageSize=10"
-```
+画面上で通信に失敗し、ブラウザコンソールにCORSエラーが出る場合は以下を確認する。
 
-対象versionの期待値:
-
-```json
-{
-  "progress": 100,
-  "completed": true,
-  "completedAt": "2026-07-01T12:00:00.000Z",
-  "isRejected": true
-}
-```
-
-## isRejected=falseの通常投稿確認
-
-`isRejected=false` では従来通り、入力された `progress` が保存されることを確認する。
-
-```powershell
-@"
-#PLAYER 1
-#TITLE Test Song Phase 10-F Normal
-#ARTIST Test Artist
-#PLAYLEVEL 2
-#BPM 120
-#00111:01
-"@ | Set-Content -Encoding UTF8 .\phase10f-normal.bms
-
-curl.exe -X POST "http://localhost:8787/api/charts" `
-  -F "file=@.\phase10f-normal.bms;type=text/plain" `
-  -F "title=" `
-  -F "subtitle=" `
-  -F "artist=" `
-  -F "subartist=" `
-  -F "chartName=[NORMAL]" `
-  -F "difficulty=★2" `
-  -F "level=2" `
-  -F "author=tester" `
-  -F "progress=30" `
-  -F "comment=https://example.com/sound-source" `
-  -F "isRejected=false" `
-  -F "password=test-password"
-```
-
-期待すること:
-
-- `progress` が `30`
-- `isRejected` が `false`
-- `completed` が `false`
-- `completedAt` が `null`
-
-## progressバリデーション確認
-
-`isRejected=true` でも `progress` の入力バリデーションは維持する。
-
-```powershell
-curl.exe -X POST "http://localhost:8787/api/charts" `
-  -F "file=@.\phase10f-rejected.bms;type=text/plain" `
-  -F "title=Invalid Progress Test" `
-  -F "artist=Test Artist" `
-  -F "chartName=[INVALID]" `
-  -F "author=tester" `
-  -F "progress=101" `
-  -F "comment=" `
-  -F "isRejected=true" `
-  -F "password=test-password"
-```
-
-期待レスポンス:
-
-```json
-{
-  "code": "INVALID_PROGRESS",
-  "message": "進捗度の値が不正です。",
-  "detail": "progress must be an integer between 0 and 100."
-}
-```
-
-## 将来の追記APIテスト項目
-
-Phase 10-Fでは `POST /api/charts/:chartId/versions` は未実装のため、以下は将来Phaseで確認する。
-
-追記投稿で `isRejected=true` が送られた場合:
-
-```json
-{
-  "code": "INVALID_REJECTED_FLAG_FOR_FOLLOWUP",
-  "message": "追記投稿では没譜面チェックを指定できません。",
-  "detail": "isRejected is allowed only on initial chart creation."
-}
-```
-
-没譜面versionを親にして追記しようとした場合:
-
-```json
-{
-  "code": "REJECTED_CHART_CANNOT_BE_EXTENDED",
-  "message": "没譜面から追記投稿はできません。",
-  "detail": "The selected parent version is rejected and cannot be extended."
-}
-```
-
-## 将来の自動削除テスト項目
-
-Phase 10-FではCron TriggerとR2自動削除処理は未実装のため、以下は将来Phaseで確認する。
-
-対象条件:
-
-- `download_blocked=1`
-- `download_blocked_at` が30日以上前
-- `file_deleted_at IS NULL`
-- `download_block_reason` が以下のいずれか
-  - `superseded_by_completed_descendant`
-  - `withdrawn`
-  - `admin_blocked`
-  - `admin_hidden`
-
-期待する更新:
-
-```sql
-is_hidden = 1
-hidden_reason = 'auto_deleted_after_download_block'
-hidden_at = CURRENT_TIMESTAMP
-file_deleted_at = CURRENT_TIMESTAMP
-file_delete_reason = 'auto_deleted_after_download_block'
-updated_at = CURRENT_TIMESTAMP
-```
-
-`delete_requested` はMVPでは自動削除対象に含めない。
+- `worker/wrangler.toml` に `ALLOWED_ORIGINS = "https://monsta-bms.github.io,http://localhost:8787"` があること
+- `npm run deploy` 済みであること
+- GitHub Pages URLではなくOrigin `https://monsta-bms.github.io` を許可していること
 
 ## テストデータ削除
 
@@ -350,15 +189,9 @@ D1は外部キーがあるため、versionから順に削除する。
 
 ```sql
 DELETE FROM post_logs WHERE detail LIKE '%Initial chart version created.%' OR error_code IS NOT NULL;
-DELETE FROM versions WHERE title LIKE '%Phase 10-F%' OR title LIKE '%Phase10F%';
+DELETE FROM versions WHERE title LIKE '%Phase 10-FE%' OR title LIKE '%Phase10FE%';
 DELETE FROM charts WHERE chart_name IN ('[REJECTED]', '[NORMAL]', '[INVALID]');
-DELETE FROM songs WHERE title LIKE '%Phase 10-F%' OR title LIKE '%Phase10F%';
+DELETE FROM songs WHERE title LIKE '%Phase 10-FE%' OR title LIKE '%Phase10FE%';
 ```
 
 R2は `charts/{chartId}/versions/root/` 配下のテストファイルをDashboardから削除する。
-
-## 注意
-
-Phase 10-Fでは、初回投稿APIの没譜面保存ルールとD1列追加のみを実装する。
-
-追記API、Cron Trigger、R2自動削除処理、難易度表APIはまだ未実装のため、該当項目は仕様と将来テスト項目として確認する。
