@@ -12,7 +12,6 @@ const artistInput = document.querySelector("#artist");
 const subartistInput = document.querySelector("#subartist");
 const chartNameInput = document.querySelector("#chartName");
 const difficultyInput = document.querySelector("#difficulty");
-const levelInput = document.querySelector("#level");
 const authorInput = document.querySelector("#author");
 const progressInput = document.querySelector("#progress");
 const commentInput = document.querySelector("#comment");
@@ -73,6 +72,26 @@ function getExtension(fileName) {
     return "";
   }
   return fileName.slice(dotIndex).toLowerCase();
+}
+
+function extractLevelFromDifficulty(difficulty) {
+  const value = difficulty.trim();
+  if (!value) {
+    return "";
+  }
+
+  const starMatch = value.match(/^[★☆]\s*(\d+(?:\.\d+)?)$/u);
+  if (starMatch) {
+    return starMatch[1];
+  }
+
+  const tableMatch = value.match(/^(?:st|sl)\s*(\d+(?:\.\d+)?)$/i);
+  if (tableMatch) {
+    return tableMatch[1];
+  }
+
+  const numericMatch = value.match(/^(\d+(?:\.\d+)?)$/);
+  return numericMatch ? numericMatch[1] : "";
 }
 
 function decodeBuffer(buffer, encoding) {
@@ -307,7 +326,6 @@ function renderCharts(data) {
     const versions = Array.isArray(entry.versions) ? entry.versions : [];
     const rows = versions.map((version) => {
       const difficulty = version.difficulty || "未入力";
-      const level = version.level ? ` / ${version.level}` : "";
       const progress = Number.isFinite(Number(version.progress)) ? Number(version.progress) : 0;
       const downloadHref = buildDownloadUrl(version.file?.downloadUrl);
       const rejectedBadge = version.isRejected ? `<span class="rejected-badge">没譜面</span>` : "";
@@ -320,7 +338,7 @@ function renderCharts(data) {
           <div class="version-tag">${escapeHtml(version.displayVersion || "ver?.?")}</div>
           <div class="meta-block">
             <span class="meta-label">想定難易度</span>
-            <span class="meta-value">${escapeHtml(difficulty)}${escapeHtml(level)}</span>
+            <span class="meta-value">${escapeHtml(difficulty)}</span>
           </div>
           <div class="meta-block">
             <span class="meta-label">差分作者</span>
@@ -375,6 +393,7 @@ async function loadCharts() {
 
 function buildChartFormData() {
   const file = fileInput.files?.[0];
+  const difficulty = difficultyInput.value.trim();
   const formData = new FormData();
 
   formData.append("file", file);
@@ -383,8 +402,8 @@ function buildChartFormData() {
   formData.append("artist", artistInput.value.trim());
   formData.append("subartist", subartistInput.value.trim());
   formData.append("chartName", chartNameInput.value.trim());
-  formData.append("difficulty", difficultyInput.value.trim());
-  formData.append("level", levelInput.value.trim());
+  formData.append("difficulty", difficulty);
+  formData.append("level", extractLevelFromDifficulty(difficulty));
   formData.append("author", authorInput.value.trim());
   formData.append("progress", isRejectedInput.checked ? "100" : progressInput.value.trim());
   formData.append("comment", commentInput.value.trim());
