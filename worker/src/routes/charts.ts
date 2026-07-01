@@ -165,6 +165,26 @@ function parseProgress(rawValue: string): { ok: true; value: number } | { ok: fa
   return { ok: true, value };
 }
 
+function extractLevelFromDifficulty(difficulty: string): string {
+  const valueText = difficulty.trim();
+  if (!valueText) {
+    return "";
+  }
+
+  const starMatch = valueText.match(/^[★☆]\s*(\d+(?:\.\d+)?)$/u);
+  if (starMatch) {
+    return starMatch[1];
+  }
+
+  const tableMatch = valueText.match(/^(?:st|sl)\s*(\d+(?:\.\d+)?)$/i);
+  if (tableMatch) {
+    return tableMatch[1];
+  }
+
+  const numericMatch = valueText.match(/^(\d+(?:\.\d+)?)$/);
+  return numericMatch ? numericMatch[1] : "";
+}
+
 function parseListParams(url: URL): ParseResult {
   const page = parsePositiveInteger(url.searchParams.get("page"), "page", 1);
   if (!page.ok) {
@@ -725,7 +745,8 @@ async function parseCreateChartInput(
   const subartist = getFormText(form, "subartist");
   const chartName = getFormText(form, "chartName");
   const difficulty = getFormText(form, "difficulty");
-  const level = getFormText(form, "level");
+  const submittedLevel = getFormText(form, "level");
+  const level = submittedLevel || extractLevelFromDifficulty(difficulty);
   const author = getFormText(form, "author");
   const comment = getFormText(form, "comment");
   const isRejected = parseBooleanField(getFormText(form, "isRejected"));
