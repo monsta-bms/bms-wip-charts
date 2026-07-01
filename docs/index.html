@@ -10,7 +10,7 @@
     <div class="page-shell">
       <header class="site-header">
         <div>
-          <p class="site-label">BMS Diff Share</p>
+          <p class="site-label">BMS WIP Charts</p>
           <h1>BMS差分共有</h1>
         </div>
       </header>
@@ -28,7 +28,7 @@
             <div class="form-grid">
               <label class="field field-wide">
                 <span>譜面ファイル</span>
-                <input id="chartFile" name="chartFile" type="file" accept=".bms,.bme,.bml,.zip" required>
+                <input id="chartFile" name="file" type="file" accept=".bms,.bme,.bml,.zip" required>
               </label>
 
               <label class="field">
@@ -37,13 +37,33 @@
               </label>
 
               <label class="field">
+                <span>サブタイトル</span>
+                <input id="subtitle" name="subtitle" type="text" autocomplete="off">
+              </label>
+
+              <label class="field">
                 <span>アーティスト</span>
                 <input id="artist" name="artist" type="text" autocomplete="off" required>
               </label>
 
               <label class="field">
+                <span>サブアーティスト</span>
+                <input id="subartist" name="subartist" type="text" autocomplete="off">
+              </label>
+
+              <label class="field">
+                <span>差分名</span>
+                <input id="chartName" name="chartName" type="text" autocomplete="off" required>
+              </label>
+
+              <label class="field">
                 <span>想定難易度</span>
                 <input id="difficulty" name="difficulty" type="text" autocomplete="off" placeholder="例: ★12">
+              </label>
+
+              <label class="field">
+                <span>level</span>
+                <input id="level" name="level" type="text" autocomplete="off" placeholder="例: 12">
               </label>
 
               <label class="field">
@@ -56,6 +76,21 @@
                 <input id="progress" name="progress" type="number" min="0" max="100" step="1" value="100" required>
               </label>
 
+              <label class="field checkbox-field">
+                <input id="isRejected" name="isRejected" type="checkbox" value="true">
+                <span>没譜面</span>
+              </label>
+
+              <label class="field">
+                <span>管理パスワード</span>
+                <input id="password" name="password" type="password" autocomplete="current-password" required>
+              </label>
+
+              <label class="field checkbox-field">
+                <input id="savePassword" type="checkbox">
+                <span>パスワードを保存</span>
+              </label>
+
               <label class="field field-wide">
                 <span>コメント</span>
                 <textarea id="comment" name="comment" rows="4"></textarea>
@@ -63,7 +98,7 @@
             </div>
 
             <div class="form-actions">
-              <button type="submit">投稿内容を確認</button>
+              <button id="submitButton" type="submit">投稿する</button>
             </div>
           </form>
         </section>
