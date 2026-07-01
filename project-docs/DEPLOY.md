@@ -3,7 +3,8 @@
 ## 対象
 
 - リポジトリ名: `bms-wip-charts`
-- GitHub Pages URL: https://monsta-bms.github.io/wipbmschart/
+- GitHub Pages URL: https://monsta-bms.github.io/bms-wip-charts/
+- 本番Worker URL: https://bms-wip-charts-worker.monsta3228gsl.workers.dev
 
 ## GitHub Pages
 
@@ -17,7 +18,24 @@ GitHub Pages の設定:
 
 設定後、以下のURLで公開される想定とする。
 
-https://monsta-bms.github.io/wipbmschart/
+https://monsta-bms.github.io/bms-wip-charts/
+
+ブラウザのOriginはパスを含まないため、WorkerのCORSでは `https://monsta-bms.github.io` を許可する。
+
+## フロント設定
+
+`docs/app.js` の `API_BASE_URL` は本番Worker URLを指す。
+
+```js
+const API_BASE_URL = "https://bms-wip-charts-worker.monsta3228gsl.workers.dev";
+```
+
+GitHub Pages側は以下を行う。
+
+- ページ表示時に `GET /api/charts` を呼ぶ。
+- 投稿フォームから `multipart/form-data` で `POST /api/charts` へ送る。
+- 投稿成功後に `GET /api/charts` を再取得する。
+- `version.file.downloadUrl` を `API_BASE_URL` と結合してDLリンクを表示する。
 
 ## Cloudflare Worker
 
@@ -29,10 +47,19 @@ Worker本体:
 
 - TypeScript
 - CORS対応
-- `ALLOWED_ORIGIN` 環境変数
+- `ALLOWED_ORIGINS` 環境変数
 - D1 binding `DB`
 - R2 binding `FILES`
 - secrets `HASH_SECRET`, `ADMIN_TOKEN`
+
+`worker/wrangler.toml` の `[vars]` では以下を設定する。
+
+```toml
+[vars]
+ALLOWED_ORIGINS = "https://monsta-bms.github.io,http://localhost:8787"
+```
+
+`ALLOWED_ORIGINS` はカンマ区切りで複数Originを許可できる。後方互換として `ALLOWED_ORIGIN` も読み取るが、今後は `ALLOWED_ORIGINS` を使う。
 
 ## Cloudflare D1
 
@@ -53,9 +80,10 @@ database_id = "d55ed399-5a31-43a0-89d4-9bd2f32ba3a7"
 
 ### D1 schema / migration
 
-Phase 10-A改で以下を追加仕様込みで再設計した。
+schema / migration:
 
 - `worker/migrations/0001_initial.sql`
+- `worker/migrations/0002_file_delete_and_rejected_rules.sql`
 - `schema/d1.sql`
 
 作成されるテーブル:
@@ -96,45 +124,6 @@ npx wrangler d1 execute wip-bms-charts-db --local --command "SELECT name FROM sq
 
 Dashboard実行時はmigration履歴には記録されないため、以後Wrangler migrationsで管理する場合はDashboard実行とWrangler実行を混在させない。
 
-### 旧schemaを既に適用済みだった場合のリセット
-
-Phase 10-A改は本番データなし前提で `0001_initial.sql` を上書き再設計している。
-
-既にMVP版の旧schemaをD1へ適用済みで、保存すべきデータがない場合は、以下のどちらかでリセットする。
-
-#### 推奨: D1 databaseを作り直す
-
-まだ本番データがない場合、最も安全で分かりやすい方法。
-
-1. Cloudflare Dashboardで既存D1 databaseを削除する。
-2. 同名 `wip-bms-charts-db` でD1 databaseを作り直す。
-3. 新しい `database_id` を確認する。
-4. `worker/wrangler.toml` の `database_id` を新しい値に更新する。
-5. `worker/migrations/0001_initial.sql` を適用する。
-
-この方法では `database_id` が変わるため、`wrangler.toml` の更新を忘れない。
-
-#### 既存databaseを使い続ける場合
-
-DashboardのQuery画面で、外部キー参照の子テーブルから順に削除する。
-
-```sql
-PRAGMA foreign_keys = OFF;
-DROP TABLE IF EXISTS delete_requests;
-DROP TABLE IF EXISTS post_logs;
-DROP TABLE IF EXISTS bans;
-DROP TABLE IF EXISTS admin_logs;
-DROP TABLE IF EXISTS versions;
-DROP TABLE IF EXISTS charts;
-DROP TABLE IF EXISTS songs;
-DROP TABLE IF EXISTS d1_migrations;
-PRAGMA foreign_keys = ON;
-```
-
-その後、`schema/d1.sql` をDashboardで実行するか、Wrangler migrationを再適用する。
-
-`d1_migrations` を削除するとWranglerの適用履歴も消えるため、Dashboard実行とWrangler実行を混在させないこと。
-
 ## Cloudflare R2
 
 作成済みR2 bucket:
@@ -155,16 +144,18 @@ R2使用量が8GBを超えた場合は、管理ログに警告を出す仕様と
 
 ## 環境変数
 
-`ALLOWED_ORIGIN` は通常のCloudflare Worker環境変数として扱う。
+通常のCloudflare Worker環境変数:
 
-公開URLが確定したら、`worker/wrangler.toml` の `[vars]` またはCloudflare Dashboardで実際のフロントURLに更新する。
+- `ALLOWED_ORIGINS`
 
-例:
+設定例:
 
 ```toml
 [vars]
-ALLOWED_ORIGIN = "https://example.com"
+ALLOWED_ORIGINS = "https://monsta-bms.github.io,http://localhost:8787"
 ```
+
+GitHub PagesのURLは `https://monsta-bms.github.io/bms-wip-charts/` だが、CORSに設定するOriginは `https://monsta-bms.github.io` である。
 
 ## 秘密情報
 
@@ -208,11 +199,7 @@ cd worker
 npx wrangler d1 migrations apply wip-bms-charts-db --local
 ```
 
-管理APIのスタブ確認には `ADMIN_TOKEN` secret またはローカル用のsecret設定が必要。
-
 ## デプロイ手順
-
-公開URLと `ALLOWED_ORIGIN` が確定してから実行する。
 
 ```bash
 cd worker
@@ -221,12 +208,15 @@ npm run typecheck
 npm run deploy
 ```
 
+`wrangler.toml` の `[vars]` を変更した場合も、Workerを再deployする。
+
 ## 確認手順
 
 - GitHub Pages の公開元が `main` ブランチの `/docs` になっていることを確認する。
-- `worker/wrangler.toml` にD1 binding `DB` とR2 binding `FILES` が設定されていることを確認する。
-- Cloudflare側でD1 database `wip-bms-charts-db` とR2 bucket `wip-bms-charts-files` が存在することを確認する。
-- D1に `0001_initial.sql` を適用し、7つのテーブルが存在することを確認する。
-- `ALLOWED_ORIGIN` を実際のフロントURLに設定する。
-- `HASH_SECRET` と `ADMIN_TOKEN` をCloudflare secretsに設定する。
-- `/api/health` がJSONで `status: "ok"` を返すことを確認する。
+- `https://monsta-bms.github.io/bms-wip-charts/` を開く。
+- ブラウザ画面に本番Workerの `GET /api/charts` の結果が表示されることを確認する。
+- 投稿フォームから `.bms`, `.bme`, `.bml`, `.zip` のいずれかを投稿する。
+- 投稿成功後に一覧が自動更新されることを確認する。
+- DLリンクが `https://bms-wip-charts-worker.monsta3228gsl.workers.dev/api/files/...` を指すことを確認する。
+- CORSエラーが出る場合は、`ALLOWED_ORIGINS` に `https://monsta-bms.github.io` が含まれていることを確認する。
+- `HASH_SECRET` と `ADMIN_TOKEN` がCloudflare secretsに設定されていることを確認する。
