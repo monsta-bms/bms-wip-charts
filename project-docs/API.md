@@ -2,7 +2,7 @@
 
 ## 概要
 
-Phase 10-Eでは `GET /api/files/:fileId` をR2実ダウンロードに接続した。
+Phase 10-Fでは没譜面仕様と自動削除準備の最小修正を行った。
 
 実装済み:
 
@@ -10,6 +10,13 @@ Phase 10-Eでは `GET /api/files/:fileId` をR2実ダウンロードに接続し
 - `GET /api/charts`
 - `POST /api/charts` 初回投稿のみ
 - `GET /api/files/:fileId`
+
+Phase 10-Fで更新したもの:
+
+- `POST /api/charts` で `isRejected=true` の場合、保存する `progress` を100へ強制する。
+- `POST /api/charts` の成功レスポンスに `progress`, `isRejected`, `completedAt` を返す。
+- `versions.file_deleted_at` と `versions.file_delete_reason` を追加するmigrationを追加した。
+- 将来の追記APIと自動削除処理の仕様を追記した。
 
 まだ実装しないもの:
 
@@ -19,6 +26,8 @@ Phase 10-Eでは `GET /api/files/:fileId` をR2実ダウンロードに接続し
 - 取り下げAPI
 - 削除申請API
 - 難易度表API
+- Cron Trigger
+- R2自動削除処理
 - 高度な権限管理
 - 高度なzip内検査
 - Turnstile
@@ -67,7 +76,7 @@ APIエラーは必ず以下のJSON形式で返す。
 
 ## D1 schema
 
-Phase 10-A改で以下のテーブルへ再設計済み。
+以下のテーブルへ再設計済み。
 
 - `songs`: 元曲単位
 - `charts`: 差分単位
@@ -77,10 +86,18 @@ Phase 10-A改で以下のテーブルへ再設計済み。
 - `bans`: IPハッシュ、UAハッシュ、ファイルSHA256のBAN
 - `admin_logs`: 管理人操作ログ・運用ログ
 
-schemaファイル:
+schema / migrationファイル:
 
 - `worker/migrations/0001_initial.sql`
+- `worker/migrations/0002_file_delete_and_rejected_rules.sql`
 - `schema/d1.sql`
+
+Phase 10-Fで `versions` に追加したカラム:
+
+| column | 内容 |
+| --- | --- |
+| `file_deleted_at` | 将来R2ファイルが自動削除または管理削除された日時。 |
+| `file_delete_reason` | 将来R2ファイルを削除した理由。 |
 
 ## 実装済みエンドポイント
 
@@ -111,6 +128,7 @@ D1から投稿一覧を取得する。
 - versionsは `branch_path` 昇順で返す。
 - `displayVersion` はDB保存値ではなくAPI側で生成する。
 - `progress=100` のversionは `completed: true` を返す。
+- `is_rejected=1` のversionは `isRejected: true` を返し、UIでは没譜面バッジで区別する。
 - `downloadBlocked` と `downloadBlockReason` を返す。
 
 クエリ:
@@ -119,7 +137,7 @@ D1から投稿一覧を取得する。
 | --- | ---: | --- |
 | `page` | `1` | 1始まりのページ番号。 |
 | `pageSize` | `100` | chart件数。最大 `200`。 |
-| `q` | 空 | 検索語。Phase 10-Eでは受け取るだけで、絞り込みはまだ未実装。 |
+| `q` | 空 | 検索語。Phase 10-Fでは受け取るだけで、絞り込みはまだ未実装。 |
 
 空DB時のレスポンス例:
 
@@ -154,6 +172,9 @@ D1から投稿一覧を取得する。
 - 同一 `file_sha256` は `DUPLICATE_FILE` で拒否する。
 - 作成するversionは `ver1.0` 相当。
 - `progress=100` の場合は `completed_at` を保存する。
+- `isRejected=true` の場合は、入力された `progress` に関係なく保存値を `progress=100` に強制する。
+- `isRejected=true` の場合は `completed_at` を保存し、completed扱いにする。
+- `isRejected=true` のversionは将来の難易度表掲載対象になり、没譜面バッジで通常の完成譜面と区別する。
 - 成功/失敗は可能な範囲で `post_logs` に記録する。
 
 成功レスポンス例:
@@ -165,8 +186,10 @@ D1から投稿一覧を取得する。
   "versionId": "version_...",
   "fileId": "file_...",
   "displayVersion": "ver1.0",
-  "completed": false,
-  "completedAt": null,
+  "progress": 100,
+  "isRejected": true,
+  "completed": true,
+  "completedAt": "2026-07-01T12:00:00.000Z",
   "file": {
     "name": "sample.bms",
     "size": 1024,
@@ -238,15 +261,58 @@ D1から投稿一覧を取得する。
 
 ### POST /api/charts/:chartId/versions
 
-既存chartへ追記投稿する。Phase 10-Eでは未実装。
+既存chartへ追記投稿する。Phase 10-Fでは未実装。
+
+将来の本実装では以下のルールを適用する。
+
+- 追記投稿では `isRejected` を指定できない。
+- 追記投稿で `isRejected=true` が送られた場合は `INVALID_REJECTED_FLAG_FOR_FOLLOWUP` を返す。
+- 追記元の親versionが `is_rejected=1` の場合は `REJECTED_CHART_CANNOT_BE_EXTENDED` を返す。
+- 没譜面versionから追記して通常譜面化することはできない。
+
+想定エラー例:
+
+```json
+{
+  "code": "REJECTED_CHART_CANNOT_BE_EXTENDED",
+  "message": "没譜面から追記投稿はできません。",
+  "detail": "The selected parent version is rejected and cannot be extended."
+}
+```
 
 ### POST /api/admin/hide-version
 
-管理人が指定versionを非表示にする。Phase 10-Eではスタブ応答のまま。
+管理人が指定versionを非表示にする。Phase 10-Fではスタブ応答のまま。
 
 ### POST /api/admin/ban
 
-管理人がIPハッシュ、UAハッシュ、ファイルSHA256をBANする。Phase 10-Eではスタブ応答のまま。
+管理人がIPハッシュ、UAハッシュ、ファイルSHA256をBANする。Phase 10-Fではスタブ応答のまま。
+
+## 自動削除準備
+
+Phase 10-FではCron TriggerとR2自動削除処理は実装しない。
+
+将来、Cloudflare Workers Cron Triggerで1日1回程度、DL不可から30日経過したversionのR2ファイルを整理する。
+
+MVPの自動削除対象reason候補:
+
+- `superseded_by_completed_descendant`
+- `withdrawn`
+- `admin_blocked`
+- `admin_hidden`
+
+`delete_requested` はMVPでは自動削除対象に含めない。管理人承認済みの削除申請を対象にする場合は、将来 `delete_requests.status='approved'` などの条件を追加する。
+
+自動削除成功時に将来更新する値:
+
+- `versions.is_hidden=1`
+- `versions.hidden_reason='auto_deleted_after_download_block'`
+- `versions.hidden_at`
+- `versions.file_deleted_at`
+- `versions.file_delete_reason='auto_deleted_after_download_block'`
+- `versions.updated_at`
+
+D1のversion行は物理削除しない。
 
 ## 追加設計エンドポイント
 
@@ -311,6 +377,8 @@ DBには `displayVersion` / `display_version` を保存しない。
 | `INVALID_CHART_ID` | 400 | `chartId` が空または不正。 |
 | `INVALID_VERSION_ID` | 400 | `versionId` が空または不正。 |
 | `TITLE_ARTIST_MISMATCH` | 400 | 追記先chartとアップロード譜面の曲情報が一致しない。 |
+| `INVALID_REJECTED_FLAG_FOR_FOLLOWUP` | 400 | 追記投稿では没譜面チェックを指定できない。 |
+| `REJECTED_CHART_CANNOT_BE_EXTENDED` | 409 | 没譜面versionから追記投稿しようとした。 |
 | `INVALID_PASSWORD` | 401 | 管理パスワードが一致しない。 |
 | `WITHDRAW_NOT_ALLOWED` | 400 | 完成versionなど、取り下げ不可のversion。 |
 | `DELETE_REQUEST_ALREADY_EXISTS` | 409 | 未処理の削除申請が既にある。 |
@@ -318,3 +386,11 @@ DBには `displayVersion` / `display_version` を保存しない。
 | `CONFIG_MISSING` | 500 | 管理APIなどの必須secretが未設定。 |
 | `UNKNOWN_ERROR` | 500 | 想定外エラー。 |
 | `INTERNAL_ERROR` | 500 | 未処理例外。 |
+
+## 管理ログ用コード
+
+| code | level | 内容 |
+| --- | --- | --- |
+| `R2_USAGE_EXCEEDED_8GB` | `warning` | R2使用量が8GBを超えた。 |
+| `AUTO_FILE_DELETE_SUCCEEDED` | `info` | DL不可から30日経過したR2ファイルの自動削除に成功した。 |
+| `AUTO_FILE_DELETE_FAILED` | `error` | DL不可から30日経過したR2ファイルの自動削除に失敗した。 |
