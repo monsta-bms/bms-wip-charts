@@ -1,30 +1,27 @@
 # テスト手順
 
-## Phase 10-Eの対象
+## Phase 10-Fの対象
 
-Phase 10-Eでは `GET /api/files/:fileId` のR2実ダウンロードを確認する。
+Phase 10-Fでは、没譜面仕様と自動削除準備の最小修正を確認する。
 
 今回確認するもの:
 
-- `GET /api/files/:fileId` がD1からversion/file情報を取得すること
-- fileIdに対応するversionがなければ `FILE_NOT_FOUND` を返すこと
-- `versions.is_hidden=1` なら `FILE_NOT_AVAILABLE` を返すこと
-- `charts.is_hidden=1` でも `FILE_NOT_AVAILABLE` を返すこと
-- `versions.download_blocked=1` なら `FILE_DOWNLOAD_BLOCKED` を返すこと
-- D1の `r2_key` からR2 objectを取得すること
-- R2 objectがなければ `R2_FILE_NOT_FOUND` を返すこと
-- 成功時はファイル本体を返すこと
-- `Content-Type` が拡張子に応じて設定されること
-- `Content-Disposition: attachment` で元ファイル名を使えること
+- `worker/migrations/0002_file_delete_and_rejected_rules.sql` をD1へ適用できること
+- `versions.file_deleted_at` と `versions.file_delete_reason` が追加されること
+- `POST /api/charts` で `isRejected=true` の場合、入力 `progress` に関係なく保存値が `100` になること
+- `isRejected=true` の場合、`completedAt` が返ること
+- `POST /api/charts` の成功レスポンスに `progress`, `isRejected`, `completedAt` が含まれること
+- `GET /api/charts` で対象versionが `progress: 100`, `completed: true`, `isRejected: true` として返ること
 - エラーが必ず `code`, `message`, `detail` のJSONになること
 
 今回確認しないもの:
 
-- `POST /api/charts/:chartId/versions`
+- Cron Trigger実装
+- R2自動削除処理
+- `POST /api/charts/:chartId/versions` の本実装
 - 取り下げAPI
 - 削除申請API
 - 難易度表API
-- 高度な権限管理
 - フロント接続
 
 ## 事前準備
@@ -57,33 +54,55 @@ npx wrangler secret put HASH_SECRET
 npx wrangler secret put ADMIN_TOKEN
 ```
 
-## ローカルD1/R2で確認する場合
+## 0002 migration適用
 
-ローカルD1にmigrationを適用する。
+ローカルD1へ適用する。
 
 ```bash
 cd worker
 npx wrangler d1 migrations apply wip-bms-charts-db --local
 ```
 
-Workerを起動する。
+remote D1へ適用する場合は `--local` を外す。
 
 ```bash
+cd worker
+npx wrangler d1 migrations apply wip-bms-charts-db
+```
+
+DashboardからSQL実行する場合は、以下を実行する。
+
+```sql
+ALTER TABLE versions ADD COLUMN file_deleted_at TEXT;
+ALTER TABLE versions ADD COLUMN file_delete_reason TEXT;
+```
+
+## 追加カラム確認
+
+ローカルD1で確認する。
+
+```bash
+cd worker
+npx wrangler d1 execute wip-bms-charts-db --local --command "PRAGMA table_info(versions);"
+```
+
+remote確認の場合は `--local` を外す。
+
+期待すること:
+
+- `file_deleted_at` が存在する
+- `file_delete_reason` が存在する
+
+## Worker起動
+
+ローカルD1/R2で確認する場合:
+
+```bash
+cd worker
 npm run dev
 ```
 
-別ターミナルで確認する。
-
-```bash
-curl.exe http://localhost:8787/api/health
-curl.exe http://localhost:8787/api/charts
-```
-
-`/api/health` の `phase` が `phase-10-e` であることを確認する。
-
-## remote D1/R2で確認する場合
-
-remote D1にはPhase 10-A改のmigrationが適用済みであること。
+remote D1/R2で確認する場合:
 
 ```bash
 cd worker
@@ -104,29 +123,132 @@ PowerShell例:
 ```powershell
 @"
 #PLAYER 1
-#TITLE Test Song Phase 10-E
+#TITLE Test Song Phase 10-F Rejected
 #ARTIST Test Artist
 #PLAYLEVEL 3
 #BPM 120
-#WAV01 dummy.wav
 #00111:01
-"@ | Set-Content -Encoding UTF8 .\phase10e-test.bms
+"@ | Set-Content -Encoding UTF8 .\phase10f-rejected.bms
 ```
 
-## 初回投稿でfileIdを作る
+## isRejected=true 初回投稿確認
 
-Phase 10-Dの `POST /api/charts` を使って、D1 metadataとR2 objectを作る。
+`progress=30` を送っても、保存値とレスポンスは `progress=100` になることを確認する。
 
 ```powershell
 curl.exe -X POST "http://localhost:8787/api/charts" `
-  -F "file=@.\phase10e-test.bms;type=text/plain" `
+  -F "file=@.\phase10f-rejected.bms;type=text/plain" `
   -F "title=" `
   -F "subtitle=" `
   -F "artist=" `
   -F "subartist=" `
-  -F "chartName=[ANOTHER]" `
+  -F "chartName=[REJECTED]" `
   -F "difficulty=★3" `
   -F "level=3" `
+  -F "author=tester" `
+  -F "progress=30" `
+  -F "comment=https://example.com/sound-source" `
+  -F "isRejected=true" `
+  -F "password=test-password"
+```
+
+期待レスポンス例:
+
+```json
+{
+  "songId": "song_...",
+  "chartId": "chart_...",
+  "versionId": "version_...",
+  "fileId": "file_...",
+  "displayVersion": "ver1.0",
+  "progress": 100,
+  "isRejected": true,
+  "completed": true,
+  "completedAt": "2026-07-01T12:00:00.000Z",
+  "file": {
+    "name": "phase10f-rejected.bms",
+    "size": 1024,
+    "sha256": "...",
+    "md5": "...",
+    "downloadUrl": "/api/files/file_..."
+  },
+  "metadata": {
+    "title": "Test Song Phase 10-F Rejected",
+    "artist": "Test Artist",
+    "encoding": "utf-8"
+  },
+  "warnings": []
+}
+```
+
+確認ポイント:
+
+- `progress` が `100`
+- `isRejected` が `true`
+- `completed` が `true`
+- `completedAt` が `null` ではない
+
+## D1保存値確認
+
+レスポンスの `<versionId>` を使って確認する。
+
+```bash
+cd worker
+npx wrangler d1 execute wip-bms-charts-db --local --command "SELECT id, progress, is_rejected, completed_at, file_deleted_at, file_delete_reason FROM versions WHERE id = '<versionId>';"
+```
+
+remote確認の場合は `--local` を外す。
+
+期待する値:
+
+```text
+progress = 100
+is_rejected = 1
+completed_at = NULLではない
+file_deleted_at = NULL
+file_delete_reason = NULL
+```
+
+## GET /api/chartsでの確認
+
+```powershell
+curl.exe "http://localhost:8787/api/charts?page=1&pageSize=10"
+```
+
+対象versionの期待値:
+
+```json
+{
+  "progress": 100,
+  "completed": true,
+  "completedAt": "2026-07-01T12:00:00.000Z",
+  "isRejected": true
+}
+```
+
+## isRejected=falseの通常投稿確認
+
+`isRejected=false` では従来通り、入力された `progress` が保存されることを確認する。
+
+```powershell
+@"
+#PLAYER 1
+#TITLE Test Song Phase 10-F Normal
+#ARTIST Test Artist
+#PLAYLEVEL 2
+#BPM 120
+#00111:01
+"@ | Set-Content -Encoding UTF8 .\phase10f-normal.bms
+
+curl.exe -X POST "http://localhost:8787/api/charts" `
+  -F "file=@.\phase10f-normal.bms;type=text/plain" `
+  -F "title=" `
+  -F "subtitle=" `
+  -F "artist=" `
+  -F "subartist=" `
+  -F "chartName=[NORMAL]" `
+  -F "difficulty=★2" `
+  -F "level=2" `
   -F "author=tester" `
   -F "progress=30" `
   -F "comment=https://example.com/sound-source" `
@@ -134,170 +256,91 @@ curl.exe -X POST "http://localhost:8787/api/charts" `
   -F "password=test-password"
 ```
 
-レスポンスの `fileId`, `versionId`, `chartId` を控える。
+期待すること:
 
-一覧から確認する場合:
+- `progress` が `30`
+- `isRejected` が `false`
+- `completed` が `false`
+- `completedAt` が `null`
 
-```powershell
-curl.exe "http://localhost:8787/api/charts?page=1&pageSize=10"
-```
+## progressバリデーション確認
 
-`charts[0].versions[0].file.id` がDL確認に使う `fileId`。
-
-## ファイルDL確認
-
-`<fileId>` を実際のIDに置き換える。
+`isRejected=true` でも `progress` の入力バリデーションは維持する。
 
 ```powershell
-curl.exe -i -L "http://localhost:8787/api/files/<fileId>" -o .\downloaded-phase10e.bms
-```
-
-期待する主なヘッダー:
-
-```text
-HTTP/1.1 200 OK
-Content-Type: text/plain; charset=utf-8
-Content-Disposition: attachment; filename="phase10e-test.bms"; filename*=UTF-8''phase10e-test.bms
-X-Content-Type-Options: nosniff
-```
-
-保存されたファイルを確認する。
-
-```powershell
-Get-Content .\downloaded-phase10e.bms
-```
-
-`.zip` の場合は `Content-Type: application/zip` になることを確認する。
-
-## 存在しないfileId
-
-```powershell
-curl.exe "http://localhost:8787/api/files/file_not_found_test"
+curl.exe -X POST "http://localhost:8787/api/charts" `
+  -F "file=@.\phase10f-rejected.bms;type=text/plain" `
+  -F "title=Invalid Progress Test" `
+  -F "artist=Test Artist" `
+  -F "chartName=[INVALID]" `
+  -F "author=tester" `
+  -F "progress=101" `
+  -F "comment=" `
+  -F "isRejected=true" `
+  -F "password=test-password"
 ```
 
 期待レスポンス:
 
 ```json
 {
-  "code": "FILE_NOT_FOUND",
-  "message": "ファイルが見つかりません。",
-  "detail": "No version exists for the requested fileId."
+  "code": "INVALID_PROGRESS",
+  "message": "進捗度の値が不正です。",
+  "detail": "progress must be an integer between 0 and 100."
 }
 ```
 
-## download_blocked時の確認
+## 将来の追記APIテスト項目
 
-対象versionをDLブロック状態にする。
+Phase 10-Fでは `POST /api/charts/:chartId/versions` は未実装のため、以下は将来Phaseで確認する。
 
-```bash
-npx wrangler d1 execute wip-bms-charts-db --local --command "UPDATE versions SET download_blocked = 1, download_block_reason = 'withdrawn', withdrawn_at = CURRENT_TIMESTAMP, download_blocked_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE file_id = '<fileId>';"
-```
-
-remote確認の場合は `--local` を外す。
-
-DLを試す。
-
-```powershell
-curl.exe "http://localhost:8787/api/files/<fileId>"
-```
-
-期待レスポンス:
+追記投稿で `isRejected=true` が送られた場合:
 
 ```json
 {
-  "code": "FILE_DOWNLOAD_BLOCKED",
-  "message": "このファイルはダウンロードできません。",
-  "detail": "Download is blocked. reason=withdrawn"
+  "code": "INVALID_REJECTED_FLAG_FOR_FOLLOWUP",
+  "message": "追記投稿では没譜面チェックを指定できません。",
+  "detail": "isRejected is allowed only on initial chart creation."
 }
 ```
 
-元に戻す場合:
-
-```bash
-npx wrangler d1 execute wip-bms-charts-db --local --command "UPDATE versions SET download_blocked = 0, download_block_reason = NULL, withdrawn_at = NULL, download_blocked_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE file_id = '<fileId>';"
-```
-
-## version is_hidden時の確認
-
-対象versionを非表示にする。
-
-```bash
-npx wrangler d1 execute wip-bms-charts-db --local --command "UPDATE versions SET is_hidden = 1, hidden_reason = 'test hidden', hidden_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE file_id = '<fileId>';"
-```
-
-DLを試す。
-
-```powershell
-curl.exe "http://localhost:8787/api/files/<fileId>"
-```
-
-期待レスポンス:
+没譜面versionを親にして追記しようとした場合:
 
 ```json
 {
-  "code": "FILE_NOT_AVAILABLE",
-  "message": "このファイルは現在利用できません。",
-  "detail": "The version is hidden. reason=test hidden"
+  "code": "REJECTED_CHART_CANNOT_BE_EXTENDED",
+  "message": "没譜面から追記投稿はできません。",
+  "detail": "The selected parent version is rejected and cannot be extended."
 }
 ```
 
-元に戻す場合:
+## 将来の自動削除テスト項目
 
-```bash
-npx wrangler d1 execute wip-bms-charts-db --local --command "UPDATE versions SET is_hidden = 0, hidden_reason = NULL, hidden_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE file_id = '<fileId>';"
+Phase 10-FではCron TriggerとR2自動削除処理は未実装のため、以下は将来Phaseで確認する。
+
+対象条件:
+
+- `download_blocked=1`
+- `download_blocked_at` が30日以上前
+- `file_deleted_at IS NULL`
+- `download_block_reason` が以下のいずれか
+  - `superseded_by_completed_descendant`
+  - `withdrawn`
+  - `admin_blocked`
+  - `admin_hidden`
+
+期待する更新:
+
+```sql
+is_hidden = 1
+hidden_reason = 'auto_deleted_after_download_block'
+hidden_at = CURRENT_TIMESTAMP
+file_deleted_at = CURRENT_TIMESTAMP
+file_delete_reason = 'auto_deleted_after_download_block'
+updated_at = CURRENT_TIMESTAMP
 ```
 
-## chart is_hidden時の確認
-
-対象chartを非表示にする。
-
-```bash
-npx wrangler d1 execute wip-bms-charts-db --local --command "UPDATE charts SET is_hidden = 1, hidden_reason = 'test chart hidden', updated_at = CURRENT_TIMESTAMP WHERE id = '<chartId>';"
-```
-
-DLを試す。
-
-```powershell
-curl.exe "http://localhost:8787/api/files/<fileId>"
-```
-
-期待レスポンス:
-
-```json
-{
-  "code": "FILE_NOT_AVAILABLE",
-  "message": "このファイルは現在利用できません。",
-  "detail": "The parent chart is hidden. reason=test chart hidden"
-}
-```
-
-元に戻す場合:
-
-```bash
-npx wrangler d1 execute wip-bms-charts-db --local --command "UPDATE charts SET is_hidden = 0, hidden_reason = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = '<chartId>';"
-```
-
-## R2_FILE_NOT_FOUNDの確認
-
-D1 metadataだけ残してR2 objectを削除した場合、以下を返す。
-
-```json
-{
-  "code": "R2_FILE_NOT_FOUND",
-  "message": "保存済みファイルが見つかりません。",
-  "detail": "D1 metadata exists, but the R2 object for r2_key was not found."
-}
-```
-
-R2 object削除はDashboardで対象 `r2_key` を確認してから行う。
-
-## DB確認
-
-```bash
-npx wrangler d1 execute wip-bms-charts-db --local --command "SELECT versions.file_id, versions.file_name, versions.file_size, versions.r2_key, versions.download_blocked, versions.is_hidden, charts.is_hidden AS chart_hidden FROM versions JOIN charts ON charts.id = versions.chart_id ORDER BY versions.created_at DESC LIMIT 5;"
-```
-
-remote確認の場合は `--local` を外す。
+`delete_requested` はMVPでは自動削除対象に含めない。
 
 ## テストデータ削除
 
@@ -307,15 +350,15 @@ D1は外部キーがあるため、versionから順に削除する。
 
 ```sql
 DELETE FROM post_logs WHERE detail LIKE '%Initial chart version created.%' OR error_code IS NOT NULL;
-DELETE FROM versions WHERE title LIKE '%Phase 10-E%' OR title LIKE '%Phase10E%';
-DELETE FROM charts WHERE chart_name IN ('[ANOTHER]', '[HYPER]', '[NORMAL]');
-DELETE FROM songs WHERE title LIKE '%Phase 10-E%' OR title LIKE '%Phase10E%';
+DELETE FROM versions WHERE title LIKE '%Phase 10-F%' OR title LIKE '%Phase10F%';
+DELETE FROM charts WHERE chart_name IN ('[REJECTED]', '[NORMAL]', '[INVALID]');
+DELETE FROM songs WHERE title LIKE '%Phase 10-F%' OR title LIKE '%Phase10F%';
 ```
 
 R2は `charts/{chartId}/versions/root/` 配下のテストファイルをDashboardから削除する。
 
 ## 注意
 
-Phase 10-Eでは `GET /api/files/:fileId` のDL可否判定とR2取得のみを実装する。
+Phase 10-Fでは、初回投稿APIの没譜面保存ルールとD1列追加のみを実装する。
 
-取り下げAPI、削除申請API、管理人非表示APIはまだ未実装のため、DLブロックや非表示の確認はD1を直接更新して行う。
+追記API、Cron Trigger、R2自動削除処理、難易度表APIはまだ未実装のため、該当項目は仕様と将来テスト項目として確認する。
