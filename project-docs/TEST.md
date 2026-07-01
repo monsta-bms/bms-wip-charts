@@ -1,8 +1,8 @@
 # テスト手順
 
-## Phase 10-FEの対象
+## 対象
 
-Phase 10-FEでは、GitHub Pages の静的フロント画面が本番Worker APIへ接続できることを確認する。
+GitHub Pages の静的フロント画面で、投稿フォームUIと本番Worker API接続を確認する。
 
 本番Worker URL:
 
@@ -16,24 +16,41 @@ GitHub Pages URL:
 https://monsta-bms.github.io/bms-wip-charts/
 ```
 
-今回確認するもの:
+## 今回確認するもの
 
-- GitHub Pages画面から `GET /api/charts` を呼び、一覧を表示できること
+- 資料AのUIから資料Bに近いUIへ変更されていること
+- 必須項目に赤い `*` が表示されること
+- `*項目は入力必須。` の説明が表示されること
+- 初期表示時に赤エラーが出すぎないこと
+- 曲名/アーティストに `一致していない場合修正してください。` が表示されること
+- 想定難易度に `例: ★12 / st5 / sl8` が表示されること
+- `level` 入力欄が通常フォームに表示されないこと
+- 一覧で `difficulty` と `level` が重複表示されないこと
+- 差分名が `仮差分名` として分かる表示になっていること
+- 仮差分名に `[ANOTHER] / [ALITHER] / 仮差分` の入力例が表示されること
+- 差分作者が `差分作者（別名義可）` になっていること
+- 差分作者に `例: tester / anonymous` の入力例が表示されること
+- 没譜面チェックに `追記されることがなくなります` の補足があること
+- 没譜面チェックONで進捗度が `100` になること
+- 没譜面チェックONで進捗度が編集不可になること
+- 没譜面チェックOFFで進捗度が編集可能に戻ること
+- 管理パスワードの補足説明が表示されること
+- パスワード保存の注意文が表示されること
+- コメント欄に `音源URL、作業メモ、注意点など` のplaceholderが出ること
+- コメント欄に、音源ファイルはアップロードせずURLを貼る運用であることが表示されること
 - 投稿フォームから `multipart/form-data` で `POST /api/charts` へ送信できること
-- 初回投稿フォームに見える `level` 入力欄がないこと
 - 投稿成功後に `GET /api/charts` を再取得して一覧が更新されること
-- 一覧の想定難易度が `difficulty` のみで表示され、`★11 / 12` のような併記にならないこと
-- `difficulty` から内部値 `level` が可能な範囲で保存されること
 - APIエラーの `code`, `message`, `detail` が画面上部に表示されること
 - 送信中に投稿ボタンがdisabledになり、二重送信を防げること
 - 管理パスワードをlocalStorageへ保存できること
-- `isRejected=true` の場合、画面上でも `progress=100` 扱いに見えること
 - DLリンクが本番Worker URLへ向いていること
 - CORSで `https://monsta-bms.github.io` が許可されていること
 
-今回確認しないもの:
+## 今回確認しないもの
 
 - DB migration
+- Worker API変更
+- R2保存処理変更
 - `POST /api/charts/:chartId/versions`
 - 追記投稿
 - 取り下げ
@@ -45,84 +62,29 @@ https://monsta-bms.github.io/bms-wip-charts/
 - Cron Trigger
 - R2自動削除処理
 
-## Worker deploy前の確認
-
-`worker/wrangler.toml` の `[vars]` に以下が入っていることを確認する。
-
-```toml
-ALLOWED_ORIGINS = "https://monsta-bms.github.io,http://localhost:8787"
-```
-
-D1/R2 bindingが設定済みであることを確認する。
-
-```toml
-[[d1_databases]]
-binding = "DB"
-database_name = "wip-bms-charts-db"
-
-[[r2_buckets]]
-binding = "FILES"
-bucket_name = "wip-bms-charts-files"
-```
-
-必要なCloudflare secrets:
-
-- `HASH_SECRET`
-- `ADMIN_TOKEN`
-
-設定例:
-
-```bash
-cd worker
-npx wrangler secret put HASH_SECRET
-npx wrangler secret put ADMIN_TOKEN
-```
-
-## Worker deploy
-
-```bash
-cd worker
-npm install
-npm run typecheck
-npm run deploy
-```
-
-`worker/src/routes/charts.ts` を変更しているため、level自動抽出を本番反映するにはWorker deployが必要。
-
-## API単体確認
-
-```bash
-curl.exe "https://bms-wip-charts-worker.monsta3228gsl.workers.dev/api/health"
-curl.exe "https://bms-wip-charts-worker.monsta3228gsl.workers.dev/api/charts?page=1&pageSize=100"
-```
-
-CORS preflight確認例:
-
-```bash
-curl.exe -i -X OPTIONS "https://bms-wip-charts-worker.monsta3228gsl.workers.dev/api/charts" ^
-  -H "Origin: https://monsta-bms.github.io" ^
-  -H "Access-Control-Request-Method: POST" ^
-  -H "Access-Control-Request-Headers: Content-Type"
-```
-
-期待する主なヘッダー:
-
-```text
-HTTP/1.1 204 No Content
-Access-Control-Allow-Origin: https://monsta-bms.github.io
-Access-Control-Allow-Methods: GET,POST,OPTIONS
-Access-Control-Allow-Headers: Content-Type,Authorization
-```
-
 ## GitHub Pages表示確認
 
 1. `https://monsta-bms.github.io/bms-wip-charts/` を開く。
-2. 初回投稿フォームに「想定難易度」はあり、「level」の見える入力欄がないことを確認する。
-3. 投稿一覧に本番Workerの `GET /api/charts` の結果が表示されることを確認する。
-4. 一覧の想定難易度が `difficulty` のみで表示されることを確認する。
-5. `★11 / 12` や `st5 / 5` のような `level` 併記が表示されないことを確認する。
-6. データが0件の場合は「投稿はまだありません。」が表示されることを確認する。
-7. ブラウザの開発者ツールでCORSエラーが出ていないことを確認する。
+2. 投稿フォームが2カラムを維持したまま、資料Bのように入力誘導と補足文が追加されていることを確認する。
+3. 初期表示時に上部エラー欄や各入力欄が赤エラーだらけになっていないことを確認する。
+4. 譜面ファイル、曲名、アーティスト、仮差分名、想定難易度、差分作者、進捗度、管理パスワードに赤い `*` が表示されることを確認する。
+5. `*項目は入力必須。` が表示されることを確認する。
+6. 曲名とアーティストのplaceholderが `一致していない場合修正してください。` であることを確認する。
+7. 想定難易度のplaceholderが `例: ★12 / st5 / sl8` であることを確認する。
+8. 通常フォームに `level` 入力欄がないことを確認する。
+9. 差分名が `仮差分名` として表示され、補足文で同じ曲の別差分を区別する名前だと分かることを確認する。
+10. 差分作者のラベルが `差分作者（別名義可）` であることを確認する。
+11. コメント欄のplaceholderが `音源URL、作業メモ、注意点など` であることを確認する。
+12. 投稿一覧に本番Workerの `GET /api/charts` の結果が表示されることを確認する。
+13. 一覧の想定難易度が `difficulty` のみで表示され、`★11 / 12` や `st5 / 5` のような `level` 併記にならないことを確認する。
+
+## 必須チェック確認
+
+1. 初期表示直後に赤いエラーが表示されていないことを確認する。
+2. 何も入力せずに「投稿する」を押す。
+3. 上部エラー欄に未入力項目が表示されることを確認する。
+4. 未入力の必須項目の入力枠が赤くなることを確認する。
+5. 入力すると該当欄の赤枠が解除されることを確認する。
 
 ## テスト用BMSファイル作成例
 
@@ -131,20 +93,38 @@ PowerShell例:
 ```powershell
 @"
 #PLAYER 1
-#TITLE Test Song Difficulty Display
+#TITLE Test Song Guided Form
 #ARTIST Test Artist
 #PLAYLEVEL 3
 #BPM 120
 #00111:01
-"@ | Set-Content -Encoding UTF8 .\difficulty-display-test.bms
+"@ | Set-Content -Encoding UTF8 .\guided-form-test.bms
 ```
+
+## BMSメタデータ自動読取確認
+
+1. GitHub Pages画面を開く。
+2. `guided-form-test.bms` を選択する。
+3. `#TITLE` と `#ARTIST` が曲名/アーティスト欄へ自動入力されることを確認する。
+4. 曲名/アーティスト欄は手修正できることを確認する。
+
+## 没譜面チェック確認
+
+1. 没譜面チェックをONにする。
+2. 進捗度欄が `100` 表示になることを確認する。
+3. 進捗度欄が編集不可に見えることを確認する。
+4. 没譜面チェックに `追記されることがなくなります` の補足があることを確認する。
+5. 没譜面チェックをOFFにする。
+6. 進捗度欄が編集可能に戻ることを確認する。
+
+API側でも `isRejected=true` の場合は `progress=100` に強制されるため、ブラウザ側の表示は補助扱いとする。
 
 ## GitHub Pagesから初回投稿確認
 
 1. GitHub Pages画面を開く。
-2. `difficulty-display-test.bms` を選択する。
-3. `#TITLE` と `#ARTIST` が曲名/アーティスト欄へ自動入力されることを確認する。
-4. 差分名、想定難易度、差分作者、進捗度、コメント、管理パスワードを入力する。
+2. `guided-form-test.bms` を選択する。
+3. 曲名とアーティストが自動入力されることを確認する。
+4. 仮差分名、想定難易度、差分作者、進捗度、コメント、管理パスワードを入力する。
 5. 想定難易度に `★12` を入力する。
 6. 「投稿する」を押す。
 7. 送信中は投稿ボタンがdisabledになることを確認する。
@@ -169,28 +149,20 @@ D1確認例:
 
 ```bash
 cd worker
-npx wrangler d1 execute wip-bms-charts-db --command "SELECT difficulty, level FROM versions WHERE title LIKE '%Difficulty Display%' ORDER BY created_at DESC LIMIT 5;"
+npx wrangler d1 execute wip-bms-charts-db --command "SELECT difficulty, level FROM versions WHERE title LIKE '%Guided Form%' ORDER BY created_at DESC LIMIT 5;"
 ```
 
 抽出できない `difficulty` の場合、`level` は空または `NULL` でよい。
-
-## isRejected=true確認
-
-1. 没譜面チェックをONにする。
-2. 進捗度欄が `100` 表示になり、編集不可に見えることを確認する。
-3. 投稿する。
-4. 一覧で `100%` と没譜面バッジが表示されることを確認する。
-
-API側でも `progress=100` に強制されるため、ブラウザ側の表示は補助扱いとする。
 
 ## 管理パスワード保存確認
 
 1. 管理パスワードを入力する。
 2. 「パスワードを保存」をONにする。
-3. 投稿する、またはチェック状態を変更する。
-4. ページを再読み込みする。
-5. 管理パスワード欄に保存値が復元されることを確認する。
-6. 「パスワードを保存」をOFFにするとlocalStorageから削除されることを確認する。
+3. 補足文に `この端末のブラウザに保存します。共有PCでは使わないでください。` と表示されることを確認する。
+4. 投稿する、またはチェック状態を変更する。
+5. ページを再読み込みする。
+6. 管理パスワード欄に保存値が復元されることを確認する。
+7. 「パスワードを保存」をOFFにするとlocalStorageから削除されることを確認する。
 
 ## APIエラー表示確認
 
@@ -220,9 +192,9 @@ D1は外部キーがあるため、versionから順に削除する。
 
 ```sql
 DELETE FROM post_logs WHERE detail LIKE '%Initial chart version created.%' OR error_code IS NOT NULL;
-DELETE FROM versions WHERE title LIKE '%Difficulty Display%';
-DELETE FROM charts WHERE chart_name IN ('[REJECTED]', '[NORMAL]', '[INVALID]');
-DELETE FROM songs WHERE title LIKE '%Difficulty Display%';
+DELETE FROM versions WHERE title LIKE '%Guided Form%';
+DELETE FROM charts WHERE chart_name IN ('[REJECTED]', '[NORMAL]', '[INVALID]', '[ANOTHER]', '[ALITHER]', '仮差分');
+DELETE FROM songs WHERE title LIKE '%Guided Form%';
 ```
 
 R2は `charts/{chartId}/versions/root/` 配下のテストファイルをDashboardから削除する。
