@@ -729,6 +729,7 @@ async function parseCreateChartInput(
   const author = getFormText(form, "author");
   const comment = getFormText(form, "comment");
   const isRejected = parseBooleanField(getFormText(form, "isRejected"));
+  const storedProgress = isRejected ? 100 : progress.value;
 
   const missingFields = [
     ["title", title],
@@ -767,7 +768,7 @@ async function parseCreateChartInput(
       difficulty,
       level,
       author,
-      progress: progress.value,
+      progress: storedProgress,
       comment,
       isRejected,
       passwordHash: await hashWithSecret(`password:${password}`, secret),
@@ -1114,6 +1115,8 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
       versionId,
       fileId,
       displayVersion: "ver1.0",
+      progress: input.progress,
+      isRejected: input.isRejected,
       completed: input.progress === 100,
       completedAt,
       file: {
