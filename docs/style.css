@@ -175,6 +175,18 @@ h2 {
   white-space: pre-wrap;
 }
 
+.required-note {
+  color: var(--danger);
+  font-size: 0.86rem;
+  font-weight: 700;
+  margin: -6px 0 14px;
+}
+
+.required-mark {
+  color: var(--danger);
+  font-weight: 800;
+}
+
 .form-grid {
   display: grid;
   gap: 16px;
@@ -190,27 +202,50 @@ h2 {
   grid-column: 1 / -1;
 }
 
-.field span {
+.field-label {
   color: var(--muted);
+  display: inline-flex;
   font-size: 0.9rem;
   font-weight: 700;
+  gap: 4px;
+  line-height: 1.4;
+}
+
+.field-help {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.45;
 }
 
 .checkbox-field {
-  align-content: end;
-  align-items: center;
+  align-content: start;
+  align-items: flex-start;
   display: flex;
   gap: 10px;
   min-height: 42px;
+  padding-top: 28px;
+}
+
+.save-password-field {
+  padding-top: 4px;
 }
 
 .checkbox-field input {
+  flex: 0 0 auto;
+  margin-top: 4px;
   min-height: 0;
   width: auto;
 }
 
-.checkbox-field span {
+.checkbox-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.checkbox-title {
   color: var(--text);
+  font-weight: 700;
 }
 
 input,
@@ -224,6 +259,11 @@ textarea {
   width: 100%;
 }
 
+input::placeholder,
+textarea::placeholder {
+  color: #8a96a3;
+}
+
 input.readonly-input {
   background: #eef3f6;
   color: var(--muted);
@@ -234,7 +274,8 @@ textarea {
   resize: vertical;
 }
 
-input[aria-invalid="true"] {
+input[aria-invalid="true"],
+textarea[aria-invalid="true"] {
   border-color: var(--danger);
 }
 
@@ -400,6 +441,10 @@ input[aria-invalid="true"] {
   .form-grid,
   .version-row {
     grid-template-columns: 1fr;
+  }
+
+  .checkbox-field {
+    padding-top: 0;
   }
 
   .form-actions,
