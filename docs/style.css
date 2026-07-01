@@ -218,6 +218,94 @@ h2 {
   line-height: 1.45;
 }
 
+.difficulty-picker {
+  background: #fbfcfd;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.difficulty-picker[aria-invalid="true"] {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 1px rgba(180, 35, 24, 0.12);
+}
+
+.difficulty-tabs {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+button.difficulty-tab,
+button.difficulty-chip {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  color: var(--text);
+  min-height: 38px;
+  padding: 0 10px;
+}
+
+button.difficulty-tab:hover,
+button.difficulty-tab:focus-visible,
+button.difficulty-chip:hover,
+button.difficulty-chip:focus-visible {
+  background: #eef7f4;
+  border-color: rgba(37, 111, 93, 0.45);
+  color: var(--primary-dark);
+  text-decoration: none;
+}
+
+button.difficulty-tab.is-selected,
+button.difficulty-chip.is-selected,
+button.difficulty-tab.is-selected:hover,
+button.difficulty-tab.is-selected:focus-visible,
+button.difficulty-chip.is-selected:hover,
+button.difficulty-chip.is-selected:focus-visible {
+  background: linear-gradient(180deg, #17834f 0%, var(--primary-dark) 100%);
+  border-color: var(--primary-dark);
+  color: #ffffff;
+}
+
+.difficulty-chips {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.difficulty-manual input {
+  min-height: 42px;
+}
+
+.difficulty-preview {
+  align-items: center;
+  background: #f1fbf6;
+  border: 1px solid rgba(37, 111, 93, 0.22);
+  border-radius: 999px;
+  color: var(--primary-dark);
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  min-height: 40px;
+  padding: 6px 12px;
+}
+
+.difficulty-preview-label {
+  background: #dff5e8;
+  border: 1px solid rgba(37, 111, 93, 0.2);
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  padding: 2px 10px;
+}
+
+.difficulty-preview-value {
+  font-size: 1rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
 .checkbox-field {
   align-content: start;
   align-items: flex-start;
@@ -441,6 +529,21 @@ textarea[aria-invalid="true"] {
   .form-grid,
   .version-row {
     grid-template-columns: 1fr;
+  }
+
+  .difficulty-tabs {
+    grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
+  }
+
+  .difficulty-chips {
+    grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
+  }
+
+  .difficulty-preview {
+    align-items: stretch;
+    border-radius: 10px;
+    flex-direction: column;
+    text-align: center;
   }
 
   .checkbox-field {
