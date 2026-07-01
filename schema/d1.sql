@@ -1,6 +1,6 @@
 -- Canonical D1 schema for BMS WIP Charts.
--- This file mirrors worker/migrations/0001_initial.sql for Dashboard SQL execution.
--- Production data does not exist yet, so this schema intentionally replaces the MVP schema.
+-- This file mirrors worker/migrations/0001_initial.sql plus later migrations for Dashboard SQL execution.
+-- Production data does not exist yet, but applied D1 databases should use migrations instead of replacing 0001.
 
 PRAGMA foreign_keys = ON;
 
@@ -56,6 +56,8 @@ CREATE TABLE IF NOT EXISTS versions (
   file_size INTEGER NOT NULL CHECK (file_size >= 0),
   file_sha256 TEXT NOT NULL,
   r2_key TEXT NOT NULL,
+  file_deleted_at TEXT,
+  file_delete_reason TEXT,
   password_hash TEXT NOT NULL,
   download_blocked INTEGER NOT NULL DEFAULT 0 CHECK (download_blocked IN (0, 1)),
   download_block_reason TEXT CHECK (
