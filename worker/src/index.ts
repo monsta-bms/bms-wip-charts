@@ -39,7 +39,7 @@ async function routeRequest(request: Request, env: Env): Promise<Response> {
       403,
       "CORS_ORIGIN_NOT_ALLOWED",
       "許可されていないOriginです。",
-      "ALLOWED_ORIGINとリクエストOriginが一致しません。"
+      "ALLOWED_ORIGINSとリクエストOriginが一致しません。"
     );
   }
 
