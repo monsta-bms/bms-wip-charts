@@ -12,6 +12,12 @@ const artistInput = document.querySelector("#artist");
 const subartistInput = document.querySelector("#subartist");
 const chartNameInput = document.querySelector("#chartName");
 const difficultyInput = document.querySelector("#difficulty");
+const difficultyPicker = document.querySelector("#difficultyPicker");
+const difficultyTabs = Array.from(document.querySelectorAll(".difficulty-tab"));
+const difficultyChips = document.querySelector("#difficultyChips");
+const difficultyManualPanel = document.querySelector("#difficultyManualPanel");
+const difficultyManualInput = document.querySelector("#difficultyManual");
+const difficultyPreview = document.querySelector("#difficultyPreview");
 const authorInput = document.querySelector("#author");
 const progressInput = document.querySelector("#progress");
 const commentInput = document.querySelector("#comment");
@@ -23,6 +29,21 @@ const errorBox = document.querySelector("#errorBox");
 const chartList = document.querySelector("#chartList");
 
 let isSubmitting = false;
+let lastValidManualDifficulty = "";
+
+const difficultyLimits = {
+  "★": 25,
+  "★★": 7,
+  sl: 12,
+  st: 15
+};
+
+const difficultyState = {
+  mode: "symbol",
+  symbol: "★",
+  number: null,
+  manualValue: ""
+};
 
 const requiredFieldChecks = [
   { name: "譜面ファイル", input: fileInput, isMissing: () => !fileInput.files?.[0] },
@@ -37,6 +58,10 @@ const requiredFieldChecks = [
 
 function setFieldInvalid(input, invalid) {
   input.setAttribute("aria-invalid", invalid ? "true" : "false");
+
+  if (input === difficultyInput) {
+    difficultyPicker.setAttribute("aria-invalid", invalid ? "true" : "false");
+  }
 }
 
 function clearRequiredFieldIndicators() {
@@ -101,18 +126,130 @@ function extractLevelFromDifficulty(difficulty) {
     return "";
   }
 
-  const starMatch = value.match(/^[★☆]\s*(\d+(?:\.\d+)?)$/u);
-  if (starMatch) {
-    return starMatch[1];
+  const numericMatch = value.match(/\d{1,2}/);
+  return numericMatch ? numericMatch[0] : "";
+}
+
+function buildSymbolDifficulty() {
+  if (!difficultyState.number) {
+    return "";
   }
 
-  const tableMatch = value.match(/^(?:st|sl)\s*(\d+(?:\.\d+)?)$/i);
-  if (tableMatch) {
-    return tableMatch[1];
+  return `${difficultyState.symbol}${difficultyState.number}`;
+}
+
+function getCurrentDifficultyValue() {
+  if (difficultyState.mode === "manual") {
+    return difficultyState.manualValue.trim();
   }
 
-  const numericMatch = value.match(/^(\d+(?:\.\d+)?)$/);
-  return numericMatch ? numericMatch[1] : "";
+  return buildSymbolDifficulty();
+}
+
+function updateDifficultyValue() {
+  const value = getCurrentDifficultyValue();
+  difficultyInput.value = value;
+  difficultyPreview.textContent = value || "未選択";
+
+  if (value) {
+    setFieldInvalid(difficultyInput, false);
+  }
+}
+
+function renderDifficultyTabs() {
+  for (const tab of difficultyTabs) {
+    const mode = tab.dataset.difficultyMode;
+    const selected = mode === "manual"
+      ? difficultyState.mode === "manual"
+      : difficultyState.mode === "symbol" && tab.dataset.symbol === difficultyState.symbol;
+
+    tab.classList.toggle("is-selected", selected);
+    tab.setAttribute("aria-pressed", selected ? "true" : "false");
+  }
+}
+
+function renderDifficultyChips() {
+  if (difficultyState.mode === "manual") {
+    difficultyChips.hidden = true;
+    difficultyChips.innerHTML = "";
+    difficultyManualPanel.hidden = false;
+    difficultyManualInput.value = difficultyState.manualValue;
+    return;
+  }
+
+  difficultyChips.hidden = false;
+  difficultyManualPanel.hidden = true;
+
+  const limit = difficultyLimits[difficultyState.symbol];
+  difficultyChips.innerHTML = Array.from({ length: limit }, (_, index) => {
+    const number = index + 1;
+    const selected = difficultyState.number === number;
+    return `<button class="difficulty-chip${selected ? " is-selected" : ""}" type="button" data-number="${number}" aria-pressed="${selected ? "true" : "false"}">${number}</button>`;
+  }).join("");
+}
+
+function renderDifficultySelector() {
+  renderDifficultyTabs();
+  renderDifficultyChips();
+  updateDifficultyValue();
+}
+
+function selectDifficultyTab(tab) {
+  const mode = tab.dataset.difficultyMode;
+
+  if (mode === "manual") {
+    if (!difficultyState.manualValue && difficultyState.number) {
+      difficultyState.manualValue = buildSymbolDifficulty();
+      lastValidManualDifficulty = difficultyState.manualValue;
+    }
+
+    difficultyState.mode = "manual";
+    renderDifficultySelector();
+    difficultyManualInput.focus();
+    return;
+  }
+
+  const nextSymbol = tab.dataset.symbol;
+  const nextLimit = difficultyLimits[nextSymbol];
+  difficultyState.mode = "symbol";
+  difficultyState.symbol = nextSymbol;
+
+  if (difficultyState.number && difficultyState.number > nextLimit) {
+    difficultyState.number = nextLimit;
+  }
+
+  renderDifficultySelector();
+}
+
+function selectDifficultyNumber(number) {
+  difficultyState.number = number;
+  renderDifficultySelector();
+}
+
+function hasThreeDigitNumber(value) {
+  return /\d{3,}/.test(value);
+}
+
+function handleManualDifficultyInput() {
+  const nextValue = difficultyManualInput.value;
+
+  if (hasThreeDigitNumber(nextValue)) {
+    difficultyManualInput.value = lastValidManualDifficulty;
+    return;
+  }
+
+  difficultyState.manualValue = nextValue;
+  lastValidManualDifficulty = nextValue;
+  updateDifficultyValue();
+}
+
+function resetDifficultySelector() {
+  difficultyState.mode = "symbol";
+  difficultyState.symbol = "★";
+  difficultyState.number = null;
+  difficultyState.manualValue = "";
+  lastValidManualDifficulty = "";
+  renderDifficultySelector();
 }
 
 function decodeBuffer(buffer, encoding) {
@@ -466,6 +603,7 @@ async function submitChart() {
     const shouldRestorePassword = savePasswordInput.checked;
     form.reset();
     clearRequiredFieldIndicators();
+    resetDifficultySelector();
     progressInput.value = "100";
     if (shouldRestorePassword) {
       passwordInput.value = savedPassword;
@@ -505,6 +643,21 @@ for (const field of requiredFieldChecks) {
   });
 }
 
+difficultyTabs.forEach((tab) => {
+  tab.addEventListener("click", () => selectDifficultyTab(tab));
+});
+
+difficultyChips.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-number]");
+  if (!button) {
+    return;
+  }
+
+  selectDifficultyNumber(Number(button.dataset.number));
+});
+
+difficultyManualInput.addEventListener("input", handleManualDifficultyInput);
+
 progressInput.addEventListener("input", () => {
   if (progressInput.getAttribute("aria-invalid") === "true") {
     validateProgress();
@@ -524,5 +677,6 @@ form.addEventListener("submit", (event) => {
 });
 
 loadSavedPassword();
+resetDifficultySelector();
 applyRejectedProgressState();
 loadCharts();
