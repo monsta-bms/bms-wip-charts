@@ -98,6 +98,31 @@ GitHub Pages側では `code`, `message`, `detail` を画面上部のエラー欄
 
 秘密情報はソースコードや `wrangler.toml` に直書きしない。
 
+## 難易度表示方針
+
+ユーザーが入力・閲覧する項目は `difficulty` を使い、表示名は「想定難易度」に統一する。
+
+`level` は内部値として保持する。
+
+- 通常の初回投稿フォームには `level` の見える入力欄を出さない。
+- 投稿一覧では `difficulty` のみ表示し、`level` を併記しない。
+- `GET /api/charts` は既存API互換のため `level` を返してよい。
+- 将来の難易度表APIでは `level` を返してよい。
+- DB上の `versions.level` カラムは残す。
+
+`POST /api/charts` では、`level` が未入力の場合に `difficulty` から可能な範囲で自動抽出する。
+
+抽出例:
+
+| difficulty | 表示 | 保存するlevel |
+| --- | --- | --- |
+| `★12` | `★12` | `12` |
+| `st5` | `st5` | `5` |
+| `sl8` | `sl8` | `8` |
+| `12` | `12` | `12` |
+
+抽出できない場合、`level` は空または `null` として扱う。
+
 ## D1 schema
 
 schema / migrationファイル:
@@ -161,6 +186,7 @@ GitHub Pages側はページ表示時と投稿成功後にこのAPIを呼ぶ。
 - `versions.is_hidden=1` のversionは通常一覧に出さない。
 - versionsは `branch_path` 昇順で返す。
 - `displayVersion` はDB保存値ではなくAPI側で生成する。
+- `difficulty` と `level` を返すが、通常一覧では `difficulty` のみ表示する。
 - `progress=100` のversionは `completed: true` を返す。
 - `is_rejected=1` のversionは `isRejected: true` を返し、UIでは没譜面バッジで区別する。
 - `downloadBlocked` と `downloadBlockReason` を返す。
@@ -193,7 +219,7 @@ GitHub Pages側は `multipart/form-data` で本番Workerへ送信する。
 - `subartist`
 - `chartName`
 - `difficulty`
-- `level`
+- `level` optional/internal
 - `author`
 - `progress`
 - `comment`
@@ -204,6 +230,8 @@ GitHub Pages側は `multipart/form-data` で本番Workerへ送信する。
 
 - `file`, `chartName`, `author`, `progress`, `password` は必須。
 - `title` / `artist` はBMS本文から読める場合は空でもよい。
+- 通常フォームでは `level` を見える入力欄として表示しない。
+- `level` が未入力の場合は `difficulty` から可能な範囲で自動抽出する。
 - 許可拡張子は `.bms`, `.bme`, `.bml`, `.zip` のみ。
 - 単体譜面ファイルは2MBまで。
 - zipファイルは5MBまで。
