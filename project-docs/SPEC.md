@@ -47,6 +47,8 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。
 
 ### 初回投稿フォーム
 
+フォームは2カラムの見やすさを維持しつつ、入力誘導、補足文、必須表示を表示する。
+
 ユーザーが入力・選択する項目:
 
 - 譜面ファイル
@@ -54,20 +56,75 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。
 - サブタイトル
 - アーティスト
 - サブアーティスト
-- 差分名
+- 仮差分名
 - 想定難易度
-- 差分作者
+- 差分作者（別名義可）
 - 進捗度 0〜100
 - コメント
 - 没譜面チェック
 - 管理パスワード
 - 管理パスワード保存チェック
 
-通常フォームでは `level` の見える入力欄を表示しない。
+通常フォームでは `level` の見える入力欄を表示しない。ユーザーが入力・閲覧する難易度は「想定難易度」に統一する。
 
-音源ファイルはアップロード禁止とする。音源が必要な場合は、コメント欄にURLを貼る方式とする。
+フォーム上の必須項目には赤い `*` を表示し、フォーム内に `*項目は入力必須。` と表示する。初期表示時には未入力エラーを大量に表示せず、送信ボタン押下後に未入力項目が分かるようにする。
 
-管理パスワードはブラウザ側のlocalStorageで保持可能とする。DBには生パスワードを保存せず、server secretやsaltを使った `password_hash` のみ保存する。
+現行APIとの互換のため、初回投稿では以下を未入力チェック対象にする。
+
+- 譜面ファイル
+- 曲名
+- アーティスト
+- 仮差分名
+- 想定難易度
+- 差分作者
+- 進捗度
+- 管理パスワード
+
+入力誘導:
+
+- 曲名 placeholder: `一致していない場合修正してください。`
+- アーティスト placeholder: `一致していない場合修正してください。`
+- 仮差分名 placeholder: `例: [ANOTHER] / [ALITHER] / 仮差分`
+- 仮差分名 補足: `同じ曲の別差分を区別するための名前です。`
+- 想定難易度 placeholder: `例: ★12 / st5 / sl8`
+- 差分作者 placeholder: `例: tester / anonymous`
+- コメント placeholder: `音源URL、作業メモ、注意点など`
+
+音源ファイルはアップロード禁止とする。音源が必要な場合は、コメント欄にURLを貼る方式とする。フォームにも音源URLはコメント欄へ記入する旨を表示する。
+
+管理パスワードは、取り下げ・削除申請に使う。公開しない。忘れると投稿者側で操作できない。DBには生パスワードを保存せず、server secretやsaltを使った `password_hash` のみ保存する。
+
+管理パスワード保存チェックは残す。保存する場合は、この端末のブラウザに保存するため共有PCでは使わない旨を表示する。
+
+### 没譜面チェック
+
+没譜面チェック `isRejected` は初回投稿 `POST /api/charts` でのみ有効とする。
+
+フォームでは `没譜面` の横または下に `追記されることがなくなります。進捗度は100固定です。` という意味の補足を表示する。
+
+没譜面チェックON時:
+
+- 進捗度を `100` にする。
+- 進捗度欄をreadonlyまたはdisabledにする。
+- 見た目でも100固定であることが分かるようにする。
+
+没譜面チェックOFF時:
+
+- 進捗度欄を通常入力可能に戻す。
+
+API側でも `isRejected=true` の場合は `progress=100` に強制する。ブラウザ側の制御は補助扱いとする。
+
+`isRejected=true` のversionは以下の扱いにする。
+
+- `completed_at` を保存する。
+- completed扱いにする。
+- 難易度表掲載対象にする。
+- 難易度表と一覧では没譜面バッジで通常の完成譜面と区別する。
+- このversionからの追記は禁止する。
+
+追記投稿 `POST /api/charts/:chartId/versions` では `isRejected` を指定できない。将来の追記APIで `isRejected=true` が送られた場合は `INVALID_REJECTED_FLAG_FOR_FOLLOWUP` を返す。
+
+将来の追記APIで親versionの `is_rejected=1` を検出した場合は `REJECTED_CHART_CANNOT_BE_EXTENDED` を返す。
 
 ### 投稿一覧
 
@@ -171,24 +228,6 @@ MD5はzipファイルではなく、BMS/BME/BMLファイル本体のMD5とする
 抽出できない場合は `level` を空または `null` にしてよい。
 
 将来 `estimated_difficulty` と `table_level` を分ける可能性は残す。
-
-### 没譜面チェック
-
-没譜面チェック `isRejected` は初回投稿 `POST /api/charts` でのみ有効とする。
-
-初回投稿で `isRejected=true` の場合、ユーザーが入力した `progress` に関係なく、保存値は `progress=100` に強制する。
-
-`isRejected=true` のversionは以下の扱いにする。
-
-- `completed_at` を保存する。
-- completed扱いにする。
-- 難易度表掲載対象にする。
-- 難易度表と一覧では没譜面バッジで通常の完成譜面と区別する。
-- このversionからの追記は禁止する。
-
-追記投稿 `POST /api/charts/:chartId/versions` では `isRejected` を指定できない。将来の追記APIで `isRejected=true` が送られた場合は `INVALID_REJECTED_FLAG_FOR_FOLLOWUP` を返す。
-
-将来の追記APIで親versionの `is_rejected=1` を検出した場合は `REJECTED_CHART_CANNOT_BE_EXTENDED` を返す。
 
 ## 分岐version管理
 
@@ -405,6 +444,8 @@ APIエラーは必ず JSON で `code`, `message`, `detail` を返す。
 - `POST /api/admin/delete-requests/:requestId/reject`
 
 難易度表APIは一覧APIとは分ける。難易度表は `progress=100` かつDL可能なversion中心に返し、`difficulty` と `level` を返せる設計にする。
+
+今回の投稿フォームUI調整では、Worker API、D1 schema、R2処理は変更しない。
 
 ## DB仕様
 
