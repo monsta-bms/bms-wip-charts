@@ -2,6 +2,7 @@ export type Env = {
   DB: D1Database;
   FILES: R2Bucket;
   ALLOWED_ORIGIN?: string;
+  ALLOWED_ORIGINS?: string;
   HASH_SECRET?: string;
   ADMIN_TOKEN?: string;
 };
@@ -15,8 +16,16 @@ export type ApiErrorBody = {
 const allowedMethods = "GET,POST,OPTIONS";
 const allowedHeaders = "Content-Type,Authorization";
 
-function getAllowedOrigin(env: Env): string {
-  return env.ALLOWED_ORIGIN?.trim() ?? "";
+function getAllowedOrigins(env: Env): string[] {
+  const rawValue = env.ALLOWED_ORIGINS?.trim() || env.ALLOWED_ORIGIN?.trim() || "";
+  if (!rawValue) {
+    return [];
+  }
+
+  return rawValue
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 }
 
 function getRequestOrigin(request: Request): string {
@@ -45,12 +54,12 @@ export function isCorsAllowed(request: Request, env: Env): boolean {
     return true;
   }
 
-  const allowedOrigin = getAllowedOrigin(env);
-  if (!allowedOrigin) {
+  const allowedOrigins = getAllowedOrigins(env);
+  if (allowedOrigins.length === 0) {
     return false;
   }
 
-  return allowedOrigin === "*" || allowedOrigin === origin;
+  return allowedOrigins.includes("*") || allowedOrigins.includes(origin);
 }
 
 export function corsHeaders(request: Request, env: Env): Headers {
@@ -59,13 +68,13 @@ export function corsHeaders(request: Request, env: Env): Headers {
   });
 
   const origin = getRequestOrigin(request);
-  const allowedOrigin = getAllowedOrigin(env);
+  const allowedOrigins = getAllowedOrigins(env);
 
   if (!origin || !isCorsAllowed(request, env)) {
     return headers;
   }
 
-  headers.set("Access-Control-Allow-Origin", allowedOrigin === "*" ? "*" : origin);
+  headers.set("Access-Control-Allow-Origin", allowedOrigins.includes("*") ? "*" : origin);
   headers.set("Access-Control-Allow-Methods", allowedMethods);
   headers.set("Access-Control-Allow-Headers", allowedHeaders);
   headers.set("Access-Control-Max-Age", "86400");
@@ -154,7 +163,7 @@ export function optionsResponse(request: Request, env: Env): Response {
       403,
       "CORS_ORIGIN_NOT_ALLOWED",
       "許可されていないOriginです。",
-      "ALLOWED_ORIGINとリクエストOriginが一致しません。"
+      "ALLOWED_ORIGINSとリクエストOriginが一致しません。"
     );
   }
 
