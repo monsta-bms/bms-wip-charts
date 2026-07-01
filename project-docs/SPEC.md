@@ -9,20 +9,26 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。
 - リポジトリ名: `bms-wip-charts`
 - GitHub Pages URL: https://monsta-bms.github.io/wipbmschart/
 
-## Phase 10-A改の範囲
+## Phase 10-Fの範囲
 
-Phase 10-A改では、追加仕様込みでD1 schema / migration / 仕様書 / API設計 / テスト設計を再設計する。
+Phase 10-Fでは、没譜面仕様と将来のR2ファイル自動削除に備えた最小修正を行う。
+
+実装・更新するもの:
+
+- 初回投稿API `POST /api/charts` で `isRejected=true` の場合に `progress=100` として保存する。
+- `isRejected=true` の場合に `completed_at` を保存し、completed扱いにする。
+- `versions.file_deleted_at` と `versions.file_delete_reason` を追加するmigrationを用意する。
+- 仕様書、API仕様、テスト手順に没譜面と自動削除準備を明記する。
 
 今回は以下を実装しない。
 
-- Worker本体のAPI実装変更
-- `GET /api/charts` のD1実データ化
-- R2保存
-- BMSメタデータ読取実装
-- zip検査実装
-- フロントUI変更
-- 管理画面UI
-- Turnstile
+- Cron Trigger実装
+- R2自動削除処理
+- `POST /api/charts/:chartId/versions` の本実装
+- 取り下げAPI
+- 削除申請API
+- 難易度表API
+- UI変更
 
 ## 画面仕様
 
@@ -55,6 +61,8 @@ Phase 10-A改では、追加仕様込みでD1 schema / migration / 仕様書 / A
 
 音源ファイルはアップロード禁止とする。音源が必要な場合は、コメント欄にURLを貼る方式とする。
 
+没譜面チェック `isRejected` は初回投稿フォームでのみ有効とする。追記投稿フォームでは没譜面チェックを非表示またはdisabledにする。
+
 管理パスワードはブラウザ側のCookieまたはlocalStorageで保持可能とする。DBには生パスワードを保存せず、server secretやsaltを使った `password_hash` のみ保存する。
 
 ### 投稿一覧
@@ -77,6 +85,8 @@ Phase 10-A改では、追加仕様込みでD1 schema / migration / 仕様書 / A
 - 削除申請ボタン
 
 `progress=100` のversionは、一覧上で色やバッジにより完成扱いであることが分かるようにする。
+
+`is_rejected=1` のversionは没譜面バッジで通常の完成譜面と区別する。
 
 ## 管理単位
 
@@ -149,6 +159,24 @@ MD5はzipファイルではなく、BMS/BME/BMLファイル本体のMD5とする
 
 `level` は当面、投稿フォームの想定難易度またはそれに相当する値を使う。後で `estimated_difficulty` と `table_level` を分ける可能性を残す。
 
+### 没譜面チェック
+
+没譜面チェック `isRejected` は初回投稿 `POST /api/charts` でのみ有効とする。
+
+初回投稿で `isRejected=true` の場合、ユーザーが入力した `progress` に関係なく、保存値は `progress=100` に強制する。
+
+`isRejected=true` のversionは以下の扱いにする。
+
+- `completed_at` を保存する。
+- completed扱いにする。
+- 難易度表掲載対象にする。
+- 難易度表と一覧では没譜面バッジで通常の完成譜面と区別する。
+- このversionからの追記は禁止する。
+
+追記投稿 `POST /api/charts/:chartId/versions` では `isRejected` を指定できない。将来の追記APIで `isRejected=true` が送られた場合は `INVALID_REJECTED_FLAG_FOR_FOLLOWUP` を返す。
+
+将来の追記APIで親versionの `is_rejected=1` を検出した場合は `REJECTED_CHART_CANNOT_BE_EXTENDED` を返す。
+
 ## 分岐version管理
 
 単線version管理ではなく、分岐ツリー型version管理にする。
@@ -191,7 +219,7 @@ MD5はzipファイルではなく、BMS/BME/BMLファイル本体のMD5とする
 
 `progress=100` 到達時は `completed_at` を保存する。
 
-`progress=100` と `is_rejected` は別フラグとして扱う。
+`progress=100` と `is_rejected` は別フラグとして扱う。ただし `is_rejected=1` の初回投稿は保存時に `progress=100` へ強制する。
 
 `progress=100` かつ `is_rejected=1` の没譜面も難易度表に通常掲載し、難易度表上では没譜面バッジで区別する。
 
@@ -249,6 +277,42 @@ ver1.0 progress=30
 - `ver2.0-a`: DL可
 - `ver3.0-a`: DL可
 
+### DL不可譜面の将来自動削除
+
+将来、`download_blocked=1` になってから30日経過したversionのR2ファイルを、Cloudflare Workers Cron Triggerで1日1回程度自動整理する。
+
+自動削除時の方針:
+
+- R2ファイルは削除する。
+- D1の `versions` 行は物理削除しない。
+- 分岐ツリーを壊さないため、version行の物理削除は禁止する。
+- D1上では `is_hidden=1` にして通常一覧から非表示にする。
+- `hidden_reason='auto_deleted_after_download_block'` を保存する。
+- `file_deleted_at` にR2ファイル削除日時を保存する。
+- `file_delete_reason='auto_deleted_after_download_block'` を保存する。
+- R2削除成功後にD1を更新する。
+- R2削除失敗時はD1を非表示化せず、`admin_logs` に失敗ログを残す。
+- 自動削除成功時も `admin_logs` に記録する。
+- 一度に処理する件数には上限を設ける。
+
+MVPでの自動削除対象条件:
+
+- `download_blocked=1`
+- `download_blocked_at` が現在時刻から30日以上前
+- `file_deleted_at IS NULL`
+- `is_hidden=0` または管理理由によりファイルだけ残っている状態
+
+MVPでの自動削除対象reason候補:
+
+- `superseded_by_completed_descendant`
+- `withdrawn`
+- `admin_blocked`
+- `admin_hidden`
+
+`delete_requested` はMVPでは自動削除対象に含めない。削除申請は管理人確認が前提のため、将来含める場合は `delete_requests.status='approved'` などの承認済み条件を追加する。
+
+Phase 10-FではCron TriggerとR2自動削除本体は実装しない。
+
 ## 取り下げ
 
 各version行に「取り下げ」ボタンを表示する想定とする。
@@ -291,6 +355,8 @@ ver1.0 progress=30
 - `updated_at`
 
 削除申請内容は `delete_requests` に保存し、管理人が後から確認・承認・却下できるようにする。
+
+`delete_requested` はMVPの自動削除対象には含めない。
 
 ## 追記時のタイトル・アーティスト一致
 
@@ -368,7 +434,7 @@ APIエラーは必ず JSON で `code`, `message`, `detail` を返す。
 
 ### 追加設計API
 
-Phase 10-A改では設計のみ行い、Worker実装は後続Phaseで行う。
+後続Phaseで実装する。
 
 - `GET /api/table`
 - `GET /api/table?level=...`
@@ -379,15 +445,14 @@ Phase 10-A改では設計のみ行い、Worker実装は後続Phaseで行う。
 - `POST /api/admin/delete-requests/:requestId/approve`
 - `POST /api/admin/delete-requests/:requestId/reject`
 
-難易度表APIは一覧APIとは分ける。難易度表は `progress=100` かつDL可能なversion中心に返し、`completed_at` 順や `level` 順で並べられる設計にする。
+難易度表APIは一覧APIとは分ける。難易度表は `progress=100` かつDL可能なversion中心に返し、`is_rejected=1` のversionも没譜面バッジ付きで返す設計にする。
 
 ## DB仕様
-
-Phase 10-A改でD1 schema / migrationを追加仕様込みで再設計する。
 
 schemaファイル:
 
 - `worker/migrations/0001_initial.sql`
+- `worker/migrations/0002_file_delete_and_rejected_rules.sql`
 - `schema/d1.sql`
 
 ### 設計方針
@@ -397,6 +462,7 @@ schemaファイル:
 - cascade削除は安易に使わない。
 - chart/versionは `is_hidden` による論理非表示を基本にする。
 - versionのDL不可は `download_blocked` と `download_block_reason` で管理する。
+- R2ファイル削除状態は `file_deleted_at` と `file_delete_reason` で管理する。
 - 全主要テーブルに `created_at` と必要に応じて `updated_at` を持たせる。
 - 日付はクライアント入力ではなく、DBまたはWorker側で取得する。
 - 基本はUTCの `CURRENT_TIMESTAMP` を使う。
@@ -469,6 +535,8 @@ schemaファイル:
 - `file_size`
 - `file_sha256`
 - `r2_key`
+- `file_deleted_at`
+- `file_delete_reason`
 - `password_hash`
 - `download_blocked`
 - `download_block_reason`
@@ -485,6 +553,8 @@ schemaファイル:
 root versionのみ `parent_version_id` はNULL。それ以外のversionは `parent_version_id` 必須とする。
 
 `display_version` はDBに保存せず、APIレスポンス時に生成する。
+
+`file_deleted_at` は将来R2ファイルが自動削除または管理削除された日時を保存する。`file_delete_reason` はファイル削除理由を保存する。
 
 ### delete_requests
 
@@ -563,6 +633,8 @@ BAN情報を保存する。
 
 R2使用量が8GBを超えた場合は、`level='warning'`, `code='R2_USAGE_EXCEEDED_8GB'` として記録する。
 
+将来の自動削除では、成功時に `AUTO_FILE_DELETE_SUCCEEDED`、失敗時に `AUTO_FILE_DELETE_FAILED` を記録する。
+
 ## エラー設計
 
 ### エラーレスポンス形式
@@ -594,6 +666,8 @@ R2使用量が8GBを超えた場合は、`level='warning'`, `code='R2_USAGE_EXCE
 | `TITLE_ARTIST_PARSE_FAILED` | 譜面情報の読み取りに失敗しました。 |
 | `TITLE_ARTIST_MISMATCH` | 追記先と譜面情報が一致しません。 |
 | `INVALID_PROGRESS` | 進捗度の値が不正です。 |
+| `INVALID_REJECTED_FLAG_FOR_FOLLOWUP` | 追記投稿では没譜面チェックを指定できません。 |
+| `REJECTED_CHART_CANNOT_BE_EXTENDED` | 没譜面から追記投稿はできません。 |
 | `COMMENT_URL_LIMIT_EXCEEDED` | コメント内のURL数が多すぎます。 |
 | `EMPTY_USER_AGENT` | User-Agentが確認できません。 |
 | `BOT_USER_AGENT_REJECTED` | 自動投稿の可能性があるため拒否しました。 |
@@ -622,3 +696,5 @@ R2使用量が8GBを超えた場合は、`level='warning'`, `code='R2_USAGE_EXCE
 | code | level | 内容 |
 | --- | --- | --- |
 | `R2_USAGE_EXCEEDED_8GB` | `warning` | R2使用量が8GBを超えた。 |
+| `AUTO_FILE_DELETE_SUCCEEDED` | `info` | DL不可から30日経過したR2ファイルの自動削除に成功した。 |
+| `AUTO_FILE_DELETE_FAILED` | `error` | DL不可から30日経過したR2ファイルの自動削除に失敗した。 |
