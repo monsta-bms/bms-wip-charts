@@ -24,6 +24,27 @@ const chartList = document.querySelector("#chartList");
 
 let isSubmitting = false;
 
+const requiredFieldChecks = [
+  { name: "譜面ファイル", input: fileInput, isMissing: () => !fileInput.files?.[0] },
+  { name: "曲名", input: titleInput, isMissing: () => !titleInput.value.trim() },
+  { name: "アーティスト", input: artistInput, isMissing: () => !artistInput.value.trim() },
+  { name: "仮差分名", input: chartNameInput, isMissing: () => !chartNameInput.value.trim() },
+  { name: "想定難易度", input: difficultyInput, isMissing: () => !difficultyInput.value.trim() },
+  { name: "差分作者", input: authorInput, isMissing: () => !authorInput.value.trim() },
+  { name: "進捗度", input: progressInput, isMissing: () => !progressInput.value.trim() },
+  { name: "管理パスワード", input: passwordInput, isMissing: () => !passwordInput.value.trim() }
+];
+
+function setFieldInvalid(input, invalid) {
+  input.setAttribute("aria-invalid", invalid ? "true" : "false");
+}
+
+function clearRequiredFieldIndicators() {
+  for (const field of requiredFieldChecks) {
+    setFieldInvalid(field.input, false);
+  }
+}
+
 function buildApiUrl(path) {
   return new URL(path, API_BASE_URL).toString();
 }
@@ -145,8 +166,11 @@ async function fillMetaFromFile(file) {
   if (!allowedChartExtensions.has(extension)) {
     showTextError("投稿対象は .bms .bme .bml .zip のみです。");
     fileInput.value = "";
+    setFieldInvalid(fileInput, true);
     return;
   }
+
+  setFieldInvalid(fileInput, false);
 
   if (!readableChartExtensions.has(extension)) {
     clearError();
@@ -160,10 +184,12 @@ async function fillMetaFromFile(file) {
 
     if (meta.title) {
       titleInput.value = meta.title;
+      setFieldInvalid(titleInput, false);
     }
 
     if (meta.artist) {
       artistInput.value = meta.artist;
+      setFieldInvalid(artistInput, false);
     }
 
     clearError();
@@ -191,7 +217,7 @@ function validateProgress() {
   }
 
   const valid = isValidProgress(progressInput.value);
-  progressInput.setAttribute("aria-invalid", String(!valid));
+  setFieldInvalid(progressInput, !valid);
 
   if (!valid) {
     showTextError("進捗度は0から100までの整数で入力してください。");
@@ -205,12 +231,14 @@ function validateProgress() {
 function validateRequiredFields() {
   const missingFields = [];
 
-  if (!fileInput.files?.[0]) missingFields.push("譜面ファイル");
-  if (!titleInput.value.trim()) missingFields.push("曲名");
-  if (!artistInput.value.trim()) missingFields.push("アーティスト");
-  if (!chartNameInput.value.trim()) missingFields.push("差分名");
-  if (!authorInput.value.trim()) missingFields.push("差分作者");
-  if (!passwordInput.value.trim()) missingFields.push("管理パスワード");
+  for (const field of requiredFieldChecks) {
+    const missing = field.isMissing();
+    setFieldInvalid(field.input, missing);
+
+    if (missing) {
+      missingFields.push(field.name);
+    }
+  }
 
   if (missingFields.length > 0) {
     showTextError(`未入力の項目があります: ${missingFields.join(", ")}`);
@@ -225,12 +253,14 @@ function applyRejectedProgressState() {
     progressInput.value = "100";
     progressInput.readOnly = true;
     progressInput.classList.add("readonly-input");
-    progressInput.setAttribute("aria-invalid", "false");
+    progressInput.setAttribute("aria-readonly", "true");
+    setFieldInvalid(progressInput, false);
     return;
   }
 
   progressInput.readOnly = false;
   progressInput.classList.remove("readonly-input");
+  progressInput.removeAttribute("aria-readonly");
 }
 
 function loadSavedPassword() {
@@ -435,6 +465,7 @@ async function submitChart() {
     const savedPassword = passwordInput.value;
     const shouldRestorePassword = savePasswordInput.checked;
     form.reset();
+    clearRequiredFieldIndicators();
     progressInput.value = "100";
     if (shouldRestorePassword) {
       passwordInput.value = savedPassword;
@@ -457,12 +488,22 @@ fileInput.addEventListener("change", () => {
   const file = fileInput.files?.[0];
 
   if (!file) {
+    setFieldInvalid(fileInput, false);
     clearError();
     return;
   }
 
   fillMetaFromFile(file);
 });
+
+for (const field of requiredFieldChecks) {
+  const eventName = field.input === fileInput ? "change" : "input";
+  field.input.addEventListener(eventName, () => {
+    if (!field.isMissing()) {
+      setFieldInvalid(field.input, false);
+    }
+  });
+}
 
 progressInput.addEventListener("input", () => {
   if (progressInput.getAttribute("aria-invalid") === "true") {
