@@ -1,4 +1,4 @@
-import { normalizeText, parseBmsMetadata } from "../utils/bms";
+import { analyzeBmsBuffer, BmsAnalysis, normalizeText, parseBmsMetadata } from "../utils/bms";
 import { sanitizeFileName, validateUploadFile } from "../utils/fileValidation";
 import { hashWithSecret, md5HexFromBuffer, sha256HexFromBuffer } from "../utils/hash";
 import { apiError, Env, errorDetail, methodNotAllowed, ok } from "../utils/response";
@@ -43,6 +43,11 @@ type VersionRow = {
   author: string;
   authors_json: string | null;
   progress: number;
+  play_notes: number | null;
+  first_note_measure: number | null;
+  last_note_measure: number | null;
+  target_measure_count: number | null;
+  measure_notes_json: string | null;
   comment: string;
   difficulty: string | null;
   level: string | null;
@@ -97,12 +102,20 @@ type ApiFailure = {
   detail: string;
 };
 
+type ApiWarning = {
+  code: string;
+  message: string;
+  detail?: string;
+};
+
 type CreateChartInput = {
   file: File;
   fileName: string;
   fileBytes: ArrayBuffer;
   fileSha256: string;
   md5: string | null;
+  bmsAnalysis: BmsAnalysis | null;
+  analysisWarnings: ApiWarning[];
   title: string;
   subtitle: string;
   artist: string;
@@ -115,7 +128,7 @@ type CreateChartInput = {
   comment: string;
   isRejected: boolean;
   passwordHash: string;
-  metadataWarning: { code: string; message: string } | null;
+  metadataWarning: ApiWarning | null;
   parsedMetadata: {
     title: string | null;
     artist: string | null;
@@ -299,6 +312,24 @@ function buildDisplayVersion(row: VersionRow): string {
   return suffix ? `${base}-${suffix}` : base;
 }
 
+function parseStoredJson(value: string | null, fieldName: string, versionId: string): unknown | null {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    console.error("[charts-list-json-parse] failed to parse stored JSON field", {
+      code: "STORED_JSON_PARSE_FAILED",
+      fieldName,
+      versionId,
+      message: errorDetail(error)
+    });
+    return null;
+  }
+}
+
 function buildVersion(row: VersionRow) {
   const downloadBlocked = toBoolean(row.download_blocked);
 
@@ -312,6 +343,11 @@ function buildVersion(row: VersionRow) {
     author: row.author,
     authorsJson: row.authors_json,
     progress: row.progress,
+    playNotes: row.play_notes,
+    firstNoteMeasure: row.first_note_measure,
+    lastNoteMeasure: row.last_note_measure,
+    targetMeasureCount: row.target_measure_count,
+    measureNotes: parseStoredJson(row.measure_notes_json, "measure_notes_json", row.version_id),
     completed: row.progress === 100,
     completedAt: row.completed_at,
     withdrawn: row.withdrawn_at !== null || row.download_block_reason === "withdrawn",
@@ -517,6 +553,11 @@ async function selectVisibleVersionRows(env: Env, chartIds: string[]): Promise<V
       versions.author AS author,
       versions.authors_json AS authors_json,
       versions.progress AS progress,
+      versions.play_notes AS play_notes,
+      versions.first_note_measure AS first_note_measure,
+      versions.last_note_measure AS last_note_measure,
+      versions.target_measure_count AS target_measure_count,
+      versions.measure_notes_json AS measure_notes_json,
       versions.comment AS comment,
       versions.difficulty AS difficulty,
       versions.level AS level,
@@ -708,7 +749,9 @@ async function parseCreateChartInput(
   context.fileSha256 = fileSha256;
 
   let md5: string | null = null;
-  let metadataWarning: { code: string; message: string } | null = null;
+  let bmsAnalysis: BmsAnalysis | null = null;
+  const analysisWarnings: ApiWarning[] = [];
+  let metadataWarning: ApiWarning | null = null;
   let parsedMetadata = {
     title: null as string | null,
     artist: null as string | null,
@@ -736,6 +779,23 @@ async function parseCreateChartInput(
         code: "BMS_METADATA_PARSE_FAILED",
         message: "譜面情報の自動読み取りに失敗したため、フォーム入力値を使用しました。"
       };
+    }
+
+    try {
+      bmsAnalysis = analyzeBmsBuffer(fileBytes);
+      analysisWarnings.push(...bmsAnalysis.warnings);
+    } catch (error) {
+      console.error("[bms-analysis] failed to analyze BMS measure notes", {
+        code: "BMS_ANALYSIS_FAILED",
+        fileSha256,
+        message: errorDetail(error)
+      });
+
+      analysisWarnings.push({
+        code: "BMS_ANALYSIS_FAILED",
+        message: "譜面の小節解析に失敗したため、進捗グラフ情報なしで投稿します。",
+        detail: errorDetail(error)
+      });
     }
   }
 
@@ -781,6 +841,8 @@ async function parseCreateChartInput(
       fileBytes,
       fileSha256,
       md5,
+      bmsAnalysis,
+      analysisWarnings,
       title,
       subtitle,
       artist,
@@ -940,6 +1002,17 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
     const fileId = makeId("file");
     const r2Key = `charts/${chartId}/versions/root/${fileId}${input.extension}`;
     const completedAt = input.progress === 100 ? new Date().toISOString() : null;
+    const measureNotesJson = input.bmsAnalysis ? JSON.stringify(input.bmsAnalysis.measureNotesJson) : null;
+    const responseWarnings: ApiWarning[] = [
+      ...(input.metadataWarning ? [input.metadataWarning] : []),
+      ...input.analysisWarnings
+    ];
+    const warningDetail = responseWarnings
+      .map((warning) => warning.detail ? `${warning.code}:${warning.detail}` : warning.code)
+      .join(", ") || "none";
+    const analysisDetail = input.bmsAnalysis
+      ? `bmsAnalysis=ok; playNotes=${input.bmsAnalysis.playNotes}; firstNoteMeasure=${input.bmsAnalysis.firstNoteMeasure ?? "null"}; lastNoteMeasure=${input.bmsAnalysis.lastNoteMeasure ?? "null"}; targetMeasureCount=${input.bmsAnalysis.targetMeasureCount}`
+      : `bmsAnalysis=skipped_or_failed; extension=${input.extension}`;
     context.chartId = chartId;
     context.versionId = versionId;
 
@@ -1022,6 +1095,11 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
         author,
         authors_json,
         progress,
+        play_notes,
+        first_note_measure,
+        last_note_measure,
+        target_measure_count,
+        measure_notes_json,
         comment,
         difficulty,
         level,
@@ -1040,12 +1118,17 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
         download_blocked,
         download_block_reason,
         completed_at
-      ) VALUES (?, ?, NULL, 1, '', 'root', ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?)
+      ) VALUES (?, ?, NULL, 1, '', 'root', ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?)
     `).bind(
       versionId,
       chartId,
       input.author,
       input.progress,
+      input.bmsAnalysis?.playNotes ?? null,
+      input.bmsAnalysis?.firstNoteMeasure ?? null,
+      input.bmsAnalysis?.lastNoteMeasure ?? null,
+      input.bmsAnalysis?.targetMeasureCount ?? null,
+      measureNotesJson,
       input.comment,
       input.difficulty || null,
       input.level || null,
@@ -1086,7 +1169,7 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
       context.ipHash,
       context.uaHash,
       input.fileSha256,
-      "Initial chart version created."
+      `Initial chart version created. ${analysisDetail}; warnings=${warningDetail}`
     ));
 
     try {
@@ -1148,7 +1231,15 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
         downloadUrl: `/api/files/${encodeURIComponent(fileId)}`
       },
       metadata: input.parsedMetadata,
-      warnings: input.metadataWarning ? [input.metadataWarning] : []
+      analysis: input.bmsAnalysis ? {
+        encoding: input.bmsAnalysis.encoding,
+        playNotes: input.bmsAnalysis.playNotes,
+        firstNoteMeasure: input.bmsAnalysis.firstNoteMeasure,
+        lastNoteMeasure: input.bmsAnalysis.lastNoteMeasure,
+        targetMeasureCount: input.bmsAnalysis.targetMeasureCount,
+        measureNotes: input.bmsAnalysis.measureNotesJson
+      } : null,
+      warnings: responseWarnings
     }, { status: 201 });
   } catch (error) {
     console.error("[create-chart-unknown] unexpected create chart failure", {
