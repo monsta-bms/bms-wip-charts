@@ -42,6 +42,12 @@ CREATE TABLE IF NOT EXISTS versions (
   author TEXT NOT NULL,
   authors_json TEXT,
   progress INTEGER NOT NULL CHECK (progress BETWEEN 0 AND 100),
+  play_notes INTEGER CHECK (play_notes IS NULL OR play_notes >= 0),
+  first_note_measure INTEGER CHECK (first_note_measure IS NULL OR first_note_measure >= 0),
+  last_note_measure INTEGER CHECK (last_note_measure IS NULL OR last_note_measure >= 0),
+  target_measure_count INTEGER CHECK (target_measure_count IS NULL OR target_measure_count >= 0),
+  measure_notes_json TEXT,
+  progress_map_json TEXT,
   comment TEXT NOT NULL DEFAULT '',
   difficulty TEXT,
   level TEXT,
@@ -58,6 +64,11 @@ CREATE TABLE IF NOT EXISTS versions (
   r2_key TEXT NOT NULL,
   file_deleted_at TEXT,
   file_delete_reason TEXT,
+  progress_image_key TEXT,
+  progress_image_mime TEXT,
+  progress_image_size INTEGER CHECK (progress_image_size IS NULL OR progress_image_size >= 0),
+  progress_image_sha256 TEXT,
+  progress_image_created_at TEXT,
   password_hash TEXT NOT NULL,
   download_blocked INTEGER NOT NULL DEFAULT 0 CHECK (download_blocked IN (0, 1)),
   download_block_reason TEXT CHECK (
@@ -71,6 +82,12 @@ CREATE TABLE IF NOT EXISTS versions (
   ),
   is_hidden INTEGER NOT NULL DEFAULT 0 CHECK (is_hidden IN (0, 1)),
   hidden_reason TEXT,
+  collapsed_by_completion INTEGER NOT NULL DEFAULT 0 CHECK (collapsed_by_completion IN (0, 1)),
+  collapsed_reason TEXT CHECK (
+    collapsed_reason IS NULL OR collapsed_reason IN ('superseded_by_completed_descendant')
+  ),
+  collapsed_at TEXT,
+  collapsed_by_version_id TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   completed_at TEXT,
@@ -87,6 +104,16 @@ CREATE TABLE IF NOT EXISTS versions (
   CHECK (
     (download_blocked = 0 AND download_block_reason IS NULL) OR
     (download_blocked = 1 AND download_block_reason IS NOT NULL)
+  ),
+  CHECK (
+    first_note_measure IS NULL OR last_note_measure IS NULL OR last_note_measure >= first_note_measure
+  ),
+  CHECK (
+    target_measure_count IS NULL OR first_note_measure IS NOT NULL
+  ),
+  CHECK (
+    (collapsed_by_completion = 0 AND collapsed_reason IS NULL) OR
+    (collapsed_by_completion = 1 AND collapsed_reason IS NOT NULL)
   ),
   UNIQUE (chart_id, branch_path),
   UNIQUE (file_id),
@@ -200,6 +227,18 @@ CREATE INDEX IF NOT EXISTS idx_versions_difficulty
 
 CREATE INDEX IF NOT EXISTS idx_versions_download_block_reason
   ON versions (download_block_reason, download_blocked_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_versions_measure_range
+  ON versions (first_note_measure, last_note_measure);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_versions_progress_image_key
+  ON versions (progress_image_key);
+
+CREATE INDEX IF NOT EXISTS idx_versions_collapsed_completion
+  ON versions (chart_id, collapsed_by_completion, branch_path);
+
+CREATE INDEX IF NOT EXISTS idx_versions_collapsed_by_version
+  ON versions (collapsed_by_version_id);
 
 CREATE INDEX IF NOT EXISTS idx_versions_created_at
   ON versions (created_at DESC);
