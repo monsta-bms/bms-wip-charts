@@ -247,6 +247,13 @@ button.difficulty-chip {
   padding: 0 10px;
 }
 
+button.difficulty-chip {
+  border-radius: 6px;
+  font-size: 0.84rem;
+  min-height: 30px;
+  padding: 0 4px;
+}
+
 button.difficulty-tab:hover,
 button.difficulty-tab:focus-visible,
 button.difficulty-chip:hover,
@@ -268,10 +275,30 @@ button.difficulty-chip.is-selected:focus-visible {
   color: #ffffff;
 }
 
+button.difficulty-chip:disabled,
+button.difficulty-chip:disabled:hover,
+button.difficulty-chip:disabled:focus-visible {
+  background: #eef1f4;
+  border-color: #dfe5eb;
+  color: #9aa5af;
+  cursor: not-allowed;
+}
+
+.difficulty-choice-area {
+  align-content: start;
+  display: grid;
+  min-height: 102px;
+}
+
 .difficulty-chips {
   display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+}
+
+.difficulty-manual {
+  align-self: center;
+  display: grid;
 }
 
 .difficulty-manual input {
@@ -535,8 +562,12 @@ textarea[aria-invalid="true"] {
     grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
   }
 
+  .difficulty-choice-area {
+    min-height: 174px;
+  }
+
   .difficulty-chips {
-    grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
   .difficulty-preview {
