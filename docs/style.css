@@ -194,12 +194,42 @@ h2 {
 }
 
 .field {
+  align-content: start;
   display: grid;
   gap: 6px;
 }
 
 .field-wide {
   grid-column: 1 / -1;
+}
+
+.form-columns {
+  align-items: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.form-column {
+  align-content: start;
+  display: grid;
+  gap: 14px;
+}
+
+.form-column-left {
+  gap: 12px;
+}
+
+.form-column-right {
+  gap: 16px;
+}
+
+.compact-text-field {
+  gap: 5px;
+}
+
+.form-column-left .field-help {
+  line-height: 1.4;
 }
 
 .field-label {
@@ -343,12 +373,12 @@ button.difficulty-chip:disabled:focus-visible {
   align-items: flex-start;
   display: flex;
   gap: 10px;
-  min-height: 42px;
-  padding-top: 28px;
+  min-height: 0;
+  padding: 2px 0;
 }
 
 .save-password-field {
-  padding-top: 4px;
+  padding-top: 0;
 }
 
 .checkbox-field input {
@@ -360,7 +390,7 @@ button.difficulty-chip:disabled:focus-visible {
 
 .checkbox-copy {
   display: grid;
-  gap: 2px;
+  gap: 1px;
 }
 
 .checkbox-title {
@@ -559,8 +589,13 @@ textarea[aria-invalid="true"] {
   }
 
   .form-grid,
+  .form-columns,
   .version-row {
     grid-template-columns: 1fr;
+  }
+
+  .form-column {
+    gap: 14px;
   }
 
   .difficulty-tabs {
