@@ -27,64 +27,44 @@
           <form id="chartForm" novalidate>
             <p class="required-note"><span class="required-mark">*</span>項目は入力必須。</p>
 
-            <div class="form-grid">
-              <label class="field field-wide">
-                <span class="field-label">譜面ファイル <span class="required-mark">*</span></span>
-                <input id="chartFile" name="file" type="file" accept=".bms,.bme,.bml,.zip" required>
-                <span class="field-help">対応形式: .bms / .bme / .bml / .zip。音源ファイルはアップロードできません。</span>
-              </label>
+            <div class="form-sections">
+              <fieldset class="form-section file-info-section">
+                <legend class="form-section-title">譜面ファイル</legend>
+                <label class="field">
+                  <span class="field-label">譜面ファイル <span class="required-mark">*</span></span>
+                  <input id="chartFile" name="file" type="file" accept=".bms,.bme,.bml,.zip" required>
+                  <span class="field-help">対応形式: .bms / .bme / .bml / .zip。音源ファイルはアップロードできません。</span>
+                </label>
+              </fieldset>
 
-              <label class="field">
-                <span class="field-label">曲名 <span class="required-mark">*</span></span>
-                <input id="title" name="title" type="text" autocomplete="off" placeholder="一致していない場合修正してください。" required>
-              </label>
-
-              <label class="field">
-                <span class="field-label">サブタイトル</span>
-                <input id="subtitle" name="subtitle" type="text" autocomplete="off">
-              </label>
-
-              <label class="field">
-                <span class="field-label">アーティスト <span class="required-mark">*</span></span>
-                <input id="artist" name="artist" type="text" autocomplete="off" placeholder="一致していない場合修正してください。" required>
-              </label>
-
-              <label class="field">
-                <span class="field-label">サブアーティスト</span>
-                <input id="subartist" name="subartist" type="text" autocomplete="off">
-              </label>
-
-              <div class="form-columns field-wide">
-                <div class="form-column form-column-left">
-                  <label class="field compact-text-field">
-                    <span class="field-label">仮差分名 <span class="required-mark">*</span></span>
-                    <input id="chartName" name="chartName" type="text" autocomplete="off" placeholder="例: [ANOTHER] / [ALITHER] / 仮差分" required>
-                    <span class="field-help">同じ曲の別差分を区別するための名前です。</span>
+              <fieldset class="form-section song-info-section">
+                <legend class="form-section-title">楽曲情報</legend>
+                <div class="section-fields two-column-fields">
+                  <label class="field">
+                    <span class="field-label">曲名 <span class="required-mark">*</span></span>
+                    <input id="title" name="title" type="text" autocomplete="off" placeholder="一致していない場合修正してください。" required>
                   </label>
 
-                  <label class="field compact-text-field">
-                    <span class="field-label">差分作者（別名義可） <span class="required-mark">*</span></span>
-                    <input id="author" name="author" type="text" autocomplete="off" placeholder="例: tester / anonymous" required>
+                  <label class="field">
+                    <span class="field-label">サブタイトル</span>
+                    <input id="subtitle" name="subtitle" type="text" autocomplete="off">
                   </label>
 
-                  <label class="field checkbox-field">
-                    <input id="isRejected" name="isRejected" type="checkbox" value="true">
-                    <span class="checkbox-copy">
-                      <span class="checkbox-title">没譜面</span>
-                      <span class="field-help">追記されることがなくなります。進捗度は100固定です。</span>
-                    </span>
+                  <label class="field">
+                    <span class="field-label">アーティスト <span class="required-mark">*</span></span>
+                    <input id="artist" name="artist" type="text" autocomplete="off" placeholder="一致していない場合修正してください。" required>
                   </label>
 
-                  <label class="field checkbox-field save-password-field">
-                    <input id="savePassword" type="checkbox">
-                    <span class="checkbox-copy">
-                      <span class="checkbox-title">パスワードを保存</span>
-                      <span class="field-help">この端末のブラウザに保存します。共有PCでは使わないでください。</span>
-                    </span>
+                  <label class="field">
+                    <span class="field-label">サブアーティスト</span>
+                    <input id="subartist" name="subartist" type="text" autocomplete="off">
                   </label>
                 </div>
+              </fieldset>
 
-                <div class="form-column form-column-right">
+              <fieldset class="form-section diff-info-section">
+                <legend class="form-section-title">差分情報</legend>
+                <div class="section-fields diff-fields">
                   <div class="field difficulty-field">
                     <span class="field-label">想定難易度 <span class="required-mark">*</span></span>
                     <input id="difficulty" name="difficulty" type="hidden" required>
@@ -109,25 +89,64 @@
                     </div>
                   </div>
 
-                  <label class="field">
-                    <span class="field-label">進捗度 <span class="required-mark">*</span></span>
-                    <input id="progress" name="progress" type="number" min="0" max="100" step="1" value="100" required>
-                    <span class="field-help">0〜100の整数。没譜面ON時は100固定です。</span>
+                  <label class="field compact-text-field">
+                    <span class="field-label">仮差分名 <span class="required-mark">*</span></span>
+                    <input id="chartName" name="chartName" type="text" autocomplete="off" placeholder="例: [ANOTHER] / [ALITHER] / 仮差分" required>
+                    <span class="field-help">同じ曲の別差分を区別するための名前です。</span>
                   </label>
 
-                  <label class="field">
-                    <span class="field-label">管理パスワード <span class="required-mark">*</span></span>
-                    <input id="password" name="password" type="password" autocomplete="current-password" required>
-                    <span class="field-help">取り下げ・削除申請に使います。公開されません。忘れると投稿者側で操作できません。</span>
+                  <label class="field compact-text-field">
+                    <span class="field-label">差分作者（別名義可） <span class="required-mark">*</span></span>
+                    <input id="author" name="author" type="text" autocomplete="off" placeholder="例: tester / anonymous" required>
                   </label>
                 </div>
-              </div>
+              </fieldset>
 
-              <label class="field field-wide">
-                <span class="field-label">コメント</span>
-                <textarea id="comment" name="comment" rows="4" placeholder="音源URL、作業メモ、注意点など"></textarea>
-                <span class="field-help">音源ファイルはアップロードせず、音源URLはコメント欄に記入してください。</span>
-              </label>
+              <fieldset class="form-section management-section">
+                <legend class="form-section-title">進捗・管理</legend>
+                <div class="management-grid">
+                  <div class="management-column">
+                    <label class="field">
+                      <span class="field-label">進捗度 <span class="required-mark">*</span></span>
+                      <input id="progress" name="progress" type="number" min="0" max="100" step="1" value="100" required>
+                      <span class="field-help">0〜100の整数。没譜面ON時は100固定です。</span>
+                    </label>
+
+                    <label class="field checkbox-field">
+                      <input id="isRejected" name="isRejected" type="checkbox" value="true">
+                      <span class="checkbox-copy">
+                        <span class="checkbox-title">没譜面</span>
+                        <span class="field-help">追記されることがなくなります。進捗度は100固定です。</span>
+                      </span>
+                    </label>
+                  </div>
+
+                  <div class="management-column">
+                    <label class="field">
+                      <span class="field-label">管理パスワード <span class="required-mark">*</span></span>
+                      <input id="password" name="password" type="password" autocomplete="current-password" required>
+                      <span class="field-help">取り下げ・削除申請に使います。公開されません。忘れると投稿者側で操作できません。</span>
+                    </label>
+
+                    <label class="field checkbox-field save-password-field">
+                      <input id="savePassword" type="checkbox">
+                      <span class="checkbox-copy">
+                        <span class="checkbox-title">パスワードを保存</span>
+                        <span class="field-help">この端末のブラウザに保存します。共有PCでは使わないでください。</span>
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              </fieldset>
+
+              <fieldset class="form-section comment-section">
+                <legend class="form-section-title">コメント</legend>
+                <label class="field">
+                  <span class="field-label">コメント</span>
+                  <textarea id="comment" name="comment" rows="4" placeholder="音源URL、作業メモ、注意点など"></textarea>
+                  <span class="field-help">音源ファイルはアップロードせず、音源URLはコメント欄に記入してください。</span>
+                </label>
+              </fieldset>
             </div>
 
             <div class="form-actions">
