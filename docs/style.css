@@ -187,49 +187,74 @@ h2 {
   font-weight: 800;
 }
 
-.form-grid {
+.form-sections {
+  display: grid;
+  gap: 18px;
+}
+
+.form-section {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 0;
+  min-width: 0;
+  padding: 18px 0 0;
+}
+
+.form-section:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.form-section-title {
+  color: var(--primary-dark);
+  font-size: 0.94rem;
+  font-weight: 800;
+  line-height: 1.4;
+  margin: 0 0 12px;
+  padding: 0;
+}
+
+.section-fields {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.two-column-fields,
+.management-grid {
   display: grid;
   gap: 16px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.diff-fields {
+  grid-template-columns: minmax(0, 720px);
+}
+
+.management-grid {
+  align-items: start;
+}
+
+.management-column {
+  align-content: start;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
 }
 
 .field {
   align-content: start;
   display: grid;
   gap: 6px;
+  min-width: 0;
 }
 
 .field-wide {
   grid-column: 1 / -1;
 }
 
-.form-columns {
-  align-items: start;
-  display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.form-column {
-  align-content: start;
-  display: grid;
-  gap: 14px;
-}
-
-.form-column-left {
-  gap: 12px;
-}
-
-.form-column-right {
-  gap: 16px;
-}
-
 .compact-text-field {
   gap: 5px;
-}
-
-.form-column-left .field-help {
-  line-height: 1.4;
 }
 
 .field-label {
@@ -588,14 +613,22 @@ textarea[aria-invalid="true"] {
     padding: 16px;
   }
 
-  .form-grid,
-  .form-columns,
+  .two-column-fields,
+  .management-grid,
   .version-row {
     grid-template-columns: 1fr;
   }
 
-  .form-column {
-    gap: 14px;
+  .diff-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .form-sections {
+    gap: 16px;
+  }
+
+  .form-section {
+    padding-top: 16px;
   }
 
   .difficulty-tabs {
