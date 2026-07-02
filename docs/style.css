@@ -287,7 +287,12 @@ button.difficulty-chip:disabled:focus-visible {
 .difficulty-choice-area {
   align-content: start;
   display: grid;
-  min-height: 102px;
+  height: 102px;
+}
+
+.difficulty-chips[hidden],
+.difficulty-manual[hidden] {
+  display: none;
 }
 
 .difficulty-chips {
@@ -563,7 +568,7 @@ textarea[aria-invalid="true"] {
   }
 
   .difficulty-choice-area {
-    min-height: 174px;
+    height: 174px;
   }
 
   .difficulty-chips {
