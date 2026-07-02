@@ -30,6 +30,7 @@ https://monsta-bms.github.io
 - `GET /api/files/:fileId`
 - GitHub Pages からの一覧取得
 - GitHub Pages 投稿フォームからの初回投稿
+- Worker側BMS解析: 単体 `.bms` / `.bme` / `.bml` のプレイノート数と対象小節情報を保存する
 
 まだ実装しないもの:
 
@@ -43,8 +44,8 @@ https://monsta-bms.github.io
 - 管理画面
 - Cron Trigger
 - R2自動削除処理
-- Worker側BMS解析
-- 進捗グラフUI
+- ZIP内部のBMS解析
+- フロント側進捗グラフUI
 - 進捗画像R2保存処理
 
 ## 共通仕様
@@ -112,21 +113,21 @@ PROG-01で `versions` に追加したカラム:
 
 | column | 内容 |
 | --- | --- |
-| `play_notes` | BMS解析で算出したプレイノート総数。 |
-| `first_note_measure` | 進捗対象の開始小節。 |
-| `last_note_measure` | 進捗対象の終了小節。 |
-| `target_measure_count` | 進捗対象小節数。 |
-| `measure_notes_json` | 小節ごとのプレイノート数JSON。 |
-| `progress_map_json` | 小節単位の塗りlayer JSON。 |
-| `progress_image_key` | 進捗画像のR2 key。 |
-| `progress_image_mime` | 進捗画像MIME。MVP想定は `image/png`。 |
-| `progress_image_size` | 進捗画像ファイルサイズ。 |
-| `progress_image_sha256` | 進捗画像SHA256。 |
-| `progress_image_created_at` | 進捗画像作成日時。 |
-| `collapsed_by_completion` | 完成到達後に通常一覧で折り畳むか。 |
-| `collapsed_reason` | 折り畳み理由。 |
-| `collapsed_at` | 折り畳み日時。 |
-| `collapsed_by_version_id` | 折り畳み原因になった完成version ID。 |
+| `play_notes` | BMS解析で算出したプレイノート総数。PROG-02で単体BMS投稿時に保存する。 |
+| `first_note_measure` | 進捗対象の開始小節。PROG-02で単体BMS投稿時に保存する。 |
+| `last_note_measure` | 進捗対象の終了小節。PROG-02で単体BMS投稿時に保存する。 |
+| `target_measure_count` | 進捗対象小節数。PROG-02で単体BMS投稿時に保存する。 |
+| `measure_notes_json` | 小節ごとのプレイノート数JSON。PROG-02で単体BMS投稿時に保存する。 |
+| `progress_map_json` | 小節単位の塗りlayer JSON。未実装。 |
+| `progress_image_key` | 進捗画像のR2 key。未実装。 |
+| `progress_image_mime` | 進捗画像MIME。MVP想定は `image/png`。未実装。 |
+| `progress_image_size` | 進捗画像ファイルサイズ。未実装。 |
+| `progress_image_sha256` | 進捗画像SHA256。未実装。 |
+| `progress_image_created_at` | 進捗画像作成日時。未実装。 |
+| `collapsed_by_completion` | 完成到達後に通常一覧で折り畳むか。未実装。 |
+| `collapsed_reason` | 折り畳み理由。未実装。 |
+| `collapsed_at` | 折り畳み日時。未実装。 |
+| `collapsed_by_version_id` | 折り畳み原因になった完成version ID。未実装。 |
 
 ## 難易度表示方針
 
@@ -139,81 +140,66 @@ PROG-01で `versions` に追加したカラム:
 - `GET /api/charts` は既存API互換のため `level` を返してよい。
 - 将来の難易度表APIでは `level` を返してよい。
 
-## 進捗グラフAPI設計
+## Worker側BMS解析仕様
 
-PROG-01ではAPI実装は変更しない。将来の実装で `GET /api/charts` のversionレスポンスに進捗グラフ情報を返せるよう、レスポンス仕様を予約する。
+PROG-02で、単体 `.bms` / `.bme` / `.bml` 投稿時にWorker側でBMS本文を解析する。
 
-### versionレスポンス追加フィールド
+### 対象
 
-| response field | DB column | 内容 |
-| --- | --- | --- |
-| `playNotes` | `play_notes` | プレイノート総数。 |
-| `firstNoteMeasure` | `first_note_measure` | 対象開始小節。 |
-| `lastNoteMeasure` | `last_note_measure` | 対象終了小節。 |
-| `targetMeasureCount` | `target_measure_count` | 対象小節数。 |
-| `measureNotes` | `measure_notes_json` | 小節ごとのノート数JSONをparseした値。 |
-| `progressMap` | `progress_map_json` | 小節単位の塗りlayer JSONをparseした値。 |
-| `progressImage.url` | `progress_image_key` | 進捗画像取得URL。 |
-| `progressImage.mime` | `progress_image_mime` | 画像MIME。 |
-| `progressImage.size` | `progress_image_size` | 画像サイズ。 |
-| `progressImage.sha256` | `progress_image_sha256` | 画像SHA256。 |
-| `collapsedByCompletion` | `collapsed_by_completion` | 完成到達後の通常一覧折り畳み状態。 |
-| `collapsedReason` | `collapsed_reason` | 折り畳み理由。 |
-| `collapsedAt` | `collapsed_at` | 折り畳み日時。 |
-| `collapsedByVersionId` | `collapsed_by_version_id` | 折り畳み原因になった完成version ID。 |
+- 対象ファイル: `.bms`, `.bme`, `.bml`
+- 文字コード: UTF-8 と Shift_JIS を試し、より妥当な結果を使う
+- ZIP投稿: ZIP内部解析は未実装のため、解析値は `null` とする
 
-レスポンス例:
+### 解析対象行
 
-```json
-{
-  "id": "version_xxx",
-  "displayVersion": "ver2.0-a",
-  "difficulty": "★12",
-  "level": "12",
-  "progress": 45,
-  "playNotes": 1234,
-  "firstNoteMeasure": 12,
-  "lastNoteMeasure": 87,
-  "targetMeasureCount": 76,
-  "measureNotes": {
-    "schemaVersion": 1,
-    "firstMeasure": 12,
-    "lastMeasure": 87,
-    "targetMeasureCount": 76,
-    "playNotes": 1234,
-    "lnPolicy": "count_start_only",
-    "measures": [
-      { "measure": 12, "playNotes": 8 },
-      { "measure": 13, "playNotes": 0 }
-    ]
-  },
-  "progressMap": {
-    "schemaVersion": 1,
-    "firstMeasure": 12,
-    "lastMeasure": 87,
-    "targetMeasureCount": 76,
-    "layers": [
-      {
-        "versionId": "version_xxx",
-        "color": "#2f80ed",
-        "kind": "normal",
-        "ranges": [[12, 18], [22, 25]]
-      }
-    ],
-    "progress": 45
-  },
-  "progressImage": {
-    "url": "/api/progress-images/version_xxx",
-    "mime": "image/png",
-    "size": 20480,
-    "sha256": "..."
-  },
-  "collapsedByCompletion": false,
-  "collapsedReason": null,
-  "collapsedAt": null,
-  "collapsedByVersionId": null
-}
+BMSデータ行は以下の形式を対象にする。
+
+```text
+#mmmcc:data
 ```
+
+- `mmm`: 3桁の小節番号
+- `cc`: 2桁のチャンネル
+- `data`: 2文字単位のオブジェクト列
+- `00` は空として数えない
+
+### プレイノート対象チャンネル
+
+MVPで数えるチャンネル:
+
+- `11`-`19`
+- `21`-`29`
+- `51`-`59`
+- `61`-`69`
+
+BGM、BPM、STOP、BGA、メタ情報はプレイノート数に含めない。
+
+LNはMVPでは `count_start_only` とする。`51`-`59` / `61`-`69` の非`00`オブジェクトは開始・終了が並ぶ前提で、開始側のみ1ノートとして数える。`LNOBJ` / `LNTYPE` を使った厳密なLN判定は後続Phaseで扱う。
+
+### 対象小節
+
+- `first_note_measure`: 最初にプレイノートが出現した小節
+- `last_note_measure`: 最後にプレイノートが出現した小節
+- `target_measure_count`: `first_note_measure` から `last_note_measure` までの小節数
+- 途中の非プレイノート小節も `measure_notes_json.measures` に `playNotes: 0` として含める
+- 前後の完全な空白小節は進捗対象に含めない
+
+プレイノートが見つからない場合:
+
+- `play_notes=0`
+- `first_note_measure=null`
+- `last_note_measure=null`
+- `target_measure_count=0`
+- `measure_notes_json.measures=[]`
+- warning `BMS_NO_PLAY_NOTES` を返す
+
+解析に失敗した場合:
+
+- 投稿自体は失敗させない
+- 解析カラムは `null` を保存する
+- warning `BMS_ANALYSIS_FAILED` を返す
+- `post_logs.detail` に警告内容を残す
+- `console.error` には `[bms-analysis]` の処理段階名を含める
 
 ### measure_notes_json仕様
 
@@ -234,18 +220,52 @@ PROG-01ではAPI実装は変更しない。将来の実装で `GET /api/charts` 
 }
 ```
 
-仕様:
+## 進捗グラフAPI設計
 
-- `firstMeasure` は最初にプレイノートが出現した小節。
-- `lastMeasure` は最後にプレイノートがある小節。
-- `targetMeasureCount` は `firstMeasure` から `lastMeasure` までの小節数。
-- 途中の非プレイノート小節も `measures` に含める。
-- BGM/BPM/STOP/メタ情報はプレイノート数に含めない。
-- LNはMVPでは開始のみ1ノートとして数え、`lnPolicy` は `count_start_only` とする。
+PROG-02ではBMS解析結果を保存し、`GET /api/charts` のversionレスポンスに返す。
+`progress_map_json`、進捗画像、完成到達後の折り畳み表示は未実装であり、後続Phaseで追加する。
+
+### versionレスポンス追加フィールド
+
+| response field | DB column | 内容 |
+| --- | --- | --- |
+| `playNotes` | `play_notes` | プレイノート総数。 |
+| `firstNoteMeasure` | `first_note_measure` | 対象開始小節。 |
+| `lastNoteMeasure` | `last_note_measure` | 対象終了小節。 |
+| `targetMeasureCount` | `target_measure_count` | 対象小節数。 |
+| `measureNotes` | `measure_notes_json` | 小節ごとのノート数JSONをparseした値。parseできない場合は `null`。 |
+
+レスポンス例:
+
+```json
+{
+  "id": "version_xxx",
+  "displayVersion": "ver1.0",
+  "difficulty": "★12",
+  "level": "12",
+  "progress": 45,
+  "playNotes": 1234,
+  "firstNoteMeasure": 12,
+  "lastNoteMeasure": 87,
+  "targetMeasureCount": 76,
+  "measureNotes": {
+    "schemaVersion": 1,
+    "firstMeasure": 12,
+    "lastMeasure": 87,
+    "targetMeasureCount": 76,
+    "playNotes": 1234,
+    "lnPolicy": "count_start_only",
+    "measures": [
+      { "measure": 12, "playNotes": 8 },
+      { "measure": 13, "playNotes": 0 }
+    ]
+  }
+}
+```
 
 ### progress_map_json仕様
 
-小節単位の進捗塗り情報を保存するJSON文字列。
+小節単位の進捗塗り情報を保存するJSON文字列。未実装だが、後続Phaseでは以下の形式を使う。
 
 ```json
 {
@@ -259,12 +279,6 @@ PROG-01ではAPI実装は変更しない。将来の実装で `GET /api/charts` 
       "color": "#2f80ed",
       "kind": "normal",
       "ranges": [[12, 18], [22, 25]]
-    },
-    {
-      "versionId": "version_yyy",
-      "color": "#27ae60",
-      "kind": "followup",
-      "ranges": [[18, 24]]
     }
   ],
   "progress": 45
@@ -278,7 +292,6 @@ PROG-01ではAPI実装は変更しない。将来の実装で `GET /api/charts` 
 - 重ね塗りは可能。
 - progressは全layerのunionで算出する。
 - 同じ小節が複数layerで塗られていても、進捗計算では1小節として数える。
-- 連続範囲は `ranges` で持つ。
 
 `kind` 候補:
 
@@ -289,7 +302,7 @@ PROG-01ではAPI実装は変更しない。将来の実装で `GET /api/charts` 
 
 ### 進捗画像仕様
 
-進捗グラフ画像は譜面ファイルとは別にR2へ保存する。
+進捗グラフ画像は譜面ファイルとは別にR2へ保存する。未実装。
 
 - 保存キー例: `charts/{chartId}/versions/{versionId}/progress/progress.png`
 - 画像形式はPNG推奨。
@@ -326,7 +339,7 @@ D1から投稿一覧を取得する。
 - `progress=100` のversionは `completed: true` を返す。
 - `is_rejected=1` のversionは `isRejected: true` を返し、UIでは没譜面バッジで区別する。
 - `downloadBlocked` と `downloadBlockReason` を返す。
-- 将来、PROG-01の進捗グラフ関連フィールドを返す。
+- BMS解析済みversionでは `playNotes`, `firstNoteMeasure`, `lastNoteMeasure`, `targetMeasureCount`, `measureNotes` を返す。
 
 空DB時のレスポンス例:
 
@@ -371,8 +384,43 @@ D1から投稿一覧を取得する。
 - 作成するversionは `ver1.0` 相当。
 - `isRejected=true` の場合は、入力された `progress` に関係なく保存値を `progress=100` に強制する。
 - `isRejected=true` の場合は `completed_at` を保存し、completed扱いにする。
+- 単体 `.bms` / `.bme` / `.bml` の場合、BMS解析結果を `versions` に保存する。
+- `.zip` の場合、ZIP内部解析は未実装のためBMS解析値は `null` とする。
 
-PROG-01では `measure_notes_json` / `progress_map_json` / 進捗画像の受信・保存はまだ実装しない。
+成功レスポンス例:
+
+```json
+{
+  "songId": "song_xxx",
+  "chartId": "chart_xxx",
+  "versionId": "version_xxx",
+  "fileId": "file_xxx",
+  "displayVersion": "ver1.0",
+  "progress": 45,
+  "completed": false,
+  "analysis": {
+    "encoding": "utf-8",
+    "playNotes": 4,
+    "firstNoteMeasure": 1,
+    "lastNoteMeasure": 3,
+    "targetMeasureCount": 3,
+    "measureNotes": {
+      "schemaVersion": 1,
+      "firstMeasure": 1,
+      "lastMeasure": 3,
+      "targetMeasureCount": 3,
+      "playNotes": 4,
+      "lnPolicy": "count_start_only",
+      "measures": [
+        { "measure": 1, "playNotes": 2 },
+        { "measure": 2, "playNotes": 0 },
+        { "measure": 3, "playNotes": 2 }
+      ]
+    }
+  },
+  "warnings": []
+}
+```
 
 ### GET /api/files/:fileId
 
@@ -461,6 +509,17 @@ DBには `displayVersion` / `display_version` を保存しない。
 | `REJECTED_CHART_CANNOT_BE_EXTENDED` | 409 | 没譜面versionから追記投稿しようとした。 |
 | `UNKNOWN_ERROR` | 500 | 想定外エラー。 |
 | `INTERNAL_ERROR` | 500 | 未処理例外。 |
+
+## 主な警告
+
+警告は投稿を失敗させず、成功レスポンスの `warnings` と `post_logs.detail` に残す。
+
+| code | 内容 |
+| --- | --- |
+| `BMS_METADATA_PARSE_FAILED` | BMSメタデータの自動読取に失敗した。フォーム入力値を使う。 |
+| `BMS_ANALYSIS_FAILED` | BMS小節解析に失敗した。解析カラムは `null` として投稿を継続する。 |
+| `BMS_NO_PLAY_NOTES` | プレイノートが見つからなかった。解析値は0件として保存する。 |
+| `BMS_UNSUPPORTED_CHANNEL_PATTERN` | 未対応のチャンネル表記があり、その行を解析対象外にした。 |
 
 ## 管理ログ用コード
 
