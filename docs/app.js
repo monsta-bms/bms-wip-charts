@@ -31,6 +31,7 @@ const chartList = document.querySelector("#chartList");
 let isSubmitting = false;
 let lastValidManualDifficulty = "";
 
+const maxDifficultyNumber = 25;
 const difficultyLimits = {
   "★": 25,
   "★★": 7,
@@ -169,6 +170,8 @@ function renderDifficultyTabs() {
 }
 
 function renderDifficultyChips() {
+  difficultyPicker.classList.toggle("is-manual-mode", difficultyState.mode === "manual");
+
   if (difficultyState.mode === "manual") {
     difficultyChips.hidden = true;
     difficultyChips.innerHTML = "";
@@ -181,10 +184,12 @@ function renderDifficultyChips() {
   difficultyManualPanel.hidden = true;
 
   const limit = difficultyLimits[difficultyState.symbol];
-  difficultyChips.innerHTML = Array.from({ length: limit }, (_, index) => {
+  difficultyChips.innerHTML = Array.from({ length: maxDifficultyNumber }, (_, index) => {
     const number = index + 1;
-    const selected = difficultyState.number === number;
-    return `<button class="difficulty-chip${selected ? " is-selected" : ""}" type="button" data-number="${number}" aria-pressed="${selected ? "true" : "false"}">${number}</button>`;
+    const disabled = number > limit;
+    const selected = !disabled && difficultyState.number === number;
+    const disabledAttributes = disabled ? " disabled aria-disabled=\"true\"" : " aria-disabled=\"false\"";
+    return `<button class="difficulty-chip${selected ? " is-selected" : ""}" type="button" data-number="${number}" aria-pressed="${selected ? "true" : "false"}"${disabledAttributes}>${number}</button>`;
   }).join("");
 }
 
@@ -222,6 +227,10 @@ function selectDifficultyTab(tab) {
 }
 
 function selectDifficultyNumber(number) {
+  if (difficultyState.mode !== "symbol" || number > difficultyLimits[difficultyState.symbol]) {
+    return;
+  }
+
   difficultyState.number = number;
   renderDifficultySelector();
 }
