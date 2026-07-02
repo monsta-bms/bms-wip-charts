@@ -38,6 +38,13 @@ export type BmsAnalysis = {
   warnings: BmsAnalysisWarning[];
 };
 
+type LongNoteEvent = {
+  measure: number;
+  channel: string;
+  pairIndex: number;
+  pairCount: number;
+};
+
 const metadataKeys = new Map<string, keyof BmsMetadata>([
   ["TITLE", "title"],
   ["SUBTITLE", "subtitle"],
@@ -46,9 +53,12 @@ const metadataKeys = new Map<string, keyof BmsMetadata>([
   ["PLAYLEVEL", "level"]
 ]);
 
-const playNoteChannelRanges = [
+const normalPlayNoteChannelRanges = [
   [11, 19],
-  [21, 29],
+  [21, 29]
+] as const;
+
+const longNoteChannelRanges = [
   [51, 59],
   [61, 69]
 ] as const;
@@ -140,13 +150,25 @@ export function parseBmsMetadata(buffer: ArrayBuffer): BmsMetadata {
   return decodeCandidates(new Uint8Array(buffer))[0]?.metadata ?? {};
 }
 
-function isPlayNoteChannel(channel: string): boolean {
+function isInRanges(channel: string, ranges: readonly (readonly [number, number])[]): boolean {
   if (!/^\d{2}$/.test(channel)) {
     return false;
   }
 
   const numericChannel = Number(channel);
-  return playNoteChannelRanges.some(([min, max]) => numericChannel >= min && numericChannel <= max);
+  return ranges.some(([min, max]) => numericChannel >= min && numericChannel <= max);
+}
+
+function isNormalPlayNoteChannel(channel: string): boolean {
+  return isInRanges(channel, normalPlayNoteChannelRanges);
+}
+
+function isLongNoteChannel(channel: string): boolean {
+  return isInRanges(channel, longNoteChannelRanges);
+}
+
+function isPlayNoteChannel(channel: string): boolean {
+  return isNormalPlayNoteChannel(channel) || isLongNoteChannel(channel);
 }
 
 function pushWarning(
@@ -179,9 +201,41 @@ function buildMeasureNotesJson(
   };
 }
 
+function addMeasureNotes(measureCounts: Map<number, number>, measure: number, count: number): void {
+  if (count <= 0) {
+    return;
+  }
+
+  measureCounts.set(measure, (measureCounts.get(measure) ?? 0) + count);
+}
+
+function compareLongNoteEvents(a: LongNoteEvent, b: LongNoteEvent): number {
+  const aPosition = a.measure + a.pairIndex / Math.max(a.pairCount, 1);
+  const bPosition = b.measure + b.pairIndex / Math.max(b.pairCount, 1);
+  return aPosition - bPosition || a.channel.localeCompare(b.channel);
+}
+
+function countLongNoteStarts(events: LongNoteEvent[], measureCounts: Map<number, number>): number {
+  const activeByChannel = new Map<string, boolean>();
+  let starts = 0;
+
+  for (const event of [...events].sort(compareLongNoteEvents)) {
+    const isActive = activeByChannel.get(event.channel) ?? false;
+    if (!isActive) {
+      addMeasureNotes(measureCounts, event.measure, 1);
+      starts += 1;
+    }
+
+    activeByChannel.set(event.channel, !isActive);
+  }
+
+  return starts;
+}
+
 export function analyzeBmsText(text: string): BmsAnalysis {
   const warnings: BmsAnalysisWarning[] = [];
   const measureCounts = new Map<number, number>();
+  const longNoteEvents: LongNoteEvent[] = [];
   let playNotes = 0;
 
   for (const rawLine of text.split(/\r?\n/)) {
@@ -206,23 +260,28 @@ export function analyzeBmsText(text: string): BmsAnalysis {
       continue;
     }
 
-    // MVPではLNOBJ/LNTYPEの厳密な始点終点判定は行わず、配置オブジェクトを開始ノートとして数える。
+    const measure = Number(measureText);
+    const pairCount = Math.floor(data.length / 2);
     let lineNotes = 0;
-    for (let index = 0; index + 1 < data.length; index += 2) {
-      const objectId = data.slice(index, index + 2);
-      if (objectId.toUpperCase() !== "00") {
+
+    for (let pairIndex = 0; pairIndex < pairCount; pairIndex += 1) {
+      const objectId = data.slice(pairIndex * 2, pairIndex * 2 + 2);
+      if (objectId.toUpperCase() === "00") {
+        continue;
+      }
+
+      if (isLongNoteChannel(channel)) {
+        longNoteEvents.push({ measure, channel, pairIndex, pairCount });
+      } else {
         lineNotes += 1;
       }
     }
 
-    if (lineNotes === 0) {
-      continue;
-    }
-
-    const measure = Number(measureText);
-    measureCounts.set(measure, (measureCounts.get(measure) ?? 0) + lineNotes);
+    addMeasureNotes(measureCounts, measure, lineNotes);
     playNotes += lineNotes;
   }
+
+  playNotes += countLongNoteStarts(longNoteEvents, measureCounts);
 
   const noteMeasures = [...measureCounts.keys()].filter((measure) => (measureCounts.get(measure) ?? 0) > 0);
   if (noteMeasures.length === 0) {
