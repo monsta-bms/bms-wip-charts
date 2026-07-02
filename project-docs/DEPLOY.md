@@ -84,6 +84,7 @@ schema / migration:
 
 - `worker/migrations/0001_initial.sql`
 - `worker/migrations/0002_file_delete_and_rejected_rules.sql`
+- `worker/migrations/0003_progress_graph_fields.sql`
 - `schema/d1.sql`
 
 作成されるテーブル:
@@ -96,7 +97,18 @@ schema / migration:
 - `bans`
 - `admin_logs`
 
+PROG-01の `0003_progress_graph_fields.sql` は、既存の `versions` テーブルへ進捗グラフ用カラムを追加する。
+
+追加対象:
+
+- BMS解析結果: `play_notes`, `first_note_measure`, `last_note_measure`, `target_measure_count`, `measure_notes_json`
+- 進捗塗り情報: `progress_map_json`
+- 進捗画像metadata: `progress_image_key`, `progress_image_mime`, `progress_image_size`, `progress_image_sha256`, `progress_image_created_at`
+- 完成後折り畳み状態: `collapsed_by_completion`, `collapsed_reason`, `collapsed_at`, `collapsed_by_version_id`
+
 ### Wranglerで適用する場合
+
+remote D1へ適用:
 
 ```bash
 cd worker
@@ -104,12 +116,40 @@ npx wrangler d1 migrations list wip-bms-charts-db
 npx wrangler d1 migrations apply wip-bms-charts-db
 ```
 
-ローカル確認:
+ローカルD1へ適用:
 
 ```bash
 cd worker
 npx wrangler d1 migrations apply wip-bms-charts-db --local
-npx wrangler d1 execute wip-bms-charts-db --local --command "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
+npx wrangler d1 execute wip-bms-charts-db --local --command "PRAGMA table_info(versions);"
+```
+
+0003適用確認SQL例:
+
+```sql
+SELECT name FROM pragma_table_info('versions')
+WHERE name IN (
+  'play_notes',
+  'measure_notes_json',
+  'progress_map_json',
+  'progress_image_key',
+  'collapsed_by_completion'
+)
+ORDER BY name;
+```
+
+index確認SQL例:
+
+```sql
+SELECT name FROM sqlite_master
+WHERE type='index'
+  AND name IN (
+    'idx_versions_measure_range',
+    'idx_versions_progress_image_key',
+    'idx_versions_collapsed_completion',
+    'idx_versions_collapsed_by_version'
+  )
+ORDER BY name;
 ```
 
 ### DashboardからSQL実行する場合
@@ -118,11 +158,13 @@ npx wrangler d1 execute wip-bms-charts-db --local --command "SELECT name FROM sq
 2. Workers & Pages から D1 を開く。
 3. database `wip-bms-charts-db` を選択する。
 4. Console または Query 画面を開く。
-5. `schema/d1.sql` の内容を貼り付ける。
+5. `worker/migrations/0003_progress_graph_fields.sql` の内容を貼り付ける。
 6. SQLを実行する。
-7. `songs`, `charts`, `versions`, `delete_requests`, `post_logs`, `bans`, `admin_logs` が作成されたことを確認する。
+7. `PRAGMA table_info(versions);` でPROG-01の追加カラムを確認する。
 
 Dashboard実行時はmigration履歴には記録されないため、以後Wrangler migrationsで管理する場合はDashboard実行とWrangler実行を混在させない。
+
+`schema/d1.sql` はDashboardで新規DBへまとめて適用するための最新状態ファイルとして扱う。既にmigration適用済みのDBでは、`schema/d1.sql` ではなくmigrationを適用する。
 
 ## Cloudflare R2
 
@@ -141,6 +183,16 @@ bucket_name = "wip-bms-charts-files"
 ```
 
 R2使用量が8GBを超えた場合は、管理ログに警告を出す仕様とする。
+
+PROG-01の進捗画像は将来R2へ保存する想定だが、今回R2保存処理は実装しない。
+
+将来の進捗画像保存キー例:
+
+```text
+charts/{chartId}/versions/{versionId}/progress/progress.png
+```
+
+譜面ファイル本体が `file_deleted_at` で削除済みになっても、進捗画像は残す。
 
 ## 環境変数
 
@@ -209,6 +261,8 @@ npm run deploy
 ```
 
 `wrangler.toml` の `[vars]` を変更した場合も、Workerを再deployする。
+
+PROG-01ではWorker本体の実装を変更しないため、DB migrationだけで仕様準備は完了する。Worker本体が進捗グラフAPIを返すようになるのは後続フェーズとする。
 
 ## 確認手順
 
