@@ -722,7 +722,7 @@ textarea[aria-invalid="true"] {
   border-bottom: 1px solid var(--line);
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(70px, 0.6fr) minmax(80px, 0.8fr) minmax(110px, 1fr) minmax(80px, 0.7fr) minmax(180px, 1.8fr) auto;
+  grid-template-columns: minmax(70px, 0.6fr) minmax(80px, 0.8fr) minmax(110px, 1fr) minmax(80px, 0.7fr) minmax(130px, 1.1fr) minmax(160px, 1.5fr) auto;
   padding: 14px 18px;
 }
 
@@ -773,6 +773,47 @@ textarea[aria-invalid="true"] {
   font-weight: 800;
   margin-left: 6px;
   padding: 2px 8px;
+}
+
+.progress-thumbnail-block.is-empty {
+  min-height: 1px;
+}
+
+.progress-thumbnail {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.progress-thumbnail-bar {
+  background: #f4f7f9;
+  border: 1px solid #dfe6ec;
+  border-radius: 999px;
+  display: grid;
+  gap: 1px;
+  grid-template-columns: repeat(var(--progress-thumbnail-cells), minmax(1px, 1fr));
+  height: 12px;
+  max-width: 220px;
+  min-width: 96px;
+  overflow: hidden;
+}
+
+.progress-thumbnail-cell {
+  background: #edf2f5;
+  min-width: 1px;
+}
+
+.progress-thumbnail-cell.is-painted {
+  background: rgba(37, 111, 93, 0.72);
+}
+
+.progress-thumbnail-value {
+  color: var(--muted);
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .version-actions {
@@ -886,6 +927,11 @@ textarea[aria-invalid="true"] {
   .version-actions button,
   .download-disabled {
     text-align: center;
+    width: 100%;
+  }
+
+  .progress-thumbnail-bar {
+    max-width: none;
     width: 100%;
   }
 }
