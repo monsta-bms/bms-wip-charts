@@ -25,6 +25,7 @@ const progressMapStatus = document.querySelector("#progressMapStatus");
 const progressMapGraphWrap = document.querySelector("#progressMapGraphWrap");
 const progressMapCanvas = document.querySelector("#progressMapCanvas");
 const progressMapBlocks = document.querySelector("#progressMapBlocks");
+const progressMapLabels = document.querySelector("#progressMapLabels");
 const progressMapSummary = document.querySelector("#progressMapSummary");
 const progressMapTooltip = document.querySelector("#progressMapTooltip");
 const progressMapPopover = document.querySelector("#progressMapPopover");
@@ -834,6 +835,60 @@ function getMeasureLabelInterval(blockCount) {
   return 8;
 }
 
+function getViewportMeasureLabelInterval(blockCount) {
+  const width = progressMapLabels?.clientWidth || progressMapBlocks.clientWidth || 0;
+  if (width > 0 && width < 560) {
+    return Math.max(16, getMeasureLabelInterval(blockCount));
+  }
+
+  return getMeasureLabelInterval(blockCount);
+}
+
+function getBlockDurationSec(block) {
+  const start = Number(block?.startTimeSec);
+  const end = Number(block?.endTimeSec);
+  const duration = end - start;
+  return Number.isFinite(duration) && duration > 0 ? duration : null;
+}
+
+function buildBlockDensities(blocks) {
+  return blocks.map((block, index) => {
+    const playNotes = Number(block.playNotes) || 0;
+    const durationSec = getBlockDurationSec(block);
+    const densityValue = durationSec ? playNotes / durationSec : playNotes;
+
+    return {
+      index,
+      playNotes,
+      durationSec,
+      densityValue: Number.isFinite(densityValue) ? densityValue : 0
+    };
+  });
+}
+
+function renderProgressMeasureLabels(blocks) {
+  if (!progressMapLabels) {
+    return;
+  }
+
+  if (blocks.length === 0) {
+    progressMapLabels.innerHTML = "";
+    progressMapLabels.hidden = true;
+    progressMapLabels.style.removeProperty("grid-template-columns");
+    return;
+  }
+
+  const labelInterval = getViewportMeasureLabelInterval(blocks.length);
+  progressMapLabels.hidden = false;
+  progressMapLabels.style.gridTemplateColumns = `repeat(${blocks.length}, minmax(0, 1fr))`;
+  progressMapLabels.innerHTML = blocks.map((block) => {
+    const showLabel = block.index % 8 === 0 && block.index % labelInterval === 0;
+    return showLabel
+      ? `<span class="progress-block-measure-label">${formatMeasureNumber(block.startMeasure)}</span>`
+      : `<span class="progress-block-measure-label is-empty"></span>`;
+  }).join("");
+}
+
 function positionFloatingElement(element, clientX, clientY) {
   if (!element) {
     return;
@@ -927,6 +982,7 @@ function setProgressMapMessage(message, state = "empty") {
   progressMapSummary.hidden = true;
   progressMapBlocks.innerHTML = "";
   progressMapBlocks.style.removeProperty("grid-template-columns");
+  renderProgressMeasureLabels([]);
   hideProgressMapFloatingInfo();
   updateCompleteButtonState();
 }
@@ -1016,34 +1072,35 @@ function drawDensityChart() {
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, cssWidth, cssHeight);
 
-  const bins = analysis.densityBins.length > 0
-    ? analysis.densityBins
-    : [{ second: 0, playNotes: 0 }];
-  const maxNotes = Math.max(1, ...bins.map((bin) => bin.playNotes));
-  const plotLeft = 10;
-  const plotRight = 10;
-  const plotTop = 10;
-  const plotBottom = 16;
-  const plotWidth = cssWidth - plotLeft - plotRight;
+  const blocks = Array.isArray(analysis.standardBlocks) ? analysis.standardBlocks : [];
+  if (blocks.length === 0) {
+    return;
+  }
+
+  const densities = buildBlockDensities(blocks);
+  const maxDensity = Math.max(1, ...densities.map((item) => item.densityValue));
+  const plotTop = 8;
+  const plotBottom = 14;
+  const plotWidth = cssWidth;
   const plotHeight = cssHeight - plotTop - plotBottom;
   const baseY = plotTop + plotHeight;
-  const barSlot = plotWidth / bins.length;
-  const barWidth = Math.max(1, Math.min(10, barSlot * 0.78));
+  const barSlot = plotWidth / densities.length;
+  const barWidth = Math.max(1, barSlot);
 
   context.strokeStyle = "#dce4ea";
   context.lineWidth = 1;
   context.beginPath();
-  context.moveTo(plotLeft, baseY + 0.5);
-  context.lineTo(cssWidth - plotRight, baseY + 0.5);
+  context.moveTo(0, baseY + 0.5);
+  context.lineTo(cssWidth, baseY + 0.5);
   context.stroke();
 
   context.fillStyle = "rgba(42, 128, 116, 0.46)";
-  for (const bin of bins) {
-    const x = plotLeft + bin.second * barSlot + (barSlot - barWidth) / 2;
-    const height = Math.max(bin.playNotes > 0 ? 2 : 0, (bin.playNotes / maxNotes) * plotHeight);
+  densities.forEach((item, index) => {
+    const x = index * barSlot;
+    const height = Math.max(item.densityValue > 0 ? 2 : 0, (item.densityValue / maxDensity) * plotHeight);
     const y = baseY - height;
-    context.fillRect(x, y, barWidth, height);
-  }
+    context.fillRect(x, y, Math.ceil(barWidth), height);
+  });
 }
 
 function renderProgressBlocks() {
@@ -1051,21 +1108,20 @@ function renderProgressBlocks() {
   if (!analysis) {
     progressMapBlocks.innerHTML = "";
     progressMapBlocks.style.removeProperty("grid-template-columns");
+    renderProgressMeasureLabels([]);
     return;
   }
 
   const blocks = analysis.standardBlocks;
-  const labelInterval = getMeasureLabelInterval(blocks.length);
   progressMapBlocks.style.gridTemplateColumns = `repeat(${blocks.length}, minmax(0, 1fr))`;
   progressMapBlocks.innerHTML = blocks.map((block) => {
     const isBarline = block.index % 8 === 0;
-    const showLabel = isBarline && block.index % labelInterval === 0;
-    const classes = ["progress-map-block", isBarline ? "is-barline" : "", showLabel ? "has-label" : ""].filter(Boolean).join(" ");
-    const label = showLabel ? `<span class="progress-block-label" aria-hidden="true">${formatMeasureNumber(block.startMeasure)}</span>` : "";
+    const classes = ["progress-map-block", isBarline ? "is-barline" : ""].filter(Boolean).join(" ");
     const ariaLabel = [`block ${block.index + 1}`, ...getBlockDetailLines(block)].join(", ");
-    return `<button class="${classes}" type="button" data-block-index="${block.index}" aria-pressed="false" aria-label="${escapeHtml(ariaLabel)}">${label}</button>`;
+    return `<button class="${classes}" type="button" data-block-index="${block.index}" aria-pressed="false" aria-label="${escapeHtml(ariaLabel)}"></button>`;
   }).join("");
 
+  renderProgressMeasureLabels(blocks);
   updateProgressBlockClasses();
 }
 
@@ -1670,6 +1726,9 @@ completeProgressButton.addEventListener("click", () => {
 
 window.addEventListener("resize", () => {
   drawDensityChart();
+  if (progressMapState.analysis) {
+    renderProgressMeasureLabels(progressMapState.analysis.standardBlocks);
+  }
   hideProgressMapFloatingInfo();
 });
 
