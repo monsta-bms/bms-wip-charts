@@ -26,6 +26,8 @@ const progressMapGraphWrap = document.querySelector("#progressMapGraphWrap");
 const progressMapCanvas = document.querySelector("#progressMapCanvas");
 const progressMapBlocks = document.querySelector("#progressMapBlocks");
 const progressMapSummary = document.querySelector("#progressMapSummary");
+const progressMapTooltip = document.querySelector("#progressMapTooltip");
+const progressMapPopover = document.querySelector("#progressMapPopover");
 const completeProgressButton = document.querySelector("#completeProgressButton");
 const commentInput = document.querySelector("#comment");
 const isRejectedInput = document.querySelector("#isRejected");
@@ -63,7 +65,10 @@ const progressMapState = {
   paintedBlockIndexes: new Set(),
   savedPaintedBlockIndexes: null,
   isDragging: false,
-  dragAction: null
+  dragAnchorIndex: null,
+  dragCurrentIndex: null,
+  dragMode: null,
+  originalPaintedBlockIndexes: null
 };
 
 const requiredFieldChecks = [
@@ -508,6 +513,43 @@ function buildDensityBins(playEvents) {
   return bins;
 }
 
+function estimateTimeForPosition(standardPosition, playEvents) {
+  const timedEvents = playEvents
+    .filter((event) => Number.isFinite(event.standardPosition) && Number.isFinite(event.timeSec))
+    .sort(comparePlayEvents);
+
+  if (timedEvents.length === 0) {
+    return null;
+  }
+
+  const firstEvent = timedEvents[0];
+  const lastEvent = timedEvents[timedEvents.length - 1];
+
+  if (standardPosition <= firstEvent.standardPosition) {
+    return firstEvent.timeSec;
+  }
+
+  if (standardPosition >= lastEvent.standardPosition) {
+    return lastEvent.timeSec;
+  }
+
+  for (let index = 1; index < timedEvents.length; index += 1) {
+    const previous = timedEvents[index - 1];
+    const next = timedEvents[index];
+    if (standardPosition <= next.standardPosition) {
+      const positionSpan = next.standardPosition - previous.standardPosition;
+      if (positionSpan <= 0) {
+        return next.timeSec;
+      }
+
+      const ratio = (standardPosition - previous.standardPosition) / positionSpan;
+      return previous.timeSec + (next.timeSec - previous.timeSec) * ratio;
+    }
+  }
+
+  return lastEvent.timeSec;
+}
+
 function buildStandardBlocks(playEvents, measureStarts, measureLengths, maxMeasure) {
   if (playEvents.length === 0) {
     return [];
@@ -530,6 +572,8 @@ function buildStandardBlocks(playEvents, measureStarts, measureLengths, maxMeasu
       endMeasure: positionToMeasure(endPosition - 0.000001, measureStarts, measureLengths, maxMeasure),
       startStandardPosition: startPosition,
       endStandardPosition: endPosition,
+      startTimeSec: estimateTimeForPosition(startPosition, playEvents),
+      endTimeSec: estimateTimeForPosition(endPosition, playEvents),
       playNotes: blockNotes.length
     };
   });
@@ -702,12 +746,180 @@ function analyzeBmsProgressText(text) {
   };
 }
 
+function formatMeasureNumber(measure) {
+  if (!Number.isFinite(Number(measure))) {
+    return "---";
+  }
+
+  return String(Number(measure)).padStart(3, "0");
+}
+
+function formatMeasureRange(block) {
+  if (!block) {
+    return "---";
+  }
+
+  const start = formatMeasureNumber(block.startMeasure);
+  const end = formatMeasureNumber(block.endMeasure);
+  return start === end ? start : `${start}-${end}`;
+}
+
+function formatSeconds(seconds) {
+  if (!Number.isFinite(seconds)) {
+    return "";
+  }
+
+  const rounded = Math.max(0, Math.round(seconds));
+  const minutes = Math.floor(rounded / 60);
+  const restSeconds = String(rounded % 60).padStart(2, "0");
+  return `${minutes}:${restSeconds}`;
+}
+
+function formatTimeRange(block) {
+  if (!block || !Number.isFinite(block.startTimeSec)) {
+    return "";
+  }
+
+  const start = formatSeconds(block.startTimeSec);
+  const end = Number.isFinite(block.endTimeSec) ? formatSeconds(block.endTimeSec) : "";
+
+  if (!end || start === end) {
+    return start;
+  }
+
+  return `${start}-${end}`;
+}
+
+function getBlockDetailLines(block) {
+  if (!block) {
+    return [];
+  }
+
+  const lines = [`小節: ${formatMeasureRange(block)}`];
+  const timeRange = formatTimeRange(block);
+  if (timeRange) {
+    lines.push(`time: ${timeRange}`);
+  }
+  lines.push(`notes: ${block.playNotes}`);
+  return lines;
+}
+
+function getBlockByIndex(blockIndex) {
+  const analysis = progressMapState.analysis;
+  if (!analysis || !Number.isInteger(blockIndex)) {
+    return null;
+  }
+
+  return analysis.standardBlocks[blockIndex] || null;
+}
+
+function getBlockFromElement(blockElement) {
+  if (!blockElement) {
+    return null;
+  }
+
+  const blockIndex = Number(blockElement.dataset.blockIndex);
+  return getBlockByIndex(blockIndex);
+}
+
+function getMeasureLabelInterval(blockCount) {
+  if (blockCount > 240) {
+    return 32;
+  }
+
+  if (blockCount > 120) {
+    return 16;
+  }
+
+  return 8;
+}
+
+function positionFloatingElement(element, clientX, clientY) {
+  if (!element) {
+    return;
+  }
+
+  const margin = 10;
+  const offset = 12;
+  element.hidden = false;
+  element.style.left = `${clientX + offset}px`;
+  element.style.top = `${clientY + offset}px`;
+
+  const rect = element.getBoundingClientRect();
+  let left = clientX + offset;
+  let top = clientY + offset;
+
+  if (left + rect.width + margin > window.innerWidth) {
+    left = clientX - rect.width - offset;
+  }
+
+  if (top + rect.height + margin > window.innerHeight) {
+    top = clientY - rect.height - offset;
+  }
+
+  element.style.left = `${Math.max(margin, Math.min(left, window.innerWidth - rect.width - margin))}px`;
+  element.style.top = `${Math.max(margin, Math.min(top, window.innerHeight - rect.height - margin))}px`;
+}
+
+function showProgressMapTooltip(blockElement, event) {
+  if (!progressMapTooltip || progressMapState.isDragging) {
+    return;
+  }
+
+  const block = getBlockFromElement(blockElement);
+  if (!block) {
+    return;
+  }
+
+  progressMapTooltip.innerHTML = getBlockDetailLines(block).map(escapeHtml).join("<br>");
+  positionFloatingElement(progressMapTooltip, event.clientX, event.clientY);
+}
+
+function hideProgressMapTooltip() {
+  if (!progressMapTooltip) {
+    return;
+  }
+
+  progressMapTooltip.hidden = true;
+}
+
+function showProgressMapPopover(blockElement, event) {
+  if (!progressMapPopover) {
+    return;
+  }
+
+  const block = getBlockFromElement(blockElement);
+  if (!block) {
+    return;
+  }
+
+  const lines = getBlockDetailLines(block).map((line) => `<div class="progress-map-popover-line">${escapeHtml(line)}</div>`).join("");
+  progressMapPopover.innerHTML = `<div class="progress-map-popover-title">ブロック ${block.index + 1}</div>${lines}`;
+  positionFloatingElement(progressMapPopover, event.clientX, event.clientY);
+}
+
+function hideProgressMapPopover() {
+  if (!progressMapPopover) {
+    return;
+  }
+
+  progressMapPopover.hidden = true;
+}
+
+function hideProgressMapFloatingInfo() {
+  hideProgressMapTooltip();
+  hideProgressMapPopover();
+}
+
 function setProgressMapMessage(message, state = "empty") {
   progressMapState.analysis = null;
   progressMapState.paintedBlockIndexes = new Set();
   progressMapState.savedPaintedBlockIndexes = null;
   progressMapState.isDragging = false;
-  progressMapState.dragAction = null;
+  progressMapState.dragAnchorIndex = null;
+  progressMapState.dragCurrentIndex = null;
+  progressMapState.dragMode = null;
+  progressMapState.originalPaintedBlockIndexes = null;
   progressMap.dataset.state = state;
   progressMapStatus.textContent = message;
   progressMapStatus.hidden = false;
@@ -715,6 +927,7 @@ function setProgressMapMessage(message, state = "empty") {
   progressMapSummary.hidden = true;
   progressMapBlocks.innerHTML = "";
   progressMapBlocks.style.removeProperty("grid-template-columns");
+  hideProgressMapFloatingInfo();
   updateCompleteButtonState();
 }
 
@@ -842,14 +1055,15 @@ function renderProgressBlocks() {
   }
 
   const blocks = analysis.standardBlocks;
-  progressMapBlocks.style.gridTemplateColumns = `repeat(${blocks.length}, minmax(4px, 1fr))`;
+  const labelInterval = getMeasureLabelInterval(blocks.length);
+  progressMapBlocks.style.gridTemplateColumns = `repeat(${blocks.length}, minmax(0, 1fr))`;
   progressMapBlocks.innerHTML = blocks.map((block) => {
     const isBarline = block.index % 8 === 0;
-    const classes = ["progress-map-block", isBarline ? "is-barline" : ""].filter(Boolean).join(" ");
-    const measureRange = block.startMeasure === block.endMeasure
-      ? `${block.startMeasure}`
-      : `${block.startMeasure}-${block.endMeasure}`;
-    return `<button class="${classes}" type="button" data-block-index="${block.index}" aria-pressed="false" aria-label="block ${block.index + 1}, measures ${measureRange}, ${block.playNotes} notes"></button>`;
+    const showLabel = isBarline && block.index % labelInterval === 0;
+    const classes = ["progress-map-block", isBarline ? "is-barline" : "", showLabel ? "has-label" : ""].filter(Boolean).join(" ");
+    const label = showLabel ? `<span class="progress-block-label" aria-hidden="true">${formatMeasureNumber(block.startMeasure)}</span>` : "";
+    const ariaLabel = [`block ${block.index + 1}`, ...getBlockDetailLines(block)].join(", ");
+    return `<button class="${classes}" type="button" data-block-index="${block.index}" aria-pressed="false" aria-label="${escapeHtml(ariaLabel)}">${label}</button>`;
   }).join("");
 
   updateProgressBlockClasses();
@@ -866,6 +1080,7 @@ function renderProgressMap() {
   progressMapStatus.hidden = true;
   progressMapGraphWrap.hidden = false;
   progressMapSummary.hidden = false;
+  hideProgressMapFloatingInfo();
   renderProgressBlocks();
   drawDensityChart();
   updateProgressFromMap();
@@ -876,7 +1091,10 @@ function initializeProgressMap(analysis) {
   progressMapState.paintedBlockIndexes = new Set();
   progressMapState.savedPaintedBlockIndexes = null;
   progressMapState.isDragging = false;
-  progressMapState.dragAction = null;
+  progressMapState.dragAnchorIndex = null;
+  progressMapState.dragCurrentIndex = null;
+  progressMapState.dragMode = null;
+  progressMapState.originalPaintedBlockIndexes = null;
 
   if (isRejectedInput.checked) {
     for (const block of analysis.standardBlocks) {
@@ -887,23 +1105,65 @@ function initializeProgressMap(analysis) {
   renderProgressMap();
 }
 
-function applyPaintAction(blockIndex, action) {
-  if (!progressMapState.analysis || isRejectedInput.checked || !Number.isFinite(blockIndex)) {
-    return;
-  }
-
-  if (action === "erase") {
-    progressMapState.paintedBlockIndexes.delete(blockIndex);
-  } else {
-    progressMapState.paintedBlockIndexes.add(blockIndex);
-  }
-
-  updateProgressFromMap();
-}
-
 function findProgressBlockFromPointer(event) {
   const element = document.elementFromPoint(event.clientX, event.clientY);
   return element?.closest?.(".progress-map-block") || null;
+}
+
+function applyProgressDragRange(currentBlockIndex) {
+  if (!progressMapState.analysis || !progressMapState.originalPaintedBlockIndexes || !Number.isInteger(currentBlockIndex)) {
+    return;
+  }
+
+  const anchorIndex = progressMapState.dragAnchorIndex;
+  if (!Number.isInteger(anchorIndex)) {
+    return;
+  }
+
+  const rangeStart = Math.min(anchorIndex, currentBlockIndex);
+  const rangeEnd = Math.max(anchorIndex, currentBlockIndex);
+  const nextPainted = new Set(progressMapState.originalPaintedBlockIndexes);
+
+  for (let index = rangeStart; index <= rangeEnd; index += 1) {
+    if (progressMapState.dragMode === "erase") {
+      nextPainted.delete(index);
+    } else {
+      nextPainted.add(index);
+    }
+  }
+
+  progressMapState.dragCurrentIndex = currentBlockIndex;
+  progressMapState.paintedBlockIndexes = nextPainted;
+  updateProgressFromMap();
+}
+
+function startProgressDrag(blockIndex, event) {
+  if (!progressMapState.analysis || isRejectedInput.checked || !Number.isInteger(blockIndex)) {
+    return;
+  }
+
+  const wasPainted = progressMapState.paintedBlockIndexes.has(blockIndex);
+  progressMapState.isDragging = true;
+  progressMapState.dragAnchorIndex = blockIndex;
+  progressMapState.dragCurrentIndex = blockIndex;
+  progressMapState.dragMode = wasPainted ? "erase" : "paint";
+  progressMapState.originalPaintedBlockIndexes = new Set(progressMapState.paintedBlockIndexes);
+  hideProgressMapFloatingInfo();
+  progressMapBlocks.setPointerCapture?.(event.pointerId);
+  applyProgressDragRange(blockIndex);
+}
+
+function finishProgressDrag({ restoreOriginal = false } = {}) {
+  if (restoreOriginal && progressMapState.originalPaintedBlockIndexes) {
+    progressMapState.paintedBlockIndexes = new Set(progressMapState.originalPaintedBlockIndexes);
+    updateProgressFromMap();
+  }
+
+  progressMapState.isDragging = false;
+  progressMapState.dragAnchorIndex = null;
+  progressMapState.dragCurrentIndex = null;
+  progressMapState.dragMode = null;
+  progressMapState.originalPaintedBlockIndexes = null;
 }
 
 function paintAllProgressBlocks() {
@@ -922,6 +1182,7 @@ function paintAllProgressBlocks() {
 
 function applyRejectedProgressMapState() {
   const analysis = progressMapState.analysis;
+  hideProgressMapFloatingInfo();
   if (!analysis) {
     updateCompleteButtonState();
     return;
@@ -1336,39 +1597,71 @@ isRejectedInput.addEventListener("change", () => {
 });
 
 progressMapBlocks.addEventListener("pointerdown", (event) => {
+  if (event.button !== 0) {
+    return;
+  }
+
   const block = event.target.closest(".progress-map-block");
   if (!block) {
     return;
   }
 
   event.preventDefault();
-  const blockIndex = Number(block.dataset.blockIndex);
-  const wasPainted = progressMapState.paintedBlockIndexes.has(blockIndex);
-  progressMapState.isDragging = true;
-  progressMapState.dragAction = wasPainted ? "erase" : "paint";
-  progressMapBlocks.setPointerCapture?.(event.pointerId);
-  applyPaintAction(blockIndex, progressMapState.dragAction);
+  startProgressDrag(Number(block.dataset.blockIndex), event);
 });
 
 progressMapBlocks.addEventListener("pointermove", (event) => {
-  if (!progressMapState.isDragging || !progressMapState.dragAction) {
+  if (progressMapState.isDragging) {
+    event.preventDefault();
+    hideProgressMapTooltip();
+    const block = findProgressBlockFromPointer(event);
+    if (block) {
+      applyProgressDragRange(Number(block.dataset.blockIndex));
+    }
     return;
   }
 
   const block = findProgressBlockFromPointer(event);
   if (block) {
-    applyPaintAction(Number(block.dataset.blockIndex), progressMapState.dragAction);
+    showProgressMapTooltip(block, event);
+  } else {
+    hideProgressMapTooltip();
   }
 });
 
-progressMapBlocks.addEventListener("pointerup", () => {
-  progressMapState.isDragging = false;
-  progressMapState.dragAction = null;
+progressMapBlocks.addEventListener("pointerout", (event) => {
+  if (!progressMapBlocks.contains(event.relatedTarget)) {
+    hideProgressMapTooltip();
+  }
 });
 
-progressMapBlocks.addEventListener("pointercancel", () => {
-  progressMapState.isDragging = false;
-  progressMapState.dragAction = null;
+progressMapBlocks.addEventListener("pointerup", (event) => {
+  if (!progressMapState.isDragging) {
+    return;
+  }
+
+  progressMapBlocks.releasePointerCapture?.(event.pointerId);
+  finishProgressDrag();
+});
+
+progressMapBlocks.addEventListener("pointercancel", (event) => {
+  if (!progressMapState.isDragging) {
+    return;
+  }
+
+  progressMapBlocks.releasePointerCapture?.(event.pointerId);
+  finishProgressDrag({ restoreOriginal: true });
+});
+
+progressMapBlocks.addEventListener("contextmenu", (event) => {
+  const block = event.target.closest(".progress-map-block");
+  if (!block) {
+    return;
+  }
+
+  event.preventDefault();
+  hideProgressMapTooltip();
+  showProgressMapPopover(block, event);
 });
 
 completeProgressButton.addEventListener("click", () => {
@@ -1377,6 +1670,23 @@ completeProgressButton.addEventListener("click", () => {
 
 window.addEventListener("resize", () => {
   drawDensityChart();
+  hideProgressMapFloatingInfo();
+});
+
+document.addEventListener("click", (event) => {
+  if (!progressMapPopover || progressMapPopover.hidden) {
+    return;
+  }
+
+  if (!progressMapPopover.contains(event.target) && !event.target.closest(".progress-map-block")) {
+    hideProgressMapPopover();
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    hideProgressMapFloatingInfo();
+  }
 });
 
 savePasswordInput.addEventListener("change", persistPasswordPreference);
