@@ -112,7 +112,7 @@
                   <div class="progress-map" id="progressMap" data-state="empty">
                     <p class="progress-map-status" id="progressMapStatus">譜面ファイル選択後に進捗マップを表示します</p>
                     <div class="progress-map-visual" id="progressMapGraphWrap" hidden>
-                      <div class="density-chart-wrap" aria-label="1秒ごとのプレイノート密度">
+                      <div class="density-chart-wrap" aria-label="表示範囲のプレイノート密度">
                         <canvas class="progress-map-canvas" id="progressMapCanvas" width="720" height="120"></canvas>
                       </div>
                       <div class="progress-block-layer" id="progressMapBlocks" role="group" aria-label="作成済みにする標準化ブロック"></div>
@@ -189,7 +189,9 @@
       (() => {
         const blocksLayer = document.querySelector("#progressMapBlocks");
         const labelLayer = document.querySelector("#progressMapLabels");
-        if (!blocksLayer || !labelLayer) {
+        const densityCanvas = document.querySelector("#progressMapCanvas");
+        const graphWrap = document.querySelector("#progressMapGraphWrap");
+        if (!blocksLayer || !labelLayer || !densityCanvas) {
           return;
         }
 
@@ -243,6 +245,68 @@
             return;
           }
           frameId = window.requestAnimationFrame(renderMeasureLabels);
+        }
+
+        function drawAlignedDensityChart() {
+          if (typeof progressMapState === "undefined" || !densityCanvas) {
+            return;
+          }
+
+          const analysis = progressMapState.analysis;
+          if (!analysis || graphWrap?.hidden) {
+            return;
+          }
+
+          const blocks = Array.isArray(analysis.standardBlocks) ? analysis.standardBlocks : [];
+          const context = densityCanvas.getContext("2d");
+          const cssWidth = Math.max(Math.floor(densityCanvas.parentElement.clientWidth), 320);
+          const cssHeight = 120;
+          const ratio = window.devicePixelRatio || 1;
+
+          densityCanvas.width = Math.floor(cssWidth * ratio);
+          densityCanvas.height = Math.floor(cssHeight * ratio);
+          densityCanvas.style.width = "100%";
+          densityCanvas.style.height = `${cssHeight}px`;
+
+          context.setTransform(ratio, 0, 0, ratio, 0, 0);
+          context.clearRect(0, 0, cssWidth, cssHeight);
+          context.fillStyle = "#ffffff";
+          context.fillRect(0, 0, cssWidth, cssHeight);
+
+          if (blocks.length === 0) {
+            return;
+          }
+
+          const maxNotes = Math.max(1, ...blocks.map((block) => Number(block.playNotes) || 0));
+          const plotLeft = 0;
+          const plotRight = 0;
+          const plotTop = 10;
+          const plotBottom = 16;
+          const plotWidth = cssWidth - plotLeft - plotRight;
+          const plotHeight = cssHeight - plotTop - plotBottom;
+          const baseY = plotTop + plotHeight;
+          const barSlot = plotWidth / blocks.length;
+          const barWidth = Math.max(1, Math.min(10, barSlot * 0.78));
+
+          context.strokeStyle = "#dce4ea";
+          context.lineWidth = 1;
+          context.beginPath();
+          context.moveTo(plotLeft, baseY + 0.5);
+          context.lineTo(cssWidth - plotRight, baseY + 0.5);
+          context.stroke();
+
+          context.fillStyle = "rgba(42, 128, 116, 0.46)";
+          blocks.forEach((block, index) => {
+            const playNotes = Number(block.playNotes) || 0;
+            const x = plotLeft + index * barSlot + (barSlot - barWidth) / 2;
+            const height = Math.max(playNotes > 0 ? 2 : 0, (playNotes / maxNotes) * plotHeight);
+            const y = baseY - height;
+            context.fillRect(x, y, barWidth, height);
+          });
+        }
+
+        if (typeof drawDensityChart === "function") {
+          drawDensityChart = drawAlignedDensityChart;
         }
 
         new MutationObserver(requestRenderMeasureLabels).observe(blocksLayer, {
