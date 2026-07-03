@@ -104,6 +104,21 @@
 
               <fieldset class="form-section management-section">
                 <legend class="form-section-title">進捗・管理</legend>
+                <div class="progress-map-field">
+                  <div class="progress-map-header">
+                    <span class="field-label">進捗マップ</span>
+                    <button class="secondary progress-complete-button" id="completeProgressButton" type="button" disabled>完成版にする</button>
+                  </div>
+                  <div class="progress-map" id="progressMap" data-state="empty">
+                    <p class="progress-map-status" id="progressMapStatus">譜面ファイル選択後に進捗マップを表示します</p>
+                    <div class="progress-map-graph-wrap" id="progressMapGraphWrap" hidden>
+                      <canvas class="progress-map-canvas" id="progressMapCanvas" width="720" height="180" aria-label="小節ごとのプレイノート数と作成済み範囲"></canvas>
+                      <div class="progress-map-blocks" id="progressMapBlocks" role="group" aria-label="作成済みにする小節"></div>
+                    </div>
+                    <div class="progress-map-summary" id="progressMapSummary" aria-live="polite" hidden></div>
+                  </div>
+                </div>
+
                 <div class="management-grid">
                   <div class="management-column">
                     <label class="field">
