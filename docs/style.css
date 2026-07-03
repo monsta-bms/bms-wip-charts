@@ -478,7 +478,7 @@ button.progress-map-block {
 button.progress-map-block::before {
   background: transparent;
   content: "";
-  inset: 0 0 16px;
+  inset: 0;
   position: absolute;
   transition: background-color 80ms ease-out;
 }
@@ -513,16 +513,32 @@ button.progress-map-block:disabled:focus-visible {
 }
 
 .progress-block-label {
-  bottom: 2px;
-  color: #53606c;
-  font-size: 0.64rem;
-  font-weight: 800;
-  left: 50%;
-  line-height: 1;
+  display: none;
+}
+
+.progress-block-label-layer {
+  display: grid;
+  margin-top: -4px;
+  min-height: 16px;
+  overflow: visible;
   pointer-events: none;
-  position: absolute;
-  transform: translateX(-50%);
+  position: relative;
+  z-index: 1;
+}
+
+.progress-block-measure-label {
+  color: #53606c;
+  font-size: 0.68rem;
+  font-weight: 800;
+  justify-self: start;
+  line-height: 1;
+  min-width: 28px;
+  transform: translateX(4px);
   white-space: nowrap;
+}
+
+.progress-block-measure-label.is-empty {
+  visibility: hidden;
 }
 
 .progress-map-summary {
@@ -848,8 +864,10 @@ textarea[aria-invalid="true"] {
     min-height: 56px;
   }
 
-  .progress-block-label {
+  .progress-block-measure-label {
     font-size: 0.58rem;
+    min-width: 24px;
+    transform: translateX(3px);
   }
 
   .checkbox-field {
