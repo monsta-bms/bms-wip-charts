@@ -65,6 +65,7 @@ const progressMapState = {
   analysis: null,
   paintedBlockIndexes: new Set(),
   savedPaintedBlockIndexes: null,
+  layerKind: "initial",
   isDragging: false,
   dragAnchorIndex: null,
   dragCurrentIndex: null,
@@ -970,6 +971,7 @@ function setProgressMapMessage(message, state = "empty") {
   progressMapState.analysis = null;
   progressMapState.paintedBlockIndexes = new Set();
   progressMapState.savedPaintedBlockIndexes = null;
+  progressMapState.layerKind = "initial";
   progressMapState.isDragging = false;
   progressMapState.dragAnchorIndex = null;
   progressMapState.dragCurrentIndex = null;
@@ -998,6 +1000,65 @@ function calculateMapProgress() {
   }
 
   return Math.round((progressMapState.paintedBlockIndexes.size / analysis.standardBlocks.length) * 100);
+}
+
+function compressBlockIndexesToRanges(indexes) {
+  const sortedIndexes = [...new Set(indexes)]
+    .filter((index) => Number.isInteger(index) && index >= 0)
+    .sort((a, b) => a - b);
+  const ranges = [];
+
+  for (const index of sortedIndexes) {
+    const previousRange = ranges[ranges.length - 1];
+    if (previousRange && previousRange[1] + 1 === index) {
+      previousRange[1] = index;
+    } else {
+      ranges.push([index, index]);
+    }
+  }
+
+  return ranges;
+}
+
+function normalizeProgressMapBlock(block, index) {
+  return {
+    index,
+    startMeasure: Number.isInteger(block.startMeasure) ? block.startMeasure : null,
+    endMeasure: Number.isInteger(block.endMeasure) ? block.endMeasure : null,
+    startTimeSec: Number.isFinite(block.startTimeSec) ? block.startTimeSec : null,
+    endTimeSec: Number.isFinite(block.endTimeSec) ? block.endTimeSec : null,
+    playNotes: Number.isInteger(block.playNotes) && block.playNotes > 0 ? block.playNotes : 0
+  };
+}
+
+function buildProgressMapPayload() {
+  const analysis = progressMapState.analysis;
+  if (!analysis || !Array.isArray(analysis.standardBlocks) || analysis.standardBlocks.length === 0) {
+    return null;
+  }
+
+  const targetBlockCount = analysis.standardBlocks.length;
+  const paintedIndexes = [...progressMapState.paintedBlockIndexes]
+    .filter((index) => Number.isInteger(index) && index >= 0 && index < targetBlockCount);
+  const progress = Math.round((new Set(paintedIndexes).size / targetBlockCount) * 100);
+
+  return {
+    schemaVersion: 2,
+    blockMode: "standardized_measure",
+    firstMeasure: Number.isInteger(analysis.firstMeasure) ? analysis.firstMeasure : null,
+    lastMeasure: Number.isInteger(analysis.lastMeasure) ? analysis.lastMeasure : null,
+    targetBlockCount,
+    blocks: analysis.standardBlocks.map(normalizeProgressMapBlock),
+    layers: [
+      {
+        versionId: "pending",
+        color: "#1f7a5c",
+        kind: isRejectedInput.checked ? "rejected_auto_fill" : progressMapState.layerKind,
+        ranges: compressBlockIndexesToRanges(paintedIndexes)
+      }
+    ],
+    progress
+  };
 }
 
 function updateProgressSummary(progressValue = calculateMapProgress()) {
@@ -1146,6 +1207,7 @@ function initializeProgressMap(analysis) {
   progressMapState.analysis = analysis;
   progressMapState.paintedBlockIndexes = new Set();
   progressMapState.savedPaintedBlockIndexes = null;
+  progressMapState.layerKind = isRejectedInput.checked ? "rejected_auto_fill" : "initial";
   progressMapState.isDragging = false;
   progressMapState.dragAnchorIndex = null;
   progressMapState.dragCurrentIndex = null;
@@ -1199,6 +1261,7 @@ function startProgressDrag(blockIndex, event) {
   }
 
   const wasPainted = progressMapState.paintedBlockIndexes.has(blockIndex);
+  progressMapState.layerKind = "initial";
   progressMapState.isDragging = true;
   progressMapState.dragAnchorIndex = blockIndex;
   progressMapState.dragCurrentIndex = blockIndex;
@@ -1222,12 +1285,13 @@ function finishProgressDrag({ restoreOriginal = false } = {}) {
   progressMapState.originalPaintedBlockIndexes = null;
 }
 
-function paintAllProgressBlocks() {
+function paintAllProgressBlocks(kind = "completion_fill") {
   const analysis = progressMapState.analysis;
   if (!analysis) {
     return;
   }
 
+  progressMapState.layerKind = kind;
   progressMapState.paintedBlockIndexes = new Set(analysis.standardBlocks.map((block) => block.index));
   progressInput.value = "100";
   setFieldInvalid(progressInput, false);
@@ -1248,13 +1312,14 @@ function applyRejectedProgressMapState() {
     if (!progressMapState.savedPaintedBlockIndexes) {
       progressMapState.savedPaintedBlockIndexes = new Set(progressMapState.paintedBlockIndexes);
     }
-    paintAllProgressBlocks();
+    paintAllProgressBlocks("rejected_auto_fill");
     return;
   }
 
   if (progressMapState.savedPaintedBlockIndexes) {
     progressMapState.paintedBlockIndexes = new Set(progressMapState.savedPaintedBlockIndexes);
     progressMapState.savedPaintedBlockIndexes = null;
+    progressMapState.layerKind = "initial";
   }
 
   updateProgressFromMap();
@@ -1539,6 +1604,7 @@ async function loadCharts() {
 function buildChartFormData() {
   const file = fileInput.files?.[0];
   const difficulty = difficultyInput.value.trim();
+  const progressMapPayload = buildProgressMapPayload();
   const formData = new FormData();
 
   formData.append("file", file);
@@ -1554,6 +1620,10 @@ function buildChartFormData() {
   formData.append("comment", commentInput.value.trim());
   formData.append("isRejected", isRejectedInput.checked ? "true" : "false");
   formData.append("password", passwordInput.value);
+
+  if (progressMapPayload) {
+    formData.append("progressMap", JSON.stringify(progressMapPayload));
+  }
 
   return formData;
 }
@@ -1721,7 +1791,7 @@ progressMapBlocks.addEventListener("contextmenu", (event) => {
 });
 
 completeProgressButton.addEventListener("click", () => {
-  paintAllProgressBlocks();
+  paintAllProgressBlocks("completion_fill");
 });
 
 window.addEventListener("resize", () => {
