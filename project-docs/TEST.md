@@ -2,7 +2,7 @@
 
 ## 対象
 
-GitHub Pages の静的フロント画面、Worker API接続、D1 migration、BMS解析、進捗マップUI、仕様ドキュメントを確認する。
+GitHub Pages の静的フロント画面、Worker API接続、D1 migration、BMS解析、進捗マップUI、進捗マップ保存、仕様ドキュメントを確認する。
 
 本番Worker URL:
 
@@ -17,6 +17,29 @@ https://monsta-bms.github.io/bms-wip-charts/
 ```
 
 ## 今回確認するもの
+
+PROG-04A 進捗マップ保存:
+
+- フロント側で塗った進捗マップが `progressMap` JSON文字列として `POST /api/charts` に送信されること
+- `progressMap.schemaVersion` が `2` であること
+- `progressMap.blockMode` が `standardized_measure` であること
+- `progressMap.targetBlockCount` が下段の標準化ブロック数と一致すること
+- `progressMap.blocks.length` が `targetBlockCount` と一致すること
+- `progressMap.blocks` が下段の標準化ブロックと1対1対応していること
+- 塗り済みブロックが `layers[0].ranges` に連続範囲として圧縮されること
+- Worker側で `progressMap` のrangesから `progress` が再計算されること
+- Worker側で再計算された `progress` が `versions.progress` に保存されること
+- Worker側で正規化された `progressMap` が `versions.progress_map_json` に保存されること
+- `POST /api/charts` 成功レスポンスに `progressMap` が含まれること
+- 成功レスポンスの `progressMap.layers[0].versionId` が実際の `versionId` になること
+- `GET /api/charts` のversionレスポンスに `progressMap` が返ること
+- `progressMap` 未送信の場合は従来通り `progress` の値で投稿できること
+- 不正なJSONを送ると `INVALID_PROGRESS_MAP` が返ること
+- 範囲外indexを送ると `PROGRESS_MAP_OUT_OF_RANGE` が返ること
+- `targetBlockCount` と `blocks.length` が一致しない場合は `PROGRESS_MAP_BLOCK_COUNT_MISMATCH` が返ること
+- 没譜面ONでは、送信された `progressMap` に関係なく `progress=100` になること
+- 没譜面ONでは、保存されるlayer kindが `rejected_auto_fill` になること
+- `完成版にする` ボタンで全塗り後に投稿すると、layer kindが `completion_fill` になり、`progress=100` で保存されること
 
 PROG-03C フロント側進捗マップUI:
 
@@ -94,7 +117,6 @@ PROG-02 Worker側BMS解析:
 
 ## 今回確認しないもの
 
-- `progress_map_json` のAPI保存
 - 進捗画像PNGのR2保存
 - Worker側BMS解析の変更
 - D1 schema変更
@@ -111,7 +133,7 @@ PROG-02 Worker側BMS解析:
 - Cron Trigger
 - R2自動削除処理
 
-## PROG-03C テスト用BMSファイル
+## PROG-03C/04A テスト用BMSファイル
 
 PowerShellで基本確認用ファイルを作成する。
 
@@ -207,7 +229,7 @@ PowerShellで基本確認用ファイルを作成する。
 - いずれのファイルでも、範囲塗りと範囲解除ができること
 - hover/右クリックで位置情報を確認できること
 
-## GitHub PagesでのPROG-03C確認
+## GitHub PagesでのPROG-04A確認
 
 1. `https://monsta-bms.github.io/bms-wip-charts/` を開く。
 2. 投稿フォームの `進捗・管理` セクションに `進捗マップ` があることを確認する。
@@ -217,34 +239,27 @@ PowerShellで基本確認用ファイルを作成する。
 6. 上段に標準化ブロックごとのノート密度が棒グラフで表示されることを確認する。
 7. 下段に進捗編集用の標準化ブロックが表示されることを確認する。
 8. 上段の棒本数と下段のブロック数が一致することを確認する。
-9. 上段の1本の棒が下段の1ブロックと横方向に対応していることを確認する。
-10. 上段左端と下段左端、上段右端と下段右端が揃っていることを確認する。
-11. 上段左側に不要な空白がないことを確認する。
-12. 高密度ブロックで棒が高く、低密度ブロックで棒が低く見えることを確認する。
-13. 棒グラフと進捗編集ブロックが重なっていないことを確認する。
-14. `play notes: 7 / blocks: ... / progress: 0%` 相当の概要が表示されることを確認する。
-15. 8ブロック区切りの下に `001` や `009` のような小節番号が表示されることを確認する。
-16. 小節番号が3桁ゼロ埋めで表示され、`m001` のような `m` 接頭辞が付かないことを確認する。
-17. 小節番号が縦線やブロック境界線と重ならないことを確認する。
-18. 小節番号が `0` や `9` のように1桁だけに切れていないことを確認する。
-19. 表示幅が狭い場合、小節番号が詰まりすぎないように間引かれることを確認する。
-20. 小節番号の上をなぞっても、下段ブロックのクリック/ドラッグ操作がずれないことを確認する。
-21. `prog03c-offset-test.bms` を選択し、表示左端が `004` 相当になることを確認する。
-22. `prog03c-offset-test.bms` で、曲頭の進捗対象外空白が通常表示に混ざらないことを確認する。
-23. `prog03c-offset-test.bms` で、上段の棒グラフと下段ブロックが同じ横位置を指していることを確認する。
-24. 未塗りブロックを1つクリックし、進捗度欄が更新されることを確認する。
-25. 同じブロックをもう一度クリックし、塗りが解除されることを確認する。
-26. 未塗りブロックから3ブロック以上ドラッグして、範囲塗りできることを確認する。
-27. そのまま左クリックを押した状態で戻し、余分な塗りが解除されることを確認する。
-28. 塗り済みブロックから3ブロック以上ドラッグして、範囲解除できることを確認する。
-29. そのまま左クリックを押した状態で戻し、解除しすぎた部分が元に戻ることを確認する。
-30. ブロックにマウスを乗せ、小節範囲、秒数範囲、notesのtooltipが出ることを確認する。
-31. ブロックを右クリックし、簡易情報ポップアップが出ることを確認する。
-32. ブロック右クリック時に通常のブラウザメニューが出ないことを確認する。
-33. 8ブロックごとの濃いグレー線と通常境界線が見分けられることを確認する。
-34. progressが80%以上かつ100%未満になると `完成版にする` ボタンが有効になることを確認する。
-35. `完成版にする` を押す。
-36. 未塗りブロックがすべて塗られ、進捗度欄が `100` になることを確認する。
+9. 未塗りブロックをいくつか塗り、進捗度欄が更新されることを確認する。
+10. ブラウザ開発者ツールのNetworkで `POST /api/charts` のFormDataに `progressMap` が含まれることを確認する。
+11. `progressMap` の `schemaVersion=2`, `blockMode=standardized_measure`, `targetBlockCount`, `blocks`, `layers[0].ranges` を確認する。
+12. 想定難易度、仮差分名、差分作者、管理パスワードを入力する。
+13. 「投稿する」を押す。
+14. 送信中は投稿ボタンがdisabledになることを確認する。
+15. 投稿成功後、一覧が再取得され、新しい投稿が表示されることを確認する。
+16. `GET /api/charts?page=1&pageSize=100` のレスポンスで対象versionに `progressMap` が返ることを確認する。
+17. `progressMap.layers[0].versionId` が `pending` ではなく、実際の `versionId` になっていることを確認する。
+18. 一覧の進捗度がWorker側で再計算された `progress` と一致することを確認する。
+
+## 完成版にする保存確認
+
+1. 単体BMSを選択する。
+2. 進捗が80%以上かつ100%未満になるようにブロックを塗る。
+3. `完成版にする` ボタンが有効になることを確認する。
+4. `完成版にする` を押す。
+5. 未塗りブロックがすべて塗られ、進捗度欄が `100` になることを確認する。
+6. 投稿する。
+7. 成功レスポンスまたは `GET /api/charts` で、`progress=100` になっていることを確認する。
+8. `progressMap.layers[0].kind` が `completion_fill` になっていることを確認する。
 
 ## 没譜面との連動確認
 
@@ -254,9 +269,10 @@ PowerShellで基本確認用ファイルを作成する。
 4. 進捗度欄が `100` になることを確認する。
 5. 進捗度欄が編集不可に見えることを確認する。
 6. 進捗マップのブロックが編集不可になることを確認する。
-7. 没譜面チェックをOFFにする。
-8. 進捗度欄が編集可能に戻ることを確認する。
-9. 進捗マップ操作が通常状態に戻ることを確認する。
+7. 投稿する。
+8. 成功レスポンスまたは `GET /api/charts` で、`progress=100` になっていることを確認する。
+9. `progressMap.layers[0].kind` が `rejected_auto_fill` になっていることを確認する。
+10. 没譜面チェックをOFFにした通常操作では、進捗度欄が編集可能に戻ることを確認する。
 
 API側でも `isRejected=true` の場合は `progress=100` に強制されるため、ブラウザ側の表示は補助扱いとする。
 
@@ -266,6 +282,7 @@ API側でも `isRejected=true` の場合は `progress=100` に強制されるた
 2. `単体BMSのみ進捗マップを表示します` と表示されることを確認する。
 3. 投稿フォーム全体が崩れないことを確認する。
 4. 進捗度欄は従来通り手入力できることを確認する。
+5. `progressMap` 未送信でも従来通り投稿できることを確認する。
 
 ## プレイノートなしBMS確認
 
@@ -302,20 +319,7 @@ PowerShellで作成する。
 9. `overjoy` を入力し、プレビューが `overjoy` になることを確認する。
 10. 一覧の想定難易度が `difficulty` のみで表示され、`★12 / 12` のような `level` 併記にならないことを確認する。
 
-## GitHub Pagesから初回投稿確認
-
-1. GitHub Pages画面を開く。
-2. `prog03c-progress-map-test.bms` または添付BMSを選択する。
-3. 曲名とアーティストが自動入力されることを確認する。
-4. 差分情報セクションで想定難易度、仮差分名、差分作者を入力する。
-5. 進捗マップでいくつかのブロックを塗り、進捗度欄が更新されることを確認する。
-6. 管理パスワード、必要ならコメントを入力する。
-7. 「投稿する」を押す。
-8. 送信中は投稿ボタンがdisabledになることを確認する。
-9. 投稿成功後、一覧が再取得され、新しい投稿が表示されることを確認する。
-10. 一覧の進捗度が投稿時の `progress` と一致することを確認する。
-
-## PROG-02 curl.exe確認
+## PROG-04A curl.exe確認
 
 ローカルWorkerを起動する。
 
@@ -327,18 +331,21 @@ npx wrangler dev
 別ターミナルで投稿する。
 
 ```powershell
+$progressMap = '{"schemaVersion":2,"blockMode":"standardized_measure","firstMeasure":1,"lastMeasure":9,"targetBlockCount":9,"blocks":[{"index":0,"startMeasure":1,"endMeasure":1,"startTimeSec":0,"endTimeSec":1,"playNotes":2},{"index":1,"startMeasure":2,"endMeasure":2,"startTimeSec":1,"endTimeSec":2,"playNotes":0},{"index":2,"startMeasure":3,"endMeasure":3,"startTimeSec":2,"endTimeSec":3,"playNotes":2},{"index":3,"startMeasure":4,"endMeasure":4,"startTimeSec":3,"endTimeSec":4,"playNotes":0},{"index":4,"startMeasure":5,"endMeasure":5,"startTimeSec":4,"endTimeSec":5,"playNotes":2},{"index":5,"startMeasure":6,"endMeasure":6,"startTimeSec":5,"endTimeSec":6,"playNotes":0},{"index":6,"startMeasure":7,"endMeasure":7,"startTimeSec":6,"endTimeSec":7,"playNotes":0},{"index":7,"startMeasure":8,"endMeasure":8,"startTimeSec":7,"endTimeSec":8,"playNotes":0},{"index":8,"startMeasure":9,"endMeasure":9,"startTimeSec":8,"endTimeSec":9,"playNotes":1}],"layers":[{"versionId":"pending","color":"#1f7a5c","kind":"initial","ranges":[[0,3]]}],"progress":44}'
+
 curl.exe -X POST "http://localhost:8787/api/charts" `
   -F "file=@.\prog03c-progress-map-test.bms;type=text/plain" `
   -F "title=Progress Map Test" `
   -F "subtitle=" `
   -F "artist=Test Artist" `
   -F "subartist=" `
-  -F "chartName=PROG-03C Test" `
+  -F "chartName=PROG-04A Test" `
   -F "difficulty=★12" `
   -F "level=12" `
   -F "author=tester" `
-  -F "progress=50" `
-  -F "comment=PROG-03C test" `
+  -F "progress=0" `
+  -F "progressMap=$progressMap" `
+  -F "comment=PROG-04A test" `
   -F "isRejected=false" `
   -F "password=test-password"
 ```
@@ -346,10 +353,45 @@ curl.exe -X POST "http://localhost:8787/api/charts" `
 期待レスポンス:
 
 - HTTP 201
+- `progress` が `44` になること
+- `progressMap.schemaVersion` が `2`
+- `progressMap.layers[0].versionId` が実際の `versionId`
+- `progressMap.layers[0].ranges` が `[[0,3]]`
 - `analysis.playNotes` が `7`
 - `analysis.firstNoteMeasure` が `1`
 - `analysis.lastNoteMeasure` が `9`
-- `analysis.targetMeasureCount` が `9`
+
+続けて確認する。
+
+```powershell
+curl.exe "http://localhost:8787/api/charts?page=1&pageSize=100"
+```
+
+期待:
+
+- 対象versionに `progressMap` が含まれる
+- 対象versionの `progress` が `44`
+
+不正JSON確認:
+
+```powershell
+curl.exe -X POST "http://localhost:8787/api/charts" `
+  -F "file=@.\prog03c-progress-map-test.bms;type=text/plain" `
+  -F "title=Progress Map Test Invalid" `
+  -F "artist=Test Artist" `
+  -F "chartName=PROG-04A Invalid" `
+  -F "difficulty=★12" `
+  -F "author=tester" `
+  -F "progress=50" `
+  -F "progressMap={invalid" `
+  -F "isRejected=false" `
+  -F "password=test-password"
+```
+
+期待:
+
+- HTTP 400
+- `code=INVALID_PROGRESS_MAP`
 
 同じファイルを再投稿した場合は既存仕様通り `DUPLICATE_FILE` になるため、再確認時はファイル内容を少し変えるかD1/R2を初期化する。
 
