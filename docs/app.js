@@ -39,7 +39,8 @@ let isSubmitting = false;
 let lastValidManualDifficulty = "";
 
 const maxDifficultyNumber = 25;
-const progressMapCanvasHeight = 180;
+const densityCanvasHeight = 120;
+const defaultBpm = 130;
 const difficultyLimits = {
   "★": 25,
   "★★": 7,
@@ -59,9 +60,10 @@ const difficultyState = {
 
 const progressMapState = {
   analysis: null,
-  paintedMeasures: new Set(),
-  savedPaintedMeasures: null,
-  isDragging: false
+  paintedBlockIndexes: new Set(),
+  savedPaintedBlockIndexes: null,
+  isDragging: false,
+  dragAction: null
 };
 
 const requiredFieldChecks = [
@@ -345,6 +347,59 @@ function isPlayNoteChannel(channel) {
   return isNormalPlayNoteChannel(channel) || isLongNoteChannel(channel);
 }
 
+function parseNumber(value) {
+  const numberValue = Number.parseFloat(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function splitDataObjects(data) {
+  const pairs = [];
+  const cleanData = data.trim();
+  const pairCount = Math.floor(cleanData.length / 2);
+
+  for (let pairIndex = 0; pairIndex < pairCount; pairIndex += 1) {
+    const objectId = cleanData.slice(pairIndex * 2, pairIndex * 2 + 2).toUpperCase();
+    if (objectId !== "00") {
+      pairs.push({ objectId, pairIndex, pairCount });
+    }
+  }
+
+  return pairs;
+}
+
+function getMeasureLength(measure, measureLengths) {
+  const value = measureLengths.get(measure);
+  return Number.isFinite(value) && value > 0 ? value : 1;
+}
+
+function buildMeasureStarts(maxMeasure, measureLengths) {
+  const starts = [];
+  let position = 0;
+
+  for (let measure = 0; measure <= maxMeasure + 1; measure += 1) {
+    starts[measure] = position;
+    position += getMeasureLength(measure, measureLengths);
+  }
+
+  return starts;
+}
+
+function getStandardPosition(event, measureStarts, measureLengths) {
+  return measureStarts[event.measure] + event.fraction * getMeasureLength(event.measure, measureLengths);
+}
+
+function positionToMeasure(standardPosition, measureStarts, measureLengths, maxMeasure) {
+  for (let measure = 0; measure <= maxMeasure; measure += 1) {
+    const start = measureStarts[measure];
+    const end = start + getMeasureLength(measure, measureLengths);
+    if (standardPosition >= start && standardPosition < end) {
+      return measure;
+    }
+  }
+
+  return maxMeasure;
+}
+
 function addMeasureNotes(measureCounts, measure, count) {
   if (count <= 0) {
     return;
@@ -353,21 +408,19 @@ function addMeasureNotes(measureCounts, measure, count) {
   measureCounts.set(measure, (measureCounts.get(measure) || 0) + count);
 }
 
-function compareLongNoteEvents(a, b) {
-  const aPosition = a.measure + a.pairIndex / Math.max(a.pairCount, 1);
-  const bPosition = b.measure + b.pairIndex / Math.max(b.pairCount, 1);
-  return aPosition - bPosition || a.channel.localeCompare(b.channel);
+function comparePlayEvents(a, b) {
+  return a.standardPosition - b.standardPosition || a.channel.localeCompare(b.channel);
 }
 
-function countLongNoteStarts(events, measureCounts) {
+function collectLongNoteStarts(longNoteEvents, measureCounts) {
   const activeByChannel = new Map();
-  let starts = 0;
+  const starts = [];
 
-  for (const event of [...events].sort(compareLongNoteEvents)) {
+  for (const event of [...longNoteEvents].sort(comparePlayEvents)) {
     const isActive = activeByChannel.get(event.channel) || false;
     if (!isActive) {
+      starts.push({ ...event });
       addMeasureNotes(measureCounts, event.measure, 1);
-      starts += 1;
     }
 
     activeByChannel.set(event.channel, !isActive);
@@ -376,104 +429,306 @@ function countLongNoteStarts(events, measureCounts) {
   return starts;
 }
 
+function addTimelineEvent(eventsByMeasure, event) {
+  const events = eventsByMeasure.get(event.measure) || [];
+  events.push(event);
+  eventsByMeasure.set(event.measure, events);
+}
+
+function getEventPriority(event) {
+  if (event.kind === "bpm") {
+    return 0;
+  }
+
+  if (event.kind === "stop") {
+    return 1;
+  }
+
+  return 2;
+}
+
+function applyTimingToNotes(playEvents, timingEvents, maxMeasure, measureLengths, initialBpm) {
+  const eventsByMeasure = new Map();
+
+  for (const event of timingEvents) {
+    addTimelineEvent(eventsByMeasure, event);
+  }
+
+  for (const event of playEvents) {
+    addTimelineEvent(eventsByMeasure, { ...event, kind: "note", noteRef: event });
+  }
+
+  let currentBpm = Number.isFinite(initialBpm) && initialBpm > 0 ? initialBpm : defaultBpm;
+  let timeSec = 0;
+
+  for (let measure = 0; measure <= maxMeasure; measure += 1) {
+    const measureLength = getMeasureLength(measure, measureLengths);
+    const events = (eventsByMeasure.get(measure) || [])
+      .filter((event) => Number.isFinite(event.fraction))
+      .sort((a, b) => a.fraction - b.fraction || getEventPriority(a) - getEventPriority(b));
+    let lastFraction = 0;
+
+    for (const event of events) {
+      const fraction = Math.min(Math.max(event.fraction, 0), 1);
+      const deltaBeats = Math.max(0, fraction - lastFraction) * measureLength * 4;
+      timeSec += deltaBeats * 60 / currentBpm;
+      lastFraction = Math.max(lastFraction, fraction);
+
+      if (event.kind === "bpm" && Number.isFinite(event.value) && event.value > 0) {
+        currentBpm = event.value;
+      } else if (event.kind === "stop" && Number.isFinite(event.value) && event.value > 0) {
+        timeSec += (event.value / 192) * 4 * 60 / currentBpm;
+      } else if (event.kind === "note" && event.noteRef) {
+        event.noteRef.timeSec = timeSec;
+      }
+    }
+
+    const restBeats = Math.max(0, 1 - lastFraction) * measureLength * 4;
+    timeSec += restBeats * 60 / currentBpm;
+  }
+}
+
+function buildDensityBins(playEvents) {
+  const timedEvents = playEvents.filter((event) => Number.isFinite(event.timeSec));
+
+  if (timedEvents.length === 0) {
+    return [];
+  }
+
+  const firstTimeSec = Math.min(...timedEvents.map((event) => event.timeSec));
+  const lastTimeSec = Math.max(...timedEvents.map((event) => event.timeSec));
+  const binCount = Math.max(1, Math.floor(lastTimeSec - firstTimeSec) + 1);
+  const bins = Array.from({ length: binCount }, (_, second) => ({ second, playNotes: 0 }));
+
+  for (const event of timedEvents) {
+    const second = Math.min(binCount - 1, Math.max(0, Math.floor(event.timeSec - firstTimeSec)));
+    bins[second].playNotes += 1;
+  }
+
+  return bins;
+}
+
+function buildStandardBlocks(playEvents, measureStarts, measureLengths, maxMeasure) {
+  if (playEvents.length === 0) {
+    return [];
+  }
+
+  const firstStandardPosition = Math.min(...playEvents.map((event) => event.standardPosition));
+  const lastStandardPosition = Math.max(...playEvents.map((event) => event.standardPosition));
+  const firstBlockPosition = Math.floor(firstStandardPosition);
+  const lastBlockPosition = Math.floor(lastStandardPosition);
+  const blockCount = Math.max(1, lastBlockPosition - firstBlockPosition + 1);
+
+  return Array.from({ length: blockCount }, (_, index) => {
+    const startPosition = firstBlockPosition + index;
+    const endPosition = startPosition + 1;
+    const blockNotes = playEvents.filter((event) => event.standardPosition >= startPosition && event.standardPosition < endPosition);
+
+    return {
+      index,
+      startMeasure: positionToMeasure(startPosition, measureStarts, measureLengths, maxMeasure),
+      endMeasure: positionToMeasure(endPosition - 0.000001, measureStarts, measureLengths, maxMeasure),
+      startStandardPosition: startPosition,
+      endStandardPosition: endPosition,
+      playNotes: blockNotes.length
+    };
+  });
+}
+
 function analyzeBmsProgressText(text) {
+  const bpmDefinitions = new Map();
+  const stopDefinitions = new Map();
+  const measureLengths = new Map();
   const measureCounts = new Map();
+  const normalNoteEvents = [];
   const longNoteEvents = [];
-  let playNotes = 0;
+  const timingEvents = [];
+  let initialBpm = defaultBpm;
+  let maxMeasure = 0;
 
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.replace(/^\uFEFF/, "").trim();
-    const match = line.match(/^#(\d{3})([0-9A-Za-z]{2}):([0-9A-Za-z]*)/);
-    if (!match) {
+    if (!line) {
       continue;
     }
 
-    const [, measureText, channel, data] = match;
-    if (!isPlayNoteChannel(channel)) {
+    const indexedBpmMatch = line.match(/^#BPM([0-9A-Za-z]{2})\s+([0-9.]+)$/i);
+    if (indexedBpmMatch) {
+      const bpm = parseNumber(indexedBpmMatch[2]);
+      if (bpm && bpm > 0) {
+        bpmDefinitions.set(indexedBpmMatch[1].toUpperCase(), bpm);
+      }
       continue;
     }
 
-    const measure = Number(measureText);
-    const pairCount = Math.floor(data.length / 2);
-    let lineNotes = 0;
+    const baseBpmMatch = line.match(/^#BPM\s+([0-9.]+)$/i);
+    if (baseBpmMatch) {
+      const bpm = parseNumber(baseBpmMatch[1]);
+      if (bpm && bpm > 0) {
+        initialBpm = bpm;
+      }
+      continue;
+    }
 
-    for (let pairIndex = 0; pairIndex < pairCount; pairIndex += 1) {
-      const objectId = data.slice(pairIndex * 2, pairIndex * 2 + 2);
-      if (objectId.toUpperCase() === "00") {
+    const stopMatch = line.match(/^#STOP([0-9A-Za-z]{2})\s+([0-9.]+)$/i);
+    if (stopMatch) {
+      const stopValue = parseNumber(stopMatch[2]);
+      if (stopValue && stopValue > 0) {
+        stopDefinitions.set(stopMatch[1].toUpperCase(), stopValue);
+      }
+      continue;
+    }
+
+    const dataMatch = line.match(/^#(\d{3})([0-9A-Za-z]{2}):(.+)$/);
+    if (!dataMatch) {
+      continue;
+    }
+
+    const measure = Number(dataMatch[1]);
+    const channel = dataMatch[2].toUpperCase();
+    const data = dataMatch[3].trim();
+    maxMeasure = Math.max(maxMeasure, measure);
+
+    if (channel === "02") {
+      const length = parseNumber(data);
+      if (length && length > 0) {
+        measureLengths.set(measure, length);
+      }
+      continue;
+    }
+
+    const pairs = splitDataObjects(data);
+    if (pairs.length === 0) {
+      continue;
+    }
+
+    for (const pair of pairs) {
+      const fraction = pair.pairCount > 0 ? pair.pairIndex / pair.pairCount : 0;
+
+      if (channel === "03") {
+        const bpm = Number.parseInt(pair.objectId, 16);
+        if (Number.isFinite(bpm) && bpm > 0) {
+          timingEvents.push({ kind: "bpm", measure, fraction, value: bpm });
+        }
         continue;
       }
 
+      if (channel === "08") {
+        const bpm = bpmDefinitions.get(pair.objectId);
+        if (bpm && bpm > 0) {
+          timingEvents.push({ kind: "bpm", measure, fraction, value: bpm });
+        }
+        continue;
+      }
+
+      if (channel === "09") {
+        const stopValue = stopDefinitions.get(pair.objectId);
+        if (stopValue && stopValue > 0) {
+          timingEvents.push({ kind: "stop", measure, fraction, value: stopValue });
+        }
+        continue;
+      }
+
+      if (!isPlayNoteChannel(channel)) {
+        continue;
+      }
+
+      const event = { measure, channel, fraction, pairIndex: pair.pairIndex, pairCount: pair.pairCount };
       if (isLongNoteChannel(channel)) {
-        longNoteEvents.push({ measure, channel, pairIndex, pairCount });
+        longNoteEvents.push(event);
       } else {
-        lineNotes += 1;
+        normalNoteEvents.push(event);
+        addMeasureNotes(measureCounts, measure, 1);
       }
     }
-
-    addMeasureNotes(measureCounts, measure, lineNotes);
-    playNotes += lineNotes;
   }
 
-  playNotes += countLongNoteStarts(longNoteEvents, measureCounts);
+  const measureStarts = buildMeasureStarts(maxMeasure, measureLengths);
+  const preparedNormalNotes = normalNoteEvents.map((event) => ({
+    ...event,
+    standardPosition: getStandardPosition(event, measureStarts, measureLengths)
+  }));
+  const preparedLongNotes = longNoteEvents.map((event) => ({
+    ...event,
+    standardPosition: getStandardPosition(event, measureStarts, measureLengths)
+  }));
+  const playEvents = [...preparedNormalNotes, ...collectLongNoteStarts(preparedLongNotes, measureCounts)]
+    .sort(comparePlayEvents);
 
-  const noteMeasures = [...measureCounts.keys()].filter((measure) => (measureCounts.get(measure) || 0) > 0);
-  if (noteMeasures.length === 0) {
+  if (playEvents.length === 0) {
     return {
       playNotes: 0,
       firstMeasure: null,
       lastMeasure: null,
       targetMeasureCount: 0,
+      blockMode: "standardized_measure",
       lnPolicy: "count_start_only",
-      measures: []
+      densityBins: [],
+      standardBlocks: [],
+      fallback: false
     };
   }
 
-  const firstMeasure = Math.min(...noteMeasures);
-  const lastMeasure = Math.max(...noteMeasures);
-  const measures = [];
-
-  for (let measure = firstMeasure; measure <= lastMeasure; measure += 1) {
-    measures.push({
-      measure,
-      playNotes: measureCounts.get(measure) || 0
+  try {
+    applyTimingToNotes(playEvents, timingEvents, maxMeasure, measureLengths, initialBpm);
+  } catch (error) {
+    console.error("[progress-map-timing] failed to estimate note timing", {
+      code: "PROGRESS_MAP_TIMING_FALLBACK",
+      message: error instanceof Error ? error.message : String(error)
     });
   }
 
+  const firstStandardPosition = Math.min(...playEvents.map((event) => event.standardPosition));
+  for (const event of playEvents) {
+    if (!Number.isFinite(event.timeSec)) {
+      event.timeSec = (event.standardPosition - firstStandardPosition) * 2;
+    }
+  }
+
+  const standardBlocks = buildStandardBlocks(playEvents, measureStarts, measureLengths, maxMeasure);
+  const firstMeasure = Math.min(...playEvents.map((event) => event.measure));
+  const lastMeasure = Math.max(...playEvents.map((event) => event.measure));
+
   return {
-    playNotes,
+    playNotes: playEvents.length,
     firstMeasure,
     lastMeasure,
-    targetMeasureCount: measures.length,
+    targetMeasureCount: standardBlocks.length,
+    blockMode: "standardized_measure",
     lnPolicy: "count_start_only",
-    measures
+    densityBins: buildDensityBins(playEvents),
+    standardBlocks,
+    fallback: false
   };
 }
 
 function setProgressMapMessage(message, state = "empty") {
+  progressMapState.analysis = null;
+  progressMapState.paintedBlockIndexes = new Set();
+  progressMapState.savedPaintedBlockIndexes = null;
+  progressMapState.isDragging = false;
+  progressMapState.dragAction = null;
   progressMap.dataset.state = state;
   progressMapStatus.textContent = message;
   progressMapStatus.hidden = false;
   progressMapGraphWrap.hidden = true;
   progressMapSummary.hidden = true;
   progressMapBlocks.innerHTML = "";
+  progressMapBlocks.style.removeProperty("grid-template-columns");
+  updateCompleteButtonState();
 }
 
 function resetProgressMap(message = "譜面ファイル選択後に進捗マップを表示します") {
-  progressMapState.analysis = null;
-  progressMapState.paintedMeasures = new Set();
-  progressMapState.savedPaintedMeasures = null;
-  progressMapState.isDragging = false;
   setProgressMapMessage(message, "empty");
-  updateCompleteButtonState();
 }
 
 function calculateMapProgress() {
   const analysis = progressMapState.analysis;
-  if (!analysis || analysis.targetMeasureCount <= 0) {
+  if (!analysis || analysis.standardBlocks.length === 0) {
     return null;
   }
 
-  return Math.round((progressMapState.paintedMeasures.size / analysis.targetMeasureCount) * 100);
+  return Math.round((progressMapState.paintedBlockIndexes.size / analysis.standardBlocks.length) * 100);
 }
 
 function updateProgressSummary(progressValue = calculateMapProgress()) {
@@ -483,13 +738,16 @@ function updateProgressSummary(progressValue = calculateMapProgress()) {
     return;
   }
 
-  progressMapSummary.textContent = `play notes: ${analysis.playNotes} / measures: ${analysis.firstMeasure}-${analysis.lastMeasure} / progress: ${progressValue ?? 0}%`;
+  const measureText = analysis.firstMeasure === null || analysis.lastMeasure === null
+    ? ""
+    : ` / measures: ${analysis.firstMeasure}-${analysis.lastMeasure}`;
+  progressMapSummary.textContent = `play notes: ${analysis.playNotes} / blocks: ${analysis.standardBlocks.length} / progress: ${progressValue ?? 0}%${measureText}`;
   progressMapSummary.hidden = false;
 }
 
 function updateCompleteButtonState() {
   const progressValue = Number(progressInput.value);
-  const hasMap = Boolean(progressMapState.analysis && progressMapState.analysis.targetMeasureCount > 0);
+  const hasMap = Boolean(progressMapState.analysis && progressMapState.analysis.standardBlocks.length > 0);
   completeProgressButton.disabled = !hasMap || isRejectedInput.checked || !Number.isFinite(progressValue) || progressValue < 80 || progressValue >= 100;
 }
 
@@ -498,8 +756,8 @@ function updateProgressBlockClasses() {
   progressMap.classList.toggle("is-locked", locked);
 
   progressMapBlocks.querySelectorAll(".progress-map-block").forEach((block) => {
-    const measure = Number(block.dataset.measure);
-    const painted = progressMapState.paintedMeasures.has(measure);
+    const blockIndex = Number(block.dataset.blockIndex);
+    const painted = progressMapState.paintedBlockIndexes.has(blockIndex);
     block.classList.toggle("is-painted", painted);
     block.setAttribute("aria-pressed", painted ? "true" : "false");
     block.disabled = locked;
@@ -523,15 +781,7 @@ function updateProgressFromMap({ updateBlocks = true } = {}) {
   }
 }
 
-function getGraphX(index, count, plotLeft, plotWidth) {
-  if (count <= 1) {
-    return plotLeft + plotWidth / 2;
-  }
-
-  return plotLeft + (index / (count - 1)) * plotWidth;
-}
-
-function drawProgressGraph() {
+function drawDensityChart() {
   const analysis = progressMapState.analysis;
   if (!analysis || progressMapGraphWrap.hidden) {
     return;
@@ -539,8 +789,8 @@ function drawProgressGraph() {
 
   const canvas = progressMapCanvas;
   const context = canvas.getContext("2d");
-  const cssWidth = Math.max(Math.floor(progressMapGraphWrap.clientWidth), 320);
-  const cssHeight = progressMapCanvasHeight;
+  const cssWidth = Math.max(Math.floor(canvas.parentElement.clientWidth), 320);
+  const cssHeight = densityCanvasHeight;
   const ratio = window.devicePixelRatio || 1;
 
   canvas.width = Math.floor(cssWidth * ratio);
@@ -553,81 +803,53 @@ function drawProgressGraph() {
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, cssWidth, cssHeight);
 
-  const measures = analysis.measures;
-  const count = measures.length;
-  const maxNotes = Math.max(1, ...measures.map((measure) => measure.playNotes));
-  const plotLeft = 28;
+  const bins = analysis.densityBins.length > 0
+    ? analysis.densityBins
+    : [{ second: 0, playNotes: 0 }];
+  const maxNotes = Math.max(1, ...bins.map((bin) => bin.playNotes));
+  const plotLeft = 10;
   const plotRight = 10;
-  const plotTop = 12;
-  const plotBottom = 20;
+  const plotTop = 10;
+  const plotBottom = 16;
   const plotWidth = cssWidth - plotLeft - plotRight;
   const plotHeight = cssHeight - plotTop - plotBottom;
   const baseY = plotTop + plotHeight;
+  const barSlot = plotWidth / bins.length;
+  const barWidth = Math.max(1, Math.min(10, barSlot * 0.78));
 
   context.strokeStyle = "#dce4ea";
   context.lineWidth = 1;
   context.beginPath();
-  context.moveTo(plotLeft, plotTop);
-  context.lineTo(plotLeft, baseY);
-  context.lineTo(cssWidth - plotRight, baseY);
+  context.moveTo(plotLeft, baseY + 0.5);
+  context.lineTo(cssWidth - plotRight, baseY + 0.5);
   context.stroke();
 
-  for (let index = 0; index < count; index += 1) {
-    const measure = measures[index].measure;
-    if ((measure - analysis.firstMeasure) % 8 !== 0) {
-      continue;
-    }
-
-    const x = getGraphX(index, count, plotLeft, plotWidth);
-    context.strokeStyle = "rgba(0, 0, 0, 0.82)";
-    context.lineWidth = 1.5;
-    context.beginPath();
-    context.moveTo(x, plotTop);
-    context.lineTo(x, baseY);
-    context.stroke();
+  context.fillStyle = "rgba(42, 128, 116, 0.46)";
+  for (const bin of bins) {
+    const x = plotLeft + bin.second * barSlot + (barSlot - barWidth) / 2;
+    const height = Math.max(bin.playNotes > 0 ? 2 : 0, (bin.playNotes / maxNotes) * plotHeight);
+    const y = baseY - height;
+    context.fillRect(x, y, barWidth, height);
   }
-
-  context.strokeStyle = "#256f5d";
-  context.lineWidth = 2;
-  context.beginPath();
-
-  measures.forEach((measure, index) => {
-    const x = getGraphX(index, count, plotLeft, plotWidth);
-    const y = baseY - (measure.playNotes / maxNotes) * plotHeight;
-
-    if (index === 0) {
-      context.moveTo(x, y);
-    } else {
-      context.lineTo(x, y);
-    }
-  });
-
-  context.stroke();
-
-  context.fillStyle = "#1c5749";
-  measures.forEach((measure, index) => {
-    const x = getGraphX(index, count, plotLeft, plotWidth);
-    const y = baseY - (measure.playNotes / maxNotes) * plotHeight;
-    context.beginPath();
-    context.arc(x, y, 2.2, 0, Math.PI * 2);
-    context.fill();
-  });
 }
 
 function renderProgressBlocks() {
   const analysis = progressMapState.analysis;
   if (!analysis) {
     progressMapBlocks.innerHTML = "";
+    progressMapBlocks.style.removeProperty("grid-template-columns");
     return;
   }
 
-  const count = analysis.measures.length;
-  progressMapBlocks.innerHTML = analysis.measures.map((measure, index) => {
-    const left = (index / count) * 100;
-    const width = 100 / count;
-    const isBarline = (measure.measure - analysis.firstMeasure) % 8 === 0;
+  const blocks = analysis.standardBlocks;
+  progressMapBlocks.style.gridTemplateColumns = `repeat(${blocks.length}, minmax(4px, 1fr))`;
+  progressMapBlocks.innerHTML = blocks.map((block) => {
+    const isBarline = block.index % 8 === 0;
     const classes = ["progress-map-block", isBarline ? "is-barline" : ""].filter(Boolean).join(" ");
-    return `<button class="${classes}" type="button" data-measure="${measure.measure}" aria-pressed="false" aria-label="${measure.measure}小節 ${measure.playNotes} notes" style="left:${left}%;width:${width}%;"></button>`;
+    const measureRange = block.startMeasure === block.endMeasure
+      ? `${block.startMeasure}`
+      : `${block.startMeasure}-${block.endMeasure}`;
+    return `<button class="${classes}" type="button" data-block-index="${block.index}" aria-pressed="false" aria-label="block ${block.index + 1}, measures ${measureRange}, ${block.playNotes} notes"></button>`;
   }).join("");
 
   updateProgressBlockClasses();
@@ -635,7 +857,7 @@ function renderProgressBlocks() {
 
 function renderProgressMap() {
   const analysis = progressMapState.analysis;
-  if (!analysis || analysis.targetMeasureCount <= 0) {
+  if (!analysis || analysis.standardBlocks.length === 0) {
     setProgressMapMessage("プレイノートを検出できませんでした", "unavailable");
     return;
   }
@@ -645,30 +867,37 @@ function renderProgressMap() {
   progressMapGraphWrap.hidden = false;
   progressMapSummary.hidden = false;
   renderProgressBlocks();
-  drawProgressGraph();
+  drawDensityChart();
   updateProgressFromMap();
 }
 
 function initializeProgressMap(analysis) {
   progressMapState.analysis = analysis;
-  progressMapState.paintedMeasures = new Set();
-  progressMapState.savedPaintedMeasures = null;
+  progressMapState.paintedBlockIndexes = new Set();
+  progressMapState.savedPaintedBlockIndexes = null;
+  progressMapState.isDragging = false;
+  progressMapState.dragAction = null;
 
   if (isRejectedInput.checked) {
-    for (const measure of analysis.measures) {
-      progressMapState.paintedMeasures.add(measure.measure);
+    for (const block of analysis.standardBlocks) {
+      progressMapState.paintedBlockIndexes.add(block.index);
     }
   }
 
   renderProgressMap();
 }
 
-function paintProgressMeasure(measure) {
-  if (!progressMapState.analysis || isRejectedInput.checked || !Number.isFinite(measure)) {
+function applyPaintAction(blockIndex, action) {
+  if (!progressMapState.analysis || isRejectedInput.checked || !Number.isFinite(blockIndex)) {
     return;
   }
 
-  progressMapState.paintedMeasures.add(measure);
+  if (action === "erase") {
+    progressMapState.paintedBlockIndexes.delete(blockIndex);
+  } else {
+    progressMapState.paintedBlockIndexes.add(blockIndex);
+  }
+
   updateProgressFromMap();
 }
 
@@ -677,13 +906,13 @@ function findProgressBlockFromPointer(event) {
   return element?.closest?.(".progress-map-block") || null;
 }
 
-function paintAllProgressMeasures() {
+function paintAllProgressBlocks() {
   const analysis = progressMapState.analysis;
   if (!analysis) {
     return;
   }
 
-  progressMapState.paintedMeasures = new Set(analysis.measures.map((measure) => measure.measure));
+  progressMapState.paintedBlockIndexes = new Set(analysis.standardBlocks.map((block) => block.index));
   progressInput.value = "100";
   setFieldInvalid(progressInput, false);
   updateProgressSummary(100);
@@ -699,16 +928,16 @@ function applyRejectedProgressMapState() {
   }
 
   if (isRejectedInput.checked) {
-    if (!progressMapState.savedPaintedMeasures) {
-      progressMapState.savedPaintedMeasures = new Set(progressMapState.paintedMeasures);
+    if (!progressMapState.savedPaintedBlockIndexes) {
+      progressMapState.savedPaintedBlockIndexes = new Set(progressMapState.paintedBlockIndexes);
     }
-    paintAllProgressMeasures();
+    paintAllProgressBlocks();
     return;
   }
 
-  if (progressMapState.savedPaintedMeasures) {
-    progressMapState.paintedMeasures = new Set(progressMapState.savedPaintedMeasures);
-    progressMapState.savedPaintedMeasures = null;
+  if (progressMapState.savedPaintedBlockIndexes) {
+    progressMapState.paintedBlockIndexes = new Set(progressMapState.savedPaintedBlockIndexes);
+    progressMapState.savedPaintedBlockIndexes = null;
   }
 
   updateProgressFromMap();
@@ -716,11 +945,11 @@ function applyRejectedProgressMapState() {
 
 async function fillMetaFromFile(file) {
   const extension = getExtension(file.name);
+  resetProgressMap();
 
   if (!allowedChartExtensions.has(extension)) {
     showTextError("投稿対象は .bms .bme .bml .zip のみです。");
     fileInput.value = "";
-    resetProgressMap();
     setFieldInvalid(fileInput, true);
     return;
   }
@@ -749,7 +978,7 @@ async function fillMetaFromFile(file) {
       setFieldInvalid(artistInput, false);
     }
 
-    if (analysis.targetMeasureCount > 0) {
+    if (analysis.standardBlocks.length > 0) {
       initializeProgressMap(analysis);
     } else {
       setProgressMapMessage("プレイノートを検出できませんでした", "unavailable");
@@ -1113,36 +1342,41 @@ progressMapBlocks.addEventListener("pointerdown", (event) => {
   }
 
   event.preventDefault();
+  const blockIndex = Number(block.dataset.blockIndex);
+  const wasPainted = progressMapState.paintedBlockIndexes.has(blockIndex);
   progressMapState.isDragging = true;
+  progressMapState.dragAction = wasPainted ? "erase" : "paint";
   progressMapBlocks.setPointerCapture?.(event.pointerId);
-  paintProgressMeasure(Number(block.dataset.measure));
+  applyPaintAction(blockIndex, progressMapState.dragAction);
 });
 
 progressMapBlocks.addEventListener("pointermove", (event) => {
-  if (!progressMapState.isDragging) {
+  if (!progressMapState.isDragging || !progressMapState.dragAction) {
     return;
   }
 
   const block = findProgressBlockFromPointer(event);
   if (block) {
-    paintProgressMeasure(Number(block.dataset.measure));
+    applyPaintAction(Number(block.dataset.blockIndex), progressMapState.dragAction);
   }
 });
 
 progressMapBlocks.addEventListener("pointerup", () => {
   progressMapState.isDragging = false;
+  progressMapState.dragAction = null;
 });
 
 progressMapBlocks.addEventListener("pointercancel", () => {
   progressMapState.isDragging = false;
+  progressMapState.dragAction = null;
 });
 
 completeProgressButton.addEventListener("click", () => {
-  paintAllProgressMeasures();
+  paintAllProgressBlocks();
 });
 
 window.addEventListener("resize", () => {
-  drawProgressGraph();
+  drawDensityChart();
 });
 
 savePasswordInput.addEventListener("change", persistPasswordPreference);
