@@ -22,14 +22,15 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。
 - 没譜面初回投稿の `progress=100` 強制
 - Worker側BMS解析による `play_notes` / 小節情報保存
 - `GET /api/charts` のBMS解析結果返却
-- PROG-03C フロント側進捗マップUI操作性改善
-- PROG-03C修正 上段密度グラフの標準化ブロック単位表示
+- フロント側進捗マップUI
+- 進捗マップ上段の標準化ブロック単位密度表示
+- 初回投稿時の `progress_map_json` 保存
+- `GET /api/charts` の `progressMap` 返却
 - `versions.file_deleted_at` / `versions.file_delete_reason` の自動削除準備カラム
 - PROG-01 進捗グラフ用DBカラムとJSON/API仕様
 
 未実装:
 
-- `progress_map_json` のAPI保存
 - 進捗画像PNGのR2保存
 - ZIP内部のBMS解析
 - `POST /api/charts/:chartId/versions` の追記投稿
@@ -114,16 +115,14 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。
 
 手入力モードでは、数字チップではなく自由入力欄を表示するが、難易度入力ブロック全体の高さは通常シンボル時と変えない。数字部分が3桁以上になる入力は受け付けない。
 
-## PROG-03C 進捗マップUI操作性改善
+## 進捗マップUI
 
 投稿フォーム内の「進捗・管理」セクションに、フロント側の進捗マップUIを表示する。
-
-PROG-03Cでは、PROG-03Bで導入した2層構造を維持しつつ、塗り操作と位置参照性を改善する。
 
 1. 上段: 下段の標準化ブロックと1対1対応するプレイノート密度棒グラフ。読み取り専用。
 2. 下段: 進捗を塗るための標準化ブロック。クリック/範囲ドラッグで編集可能。
 
-今回の進捗マップはフロントUI改善であり、API送信項目は増やさない。既存の `progress` 入力欄へ算出値を反映するだけとする。
+PROG-04Aでは、フロント側で作成した塗り状態を `progressMap` として初回投稿APIへ送信する。Workerは `progressMap` を検証し、progressを再計算した上で `versions.progress_map_json` と `versions.progress` に保存する。
 
 ### 表示条件
 
@@ -181,12 +180,9 @@ PROG-03Cでは、PROG-03Bで導入した2層構造を維持しつつ、塗り操
 - 上段と下段は同じ表示範囲 `firstMeasure` 〜 `lastMeasure` を使う。
 - 進捗対象外の曲頭空白小節は通常表示に含めない。
 - 上段左端・右端・各区切り位置は下段ブロック列と揃える。
-- 上段だけに `padding-left` や別の横幅計算を入れない。
-- 0密度のブロックも列としては存在させ、下段との対応を崩さない。
+- 0密度のブロックも列として存在させ、下段との対応を崩さない。
 - Canvasで棒グラフを描画する。
 - 線グラフは使用しない。
-- 進捗編集用ブロックや8ブロック線はグラフに重ねない。
-- 棒グラフ側に不要な縦線は増やさない。
 
 棒の高さは、標準化ブロックごとに以下で計算した `densityValue` を相対スケーリングして表示する。
 
@@ -207,8 +203,6 @@ densityValue = block.playNotes / (block.endTimeSec - block.startTimeSec)
 - `#xxx02` で長い小節がある場合は、標準化位置上で複数ブロックに分かれる。
 - 標準化ブロックの対象範囲は、最初のプレイノート位置から最後のプレイノート位置までとする。
 - 対象範囲内にある無音・非プレイノート部分も進捗対象に含める。
-
-この設計により、`#xxx02` の細かい分割やギミックが多いBMSでも、進捗マップの見た目が過密になりにくい。
 
 ### 表示ルール
 
@@ -247,8 +241,6 @@ densityValue = block.playNotes / (block.endTimeSec - block.startTimeSec)
 - `dragRange` 外は `originalPaintedSet` の状態に戻す。
 - `pointerup` で確定する。
 
-これにより、左クリックを押したまま行き過ぎた場合でも、戻すと余分な塗り/解除が元に戻る。
-
 没譜面チェックON時は全ブロック塗り扱いにし、進捗マップの編集はできない。
 
 ### 位置参照UI
@@ -281,9 +273,9 @@ hover表示:
 round(塗られた標準化ブロック数 / 標準化ブロック総数 * 100)
 ```
 
-算出した値は既存の進捗度欄 `progress` に反映する。
+算出した値は既存の進捗度欄 `progress` に反映する。初回投稿時は `progressMap` も送信し、Worker側で同じルールにより再計算した値を保存する。
 
-手入力欄はPROG-03Cでは残す。将来、進捗マップが安定したら手入力を廃止する可能性がある。
+手入力欄は残す。`progressMap` が送信されない場合の後方互換入力として使う。
 
 ### 完成版にするボタン
 
@@ -293,8 +285,9 @@ round(塗られた標準化ブロック数 / 標準化ブロック総数 * 100)
 - 押すと未塗りブロックをすべて塗る。
 - `progress=100` にする。
 - 進捗度欄も100にする。
+- 初回投稿時に `kind=completion_fill` のlayerとして保存する。
 
-PROG-03Cでは、`completed_at` 保存、`progress_map_json` 保存、進捗画像保存は行わない。
+`completed_at` は投稿API側で `progress=100` の場合に保存する。進捗画像保存はまだ行わない。
 
 ### 没譜面との連動
 
@@ -304,6 +297,7 @@ PROG-03Cでは、`completed_at` 保存、`progress_map_json` 保存、進捗画�
 - 進捗マップは全塗り扱い
 - 進捗度欄は100固定
 - 進捗マップの標準化ブロックは編集不可
+- 初回投稿時にWorker側で `kind=rejected_auto_fill` の全塗りlayerを生成する
 
 没譜面チェックOFF時:
 
@@ -376,8 +370,6 @@ MD5はzipファイルではなく、BMS/BME/BMLファイル本体のMD5とする
 
 ## 進捗グラフ保存仕様
 
-PROG-03Cでは保存しないが、後続Phaseでは以下を使う。
-
 ### measure_notes_json
 
 Worker側PROG-02で、単体BMS投稿時に小節ごとのプレイノート数を保存するJSON文字列。
@@ -399,37 +391,54 @@ Worker側PROG-02で、単体BMS投稿時に小節ごとのプレイノート数�
 
 ### progress_map_json
 
-標準化ブロック単位の進捗塗り情報を保存するJSON文字列。未実装。
+標準化ブロック単位の進捗塗り情報を保存するJSON文字列。PROG-04Aでは初回投稿で保存する。
 
 ```json
 {
   "schemaVersion": 2,
-  "unit": "standardized_block",
-  "firstMeasure": 12,
-  "lastMeasure": 87,
-  "blockCount": 76,
+  "blockMode": "standardized_measure",
+  "firstMeasure": 4,
+  "lastMeasure": 349,
+  "targetBlockCount": 142,
   "blocks": [
-    { "index": 0, "startPosition": 12, "endPosition": 13 },
-    { "index": 1, "startPosition": 13, "endPosition": 14 }
+    {
+      "index": 0,
+      "startMeasure": 4,
+      "endMeasure": 7,
+      "startTimeSec": 0,
+      "endTimeSec": 2.1,
+      "playNotes": 20
+    }
   ],
   "layers": [
     {
       "versionId": "version_xxx",
-      "color": "#2f80ed",
-      "kind": "normal",
-      "ranges": [[0, 6], [10, 14]]
+      "color": "#1f7a5c",
+      "kind": "initial",
+      "ranges": [[0, 10], [20, 30]]
     }
   ],
-  "progress": 45
+  "progress": 23
 }
 ```
 
+仕様:
+
+- `schemaVersion=2` とする。
+- `blockMode=standardized_measure` とする。
+- `blocks` は下段の標準化ブロックと1対1対応する。
+- `ranges` は連続したブロックindexを `[startIndex, endIndex]` で圧縮して持つ。
+- progressは全layerのunion / `targetBlockCount` で算出する。
+- 重複して塗られたブロックは1回だけ数える。
+- 初回投稿では1layerでよい。
+- Workerは保存前にprogressを再計算し、`versions.progress` にも同じ値を保存する。
+- `isRejected=true` の場合、送信されたprogressMapではなくWorker生成の全塗りprogressMapを保存する。
+
 layerの `kind` 候補:
 
-- `normal`
-- `followup`
-- `rejected_auto_fill`
+- `initial`
 - `completion_fill`
+- `rejected_auto_fill`
 
 ### 進捗画像仕様
 
@@ -524,6 +533,8 @@ APIエラーは必ず JSON で `code`, `message`, `detail` を返す。
 - `POST /api/admin/hide-version`
 - `POST /api/admin/ban`
 
+`POST /api/charts` は `progressMap` JSON文字列を受け取れる。Workerは `progressMap` のrangesからprogressを再計算し、`versions.progress` と `versions.progress_map_json` に保存する。
+
 `GET /api/charts` のversionレスポンスでは以下も返せる。
 
 - `playNotes`
@@ -531,8 +542,9 @@ APIエラーは必ず JSON で `code`, `message`, `detail` を返す。
 - `lastNoteMeasure`
 - `targetMeasureCount`
 - `measureNotes`
+- `progressMap`
 
-`progressMap` / `progressImage` / `collapsedByCompletion` は後続Phaseで実装する。
+`progressImage` / `collapsedByCompletion` は後続Phaseで実装する。
 
 ## エラー設計
 
@@ -562,6 +574,9 @@ APIエラーは必ず JSON で `code`, `message`, `detail` を返す。
 | `ZIP_INSPECTION_FAILED` | zipファイルの検査に失敗しました。 |
 | `TITLE_ARTIST_PARSE_FAILED` | 譜面情報の読み取りに失敗しました。 |
 | `INVALID_PROGRESS` | 進捗度の値が不正です。 |
+| `INVALID_PROGRESS_MAP` | 進捗マップ情報が不正です。 |
+| `PROGRESS_MAP_OUT_OF_RANGE` | 進捗マップの範囲が不正です。 |
+| `PROGRESS_MAP_BLOCK_COUNT_MISMATCH` | 進捗マップのブロック数が一致しません。 |
 | `INVALID_REJECTED_FLAG_FOR_FOLLOWUP` | 追記投稿では没譜面チェックを指定できません。 |
 | `REJECTED_CHART_CANNOT_BE_EXTENDED` | 没譜面から追記投稿はできません。 |
 | `DUPLICATE_FILE` | 同じファイルは投稿できません。 |
