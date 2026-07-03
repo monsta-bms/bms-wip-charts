@@ -31,6 +31,9 @@ https://monsta-bms.github.io
 - GitHub Pages からの一覧取得
 - GitHub Pages 投稿フォームからの初回投稿
 - Worker側BMS解析: 単体 `.bms` / `.bme` / `.bml` のプレイノート数と対象小節情報を保存する
+- フロント側進捗マップUI
+- 初回投稿時の `progress_map_json` 保存
+- `GET /api/charts` の `progressMap` 返却
 
 まだ実装しないもの:
 
@@ -45,8 +48,8 @@ https://monsta-bms.github.io
 - Cron Trigger
 - R2自動削除処理
 - ZIP内部のBMS解析
-- フロント側進捗グラフUI
 - 進捗画像R2保存処理
+- 一覧への進捗画像表示
 
 ## 共通仕様
 
@@ -118,7 +121,7 @@ PROG-01で `versions` に追加したカラム:
 | `last_note_measure` | 進捗対象の終了小節。PROG-02で単体BMS投稿時に保存する。 |
 | `target_measure_count` | 進捗対象小節数。PROG-02で単体BMS投稿時に保存する。 |
 | `measure_notes_json` | 小節ごとのプレイノート数JSON。PROG-02で単体BMS投稿時に保存する。 |
-| `progress_map_json` | 小節単位の塗りlayer JSON。未実装。 |
+| `progress_map_json` | 標準化ブロック単位の進捗塗りJSON。PROG-04Aで初回投稿時に保存する。 |
 | `progress_image_key` | 進捗画像のR2 key。未実装。 |
 | `progress_image_mime` | 進捗画像MIME。MVP想定は `image/png`。未実装。 |
 | `progress_image_size` | 進捗画像ファイルサイズ。未実装。 |
@@ -222,8 +225,7 @@ LNはMVPでは `count_start_only` とする。`51`-`59` / `61`-`69` の非`00`�
 
 ## 進捗グラフAPI設計
 
-PROG-02ではBMS解析結果を保存し、`GET /api/charts` のversionレスポンスに返す。
-`progress_map_json`、進捗画像、完成到達後の折り畳み表示は未実装であり、後続Phaseで追加する。
+PROG-04Aでは、フロント側で生成した `progressMap` を初回投稿時に `multipart/form-data` へ追加し、Worker側で検証・progress再計算後に `versions.progress_map_json` へ保存する。
 
 ### versionレスポンス追加フィールド
 
@@ -234,6 +236,7 @@ PROG-02ではBMS解析結果を保存し、`GET /api/charts` のversionレスポ
 | `lastNoteMeasure` | `last_note_measure` | 対象終了小節。 |
 | `targetMeasureCount` | `target_measure_count` | 対象小節数。 |
 | `measureNotes` | `measure_notes_json` | 小節ごとのノート数JSONをparseした値。parseできない場合は `null`。 |
+| `progressMap` | `progress_map_json` | 標準化ブロック単位の進捗塗りJSONをparseした値。未保存またはparse不可の場合は `null`。 |
 
 レスポンス例:
 
@@ -259,46 +262,70 @@ PROG-02ではBMS解析結果を保存し、`GET /api/charts` のversionレスポ
       { "measure": 12, "playNotes": 8 },
       { "measure": 13, "playNotes": 0 }
     ]
+  },
+  "progressMap": {
+    "schemaVersion": 2,
+    "blockMode": "standardized_measure",
+    "firstMeasure": 12,
+    "lastMeasure": 87,
+    "targetBlockCount": 76,
+    "blocks": [],
+    "layers": [],
+    "progress": 45
   }
 }
 ```
 
 ### progress_map_json仕様
 
-小節単位の進捗塗り情報を保存するJSON文字列。未実装だが、後続Phaseでは以下の形式を使う。
+標準化ブロック単位の進捗塗り情報を保存するJSON文字列。
 
 ```json
 {
-  "schemaVersion": 1,
-  "firstMeasure": 12,
-  "lastMeasure": 87,
-  "targetMeasureCount": 76,
+  "schemaVersion": 2,
+  "blockMode": "standardized_measure",
+  "firstMeasure": 4,
+  "lastMeasure": 349,
+  "targetBlockCount": 142,
+  "blocks": [
+    {
+      "index": 0,
+      "startMeasure": 4,
+      "endMeasure": 7,
+      "startTimeSec": 0,
+      "endTimeSec": 2.1,
+      "playNotes": 20
+    }
+  ],
   "layers": [
     {
       "versionId": "version_xxx",
-      "color": "#2f80ed",
-      "kind": "normal",
-      "ranges": [[12, 18], [22, 25]]
+      "color": "#1f7a5c",
+      "kind": "initial",
+      "ranges": [[0, 10], [20, 30]]
     }
   ],
-  "progress": 45
+  "progress": 23
 }
 ```
 
 仕様:
 
-- 塗りはversionごとのlayerで持つ。
-- 追記時は親versionのlayersを引き継ぎ、今回分を新layerとして追加する。
-- 重ね塗りは可能。
-- progressは全layerのunionで算出する。
-- 同じ小節が複数layerで塗られていても、進捗計算では1小節として数える。
+- `schemaVersion` は `2` とする。
+- `blockMode` は `standardized_measure` とする。
+- `blocks` はフロント下段の標準化ブロックと1対1で対応する。
+- `ranges` は連続した塗り済みブロックindexを `[startIndex, endIndex]` で圧縮して持つ。
+- `progress` は全layerのunionを `targetBlockCount` で割り、Worker側で再計算して保存する。
+- 同じブロックが複数layerで塗られていても、進捗計算では1ブロックとして数える。
+- 初回投稿では1layerを基本とし、Worker保存時に `versionId` を実IDへ置き換える。
+- `progressMap` が未送信の場合は、既存互換としてフォームの `progress` を保存する。
+- `isRejected=true` の場合は送信された `progressMap` を信用せず、Worker側で全塗りの `rejected_auto_fill` layerを生成し、`progress=100` として保存する。
 
 `kind` 候補:
 
-- `normal`
-- `followup`
-- `rejected_auto_fill`
-- `completion_fill`
+- `initial`: 初回投稿の通常塗り。
+- `completion_fill`: 「完成版にする」で未塗りを全塗りした場合。
+- `rejected_auto_fill`: 没譜面投稿でWorker側が全塗り扱いにした場合。
 
 ### 進捗画像仕様
 
@@ -340,6 +367,7 @@ D1から投稿一覧を取得する。
 - `is_rejected=1` のversionは `isRejected: true` を返し、UIでは没譜面バッジで区別する。
 - `downloadBlocked` と `downloadBlockReason` を返す。
 - BMS解析済みversionでは `playNotes`, `firstNoteMeasure`, `lastNoteMeasure`, `targetMeasureCount`, `measureNotes` を返す。
+- `progress_map_json` 保存済みversionでは `progressMap` を返す。
 
 空DB時のレスポンス例:
 
@@ -370,6 +398,7 @@ D1から投稿一覧を取得する。
 - `level` optional/internal
 - `author`
 - `progress`
+- `progressMap` optional JSON string
 - `comment`
 - `isRejected`
 - `password`
@@ -382,7 +411,11 @@ D1から投稿一覧を取得する。
 - 音源ファイルのアップロードは禁止する。
 - 同一 `file_sha256` は `DUPLICATE_FILE` で拒否する。
 - 作成するversionは `ver1.0` 相当。
-- `isRejected=true` の場合は、入力された `progress` に関係なく保存値を `progress=100` に強制する。
+- `progressMap` が送られた場合、Worker側でJSONを検証し、塗り済みunionから `progress` を再計算して保存する。
+- `progressMap` の再計算結果を `versions.progress` に保存し、正規化したJSONを `versions.progress_map_json` に保存する。
+- `progressMap` が未送信の場合は既存互換としてフォームの `progress` を保存する。
+- `isRejected=true` の場合は、入力された `progress` と送信された `progressMap` に関係なく保存値を `progress=100` に強制する。
+- `isRejected=true` の場合は、Worker側で全塗りの `rejected_auto_fill` progressMapを生成できる範囲で保存する。
 - `isRejected=true` の場合は `completed_at` を保存し、completed扱いにする。
 - 単体 `.bms` / `.bme` / `.bml` の場合、BMS解析結果を `versions` に保存する。
 - `.zip` の場合、ZIP内部解析は未実装のためBMS解析値は `null` とする。
@@ -397,6 +430,23 @@ D1から投稿一覧を取得する。
   "fileId": "file_xxx",
   "displayVersion": "ver1.0",
   "progress": 45,
+  "progressMap": {
+    "schemaVersion": 2,
+    "blockMode": "standardized_measure",
+    "firstMeasure": 1,
+    "lastMeasure": 9,
+    "targetBlockCount": 9,
+    "blocks": [],
+    "layers": [
+      {
+        "versionId": "version_xxx",
+        "color": "#1f7a5c",
+        "kind": "initial",
+        "ranges": [[0, 3]]
+      }
+    ],
+    "progress": 44
+  },
   "completed": false,
   "analysis": {
     "encoding": "utf-8",
@@ -494,6 +544,9 @@ DBには `displayVersion` / `display_version` を保存しない。
 | `PASSWORD_REQUIRED` | 400 | 管理パスワードが未入力。 |
 | `SERVER_CONFIG_ERROR` | 500 | `HASH_SECRET` などサーバー設定が不足。 |
 | `INVALID_PROGRESS` | 400 | `progress` が0〜100の整数ではない。 |
+| `INVALID_PROGRESS_MAP` | 400 | `progressMap` がJSONとして不正、または必須構造を満たさない。 |
+| `PROGRESS_MAP_OUT_OF_RANGE` | 400 | `progressMap.layers[].ranges` がブロック範囲外を指している。 |
+| `PROGRESS_MAP_BLOCK_COUNT_MISMATCH` | 400 | `progressMap.targetBlockCount` と `blocks.length` が一致しない。 |
 | `INVALID_EXTENSION` | 400 | 許可されていない拡張子。 |
 | `FILE_TOO_LARGE` | 400 | ファイルサイズ上限超過。 |
 | `DUPLICATE_FILE` | 409 | 同じ `file_sha256` のversionが既にある。 |
