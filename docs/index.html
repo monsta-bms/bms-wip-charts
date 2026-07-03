@@ -116,6 +116,7 @@
                         <canvas class="progress-map-canvas" id="progressMapCanvas" width="720" height="120"></canvas>
                       </div>
                       <div class="progress-block-layer" id="progressMapBlocks" role="group" aria-label="作成済みにする標準化ブロック"></div>
+                      <div class="progress-block-label-layer" id="progressMapLabels" aria-hidden="true" hidden></div>
                     </div>
                     <div class="progress-map-summary" id="progressMapSummary" aria-live="polite" hidden></div>
                     <div class="progress-map-tooltip" id="progressMapTooltip" role="tooltip" hidden></div>
@@ -184,5 +185,73 @@
     </div>
 
     <script src="./app.js"></script>
+    <script>
+      (() => {
+        const blocksLayer = document.querySelector("#progressMapBlocks");
+        const labelLayer = document.querySelector("#progressMapLabels");
+        if (!blocksLayer || !labelLayer) {
+          return;
+        }
+
+        let frameId = 0;
+
+        function normalizeMeasureLabel(value) {
+          const label = String(value || "").trim().replace(/^m/i, "");
+          return /^\d+$/.test(label) ? label.padStart(3, "0") : label;
+        }
+
+        function getViewportLabelInterval(blockCount) {
+          const width = labelLayer.clientWidth || blocksLayer.clientWidth || 0;
+          if (width > 0 && width < 560) {
+            return 16;
+          }
+          if (blockCount > 240) {
+            return 32;
+          }
+          if (blockCount > 120) {
+            return 16;
+          }
+          return 8;
+        }
+
+        function renderMeasureLabels() {
+          frameId = 0;
+          const blocks = Array.from(blocksLayer.querySelectorAll(".progress-map-block"));
+          const labelInterval = getViewportLabelInterval(blocks.length);
+
+          labelLayer.hidden = blocks.length === 0;
+          labelLayer.style.gridTemplateColumns = blocksLayer.style.gridTemplateColumns || "";
+          labelLayer.innerHTML = blocks.map((block) => {
+            const inlineLabel = block.querySelector(".progress-block-label");
+            if (inlineLabel) {
+              block.dataset.measureLabel = inlineLabel.textContent.trim();
+              inlineLabel.remove();
+            }
+
+            const blockIndex = Number(block.dataset.blockIndex);
+            const rawLabel = block.dataset.measureLabel || "";
+            if (!rawLabel || !Number.isInteger(blockIndex) || blockIndex % labelInterval !== 0) {
+              return '<span class="progress-block-measure-label is-empty"></span>';
+            }
+
+            return `<span class="progress-block-measure-label">${normalizeMeasureLabel(rawLabel)}</span>`;
+          }).join("");
+        }
+
+        function requestRenderMeasureLabels() {
+          if (frameId) {
+            return;
+          }
+          frameId = window.requestAnimationFrame(renderMeasureLabels);
+        }
+
+        new MutationObserver(requestRenderMeasureLabels).observe(blocksLayer, {
+          childList: true,
+          subtree: true
+        });
+        window.addEventListener("resize", requestRenderMeasureLabels);
+        requestRenderMeasureLabels();
+      })();
+    </script>
   </body>
 </html>
