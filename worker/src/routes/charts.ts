@@ -1,6 +1,7 @@
 import { analyzeBmsBuffer, BmsAnalysis, normalizeText, parseBmsMetadata } from "../utils/bms";
 import { sanitizeFileName, validateUploadFile } from "../utils/fileValidation";
 import { hashWithSecret, md5HexFromBuffer, sha256HexFromBuffer } from "../utils/hash";
+import { prepareProgressMap } from "../utils/progressMap";
 import { apiError, Env, errorDetail, methodNotAllowed, ok } from "../utils/response";
 
 const DEFAULT_PAGE_SIZE = 100;
@@ -48,6 +49,7 @@ type VersionRow = {
   last_note_measure: number | null;
   target_measure_count: number | null;
   measure_notes_json: string | null;
+  progress_map_json: string | null;
   comment: string;
   difficulty: string | null;
   level: string | null;
@@ -125,6 +127,7 @@ type CreateChartInput = {
   level: string;
   author: string;
   progress: number;
+  progressMapText: string;
   comment: string;
   isRejected: boolean;
   passwordHash: string;
@@ -348,6 +351,7 @@ function buildVersion(row: VersionRow) {
     lastNoteMeasure: row.last_note_measure,
     targetMeasureCount: row.target_measure_count,
     measureNotes: parseStoredJson(row.measure_notes_json, "measure_notes_json", row.version_id),
+    progressMap: parseStoredJson(row.progress_map_json, "progress_map_json", row.version_id),
     completed: row.progress === 100,
     completedAt: row.completed_at,
     withdrawn: row.withdrawn_at !== null || row.download_block_reason === "withdrawn",
@@ -558,6 +562,7 @@ async function selectVisibleVersionRows(env: Env, chartIds: string[]): Promise<V
       versions.last_note_measure AS last_note_measure,
       versions.target_measure_count AS target_measure_count,
       versions.measure_notes_json AS measure_notes_json,
+      versions.progress_map_json AS progress_map_json,
       versions.comment AS comment,
       versions.difficulty AS difficulty,
       versions.level AS level,
@@ -811,6 +816,7 @@ async function parseCreateChartInput(
   const comment = getFormText(form, "comment");
   const isRejected = parseBooleanField(getFormText(form, "isRejected"));
   const storedProgress = isRejected ? 100 : progress.value;
+  const progressMapText = getFormText(form, "progressMap");
 
   const missingFields = [
     ["title", title],
@@ -852,6 +858,7 @@ async function parseCreateChartInput(
       level,
       author,
       progress: storedProgress,
+      progressMapText,
       comment,
       isRejected,
       passwordHash: await hashWithSecret(`password:${password}`, secret),
@@ -1001,8 +1008,31 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
     const versionId = makeId("version");
     const fileId = makeId("file");
     const r2Key = `charts/${chartId}/versions/root/${fileId}${input.extension}`;
-    const completedAt = input.progress === 100 ? new Date().toISOString() : null;
+    context.chartId = chartId;
+    context.versionId = versionId;
+
+    const preparedProgressMap = prepareProgressMap({
+      rawProgressMap: input.progressMapText,
+      versionId,
+      isRejected: input.isRejected,
+      fallbackProgress: input.progress,
+      bmsAnalysis: input.bmsAnalysis
+    });
+    if (!preparedProgressMap.ok) {
+      console.error("[create-chart-progress-map] invalid progress map payload", {
+        code: preparedProgressMap.failure.code,
+        chartId,
+        versionId,
+        message: preparedProgressMap.failure.detail
+      });
+
+      return failCreateChart(request, env, context, preparedProgressMap.failure);
+    }
+
+    const storedProgress = preparedProgressMap.progress;
+    const completedAt = storedProgress === 100 ? new Date().toISOString() : null;
     const measureNotesJson = input.bmsAnalysis ? JSON.stringify(input.bmsAnalysis.measureNotesJson) : null;
+    const progressMapJson = preparedProgressMap.progressMapJson;
     const responseWarnings: ApiWarning[] = [
       ...(input.metadataWarning ? [input.metadataWarning] : []),
       ...input.analysisWarnings
@@ -1013,8 +1043,6 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
     const analysisDetail = input.bmsAnalysis
       ? `bmsAnalysis=ok; playNotes=${input.bmsAnalysis.playNotes}; firstNoteMeasure=${input.bmsAnalysis.firstNoteMeasure ?? "null"}; lastNoteMeasure=${input.bmsAnalysis.lastNoteMeasure ?? "null"}; targetMeasureCount=${input.bmsAnalysis.targetMeasureCount}`
       : `bmsAnalysis=skipped_or_failed; extension=${input.extension}`;
-    context.chartId = chartId;
-    context.versionId = versionId;
 
     try {
       await env.FILES.put(r2Key, input.fileBytes, {
@@ -1100,6 +1128,7 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
         last_note_measure,
         target_measure_count,
         measure_notes_json,
+        progress_map_json,
         comment,
         difficulty,
         level,
@@ -1118,17 +1147,18 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
         download_blocked,
         download_block_reason,
         completed_at
-      ) VALUES (?, ?, NULL, 1, '', 'root', ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?)
+      ) VALUES (?, ?, NULL, 1, '', 'root', ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?)
     `).bind(
       versionId,
       chartId,
       input.author,
-      input.progress,
+      storedProgress,
       input.bmsAnalysis?.playNotes ?? null,
       input.bmsAnalysis?.firstNoteMeasure ?? null,
       input.bmsAnalysis?.lastNoteMeasure ?? null,
       input.bmsAnalysis?.targetMeasureCount ?? null,
       measureNotesJson,
+      progressMapJson,
       input.comment,
       input.difficulty || null,
       input.level || null,
@@ -1169,7 +1199,7 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
       context.ipHash,
       context.uaHash,
       input.fileSha256,
-      `Initial chart version created. ${analysisDetail}; warnings=${warningDetail}`
+      `Initial chart version created. ${analysisDetail}; progress=${storedProgress}; progressMap=${progressMapJson ? "saved" : "none"}; warnings=${warningDetail}`
     ));
 
     try {
@@ -1219,9 +1249,10 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
       versionId,
       fileId,
       displayVersion: "ver1.0",
-      progress: input.progress,
+      progress: storedProgress,
+      progressMap: preparedProgressMap.progressMap,
       isRejected: input.isRejected,
-      completed: input.progress === 100,
+      completed: storedProgress === 100,
       completedAt,
       file: {
         name: input.fileName,
