@@ -457,48 +457,72 @@ button.progress-complete-button {
   border: 1px solid var(--line);
   border-radius: 6px;
   display: grid;
-  min-height: 34px;
+  min-height: 54px;
   overflow: hidden;
   touch-action: none;
 }
 
 button.progress-map-block {
-  background: transparent;
+  background: #ffffff;
   border: 0;
-  border-left: 1px solid rgba(91, 101, 114, 0.16);
+  border-left: 1px solid rgba(91, 101, 114, 0.13);
   border-radius: 0;
   color: transparent;
-  min-height: 34px;
+  min-height: 54px;
   min-width: 0;
+  overflow: hidden;
   padding: 0;
+  position: relative;
+}
+
+button.progress-map-block::before {
+  background: transparent;
+  content: "";
+  inset: 0 0 16px;
+  position: absolute;
+  transition: background-color 80ms ease-out;
 }
 
 button.progress-map-block:first-child {
   border-left: 0;
 }
 
-button.progress-map-block:hover,
-button.progress-map-block:focus-visible {
+button.progress-map-block.is-barline {
+  border-left: 2px solid rgba(59, 68, 78, 0.82);
+}
+
+button.progress-map-block:hover::before,
+button.progress-map-block:focus-visible::before {
   background: rgba(37, 111, 93, 0.12);
 }
 
-button.progress-map-block.is-painted,
-button.progress-map-block.is-painted:hover,
-button.progress-map-block.is-painted:focus-visible,
-button.progress-map-block.is-painted:disabled,
-button.progress-map-block.is-painted:disabled:hover,
-button.progress-map-block.is-painted:disabled:focus-visible {
-  background: rgba(37, 111, 93, 0.42);
-}
-
-button.progress-map-block.is-barline {
-  border-left: 2px solid rgba(59, 68, 78, 0.78);
+button.progress-map-block.is-painted::before,
+button.progress-map-block.is-painted:hover::before,
+button.progress-map-block.is-painted:focus-visible::before,
+button.progress-map-block.is-painted:disabled::before,
+button.progress-map-block.is-painted:disabled:hover::before,
+button.progress-map-block.is-painted:disabled:focus-visible::before {
+  background: rgba(37, 111, 93, 0.44);
 }
 
 button.progress-map-block:disabled,
 button.progress-map-block:disabled:hover,
 button.progress-map-block:disabled:focus-visible {
+  background: #ffffff;
   cursor: not-allowed;
+}
+
+.progress-block-label {
+  bottom: 2px;
+  color: #53606c;
+  font-size: 0.64rem;
+  font-weight: 800;
+  left: 50%;
+  line-height: 1;
+  pointer-events: none;
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
 }
 
 .progress-map-summary {
@@ -506,6 +530,46 @@ button.progress-map-block:disabled:focus-visible {
   font-size: 0.78rem;
   font-weight: 700;
   line-height: 1.45;
+}
+
+.progress-map-tooltip {
+  background: rgba(23, 32, 42, 0.94);
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1.45;
+  max-width: min(220px, calc(100vw - 20px));
+  padding: 7px 9px;
+  pointer-events: none;
+  position: fixed;
+  z-index: 50;
+}
+
+.progress-map-popover {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 12px 30px rgba(23, 32, 42, 0.18);
+  color: var(--text);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  max-width: min(260px, calc(100vw - 20px));
+  min-width: 160px;
+  padding: 10px 12px;
+  position: fixed;
+  z-index: 60;
+}
+
+.progress-map-popover-title {
+  color: var(--primary-dark);
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.progress-map-popover-line {
+  color: var(--muted);
+  font-weight: 700;
 }
 
 .progress-map.is-locked .progress-block-layer {
@@ -781,7 +845,11 @@ textarea[aria-invalid="true"] {
 
   .progress-block-layer,
   button.progress-map-block {
-    min-height: 38px;
+    min-height: 56px;
+  }
+
+  .progress-block-label {
+    font-size: 0.58rem;
   }
 
   .checkbox-field {
