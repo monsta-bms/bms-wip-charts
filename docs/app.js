@@ -20,6 +20,13 @@ const difficultyManualInput = document.querySelector("#difficultyManual");
 const difficultyPreview = document.querySelector("#difficultyPreview");
 const authorInput = document.querySelector("#author");
 const progressInput = document.querySelector("#progress");
+const progressMap = document.querySelector("#progressMap");
+const progressMapStatus = document.querySelector("#progressMapStatus");
+const progressMapGraphWrap = document.querySelector("#progressMapGraphWrap");
+const progressMapCanvas = document.querySelector("#progressMapCanvas");
+const progressMapBlocks = document.querySelector("#progressMapBlocks");
+const progressMapSummary = document.querySelector("#progressMapSummary");
+const completeProgressButton = document.querySelector("#completeProgressButton");
 const commentInput = document.querySelector("#comment");
 const isRejectedInput = document.querySelector("#isRejected");
 const passwordInput = document.querySelector("#password");
@@ -32,6 +39,7 @@ let isSubmitting = false;
 let lastValidManualDifficulty = "";
 
 const maxDifficultyNumber = 25;
+const progressMapCanvasHeight = 180;
 const difficultyLimits = {
   "★": 25,
   "★★": 7,
@@ -39,11 +47,21 @@ const difficultyLimits = {
   st: 15
 };
 
+const normalPlayNoteChannelRanges = [[11, 19], [21, 29]];
+const longNoteChannelRanges = [[51, 59], [61, 69]];
+
 const difficultyState = {
   mode: "symbol",
   symbol: "★",
   number: null,
   manualValue: ""
+};
+
+const progressMapState = {
+  analysis: null,
+  paintedMeasures: new Set(),
+  savedPaintedMeasures: null,
+  isDragging: false
 };
 
 const requiredFieldChecks = [
@@ -306,12 +324,403 @@ function parseBmsMeta(text) {
   return meta;
 }
 
+function isInChannelRanges(channel, ranges) {
+  if (!/^\d{2}$/.test(channel)) {
+    return false;
+  }
+
+  const numericChannel = Number(channel);
+  return ranges.some(([min, max]) => numericChannel >= min && numericChannel <= max);
+}
+
+function isNormalPlayNoteChannel(channel) {
+  return isInChannelRanges(channel, normalPlayNoteChannelRanges);
+}
+
+function isLongNoteChannel(channel) {
+  return isInChannelRanges(channel, longNoteChannelRanges);
+}
+
+function isPlayNoteChannel(channel) {
+  return isNormalPlayNoteChannel(channel) || isLongNoteChannel(channel);
+}
+
+function addMeasureNotes(measureCounts, measure, count) {
+  if (count <= 0) {
+    return;
+  }
+
+  measureCounts.set(measure, (measureCounts.get(measure) || 0) + count);
+}
+
+function compareLongNoteEvents(a, b) {
+  const aPosition = a.measure + a.pairIndex / Math.max(a.pairCount, 1);
+  const bPosition = b.measure + b.pairIndex / Math.max(b.pairCount, 1);
+  return aPosition - bPosition || a.channel.localeCompare(b.channel);
+}
+
+function countLongNoteStarts(events, measureCounts) {
+  const activeByChannel = new Map();
+  let starts = 0;
+
+  for (const event of [...events].sort(compareLongNoteEvents)) {
+    const isActive = activeByChannel.get(event.channel) || false;
+    if (!isActive) {
+      addMeasureNotes(measureCounts, event.measure, 1);
+      starts += 1;
+    }
+
+    activeByChannel.set(event.channel, !isActive);
+  }
+
+  return starts;
+}
+
+function analyzeBmsProgressText(text) {
+  const measureCounts = new Map();
+  const longNoteEvents = [];
+  let playNotes = 0;
+
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.replace(/^\uFEFF/, "").trim();
+    const match = line.match(/^#(\d{3})([0-9A-Za-z]{2}):([0-9A-Za-z]*)/);
+    if (!match) {
+      continue;
+    }
+
+    const [, measureText, channel, data] = match;
+    if (!isPlayNoteChannel(channel)) {
+      continue;
+    }
+
+    const measure = Number(measureText);
+    const pairCount = Math.floor(data.length / 2);
+    let lineNotes = 0;
+
+    for (let pairIndex = 0; pairIndex < pairCount; pairIndex += 1) {
+      const objectId = data.slice(pairIndex * 2, pairIndex * 2 + 2);
+      if (objectId.toUpperCase() === "00") {
+        continue;
+      }
+
+      if (isLongNoteChannel(channel)) {
+        longNoteEvents.push({ measure, channel, pairIndex, pairCount });
+      } else {
+        lineNotes += 1;
+      }
+    }
+
+    addMeasureNotes(measureCounts, measure, lineNotes);
+    playNotes += lineNotes;
+  }
+
+  playNotes += countLongNoteStarts(longNoteEvents, measureCounts);
+
+  const noteMeasures = [...measureCounts.keys()].filter((measure) => (measureCounts.get(measure) || 0) > 0);
+  if (noteMeasures.length === 0) {
+    return {
+      playNotes: 0,
+      firstMeasure: null,
+      lastMeasure: null,
+      targetMeasureCount: 0,
+      lnPolicy: "count_start_only",
+      measures: []
+    };
+  }
+
+  const firstMeasure = Math.min(...noteMeasures);
+  const lastMeasure = Math.max(...noteMeasures);
+  const measures = [];
+
+  for (let measure = firstMeasure; measure <= lastMeasure; measure += 1) {
+    measures.push({
+      measure,
+      playNotes: measureCounts.get(measure) || 0
+    });
+  }
+
+  return {
+    playNotes,
+    firstMeasure,
+    lastMeasure,
+    targetMeasureCount: measures.length,
+    lnPolicy: "count_start_only",
+    measures
+  };
+}
+
+function setProgressMapMessage(message, state = "empty") {
+  progressMap.dataset.state = state;
+  progressMapStatus.textContent = message;
+  progressMapStatus.hidden = false;
+  progressMapGraphWrap.hidden = true;
+  progressMapSummary.hidden = true;
+  progressMapBlocks.innerHTML = "";
+}
+
+function resetProgressMap(message = "譜面ファイル選択後に進捗マップを表示します") {
+  progressMapState.analysis = null;
+  progressMapState.paintedMeasures = new Set();
+  progressMapState.savedPaintedMeasures = null;
+  progressMapState.isDragging = false;
+  setProgressMapMessage(message, "empty");
+  updateCompleteButtonState();
+}
+
+function calculateMapProgress() {
+  const analysis = progressMapState.analysis;
+  if (!analysis || analysis.targetMeasureCount <= 0) {
+    return null;
+  }
+
+  return Math.round((progressMapState.paintedMeasures.size / analysis.targetMeasureCount) * 100);
+}
+
+function updateProgressSummary(progressValue = calculateMapProgress()) {
+  const analysis = progressMapState.analysis;
+  if (!analysis) {
+    progressMapSummary.hidden = true;
+    return;
+  }
+
+  progressMapSummary.textContent = `play notes: ${analysis.playNotes} / measures: ${analysis.firstMeasure}-${analysis.lastMeasure} / progress: ${progressValue ?? 0}%`;
+  progressMapSummary.hidden = false;
+}
+
+function updateCompleteButtonState() {
+  const progressValue = Number(progressInput.value);
+  const hasMap = Boolean(progressMapState.analysis && progressMapState.analysis.targetMeasureCount > 0);
+  completeProgressButton.disabled = !hasMap || isRejectedInput.checked || !Number.isFinite(progressValue) || progressValue < 80 || progressValue >= 100;
+}
+
+function updateProgressBlockClasses() {
+  const locked = isRejectedInput.checked;
+  progressMap.classList.toggle("is-locked", locked);
+
+  progressMapBlocks.querySelectorAll(".progress-map-block").forEach((block) => {
+    const measure = Number(block.dataset.measure);
+    const painted = progressMapState.paintedMeasures.has(measure);
+    block.classList.toggle("is-painted", painted);
+    block.setAttribute("aria-pressed", painted ? "true" : "false");
+    block.disabled = locked;
+  });
+}
+
+function updateProgressFromMap({ updateBlocks = true } = {}) {
+  const progressValue = isRejectedInput.checked ? 100 : calculateMapProgress();
+  if (progressValue === null) {
+    updateCompleteButtonState();
+    return;
+  }
+
+  progressInput.value = String(progressValue);
+  setFieldInvalid(progressInput, false);
+  updateProgressSummary(progressValue);
+  updateCompleteButtonState();
+
+  if (updateBlocks) {
+    updateProgressBlockClasses();
+  }
+}
+
+function getGraphX(index, count, plotLeft, plotWidth) {
+  if (count <= 1) {
+    return plotLeft + plotWidth / 2;
+  }
+
+  return plotLeft + (index / (count - 1)) * plotWidth;
+}
+
+function drawProgressGraph() {
+  const analysis = progressMapState.analysis;
+  if (!analysis || progressMapGraphWrap.hidden) {
+    return;
+  }
+
+  const canvas = progressMapCanvas;
+  const context = canvas.getContext("2d");
+  const cssWidth = Math.max(Math.floor(progressMapGraphWrap.clientWidth), 320);
+  const cssHeight = progressMapCanvasHeight;
+  const ratio = window.devicePixelRatio || 1;
+
+  canvas.width = Math.floor(cssWidth * ratio);
+  canvas.height = Math.floor(cssHeight * ratio);
+  canvas.style.width = "100%";
+  canvas.style.height = `${cssHeight}px`;
+
+  context.setTransform(ratio, 0, 0, ratio, 0, 0);
+  context.clearRect(0, 0, cssWidth, cssHeight);
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, cssWidth, cssHeight);
+
+  const measures = analysis.measures;
+  const count = measures.length;
+  const maxNotes = Math.max(1, ...measures.map((measure) => measure.playNotes));
+  const plotLeft = 28;
+  const plotRight = 10;
+  const plotTop = 12;
+  const plotBottom = 20;
+  const plotWidth = cssWidth - plotLeft - plotRight;
+  const plotHeight = cssHeight - plotTop - plotBottom;
+  const baseY = plotTop + plotHeight;
+
+  context.strokeStyle = "#dce4ea";
+  context.lineWidth = 1;
+  context.beginPath();
+  context.moveTo(plotLeft, plotTop);
+  context.lineTo(plotLeft, baseY);
+  context.lineTo(cssWidth - plotRight, baseY);
+  context.stroke();
+
+  for (let index = 0; index < count; index += 1) {
+    const measure = measures[index].measure;
+    if ((measure - analysis.firstMeasure) % 8 !== 0) {
+      continue;
+    }
+
+    const x = getGraphX(index, count, plotLeft, plotWidth);
+    context.strokeStyle = "rgba(0, 0, 0, 0.82)";
+    context.lineWidth = 1.5;
+    context.beginPath();
+    context.moveTo(x, plotTop);
+    context.lineTo(x, baseY);
+    context.stroke();
+  }
+
+  context.strokeStyle = "#256f5d";
+  context.lineWidth = 2;
+  context.beginPath();
+
+  measures.forEach((measure, index) => {
+    const x = getGraphX(index, count, plotLeft, plotWidth);
+    const y = baseY - (measure.playNotes / maxNotes) * plotHeight;
+
+    if (index === 0) {
+      context.moveTo(x, y);
+    } else {
+      context.lineTo(x, y);
+    }
+  });
+
+  context.stroke();
+
+  context.fillStyle = "#1c5749";
+  measures.forEach((measure, index) => {
+    const x = getGraphX(index, count, plotLeft, plotWidth);
+    const y = baseY - (measure.playNotes / maxNotes) * plotHeight;
+    context.beginPath();
+    context.arc(x, y, 2.2, 0, Math.PI * 2);
+    context.fill();
+  });
+}
+
+function renderProgressBlocks() {
+  const analysis = progressMapState.analysis;
+  if (!analysis) {
+    progressMapBlocks.innerHTML = "";
+    return;
+  }
+
+  const count = analysis.measures.length;
+  progressMapBlocks.innerHTML = analysis.measures.map((measure, index) => {
+    const left = (index / count) * 100;
+    const width = 100 / count;
+    const isBarline = (measure.measure - analysis.firstMeasure) % 8 === 0;
+    const classes = ["progress-map-block", isBarline ? "is-barline" : ""].filter(Boolean).join(" ");
+    return `<button class="${classes}" type="button" data-measure="${measure.measure}" aria-pressed="false" aria-label="${measure.measure}小節 ${measure.playNotes} notes" style="left:${left}%;width:${width}%;"></button>`;
+  }).join("");
+
+  updateProgressBlockClasses();
+}
+
+function renderProgressMap() {
+  const analysis = progressMapState.analysis;
+  if (!analysis || analysis.targetMeasureCount <= 0) {
+    setProgressMapMessage("プレイノートを検出できませんでした", "unavailable");
+    return;
+  }
+
+  progressMap.dataset.state = "ready";
+  progressMapStatus.hidden = true;
+  progressMapGraphWrap.hidden = false;
+  progressMapSummary.hidden = false;
+  renderProgressBlocks();
+  drawProgressGraph();
+  updateProgressFromMap();
+}
+
+function initializeProgressMap(analysis) {
+  progressMapState.analysis = analysis;
+  progressMapState.paintedMeasures = new Set();
+  progressMapState.savedPaintedMeasures = null;
+
+  if (isRejectedInput.checked) {
+    for (const measure of analysis.measures) {
+      progressMapState.paintedMeasures.add(measure.measure);
+    }
+  }
+
+  renderProgressMap();
+}
+
+function paintProgressMeasure(measure) {
+  if (!progressMapState.analysis || isRejectedInput.checked || !Number.isFinite(measure)) {
+    return;
+  }
+
+  progressMapState.paintedMeasures.add(measure);
+  updateProgressFromMap();
+}
+
+function findProgressBlockFromPointer(event) {
+  const element = document.elementFromPoint(event.clientX, event.clientY);
+  return element?.closest?.(".progress-map-block") || null;
+}
+
+function paintAllProgressMeasures() {
+  const analysis = progressMapState.analysis;
+  if (!analysis) {
+    return;
+  }
+
+  progressMapState.paintedMeasures = new Set(analysis.measures.map((measure) => measure.measure));
+  progressInput.value = "100";
+  setFieldInvalid(progressInput, false);
+  updateProgressSummary(100);
+  updateProgressBlockClasses();
+  updateCompleteButtonState();
+}
+
+function applyRejectedProgressMapState() {
+  const analysis = progressMapState.analysis;
+  if (!analysis) {
+    updateCompleteButtonState();
+    return;
+  }
+
+  if (isRejectedInput.checked) {
+    if (!progressMapState.savedPaintedMeasures) {
+      progressMapState.savedPaintedMeasures = new Set(progressMapState.paintedMeasures);
+    }
+    paintAllProgressMeasures();
+    return;
+  }
+
+  if (progressMapState.savedPaintedMeasures) {
+    progressMapState.paintedMeasures = new Set(progressMapState.savedPaintedMeasures);
+    progressMapState.savedPaintedMeasures = null;
+  }
+
+  updateProgressFromMap();
+}
+
 async function fillMetaFromFile(file) {
   const extension = getExtension(file.name);
 
   if (!allowedChartExtensions.has(extension)) {
     showTextError("投稿対象は .bms .bme .bml .zip のみです。");
     fileInput.value = "";
+    resetProgressMap();
     setFieldInvalid(fileInput, true);
     return;
   }
@@ -320,6 +729,7 @@ async function fillMetaFromFile(file) {
 
   if (!readableChartExtensions.has(extension)) {
     clearError();
+    setProgressMapMessage("単体BMSのみ進捗マップを表示します", "unavailable");
     return;
   }
 
@@ -327,6 +737,7 @@ async function fillMetaFromFile(file) {
     const buffer = await file.arrayBuffer();
     const text = decodeBmsText(buffer);
     const meta = parseBmsMeta(text);
+    const analysis = analyzeBmsProgressText(text);
 
     if (meta.title) {
       titleInput.value = meta.title;
@@ -338,12 +749,23 @@ async function fillMetaFromFile(file) {
       setFieldInvalid(artistInput, false);
     }
 
+    if (analysis.targetMeasureCount > 0) {
+      initializeProgressMap(analysis);
+    } else {
+      setProgressMapMessage("プレイノートを検出できませんでした", "unavailable");
+    }
+
     clearError();
   } catch (error) {
     console.error("[file-meta-read] failed to read chart metadata", {
       code: "TITLE_ARTIST_PARSE_FAILED",
       message: error instanceof Error ? error.message : String(error)
     });
+    console.error("[progress-map-analysis] failed to analyze progress map", {
+      code: "PROGRESS_MAP_ANALYSIS_FAILED",
+      message: error instanceof Error ? error.message : String(error)
+    });
+    setProgressMapMessage("BMS解析に失敗しました", "unavailable");
     showTextError("譜面情報の読み取りに失敗しました。曲名とアーティストは手入力してください。");
   }
 }
@@ -371,6 +793,7 @@ function validateProgress() {
   }
 
   clearError();
+  updateCompleteButtonState();
   return true;
 }
 
@@ -613,6 +1036,7 @@ async function submitChart() {
     form.reset();
     clearRequiredFieldIndicators();
     resetDifficultySelector();
+    resetProgressMap();
     progressInput.value = "100";
     if (shouldRestorePassword) {
       passwordInput.value = savedPassword;
@@ -636,6 +1060,7 @@ fileInput.addEventListener("change", () => {
 
   if (!file) {
     setFieldInvalid(fileInput, false);
+    resetProgressMap();
     clearError();
     return;
   }
@@ -671,11 +1096,53 @@ progressInput.addEventListener("input", () => {
   if (progressInput.getAttribute("aria-invalid") === "true") {
     validateProgress();
   }
+
+  updateCompleteButtonState();
 });
 
 isRejectedInput.addEventListener("change", () => {
   applyRejectedProgressState();
+  applyRejectedProgressMapState();
   clearError();
+});
+
+progressMapBlocks.addEventListener("pointerdown", (event) => {
+  const block = event.target.closest(".progress-map-block");
+  if (!block) {
+    return;
+  }
+
+  event.preventDefault();
+  progressMapState.isDragging = true;
+  progressMapBlocks.setPointerCapture?.(event.pointerId);
+  paintProgressMeasure(Number(block.dataset.measure));
+});
+
+progressMapBlocks.addEventListener("pointermove", (event) => {
+  if (!progressMapState.isDragging) {
+    return;
+  }
+
+  const block = findProgressBlockFromPointer(event);
+  if (block) {
+    paintProgressMeasure(Number(block.dataset.measure));
+  }
+});
+
+progressMapBlocks.addEventListener("pointerup", () => {
+  progressMapState.isDragging = false;
+});
+
+progressMapBlocks.addEventListener("pointercancel", () => {
+  progressMapState.isDragging = false;
+});
+
+completeProgressButton.addEventListener("click", () => {
+  paintAllProgressMeasures();
+});
+
+window.addEventListener("resize", () => {
+  drawProgressGraph();
 });
 
 savePasswordInput.addEventListener("change", persistPasswordPreference);
@@ -687,5 +1154,6 @@ form.addEventListener("submit", (event) => {
 
 loadSavedPassword();
 resetDifficultySelector();
+resetProgressMap();
 applyRejectedProgressState();
 loadCharts();
