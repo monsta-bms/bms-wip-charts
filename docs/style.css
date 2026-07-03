@@ -428,43 +428,54 @@ button.progress-complete-button {
   margin: 0;
 }
 
-.progress-map-graph-wrap {
+.progress-map-visual {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.density-chart-wrap {
   background: #ffffff;
   border: 1px solid var(--line);
   border-radius: 6px;
-  min-height: 180px;
+  height: 120px;
   overflow: hidden;
-  position: relative;
-  touch-action: none;
 }
 
 .progress-map-canvas {
   display: block;
-  height: 180px;
+  height: 120px;
   width: 100%;
 }
 
-.progress-map-blocks {
-  inset: 0;
-  position: absolute;
+.progress-block-layer {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: grid;
+  min-height: 34px;
+  overflow: hidden;
+  touch-action: none;
 }
 
 button.progress-map-block {
   background: transparent;
   border: 0;
-  border-left: 1px solid rgba(91, 101, 114, 0.14);
+  border-left: 1px solid rgba(91, 101, 114, 0.16);
   border-radius: 0;
-  bottom: 0;
   color: transparent;
-  min-height: 0;
+  min-height: 34px;
+  min-width: 0;
   padding: 0;
-  position: absolute;
-  top: 0;
+}
+
+button.progress-map-block:first-child {
+  border-left: 0;
 }
 
 button.progress-map-block:hover,
 button.progress-map-block:focus-visible {
-  background: rgba(37, 111, 93, 0.14);
+  background: rgba(37, 111, 93, 0.12);
 }
 
 button.progress-map-block.is-painted,
@@ -473,11 +484,11 @@ button.progress-map-block.is-painted:focus-visible,
 button.progress-map-block.is-painted:disabled,
 button.progress-map-block.is-painted:disabled:hover,
 button.progress-map-block.is-painted:disabled:focus-visible {
-  background: rgba(37, 111, 93, 0.34);
+  background: rgba(37, 111, 93, 0.42);
 }
 
 button.progress-map-block.is-barline {
-  border-left: 2px solid rgba(0, 0, 0, 0.82);
+  border-left: 2px solid rgba(59, 68, 78, 0.78);
 }
 
 button.progress-map-block:disabled,
@@ -493,7 +504,7 @@ button.progress-map-block:disabled:focus-visible {
   line-height: 1.45;
 }
 
-.progress-map.is-locked .progress-map-graph-wrap {
+.progress-map.is-locked .progress-block-layer {
   background: #f3f7f6;
 }
 
@@ -759,10 +770,14 @@ textarea[aria-invalid="true"] {
     flex-direction: column;
   }
 
-  .progress-map-graph-wrap,
+  .density-chart-wrap,
   .progress-map-canvas {
-    min-height: 160px;
-    height: 160px;
+    height: 104px;
+  }
+
+  .progress-block-layer,
+  button.progress-map-block {
+    min-height: 38px;
   }
 
   .checkbox-field {
