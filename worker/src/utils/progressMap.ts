@@ -56,9 +56,15 @@ type PrepareProgressMapParams = {
   bmsAnalysis: BmsAnalysis | null;
 };
 
-type NormalizeLayoutResult =
-  | { ok: true; firstMeasure: number | null; lastMeasure: number | null; targetBlockCount: number; blocks: ProgressMapBlock[] }
-  | { ok: false; failure: ProgressMapFailure };
+type ProgressMapLayout = {
+  ok: true;
+  firstMeasure: number | null;
+  lastMeasure: number | null;
+  targetBlockCount: number;
+  blocks: ProgressMapBlock[];
+};
+
+type NormalizeLayoutResult = ProgressMapLayout | { ok: false; failure: ProgressMapFailure };
 
 function failure(code: string, detail: string, status = 400): ProgressMapFailure {
   const messages: Record<string, string> = {
@@ -77,6 +83,10 @@ function failure(code: string, detail: string, status = 400): ProgressMapFailure
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isProgressMapFailure(value: unknown): value is ProgressMapFailure {
+  return isRecord(value) && typeof value.code === "string" && typeof value.detail === "string";
 }
 
 function isSafeNonNegativeInteger(value: unknown): value is number {
@@ -134,22 +144,22 @@ function normalizeBlock(value: unknown, expectedIndex: number): { ok: true; valu
   }
 
   const startMeasure = normalizeNullableInteger(value.startMeasure, `blocks[${expectedIndex}].startMeasure`);
-  if (isRecord(startMeasure)) {
+  if (isProgressMapFailure(startMeasure)) {
     return { ok: false, failure: startMeasure };
   }
 
   const endMeasure = normalizeNullableInteger(value.endMeasure, `blocks[${expectedIndex}].endMeasure`);
-  if (isRecord(endMeasure)) {
+  if (isProgressMapFailure(endMeasure)) {
     return { ok: false, failure: endMeasure };
   }
 
   const startTimeSec = normalizeNullableSeconds(value.startTimeSec, `blocks[${expectedIndex}].startTimeSec`);
-  if (isRecord(startTimeSec)) {
+  if (isProgressMapFailure(startTimeSec)) {
     return { ok: false, failure: startTimeSec };
   }
 
   const endTimeSec = normalizeNullableSeconds(value.endTimeSec, `blocks[${expectedIndex}].endTimeSec`);
-  if (isRecord(endTimeSec)) {
+  if (isProgressMapFailure(endTimeSec)) {
     return { ok: false, failure: endTimeSec };
   }
 
@@ -215,12 +225,12 @@ function normalizeLayout(root: unknown, bmsAnalysis: BmsAnalysis | null): Normal
   }
 
   const firstMeasure = normalizeNullableInteger(root.firstMeasure, "progressMap.firstMeasure");
-  if (isRecord(firstMeasure)) {
+  if (isProgressMapFailure(firstMeasure)) {
     return { ok: false, failure: firstMeasure };
   }
 
   const lastMeasure = normalizeNullableInteger(root.lastMeasure, "progressMap.lastMeasure");
-  if (isRecord(lastMeasure)) {
+  if (isProgressMapFailure(lastMeasure)) {
     return { ok: false, failure: lastMeasure };
   }
 
@@ -315,7 +325,7 @@ function normalizeLayerKind(root: Record<string, unknown>, progress: number): Pr
 
 function buildProgressMapJson(
   versionId: string,
-  layout: Extract<NormalizeLayoutResult, { ok: true }>,
+  layout: ProgressMapLayout,
   kind: ProgressMapLayerKind,
   paintedIndexes: Set<number>,
   forcedProgress?: number
@@ -381,7 +391,7 @@ function normalizeClientProgressMap(
   };
 }
 
-function buildFallbackLayoutFromBmsAnalysis(bmsAnalysis: BmsAnalysis | null): Extract<NormalizeLayoutResult, { ok: true }> {
+function buildFallbackLayoutFromBmsAnalysis(bmsAnalysis: BmsAnalysis | null): ProgressMapLayout {
   if (!bmsAnalysis || bmsAnalysis.playNotes <= 0) {
     return {
       ok: true,
@@ -415,7 +425,7 @@ function buildRejectedProgressMap(
   versionId: string,
   bmsAnalysis: BmsAnalysis | null
 ): ProgressMapResult {
-  let layout: Extract<NormalizeLayoutResult, { ok: true }> | null = null;
+  let layout: ProgressMapLayout | null = null;
 
   if (rawProgressMap.trim()) {
     const parsed = parseProgressMap(rawProgressMap);
