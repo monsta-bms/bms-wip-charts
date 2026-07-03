@@ -20,16 +20,17 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。
 - `GET /api/files/:fileId` のR2実ダウンロード
 - GitHub Pages から本番Worker APIへの一覧取得/初回投稿
 - 没譜面初回投稿の `progress=100` 強制
+- Worker側BMS解析による `play_notes` / 小節情報保存
+- `GET /api/charts` のBMS解析結果返却
+- PROG-03A フロント側進捗マップUI試作
 - `versions.file_deleted_at` / `versions.file_delete_reason` の自動削除準備カラム
 - PROG-01 進捗グラフ用DBカラムとJSON/API仕様
 
 未実装:
 
-- Worker側BMS解析の本実装
-- フロント側進捗グラフUI
-- Canvas/SVG描画
-- R2への進捗画像保存処理
-- 初回投稿APIの `progress_map_json` 対応
+- `progress_map_json` のAPI保存
+- 進捗画像PNGのR2保存
+- ZIP内部のBMS解析
 - `POST /api/charts/:chartId/versions` の追記投稿
 - 取り下げAPI
 - 削除申請API
@@ -40,6 +41,9 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。
 - Cron Trigger
 - R2自動削除本体
 - Turnstile
+- 一覧への進捗画像表示
+- 完成到達後の折り畳み表示
+- お気に入り★
 
 ## 画面仕様
 
@@ -53,9 +57,7 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。
 
 ### 初回投稿フォーム
 
-フォームは入力誘導、補足文、必須表示を表示しつつ、情報の意味単位が分かる構造にする。
-
-FORM-03以降、初回投稿フォームは以下のセクションに分ける。
+フォームは以下のセクションに分ける。
 
 1. 譜面ファイル
 2. 楽曲情報
@@ -69,7 +71,7 @@ FORM-03以降、初回投稿フォームは以下のセクションに分ける�
 2. 仮差分名
 3. 差分作者（別名義可）
 
-進捗・管理セクションには、進捗度、没譜面、管理パスワード、管理パスワード保存チェックをまとめる。将来の進捗グラフUI追加を見据えて過度に作り込まない。
+進捗・管理セクションには、進捗マップ、進捗度、没譜面、管理パスワード、管理パスワード保存チェックをまとめる。
 
 通常フォームでは `level` の見える入力欄を表示しない。ユーザーが入力・閲覧する難易度は「想定難易度」に統一する。
 
@@ -106,15 +108,122 @@ FORM-03以降、初回投稿フォームは以下のセクションに分ける�
 
 通常シンボルでは数字を常に1〜25まで表示する。シンボルごとの上限を超える数字はdisabledにしてクリック不可にする。
 
-PC表示では数字チップを1行10個で表示する。
-
-- 1行目: 1〜10
-- 2行目: 11〜20
-- 3行目: 21〜25
-
 シンボル変更時、現在選択中の数字が新しいシンボルの上限を超える場合は最大値に丸める。
 
-手入力モードでは、数字チップではなく自由入力欄を表示するが、難易度入力ブロック全体の高さは通常シンボル時と変えない。数字部分が3桁以上になる入力は受け付けない。手入力時はシンボル別の上限チェックは行わない。
+手入力モードでは、数字チップではなく自由入力欄を表示するが、難易度入力ブロック全体の高さは通常シンボル時と変えない。数字部分が3桁以上になる入力は受け付けない。
+
+## PROG-03A 進捗マップUI試作
+
+PROG-03Aでは、投稿フォーム内の「進捗・管理」セクションにフロント側の進捗マップUIを追加する。
+
+今回の進捗マップは試作であり、API送信項目は増やさない。既存の `progress` 入力欄へ算出値を反映するだけとする。
+
+### 表示条件
+
+表示対象:
+
+- `.bms`
+- `.bme`
+- `.bml`
+
+未対応:
+
+- `.zip`
+- プレイノートなしBMS
+- BMS解析失敗時
+
+未対応時は控えめなメッセージを表示する。
+
+例:
+
+- `譜面ファイル選択後に進捗マップを表示します`
+- `単体BMSのみ進捗マップを表示します`
+- `プレイノートを検出できませんでした`
+- `BMS解析に失敗しました`
+
+### フロント側BMS解析
+
+フロント側でもWorker側PROG-02と同じ簡易ルールでBMS本文を解析する。
+
+対象チャンネル:
+
+- `11`-`19`
+- `21`-`29`
+- `51`-`59`
+- `61`-`69`
+
+仕様:
+
+- `#mmmcc:data` 形式のBMSデータ行を対象にする。
+- `data` は2文字単位で読む。
+- `00` はカウントしない。
+- BGM/BPM/STOP/BGA/メタ情報はプレイノート数に含めない。
+- LNはMVPとして `count_start_only` 扱いにする。
+- `firstMeasure` は最初にプレイノートが出る小節。
+- `lastMeasure` は最後にプレイノートが出る小節。
+- `firstMeasure` から `lastMeasure` までの途中の非プレイノート小節も対象に含める。
+
+### グラフ表示
+
+- x軸は小節。
+- y軸は小節ごとの `playNotes`。
+- Canvasで折れ線グラフを描画する。
+- Canvas上に小節ごとの透明ボタンブロックを重ねる。
+- 最初にプレイノートがある小節から8小節ごとに黒線を表示する。
+- 黒線の説明文はUI上に出さない。
+
+進捗マップ付近には以下を控えめに表示する。
+
+- `play notes: xxxx`
+- `measures: first-last`
+- `progress: xx%`
+
+### 塗り操作
+
+- 小節ブロックをクリックすると塗られる。
+- ドラッグで連続して塗れる。
+- 塗られた小節は緑系の半透明色で表示する。
+- 未塗り小節は透明または薄い枠のみとする。
+- 今回は最低限「塗る」操作を実装し、解除操作は必須にしない。
+
+### progress計算
+
+進捗度は以下で算出する。
+
+```text
+round(塗られた小節数 / 対象小節数 * 100)
+```
+
+算出した値は既存の進捗度欄 `progress` に反映する。
+
+手入力欄はPROG-03Aでは残す。将来、進捗マップが安定したら手入力を廃止する可能性がある。
+
+### 完成版にするボタン
+
+進捗マップ付近に「完成版にする」ボタンを表示する。
+
+- `progress >= 80` で有効化する。
+- 押すと未塗り小節をすべて塗る。
+- `progress=100` にする。
+- 進捗度欄も100にする。
+
+PROG-03Aでは、`completed_at` 保存、`progress_map_json` 保存、進捗画像保存は行わない。
+
+### 没譜面との連動
+
+没譜面チェックON時:
+
+- `progress=100`
+- 進捗マップは全塗り扱い
+- 進捗度欄は100固定
+- 進捗マップの小節ブロックは編集不可
+
+没譜面チェックOFF時:
+
+- 通常の進捗マップ操作に戻す。
+- 進捗度欄も通常状態に戻す。
+
+API側でも `isRejected=true` の場合は `progress=100` に強制する既存仕様を維持する。
 
 ## 投稿仕様
 
@@ -178,67 +287,13 @@ MD5はzipファイルではなく、BMS/BME/BMLファイル本体のMD5とする
 
 将来の追記APIで親versionの `is_rejected=1` を検出した場合は `REJECTED_CHART_CANNOT_BE_EXTENDED` を返す。
 
-PROG-01以降、没譜面の進捗グラフは全塗り扱いとする。`progress_map_json` には `kind: "rejected_auto_fill"` のlayerを使う。
+## 進捗グラフ保存仕様
 
-## 進捗グラフ仕様
-
-PROG-01ではDB拡張とJSON/API仕様のみ定義する。Worker側BMS解析、フロント側進捗グラフUI、Canvas/SVG描画、R2への進捗画像保存処理はまだ実装しない。
-
-### 目的
-
-進捗度を手入力だけで管理するのではなく、BMS小節単位の塗りUIから算出できるようにする。
-
-将来のUIでは以下を行う。
-
-- BMSファイルを解析し、小節ごとのプレイノート数を算出する。
-- 小節ごとのプレイノート数を折れ線グラフで表示する。
-- 折れ線グラフと小節ブロックを重ねて表示する。
-- グラフ上に小節ごとの透明ブロックを重ねる。
-- ブロックをクリック/ドラッグすると、その小節が作成済み色に変わる。
-- 追記時は親versionの塗り情報を引き継ぎ、今回追記分は別色で重ね塗りする。
-- 重ね塗りは可能とする。
-- 進捗度は、色が付いた対象小節数のunion / 対象小節数で算出する。
-
-### 対象小節
-
-- プレイノートが最初に出現した小節から開始する。
-- 最後にノートがある小節までを対象にする。
-- その間にある非プレイノート小節も対象小節に含める。
-- 前後の完全な空白小節は進捗対象にしない。
-- `first_note_measure` を対象範囲の開始小節として保存する。
-- `last_note_measure` を対象範囲の終了小節として保存する。
-- `target_measure_count` を対象小節数として保存する。
-
-### 8小節線
-
-進捗グラフUIでは、最初にプレイノートが出る小節から8小節ごとに黒線を表示する。
-
-- 起点は `first_note_measure` とする。
-- ユーザー向けの説明文は不要とする。
-
-### play_notes算出方針
-
-- BGM/BPM/STOP/メタ情報はプレイノート数に含めない。
-- プレイ用チャンネルの `00` 以外をノートとして数える。
-- LNはMVPでは開始のみ1ノートとして数える。
-- `lnPolicy` は `count_start_only` として保存する。
-- `play_notes` はプレイノート総数として `versions.play_notes` に保存する。
+PROG-03Aでは保存しないが、後続Phaseでは以下を使う。
 
 ### measure_notes_json
 
-小節ごとのプレイノート数を保存するJSON文字列。
-
-仕様:
-
-- `schemaVersion`: JSON仕様バージョン。MVPは `1`。
-- `firstMeasure`: 最初にプレイノートが出現した対象小節。
-- `lastMeasure`: 最後にプレイノートがある対象小節。
-- `targetMeasureCount`: `firstMeasure` から `lastMeasure` までの小節数。
-- `playNotes`: プレイノート総数。
-- `lnPolicy`: MVPでは `count_start_only`。
-- `measures`: 対象範囲内の各小節ごとのノート数。途中の非プレイノート小節も `playNotes: 0` として含める。
-
-例:
+Worker側PROG-02で、単体BMS投稿時に小節ごとのプレイノート数を保存するJSON文字列。
 
 ```json
 {
@@ -257,29 +312,7 @@ PROG-01ではDB拡張とJSON/API仕様のみ定義する。Worker側BMS解析、
 
 ### progress_map_json
 
-小節単位の進捗塗り情報を保存するJSON文字列。
-
-仕様:
-
-- `schemaVersion`: JSON仕様バージョン。MVPは `1`。
-- `firstMeasure`: 対象範囲の開始小節。
-- `lastMeasure`: 対象範囲の終了小節。
-- `targetMeasureCount`: 対象小節数。
-- `layers`: versionごとの塗りlayer配列。
-- layerの `ranges` は連続小節範囲を `[start, end]` で保存する。
-- 追記時は親versionのlayersを引き継ぎ、今回分を新しいlayerとして追加する。
-- 重ね塗りは可能。
-- progress計算では、複数layerで塗られた同じ小節も1小節として数える。
-- `progress` は全layerのunionから算出した進捗度のsnapshot。
-
-layerの `kind` 候補:
-
-- `normal`: 初回投稿または通常塗り。
-- `followup`: 追記投稿で追加された塗り。
-- `rejected_auto_fill`: 没譜面による全塗り。
-- `completion_fill`: 完成ボタンによる未塗り小節の全塗り。
-
-例:
+小節単位の進捗塗り情報を保存するJSON文字列。未実装。
 
 ```json
 {
@@ -293,86 +326,32 @@ layerの `kind` 候補:
       "color": "#2f80ed",
       "kind": "normal",
       "ranges": [[12, 18], [22, 25]]
-    },
-    {
-      "versionId": "version_yyy",
-      "color": "#27ae60",
-      "kind": "followup",
-      "ranges": [[18, 24]]
     }
   ],
   "progress": 45
 }
 ```
 
-### 完成ボタン仕様
+layerの `kind` 候補:
 
-将来の進捗グラフUIでは、`progress >= 80` で「完成版にする」ボタンを有効化する。
-
-押した場合:
-
-- 未塗り小節を現在versionの色で全部塗る。
-- `progress=100` にする。
-- `completed_at` を保存する。
-- `progress_map_json` に `kind: "completion_fill"` のlayerを追加する。
+- `normal`
+- `followup`
+- `rejected_auto_fill`
+- `completion_fill`
 
 ### 進捗画像仕様
 
-進捗グラフ画像は、譜面ファイル本体とは別にR2へ保存する。
+進捗グラフ画像は、譜面ファイル本体とは別にR2へ保存する。未実装。
 
 - 保存キー例: `charts/{chartId}/versions/{versionId}/progress/progress.png`
 - 画像形式はPNG推奨。
-- `progress_image_key`: R2 key。
-- `progress_image_mime`: `image/png`。
-- `progress_image_size`: 画像ファイルサイズ。
-- `progress_image_sha256`: 画像SHA256。
-- `progress_image_created_at`: 画像作成日時。
-
-譜面ファイル本体が `file_deleted_at` により削除済みになっても、進捗画像は残す。進捗画像は一覧、折り畳み展開表示、履歴確認で使う。
-
-### progress=100到達後の折り畳み表示
-
-`is_hidden` と `collapsed_by_completion` は分ける。
-
-- `is_hidden`: 管理、削除、BANなどで通常表示から消す状態。
-- `collapsed_by_completion`: 通常一覧で省略するだけの状態。展開すれば確認できる。
-
-`collapsed_by_completion=1` のversionは、展開ボタン経由で進捗画像、差分作者、コメント、進捗度などを確認できる。ただしDLは不可のままとする。
-
-関連カラム:
-
-- `collapsed_by_completion`
-- `collapsed_reason`
-- `collapsed_at`
-- `collapsed_by_version_id`
-
-`collapsed_reason` 候補:
-
-- `superseded_by_completed_descendant`
-
-### DL制御との関係
-
-`progress=100` の完成version自体はDL可能とする。
-
-同じ分岐上で `progress=100` に到達した場合、その完成versionに至るまでの親譜面のうち `progress=1〜99` のversionはDL不可にする。
-
-DL不可から30日経過した譜面ファイルは、将来R2から自動削除する。ただし削除対象は譜面ファイル本体のみで、進捗画像は残す。
-
-### お気に入り仕様
-
-お気に入りはサーバーDBに保存しない。
-
-- version.id 単位でブラウザのlocalStorageに保存する。
-- 各version行に星マークを表示する。
-- クリックすると黄色にする。
-- お気に入りのみ表示するフィルタを将来追加する。
-- MVPでは読み込み済み一覧に対するクライアント側フィルタでよい。
+- 譜面ファイル本体が `file_deleted_at` により削除済みになっても、進捗画像は残す。
 
 ## 分岐version管理
 
 単線version管理ではなく、分岐ツリー型version管理にする。
 
-同じbase versionから複数人が追記した場合は、両方を受け入れる。遅れた投稿者を `VERSION_CONFLICT` で拒否しない。
+同じbase versionから複数人が追記した場合は、両方を受け入れる。
 
 `versions` は以下を持つ。
 
@@ -395,8 +374,6 @@ DL不可から30日経過した譜面ファイルは、将来R2から自動削�
 - コメント
 - DLリンク
 - 追記投稿ボタン
-- 取り下げボタン
-- 削除申請ボタン
 
 一覧の想定難易度は `difficulty` のみを表示する。`level` は併記しない。
 
@@ -421,7 +398,7 @@ schema / migrationファイル:
 - `bans`: BAN情報。
 - `admin_logs`: 管理者向け操作ログ・運用ログ。
 
-PROG-01で `versions` に追加するカラム:
+PROG-01で `versions` に追加したカラム:
 
 | column | 内容 |
 | --- | --- |
@@ -432,7 +409,7 @@ PROG-01で `versions` に追加するカラム:
 | `measure_notes_json` | 小節ごとのプレイノート数JSON。 |
 | `progress_map_json` | 小節単位の塗りlayer JSON。 |
 | `progress_image_key` | 進捗画像のR2 key。 |
-| `progress_image_mime` | 進捗画像MIME。MVP想定は `image/png`。 |
+| `progress_image_mime` | 進捗画像MIME。 |
 | `progress_image_size` | 進捗画像ファイルサイズ。 |
 | `progress_image_sha256` | 進捗画像SHA256。 |
 | `progress_image_created_at` | 進捗画像作成日時。 |
@@ -440,13 +417,6 @@ PROG-01で `versions` に追加するカラム:
 | `collapsed_reason` | 折り畳み理由。 |
 | `collapsed_at` | 折り畳み日時。 |
 | `collapsed_by_version_id` | 折り畳み原因になった完成version ID。 |
-
-追加index:
-
-- `idx_versions_measure_range`
-- `idx_versions_progress_image_key`
-- `idx_versions_collapsed_completion`
-- `idx_versions_collapsed_by_version`
 
 ## API仕様
 
@@ -462,19 +432,15 @@ APIエラーは必ず JSON で `code`, `message`, `detail` を返す。
 - `POST /api/admin/hide-version`
 - `POST /api/admin/ban`
 
-PROG-01ではWorker本体のAPI実装は変更しない。ただし将来 `GET /api/charts` のversionレスポンスで以下を返せるようにAPI仕様を拡張する。
+`GET /api/charts` のversionレスポンスでは以下も返せる。
 
 - `playNotes`
 - `firstNoteMeasure`
 - `lastNoteMeasure`
 - `targetMeasureCount`
 - `measureNotes`
-- `progressMap`
-- `progressImage`
-- `collapsedByCompletion`
-- `collapsedReason`
-- `collapsedAt`
-- `collapsedByVersionId`
+
+`progressMap` / `progressImage` / `collapsedByCompletion` は後続Phaseで実装する。
 
 ## エラー設計
 
@@ -503,7 +469,6 @@ PROG-01ではWorker本体のAPI実装は変更しない。ただし将来 `GET /
 | `AUDIO_FILE_NOT_ALLOWED` | 音源ファイルはアップロードできません。 |
 | `ZIP_INSPECTION_FAILED` | zipファイルの検査に失敗しました。 |
 | `TITLE_ARTIST_PARSE_FAILED` | 譜面情報の読み取りに失敗しました。 |
-| `TITLE_ARTIST_MISMATCH` | 追記先と譜面情報が一致しません。 |
 | `INVALID_PROGRESS` | 進捗度の値が不正です。 |
 | `INVALID_REJECTED_FLAG_FOR_FOLLOWUP` | 追記投稿では没譜面チェックを指定できません。 |
 | `REJECTED_CHART_CANNOT_BE_EXTENDED` | 没譜面から追記投稿はできません。 |
