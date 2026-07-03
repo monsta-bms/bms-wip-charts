@@ -443,6 +443,7 @@ button.progress-complete-button {
   border: 1px solid var(--line);
   border-radius: 6px;
   height: 120px;
+  line-height: 0;
   overflow: hidden;
 }
 
