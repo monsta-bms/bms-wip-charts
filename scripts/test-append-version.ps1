@@ -191,9 +191,7 @@ function Test-IntegerLike($value) {
 }
 
 function New-IntPairArray([int]$startIndex, [int]$endIndex) {
-  $range = New-Object System.Collections.ArrayList
-  [void]$range.Add([int]$startIndex)
-  [void]$range.Add([int]$endIndex)
+  $range = @([int]$startIndex, [int]$endIndex)
   Write-Output -NoEnumerate $range
 }
 
@@ -223,8 +221,8 @@ function Normalize-RangesArray($rangesValue, [int]$layerIndex) {
 
   if ($rangeItems.Count -eq 2 -and (Test-IntegerLike $rangeItems[0]) -and (Test-IntegerLike $rangeItems[1])) {
     $singleRange = Normalize-RangeArray -rangeValue $rangeItems -layerIndex $layerIndex -rangeIndex 0
-    $singleRanges = New-Object System.Collections.ArrayList
-    [void]$singleRanges.Add($singleRange)
+    $singleRanges = @()
+    $singleRanges += ,$singleRange
     Write-Output -NoEnumerate $singleRanges
     return
   }
@@ -233,10 +231,10 @@ function Normalize-RangesArray($rangesValue, [int]$layerIndex) {
     throw "ProgressMap layer $layerIndex ranges must contain at least one range."
   }
 
-  $normalizedRanges = New-Object System.Collections.ArrayList
+  $normalizedRanges = @()
   for ($rangeIndex = 0; $rangeIndex -lt $rangeItems.Count; $rangeIndex += 1) {
     $normalizedRange = Normalize-RangeArray -rangeValue $rangeItems[$rangeIndex] -layerIndex $layerIndex -rangeIndex $rangeIndex
-    [void]$normalizedRanges.Add($normalizedRange)
+    $normalizedRanges += ,$normalizedRange
   }
 
   Write-Output -NoEnumerate $normalizedRanges
@@ -253,12 +251,12 @@ function Normalize-ProgressMapArrays($progressMap) {
     throw "ProgressMap layers must contain at least one layer."
   }
 
-  $normalizedLayers = New-Object System.Collections.ArrayList
+  $normalizedLayers = @()
   for ($layerIndex = 0; $layerIndex -lt $layerItems.Count; $layerIndex += 1) {
     $layer = $layerItems[$layerIndex]
     $ranges = Normalize-RangesArray -rangesValue (Get-PropertyValue $layer "ranges") -layerIndex $layerIndex
     Set-JsonProperty $layer "ranges" $ranges
-    [void]$normalizedLayers.Add($layer)
+    $normalizedLayers += $layer
   }
 
   Set-JsonProperty $progressMap "layers" $normalizedLayers
@@ -327,8 +325,8 @@ function Add-OnePaintedBlock($progressMap) {
   }
 
   $newRange = New-IntPairArray -startIndex ([int]$nextIndex) -endIndex ([int]$nextIndex)
-  $newRanges = New-Object System.Collections.ArrayList
-  [void]$newRanges.Add($newRange)
+  $newRanges = @()
+  $newRanges += ,$newRange
 
   $newLayer = [pscustomobject]@{
     versionId = "pending"
@@ -338,11 +336,11 @@ function Add-OnePaintedBlock($progressMap) {
   Set-JsonProperty $newLayer "ranges" $newRanges
 
   $existingLayers = @($progressMap.layers)
-  $updatedLayers = New-Object System.Collections.ArrayList
+  $updatedLayers = @()
   for ($layerIndex = 0; $layerIndex -lt $existingLayers.Count; $layerIndex += 1) {
-    [void]$updatedLayers.Add($existingLayers[$layerIndex])
+    $updatedLayers += $existingLayers[$layerIndex]
   }
-  [void]$updatedLayers.Add($newLayer)
+  $updatedLayers += $newLayer
 
   Set-JsonProperty $progressMap "layers" $updatedLayers
   Normalize-ProgressMapArrays $progressMap
