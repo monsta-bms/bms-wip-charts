@@ -64,6 +64,7 @@ BRANCH-01A-CHECK スクリプト確認:
 - `GET /api/charts` で新versionが増えていること
 - 同じ親versionへもう一度追記すると `root/b` になること
 - 親とprogressMapが同一の場合は `PROGRESS_MAP_UNCHANGED` になること
+- Windows PowerShell 5.1ではスクリプト内メッセージをASCII英語にして文字化けを避けること
 
 分岐生成:
 
@@ -224,6 +225,18 @@ curl.exe -X POST "http://localhost:8787/api/charts" `
   -password test-password
 ```
 
+Windows PowerShell 5.1確認例:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-append-version.ps1 `
+  -API_BASE_URL "http://localhost:8787" `
+  -chartId "chart_xxx" `
+  -parentVersionId "version_xxx" `
+  -filePath ".\branch-append.bms" `
+  -author "append-author" `
+  -password "test-password"
+```
+
 期待:
 
 - `API_BASE_URL: http://localhost:8787` が表示される
@@ -231,6 +244,7 @@ curl.exe -X POST "http://localhost:8787/api/charts" `
 - HTTP 201で成功する
 - `versionId`, `branchPath`, `progress` が表示される
 - 1回目の `branchPath` が `root/a` 相当になる
+- Windows PowerShell 5.1でもスクリプト内メッセージが文字化けせず、ParserErrorにならない
 
 本番確認例:
 
