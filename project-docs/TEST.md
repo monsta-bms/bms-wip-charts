@@ -50,6 +50,21 @@ BRANCH-01A 追記投稿API:
 - `console.error` に処理段階名が含まれること
 - APIエラーが必ず `code`, `message`, `detail` のJSONになること
 
+BRANCH-01A-CHECK スクリプト確認:
+
+- 初回投稿済みchartに対して `scripts/test-append-version.ps1` で追記投稿できること
+- スクリプトが `API_BASE_URL`, `chartId`, `parentVersionId`, `filePath` を引数で受け取れること
+- `API_BASE_URL` を省略した場合に `http://localhost:8787` が使われること
+- スクリプトが `GET /api/charts` から親versionの `progressMap` を取得すること
+- 親versionの `progressMap` を複製し、未塗りブロックを少なくとも1つ追加して送信すること
+- 追加できる未塗りブロックが無い場合、分かりやすいエラーを表示すること
+- 成功時に `versionId`, `branchPath`, `progress` が表示されること
+- 失敗時に `code`, `message`, `detail` が表示されること
+- `branchPath` が `root/a` などで返ること
+- `GET /api/charts` で新versionが増えていること
+- 同じ親versionへもう一度追記すると `root/b` になること
+- 親とprogressMapが同一の場合は `PROGRESS_MAP_UNCHANGED` になること
+
 分岐生成:
 
 - 親 `root` への1件目の追記が `branch_path=root/a` になること
@@ -194,7 +209,80 @@ curl.exe -X POST "http://localhost:8787/api/charts" `
 
 返った `chartId` と `versionId` を以降の `$chartId`, `$parentVersionId` に使う。
 
+## 追記投稿スクリプト確認
+
+長いcurlを手打ちせず、`scripts/test-append-version.ps1` を使って追記投稿を確認する。
+
+ローカル確認例:
+
+```powershell
+.\scripts\test-append-version.ps1 `
+  -chartId $chartId `
+  -parentVersionId $parentVersionId `
+  -filePath .\branch-append.bms `
+  -author append-author `
+  -password test-password
+```
+
+期待:
+
+- `API_BASE_URL: http://localhost:8787` が表示される
+- 親versionの `progressMap` から未塗りブロックが1つ追加される
+- HTTP 201で成功する
+- `versionId`, `branchPath`, `progress` が表示される
+- 1回目の `branchPath` が `root/a` 相当になる
+
+本番確認例:
+
+```powershell
+.\scripts\test-append-version.ps1 `
+  -API_BASE_URL "https://bms-wip-charts-worker.monsta3228gsl.workers.dev" `
+  -chartId $chartId `
+  -parentVersionId $parentVersionId `
+  -filePath .\branch-append.bms `
+  -author append-author `
+  -comment "production append test" `
+  -password "your-password"
+```
+
+期待:
+
+- 本番Workerへmultipart投稿される
+- 成功時に `versionId`, `branchPath`, `progress` が表示される
+- 失敗時に `code`, `message`, `detail` が表示される
+
+同じ親versionへ2回目の追記確認:
+
+```powershell
+.\scripts\test-append-version.ps1 `
+  -chartId $chartId `
+  -parentVersionId $parentVersionId `
+  -filePath .\branch-append.bms `
+  -author append-author-2 `
+  -password test-password
+```
+
+期待:
+
+- 別内容のファイルを使った場合、2回目の `branchPath` が `root/b` 相当になる
+- 同じファイル内容を使った場合は、既存仕様通り `DUPLICATE_FILE` になる
+
+GET確認:
+
+```powershell
+curl.exe "http://localhost:8787/api/charts?page=1&pageSize=200"
+```
+
+期待:
+
+- 追記投稿後に対象chartの `versions` が増えている
+- 新versionの `parentVersionId` が指定した親version IDになっている
+- 新versionの `branchPath` が `root/a` や `root/b` になっている
+- 新versionの `progressMap` が返る
+
 ## 追記投稿の正常系curl例
+
+スクリプトを使わずに直接確認したい場合の例。
 
 ```powershell
 $chartId = "chart_xxx"
@@ -353,16 +441,17 @@ GitHub Pagesでは以下だけ確認する。
 
 ## 本番Worker確認
 
-本番へdeploy後に、ローカル確認と同じcurlを本番URLへ向けて実行する。
+本番へdeploy後に、ローカル確認と同じcurlまたは `scripts/test-append-version.ps1` を本番URLへ向けて実行する。
 
 ```powershell
-curl.exe -X POST "https://bms-wip-charts-worker.monsta3228gsl.workers.dev/api/charts/$chartId/versions" `
-  -F "file=@.\branch-append.bms;type=text/plain" `
-  -F "parentVersionId=$parentVersionId" `
-  -F "author=append-author" `
-  -F "progressMap=$appendMap" `
-  -F "comment=production append test" `
-  -F "password=test-password"
+.\scripts\test-append-version.ps1 `
+  -API_BASE_URL "https://bms-wip-charts-worker.monsta3228gsl.workers.dev" `
+  -chartId $chartId `
+  -parentVersionId $parentVersionId `
+  -filePath .\branch-append.bms `
+  -author append-author `
+  -comment "production append test" `
+  -password "your-password"
 ```
 
 期待:
