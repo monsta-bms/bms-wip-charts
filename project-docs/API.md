@@ -27,18 +27,19 @@ https://monsta-bms.github.io
 - `GET /api/health`
 - `GET /api/charts`
 - `POST /api/charts` 初回投稿のみ
+- `POST /api/charts/:chartId/versions` 追記投稿
 - `GET /api/files/:fileId`
 - GitHub Pages からの一覧取得
 - GitHub Pages 投稿フォームからの初回投稿
 - Worker側BMS解析: 単体 `.bms` / `.bme` / `.bml` のプレイノート数と対象小節情報を保存する
 - フロント側進捗マップUI
 - 初回投稿時の `progress_map_json` 保存
+- 追記投稿時の `progress_map_json` 保存
 - `GET /api/charts` の `progressMap` 返却
 
 まだ実装しないもの:
 
-- `POST /api/charts/:chartId/versions`
-- 追記投稿
+- 追記投稿UI
 - 取り下げ
 - 削除申請
 - 難易度表API
@@ -121,16 +122,16 @@ PROG-01で `versions` に追加したカラム:
 | `last_note_measure` | 進捗対象の終了小節。PROG-02で単体BMS投稿時に保存する。 |
 | `target_measure_count` | 進捗対象小節数。PROG-02で単体BMS投稿時に保存する。 |
 | `measure_notes_json` | 小節ごとのプレイノート数JSON。PROG-02で単体BMS投稿時に保存する。 |
-| `progress_map_json` | 標準化ブロック単位の進捗塗りJSON。PROG-04Aで初回投稿時に保存する。 |
+| `progress_map_json` | 標準化ブロック単位の進捗塗りJSON。PROG-04Aで初回投稿時、BRANCH-01Aで追記投稿時に保存する。 |
 | `progress_image_key` | 進捗画像のR2 key。未実装。 |
 | `progress_image_mime` | 進捗画像MIME。MVP想定は `image/png`。未実装。 |
 | `progress_image_size` | 進捗画像ファイルサイズ。未実装。 |
 | `progress_image_sha256` | 進捗画像SHA256。未実装。 |
 | `progress_image_created_at` | 進捗画像作成日時。未実装。 |
-| `collapsed_by_completion` | 完成到達後に通常一覧で折り畳むか。未実装。 |
-| `collapsed_reason` | 折り畳み理由。未実装。 |
-| `collapsed_at` | 折り畳み日時。未実装。 |
-| `collapsed_by_version_id` | 折り畳み原因になった完成version ID。未実装。 |
+| `collapsed_by_completion` | 完成到達後に通常一覧で折り畳むか。BRANCH-01Aで同一分岐の途中versionに設定する。 |
+| `collapsed_reason` | 折り畳み理由。BRANCH-01Aでは `superseded_by_completed_descendant`。 |
+| `collapsed_at` | 折り畳み日時。 |
+| `collapsed_by_version_id` | 折り畳み原因になった完成version ID。 |
 
 ## 難易度表示方針
 
@@ -227,6 +228,8 @@ LNはMVPでは `count_start_only` とする。`51`-`59` / `61`-`69` の非`00`�
 
 PROG-04Aでは、フロント側で生成した `progressMap` を初回投稿時に `multipart/form-data` へ追加し、Worker側で検証・progress再計算後に `versions.progress_map_json` へ保存する。
 
+BRANCH-01Aでは、追記投稿時にも `progressMap` を必須項目として受け取り、親versionの塗り情報を引き継いだJSONとして保存する。
+
 ### versionレスポンス追加フィールド
 
 | response field | DB column | 内容 |
@@ -318,12 +321,16 @@ PROG-04Aでは、フロント側で生成した `progressMap` を初回投稿時
 - `progress` は全layerのunionを `targetBlockCount` で割り、Worker側で再計算して保存する。
 - 同じブロックが複数layerで塗られていても、進捗計算では1ブロックとして数える。
 - 初回投稿では1layerを基本とし、Worker保存時に `versionId` を実IDへ置き換える。
-- `progressMap` が未送信の場合は、既存互換としてフォームの `progress` を保存する。
+- 追記投稿では既存layerを維持し、最後のlayerを今回作成したversion IDへ置き換えて保存する。
+- 追記投稿では親versionのunionと同じ塗り範囲なら `PROGRESS_MAP_UNCHANGED` で拒否する。
+- `progressMap` が未送信の場合、初回投稿では既存互換としてフォームの `progress` を保存する。
+- `progressMap` が未送信の場合、追記投稿では `INVALID_PROGRESS_MAP` で拒否する。
 - `isRejected=true` の場合は送信された `progressMap` を信用せず、Worker側で全塗りの `rejected_auto_fill` layerを生成し、`progress=100` として保存する。
 
 `kind` 候補:
 
 - `initial`: 初回投稿の通常塗り。
+- `followup`: 追記投稿の今回追加分。
 - `completion_fill`: 「完成版にする」で未塗りを全塗りした場合。
 - `rejected_auto_fill`: 没譜面投稿でWorker側が全塗り扱いにした場合。
 
@@ -472,6 +479,130 @@ D1から投稿一覧を取得する。
 }
 ```
 
+### POST /api/charts/:chartId/versions
+
+既存chartへ追記投稿する。BRANCH-01Aで実装済み。
+
+送信形式:
+
+- `multipart/form-data`
+
+必須項目:
+
+- `file`
+- `parentVersionId`
+- `author`
+- `progressMap`
+- `password`
+
+任意項目:
+
+- `difficulty`
+- `level`
+- `comment`
+
+受け付けない項目:
+
+- `isRejected=true`
+
+主な仕様:
+
+- 許可拡張子、サイズ上限、R2保存、SHA256/MD5計算、単体BMS解析は初回投稿と同じ方針を使う。
+- `HASH_SECRET` 未設定時は `SERVER_CONFIG_ERROR` を返す。
+- `parentVersionId` のversionが存在しない、非表示、または `chartId` と一致しない場合は拒否する。
+- 親versionが `is_rejected=1` の場合は `REJECTED_CHART_CANNOT_BE_EXTENDED` を返す。
+- 追記投稿で `isRejected=true` が送られた場合は `INVALID_REJECTED_FLAG_FOR_FOLLOWUP` を返す。
+- 単体BMSで `#TITLE` / `#ARTIST` が読み取れる場合、追記先songと正規化比較し、不一致なら `TITLE_ARTIST_MISMATCH` で拒否する。
+- 同じ `file_sha256` は `DUPLICATE_FILE` で拒否する。
+- `progressMap` は必須。JSON構造、`schemaVersion=2`、`blockMode=standardized_measure`、`blocks.length=targetBlockCount`、`layers[].ranges` の範囲を検証する。
+- progressは送信値を信用せず、全layerのunionからWorker側で再計算する。
+- 親versionのprogressMap unionと同じ塗り範囲の場合は `PROGRESS_MAP_UNCHANGED` で拒否する。
+- `difficulty` / `level` が未送信の場合は親versionから継承する。
+- `level` が未送信で `difficulty` から数字を抽出できる場合は抽出値を保存する。
+- 成功時は `post_logs.action='append_version'` / `result='accepted'` を記録する。
+- 失敗時も可能な範囲で `post_logs.action='append_version'` / `result='rejected'` を記録する。
+- D1登録失敗時はR2孤児ファイルを残さないよう削除を試み、削除失敗時は `admin_logs` に記録する。
+
+分岐生成:
+
+- `version_number = parent.version_number + 1`
+- 親versionの既存子数を数え、0件目を `a`、1件目を `b`、以降 `c`...`z`、`aa`... とする。
+- `branch_path = parent.branch_path + '/' + suffix`
+- 例: 親 `root` の1つ目の追記は `root/a`、2つ目は `root/b`。
+- 例: `root/a` への1つ目の追記は `root/a/a`。
+- `displayVersion` はAPI側で `version_number` とbranch suffixから生成する。例: `ver2.0-a`。
+- 競合時はDBのunique制約で検出し、`BRANCH_CREATE_FAILED` を返す。
+
+progress=100時のDL制御:
+
+- 新しく作成された `progress=100` version自体はDL可能にする。
+- 同一分岐上の祖先のうち `progress BETWEEN 1 AND 99` のversionだけをDL不可にする。
+- 対象祖先には以下を設定する。
+  - `download_blocked=1`
+  - `download_block_reason='superseded_by_completed_descendant'`
+  - `download_blocked_at=CURRENT_TIMESTAMP`
+  - `collapsed_by_completion=1`
+  - `collapsed_reason='superseded_by_completed_descendant'`
+  - `collapsed_at=CURRENT_TIMESTAMP`
+  - `collapsed_by_version_id=<new version id>`
+- `progress=100` の祖先や他分岐のversionは変更しない。
+- D1行やR2ファイルの物理削除はしない。R2自動削除は将来のCron対象。
+
+成功レスポンス例:
+
+```json
+{
+  "chartId": "chart_xxx",
+  "parentVersionId": "version_parent",
+  "versionId": "version_new",
+  "displayVersion": "ver2.0-a",
+  "branchPath": "root/a",
+  "progress": 72,
+  "progressMap": {
+    "schemaVersion": 2,
+    "blockMode": "standardized_measure",
+    "firstMeasure": 4,
+    "lastMeasure": 80,
+    "targetBlockCount": 77,
+    "blocks": [],
+    "layers": [],
+    "progress": 72
+  },
+  "fileId": "file_xxx",
+  "file": {
+    "name": "append.bms",
+    "size": 12345,
+    "sha256": "...",
+    "md5": "...",
+    "downloadUrl": "/api/files/file_xxx"
+  },
+  "analysis": {
+    "encoding": "utf-8",
+    "playNotes": 1234,
+    "firstNoteMeasure": 4,
+    "lastNoteMeasure": 80,
+    "targetMeasureCount": 77,
+    "measureNotes": {}
+  },
+  "warnings": [],
+  "message": "created"
+}
+```
+
+curl.exe例:
+
+```powershell
+curl.exe -X POST "https://bms-wip-charts-worker.monsta3228gsl.workers.dev/api/charts/chart_xxx/versions" ^
+  -F "file=@C:\path\append.bms" ^
+  -F "parentVersionId=version_parent" ^
+  -F "difficulty=★12" ^
+  -F "level=12" ^
+  -F "author=tester" ^
+  -F "progressMap={\"schemaVersion\":2,\"blockMode\":\"standardized_measure\",\"firstMeasure\":1,\"lastMeasure\":3,\"targetBlockCount\":3,\"blocks\":[{\"index\":0,\"startMeasure\":1,\"endMeasure\":1,\"startTimeSec\":null,\"endTimeSec\":null,\"playNotes\":4},{\"index\":1,\"startMeasure\":2,\"endMeasure\":2,\"startTimeSec\":null,\"endTimeSec\":null,\"playNotes\":0},{\"index\":2,\"startMeasure\":3,\"endMeasure\":3,\"startTimeSec\":null,\"endTimeSec\":null,\"playNotes\":8}],\"layers\":[{\"versionId\":\"version_parent\",\"color\":\"#1f7a5c\",\"kind\":\"initial\",\"ranges\":[[0,0]]},{\"versionId\":\"pending\",\"color\":\"#2563eb\",\"kind\":\"followup\",\"ranges\":[[1,2]]}],\"progress\":100}" ^
+  -F "comment=追記テスト" ^
+  -F "password=local-password"
+```
+
 ### GET /api/files/:fileId
 
 投稿ファイルをダウンロードする。
@@ -486,17 +617,6 @@ D1から投稿一覧を取得する。
 - R2取得処理が失敗した場合は `R2_DOWNLOAD_FAILED`。
 
 ## スタブのままのエンドポイント
-
-### POST /api/charts/:chartId/versions
-
-既存chartへ追記投稿する。現時点では未実装。
-
-将来の本実装では以下のルールを適用する。
-
-- 追記投稿では `isRejected` を指定できない。
-- 追記投稿で `isRejected=true` が送られた場合は `INVALID_REJECTED_FLAG_FOR_FOLLOWUP` を返す。
-- 追記元の親versionが `is_rejected=1` の場合は `REJECTED_CHART_CANNOT_BE_EXTENDED` を返す。
-- 親versionの `progress_map_json` layersを引き継ぎ、今回追記分を新しいlayerとして追加する。
 
 ### POST /api/admin/hide-version
 
@@ -547,10 +667,17 @@ DBには `displayVersion` / `display_version` を保存しない。
 | `INVALID_PROGRESS_MAP` | 400 | `progressMap` がJSONとして不正、または必須構造を満たさない。 |
 | `PROGRESS_MAP_OUT_OF_RANGE` | 400 | `progressMap.layers[].ranges` がブロック範囲外を指している。 |
 | `PROGRESS_MAP_BLOCK_COUNT_MISMATCH` | 400 | `progressMap.targetBlockCount` と `blocks.length` が一致しない。 |
+| `PROGRESS_MAP_UNCHANGED` | 409 | 追記投稿の塗り範囲が親versionと同じ。 |
 | `INVALID_EXTENSION` | 400 | 許可されていない拡張子。 |
 | `FILE_TOO_LARGE` | 400 | ファイルサイズ上限超過。 |
 | `DUPLICATE_FILE` | 409 | 同じ `file_sha256` のversionが既にある。 |
 | `CHART_ALREADY_EXISTS` | 409 | 初回投稿対象のchartが既にある。 |
+| `CHART_NOT_FOUND` | 404 | 追記対象chartが存在しない、または非表示。 |
+| `PARENT_VERSION_NOT_FOUND` | 404 | 追記元versionが存在しない、または非表示。 |
+| `PARENT_VERSION_CHART_MISMATCH` | 409 | 追記元versionが指定chartに属していない。 |
+| `TITLE_ARTIST_MISMATCH` | 409 | 追記ファイルの `#TITLE` / `#ARTIST` が追記先songと一致しない。 |
+| `BRANCH_CREATE_FAILED` | 500 | 分岐suffix/branch_pathの作成またはDB unique競合処理に失敗。 |
+| `VERSION_INSERT_FAILED` | 500 | 追記versionのD1保存に失敗。 |
 | `R2_UPLOAD_FAILED` | 500 | R2への保存に失敗。 |
 | `DB_INSERT_FAILED` | 500 | D1への保存に失敗。 |
 | `FILE_NOT_FOUND` | 404 | fileIdに対応するversionがない。 |
@@ -581,3 +708,4 @@ DBには `displayVersion` / `display_version` を保存しない。
 | `R2_USAGE_EXCEEDED_8GB` | `warning` | R2使用量が8GBを超えた。 |
 | `AUTO_FILE_DELETE_SUCCEEDED` | `info` | DL不可から30日経過したR2ファイルの自動削除に成功した。 |
 | `AUTO_FILE_DELETE_FAILED` | `error` | DL不可から30日経過したR2ファイルの自動削除に失敗した。 |
+| `R2_ORPHAN_FILE` | `error` | D1登録失敗後のR2 cleanupにも失敗し、孤児ファイルが残った可能性がある。 |
