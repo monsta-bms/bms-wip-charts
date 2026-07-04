@@ -119,6 +119,58 @@ function Get-PropertyValue($object, [string]$name) {
   return $property.Value
 }
 
+function Get-NestedPropertyValue($object, [string]$path) {
+  if ($null -eq $object -or [string]::IsNullOrWhiteSpace($path)) {
+    return $null
+  }
+
+  $current = $object
+  foreach ($part in $path.Split(".")) {
+    $current = Get-PropertyValue $current $part
+    if ($null -eq $current) {
+      return $null
+    }
+  }
+
+  return $current
+}
+
+function Get-FirstPropertyValue($object, [string[]]$paths) {
+  foreach ($path in $paths) {
+    $value = Get-NestedPropertyValue $object $path
+    if ($null -ne $value) {
+      return $value
+    }
+  }
+
+  return $null
+}
+
+function Format-OptionalValue($value) {
+  if ($null -eq $value) {
+    return "<not returned>"
+  }
+
+  $text = [string]$value
+  if ([string]::IsNullOrWhiteSpace($text)) {
+    return "<not returned>"
+  }
+
+  return $text
+}
+
+function Format-JsonBody($body, [string]$bodyText) {
+  if ($null -ne $body) {
+    return ($body | ConvertTo-Json -Depth 100)
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($bodyText)) {
+    return $bodyText
+  }
+
+  return "<empty response body>"
+}
+
 function Set-JsonProperty($object, [string]$name, $value) {
   Add-Member -InputObject $object -MemberType NoteProperty -Name $name -Value $value -Force
 }
@@ -317,9 +369,16 @@ $result = Invoke-MultipartPost `
 
 if ($result.IsSuccess) {
   Write-Host "Append request succeeded." -ForegroundColor Green
-  Write-Host "versionId: $($result.Body.versionId)"
-  Write-Host "branchPath: $($result.Body.branchPath)"
-  Write-Host "progress: $($result.Body.progress)"
+  Write-Host "Full response body:"
+  Write-Host (Format-JsonBody $result.Body $result.BodyText)
+
+  $versionId = Get-FirstPropertyValue $result.Body @("versionId", "id", "version.id", "data.versionId", "data.version.id")
+  $branchPath = Get-FirstPropertyValue $result.Body @("branchPath", "branch_path", "version.branchPath", "version.branch_path", "data.branchPath", "data.branch_path", "data.version.branchPath", "data.version.branch_path")
+  $progress = Get-FirstPropertyValue $result.Body @("progress", "version.progress", "data.progress", "data.version.progress")
+
+  Write-Host "versionId: $(Format-OptionalValue $versionId)"
+  Write-Host "branchPath: $(Format-OptionalValue $branchPath)"
+  Write-Host "progress: $(Format-OptionalValue $progress)"
   exit 0
 }
 
@@ -327,9 +386,12 @@ Write-Host "Append request failed." -ForegroundColor Red
 Write-Host "HTTP status: $($result.StatusCode)"
 
 if ($null -ne $result.Body) {
-  Write-Host "code: $($result.Body.code)"
-  Write-Host "message: $($result.Body.message)"
-  Write-Host "detail: $($result.Body.detail)"
+  $errorCode = Get-PropertyValue $result.Body "code"
+  $errorMessage = Get-PropertyValue $result.Body "message"
+  $errorDetail = Get-PropertyValue $result.Body "detail"
+  Write-Host "code: $(Format-OptionalValue $errorCode)"
+  Write-Host "message: $(Format-OptionalValue $errorMessage)"
+  Write-Host "detail: $(Format-OptionalValue $errorDetail)"
 } else {
   Write-Host $result.BodyText
 }
