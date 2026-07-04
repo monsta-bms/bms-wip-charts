@@ -21,11 +21,34 @@
         <section class="panel submit-panel" aria-labelledby="submitTitle">
           <div class="section-heading">
             <h2 id="submitTitle">投稿フォーム</h2>
-            <span class="version-badge">初回投稿 ver1.0</span>
+            <span class="version-badge" id="formModeBadge">初回投稿 ver1.0</span>
           </div>
 
           <form id="chartForm" novalidate>
             <p class="required-note"><span class="required-mark">*</span>項目は入力必須。</p>
+
+            <div class="append-context" id="appendContext" hidden>
+              <div class="append-context-title" id="appendContextTitle">追記投稿</div>
+              <dl class="append-context-grid">
+                <div>
+                  <dt>追記元</dt>
+                  <dd id="appendParentVersion">-</dd>
+                </div>
+                <div>
+                  <dt>曲名</dt>
+                  <dd id="appendParentSong">-</dd>
+                </div>
+                <div>
+                  <dt>アーティスト</dt>
+                  <dd id="appendParentArtist">-</dd>
+                </div>
+                <div>
+                  <dt>仮差分名</dt>
+                  <dd id="appendParentChartName">-</dd>
+                </div>
+              </dl>
+              <p class="append-context-note">追記投稿では楽曲情報と仮差分名は追記元を引き継ぎます。今回追加した進捗範囲だけを塗って送信してください。</p>
+            </div>
 
             <div class="form-sections">
               <fieldset class="form-section file-info-section">
@@ -89,7 +112,7 @@
                     </div>
                   </div>
 
-                  <label class="field compact-text-field">
+                  <label class="field compact-text-field chart-name-field">
                     <span class="field-label">仮差分名 <span class="required-mark">*</span></span>
                     <input id="chartName" name="chartName" type="text" autocomplete="off" placeholder="例: [ANOTHER] / [ALITHER] / 仮差分" required>
                     <span class="field-help">同じ曲の別差分を区別するための名前です。</span>
@@ -132,7 +155,7 @@
                       <span class="field-help">0〜100の整数。没譜面ON時は100固定です。</span>
                     </label>
 
-                    <label class="field checkbox-field">
+                    <label class="field checkbox-field rejected-field">
                       <input id="isRejected" name="isRejected" type="checkbox" value="true">
                       <span class="checkbox-copy">
                         <span class="checkbox-title">没譜面</span>
@@ -170,6 +193,7 @@
             </div>
 
             <div class="form-actions">
+              <button class="secondary" id="cancelAppendButton" type="button" hidden>追記をやめる</button>
               <button id="submitButton" type="submit">投稿する</button>
             </div>
           </form>
@@ -186,5 +210,6 @@
 
     <script src="./app.js"></script>
     <script src="./progress-thumbnail-list.js"></script>
+    <script src="./branch-append-ui.js"></script>
   </body>
 </html>
