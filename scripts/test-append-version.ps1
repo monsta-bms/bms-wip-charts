@@ -133,7 +133,7 @@ function New-RangeArray([int]$startIndex, [int]$endIndex) {
 function New-SingleRangeArray($range) {
   $ranges = New-Object 'object[]' 1
   $ranges[0] = $range
-  return $ranges
+  Write-Output -NoEnumerate $ranges
 }
 
 function Append-ArrayItem($items, $newItem) {
@@ -145,7 +145,7 @@ function Append-ArrayItem($items, $newItem) {
   }
 
   $updatedItems[$existingItems.Count] = $newItem
-  return $updatedItems
+  Write-Output -NoEnumerate $updatedItems
 }
 
 function Get-PaintedIndexes($progressMap) {
