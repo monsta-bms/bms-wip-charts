@@ -37,7 +37,8 @@ param(
 
   [string]$Author = "append-check",
   [string]$Comment = "BRANCH-01A-CHECK append test",
-  [string]$Password = "test-password"
+  [string]$Password = "test-password",
+  [switch]$WriteDebugProgressMap
 )
 
 Set-StrictMode -Version Latest
@@ -176,33 +177,90 @@ function Test-StubResponse($body) {
   return $null -ne $mode -and ([string]$mode).Trim().ToLowerInvariant() -eq "stub"
 }
 
+function Test-IntegerLike($value) {
+  if ($null -eq $value) {
+    return $false
+  }
+
+  try {
+    [void][int]$value
+    return $true
+  } catch {
+    return $false
+  }
+}
+
+function New-IntPairArray([int]$startIndex, [int]$endIndex) {
+  $range = New-Object 'object[]' 2
+  $range[0] = [int]$startIndex
+  $range[1] = [int]$endIndex
+  Write-Output -NoEnumerate $range
+}
+
 function Set-JsonProperty($object, [string]$name, $value) {
   Add-Member -InputObject $object -MemberType NoteProperty -Name $name -Value $value -Force
 }
 
-function New-RangeArray([int]$startIndex, [int]$endIndex) {
-  $range = New-Object 'object[]' 2
-  $range[0] = $startIndex
-  $range[1] = $endIndex
-  Write-Output -NoEnumerate $range
-}
-
-function New-SingleRangeArray($range) {
-  $ranges = New-Object 'object[]' 1
-  $ranges[0] = $range
-  Write-Output -NoEnumerate $ranges
-}
-
-function Append-ArrayItem($items, $newItem) {
-  $existingItems = @($items)
-  $updatedItems = New-Object 'object[]' ($existingItems.Count + 1)
-
-  for ($index = 0; $index -lt $existingItems.Count; $index += 1) {
-    $updatedItems[$index] = $existingItems[$index]
+function Normalize-RangeArray($rangeValue, [int]$layerIndex, [int]$rangeIndex) {
+  $rangeItems = @($rangeValue)
+  if ($rangeItems.Count -ne 2) {
+    throw "ProgressMap layer $layerIndex range $rangeIndex must contain exactly two values."
   }
 
-  $updatedItems[$existingItems.Count] = $newItem
-  Write-Output -NoEnumerate $updatedItems
+  if (-not (Test-IntegerLike $rangeItems[0]) -or -not (Test-IntegerLike $rangeItems[1])) {
+    throw "ProgressMap layer $layerIndex range $rangeIndex must contain numeric start and end indexes."
+  }
+
+  return New-IntPairArray -startIndex ([int]$rangeItems[0]) -endIndex ([int]$rangeItems[1])
+}
+
+function Normalize-RangesArray($rangesValue, [int]$layerIndex) {
+  if ($null -eq $rangesValue) {
+    throw "ProgressMap layer $layerIndex is missing ranges."
+  }
+
+  $rangeItems = @($rangesValue)
+
+  if ($rangeItems.Count -eq 2 -and (Test-IntegerLike $rangeItems[0]) -and (Test-IntegerLike $rangeItems[1])) {
+    $singleRange = Normalize-RangeArray -rangeValue $rangeItems -layerIndex $layerIndex -rangeIndex 0
+    $singleRanges = New-Object 'object[]' 1
+    $singleRanges[0] = $singleRange
+    Write-Output -NoEnumerate $singleRanges
+    return
+  }
+
+  if ($rangeItems.Count -lt 1) {
+    throw "ProgressMap layer $layerIndex ranges must contain at least one range."
+  }
+
+  $normalizedRanges = New-Object 'object[]' $rangeItems.Count
+  for ($rangeIndex = 0; $rangeIndex -lt $rangeItems.Count; $rangeIndex += 1) {
+    $normalizedRanges[$rangeIndex] = Normalize-RangeArray -rangeValue $rangeItems[$rangeIndex] -layerIndex $layerIndex -rangeIndex $rangeIndex
+  }
+
+  Write-Output -NoEnumerate $normalizedRanges
+}
+
+function Normalize-ProgressMapArrays($progressMap) {
+  $layersValue = Get-PropertyValue $progressMap "layers"
+  if ($null -eq $layersValue) {
+    throw "ProgressMap is missing layers."
+  }
+
+  $layerItems = @($layersValue)
+  if ($layerItems.Count -lt 1) {
+    throw "ProgressMap layers must contain at least one layer."
+  }
+
+  $normalizedLayers = New-Object 'object[]' $layerItems.Count
+  for ($layerIndex = 0; $layerIndex -lt $layerItems.Count; $layerIndex += 1) {
+    $layer = $layerItems[$layerIndex]
+    $ranges = Normalize-RangesArray -rangesValue (Get-PropertyValue $layer "ranges") -layerIndex $layerIndex
+    Set-JsonProperty $layer "ranges" ([object[]]$ranges)
+    $normalizedLayers[$layerIndex] = $layer
+  }
+
+  Set-JsonProperty $progressMap "layers" ([object[]]$normalizedLayers)
 }
 
 function Get-PaintedIndexes($progressMap) {
@@ -238,6 +296,8 @@ function Add-OnePaintedBlock($progressMap) {
     throw "Parent progressMap must use schemaVersion=2 and blockMode=standardized_measure."
   }
 
+  Normalize-ProgressMapArrays $progressMap
+
   $targetBlockCount = [int](Get-PropertyValue $progressMap "targetBlockCount")
   if ($targetBlockCount -le 0) {
     throw "Parent progressMap.targetBlockCount is zero or negative. Cannot add an unpainted block."
@@ -265,17 +325,26 @@ function Add-OnePaintedBlock($progressMap) {
     [void]$painted.Add([int]$nextIndex)
   }
 
-  $newRange = New-RangeArray -startIndex ([int]$nextIndex) -endIndex ([int]$nextIndex)
+  $newRange = New-IntPairArray -startIndex ([int]$nextIndex) -endIndex ([int]$nextIndex)
+  $newRanges = New-Object 'object[]' 1
+  $newRanges[0] = $newRange
+
   $newLayer = [pscustomobject]@{
     versionId = "pending"
     color = "#2563eb"
     kind = "followup"
-    ranges = New-SingleRangeArray $newRange
   }
+  Set-JsonProperty $newLayer "ranges" ([object[]]$newRanges)
 
-  $layers = Append-ArrayItem $progressMap.layers $newLayer
+  $existingLayers = @($progressMap.layers)
+  $updatedLayers = New-Object 'object[]' ($existingLayers.Count + 1)
+  for ($layerIndex = 0; $layerIndex -lt $existingLayers.Count; $layerIndex += 1) {
+    $updatedLayers[$layerIndex] = $existingLayers[$layerIndex]
+  }
+  $updatedLayers[$existingLayers.Count] = $newLayer
 
-  Set-JsonProperty $progressMap "layers" $layers
+  Set-JsonProperty $progressMap "layers" ([object[]]$updatedLayers)
+  Normalize-ProgressMapArrays $progressMap
   Set-JsonProperty $progressMap "progress" ([int][Math]::Round(($painted.Count / $targetBlockCount) * 100))
 
   return [pscustomobject]@{
@@ -285,7 +354,73 @@ function Add-OnePaintedBlock($progressMap) {
   }
 }
 
+function Assert-ProgressMapJsonShape([string]$json) {
+  $parsed = $null
+  try {
+    $parsed = $json | ConvertFrom-Json
+  } catch {
+    throw "JSON validation failed: progressMap must be valid JSON before POST. $($_.Exception.Message)"
+  }
+
+  $layersValue = Get-PropertyValue $parsed "layers"
+  if ($null -eq $layersValue) {
+    throw "JSON validation failed: progressMap.layers is missing."
+  }
+
+  if (-not ($layersValue -is [System.Array])) {
+    throw "JSON validation failed: progressMap.layers must serialize as a JSON array."
+  }
+
+  $layers = @($layersValue)
+  if ($layers.Count -lt 1) {
+    throw "JSON validation failed: progressMap.layers must contain at least one layer."
+  }
+
+  for ($layerIndex = 0; $layerIndex -lt $layers.Count; $layerIndex += 1) {
+    $rangesValue = Get-PropertyValue $layers[$layerIndex] "ranges"
+    if ($null -eq $rangesValue) {
+      throw "JSON validation failed: progressMap.layers[$layerIndex].ranges is missing."
+    }
+
+    if (-not ($rangesValue -is [System.Array])) {
+      throw "JSON validation failed: progressMap.layers[$layerIndex].ranges must serialize as a JSON array."
+    }
+
+    $ranges = @($rangesValue)
+    if ($ranges.Count -lt 1) {
+      throw "JSON validation failed: progressMap.layers[$layerIndex].ranges must contain at least one range."
+    }
+
+    for ($rangeIndex = 0; $rangeIndex -lt $ranges.Count; $rangeIndex += 1) {
+      $range = $ranges[$rangeIndex]
+      if (-not ($range -is [System.Array])) {
+        throw "JSON validation failed: progressMap.layers[$layerIndex].ranges[$rangeIndex] must serialize as a JSON array."
+      }
+
+      $rangeItems = @($range)
+      if ($rangeItems.Count -ne 2) {
+        throw "JSON validation failed: progressMap.layers[$layerIndex].ranges[$rangeIndex] must contain exactly two values."
+      }
+
+      if (-not (Test-IntegerLike $rangeItems[0]) -or -not (Test-IntegerLike $rangeItems[1])) {
+        throw "JSON validation failed: progressMap.layers[$layerIndex].ranges[$rangeIndex] must contain numeric values."
+      }
+    }
+  }
+
+  $firstRanges = @((Get-PropertyValue $layers[0] "ranges"))
+  $firstRange = @($firstRanges[0])
+
+  return [pscustomobject]@{
+    LayersIsArray = $true
+    LayerCount = [int]$layers.Count
+    FirstRangesIsArray = $true
+    FirstRangeLength = [int]$firstRange.Count
+  }
+}
+
 function ConvertTo-ProgressMapJson($progressMap) {
+  Normalize-ProgressMapArrays $progressMap
   $json = $progressMap | ConvertTo-Json -Depth 50 -Compress
   $trimmedJson = $json.TrimStart()
 
@@ -293,13 +428,12 @@ function ConvertTo-ProgressMapJson($progressMap) {
     throw "JSON validation failed: progressMap JSON must start with '{'. Actual prefix: $($trimmedJson.Substring(0, [Math]::Min(20, $trimmedJson.Length)))"
   }
 
-  try {
-    $null = $json | ConvertFrom-Json
-  } catch {
-    throw "JSON validation failed: progressMap must be valid JSON before POST. $($_.Exception.Message)"
-  }
+  $shape = Assert-ProgressMapJsonShape $json
 
-  return $json
+  return [pscustomobject]@{
+    Json = $json
+    Shape = $shape
+  }
 }
 
 function Get-PreviewText([string]$value, [int]$maxLength) {
@@ -315,6 +449,13 @@ function Write-ProgressMapTempFile([string]$progressMapJson) {
   $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
   [System.IO.File]::WriteAllText($tempPath, $progressMapJson, $utf8NoBom)
   return $tempPath
+}
+
+function Write-DebugProgressMapFile([string]$progressMapJson) {
+  $debugPath = Join-Path $PSScriptRoot "debug-progressMap.json"
+  $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+  [System.IO.File]::WriteAllText($debugPath, $progressMapJson, $utf8NoBom)
+  return $debugPath
 }
 
 function Invoke-CurlMultipartPost(
@@ -386,13 +527,21 @@ $parent = Find-ParentVersion -apiBaseUrl $apiBaseUrl -targetChartId $ChartId -ta
 $parentVersion = $parent.Version
 $progressMap = Copy-JsonObject $parentVersion.progressMap
 $appendMap = Add-OnePaintedBlock $progressMap
-$progressMapJson = ConvertTo-ProgressMapJson $appendMap.ProgressMap
+$progressMapJsonResult = ConvertTo-ProgressMapJson $appendMap.ProgressMap
+$progressMapJson = $progressMapJsonResult.Json
+$progressMapShape = $progressMapJsonResult.Shape
 $progressMapPreview = Get-PreviewText $progressMapJson 200
 
 Write-Host "Parent displayVersion: $($parentVersion.displayVersion)"
 Write-Host "Added block index: $($appendMap.AddedBlockIndex)"
 Write-Host "Expected recalculated progress: $($appendMap.Progress)%"
 Write-Host "progressMapJson preview: $progressMapPreview"
+Write-Host "progressMapJson layers array: $($progressMapShape.LayersIsArray); layers count: $($progressMapShape.LayerCount); first ranges array: $($progressMapShape.FirstRangesIsArray); first range length: $($progressMapShape.FirstRangeLength)"
+
+if ($WriteDebugProgressMap) {
+  $debugProgressMapPath = Write-DebugProgressMapFile $progressMapJson
+  Write-Host "Debug progressMap JSON: $debugProgressMapPath"
+}
 
 $encodedChartId = [System.Uri]::EscapeDataString($ChartId)
 $postUrl = "$apiBaseUrl/api/charts/$encodedChartId/versions"
