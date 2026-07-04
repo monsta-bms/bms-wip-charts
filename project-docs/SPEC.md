@@ -17,6 +17,7 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。
 - GitHub Pages の静的1ページUI
 - `GET /api/charts` のD1実データ読み取り
 - `POST /api/charts` の初回投稿
+- `POST /api/charts/:chartId/versions` の追記投稿
 - `GET /api/files/:fileId` のR2実ダウンロード
 - GitHub Pages から本番Worker APIへの一覧取得/初回投稿
 - 没譜面初回投稿の `progress=100` 強制
@@ -25,6 +26,7 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。
 - フロント側進捗マップUI
 - 進捗マップ上段の標準化ブロック単位密度表示
 - 初回投稿時の `progress_map_json` 保存
+- 追記投稿時の `progress_map_json` 保存
 - `GET /api/charts` の `progressMap` 返却
 - `progressMap` の一覧側簡易サムネイル表示
 - `versions.file_deleted_at` / `versions.file_delete_reason` の自動削除準備カラム
@@ -32,9 +34,9 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。
 
 未実装:
 
+- 追記投稿UI
 - 進捗画像PNGのR2保存
 - ZIP内部のBMS解析
-- `POST /api/charts/:chartId/versions` の追記投稿
 - 取り下げAPI
 - 削除申請API
 - 難易度表API
@@ -45,7 +47,7 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。
 - R2自動削除本体
 - Turnstile
 - 一覧への進捗画像表示
-- 完成到達後の折り畳み表示
+- 完成到達後の一覧折り畳みUI
 - お気に入り★
 - 本格的な譜面ミニビュー
 
@@ -124,6 +126,8 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。
 2. 下段: 進捗を塗るための標準化ブロック。クリック/範囲ドラッグで編集可能。
 
 PROG-04Aでは、フロント側で作成した塗り状態を `progressMap` として初回投稿APIへ送信する。Workerは `progressMap` を検証し、progressを再計算した上で `versions.progress_map_json` と `versions.progress` に保存する。
+
+BRANCH-01Aでは、追記投稿APIでも `progressMap` を必須で受け取り、親versionの塗り情報を引き継いだ複数layer JSONとして保存する。
 
 ### 表示条件
 
@@ -274,9 +278,9 @@ hover表示:
 round(塗られた標準化ブロック数 / 標準化ブロック総数 * 100)
 ```
 
-算出した値は既存の進捗度欄 `progress` に反映する。初回投稿時は `progressMap` も送信し、Worker側で同じルールにより再計算した値を保存する。
+算出した値は既存の進捗度欄 `progress` に反映する。初回投稿時と追記投稿時は `progressMap` も送信し、Worker側で同じルールにより再計算した値を保存する。
 
-手入力欄は残す。`progressMap` が送信されない場合の後方互換入力として使う。
+手入力欄は残す。初回投稿では `progressMap` が送信されない場合の後方互換入力として使う。追記投稿では `progressMap` を必須にする。
 
 ### 完成版にするボタン
 
@@ -287,6 +291,7 @@ round(塗られた標準化ブロック数 / 標準化ブロック総数 * 100)
 - `progress=100` にする。
 - 進捗度欄も100にする。
 - 初回投稿時に `kind=completion_fill` のlayerとして保存する。
+- 追記投稿時も最終layerに今回versionの `completion_fill` または `followup` 塗りとして保存できる。
 
 `completed_at` は投稿API側で `progress=100` の場合に保存する。進捗画像保存はまだ行わない。
 
@@ -338,6 +343,8 @@ BMS/BME/BMLファイルから以下を取得・保存できるようにする。
 
 MD5はzipファイルではなく、BMS/BME/BMLファイル本体のMD5とする。
 
+追記投稿では、単体BMSから `#TITLE` / `#ARTIST` を読み取れる場合、追記先songと正規化比較する。不一致の場合は `TITLE_ARTIST_MISMATCH` で拒否する。BMS titleに差分名を含める慣習があるため、MVPでは完全一致だけでなく包含一致も許容する。将来、より厳密な差分名分離ルールを検討する。
+
 ### 想定難易度とlevel
 
 ユーザーが入力・閲覧する項目は `difficulty` に統一し、表示名は「想定難易度」とする。
@@ -349,6 +356,7 @@ MD5はzipファイルではなく、BMS/BME/BMLファイル本体のMD5とする
 - DB上の `versions.level` カラムは残す。
 - `GET /api/charts` では既存API互換のため `level` を返してよい。
 - 将来の難易度表APIでは `level` を返してよい。
+- 追記投稿では `difficulty` / `level` が未送信の場合、親versionの値を継承する。
 
 ## 没譜面チェック
 
@@ -365,9 +373,9 @@ MD5はzipファイルではなく、BMS/BME/BMLファイル本体のMD5とする
 - 難易度表と一覧では没譜面バッジで通常の完成譜面と区別する。
 - このversionからの追記は禁止する。
 
-追記投稿 `POST /api/charts/:chartId/versions` では `isRejected` を指定できない。将来の追記APIで `isRejected=true` が送られた場合は `INVALID_REJECTED_FLAG_FOR_FOLLOWUP` を返す。
+追記投稿 `POST /api/charts/:chartId/versions` では `isRejected` を指定できない。`isRejected=true` が送られた場合は `INVALID_REJECTED_FLAG_FOR_FOLLOWUP` を返す。
 
-将来の追記APIで親versionの `is_rejected=1` を検出した場合は `REJECTED_CHART_CANNOT_BE_EXTENDED` を返す。
+追記APIで親versionの `is_rejected=1` を検出した場合は `REJECTED_CHART_CANNOT_BE_EXTENDED` を返す。
 
 ## 進捗グラフ保存仕様
 
@@ -392,7 +400,7 @@ Worker側PROG-02で、単体BMS投稿時に小節ごとのプレイノート数�
 
 ### progress_map_json
 
-標準化ブロック単位の進捗塗り情報を保存するJSON文字列。PROG-04Aでは初回投稿で保存する。
+標準化ブロック単位の進捗塗り情報を保存するJSON文字列。PROG-04Aでは初回投稿で保存し、BRANCH-01Aでは追記投稿でも保存する。
 
 ```json
 {
@@ -432,12 +440,16 @@ Worker側PROG-02で、単体BMS投稿時に小節ごとのプレイノート数�
 - progressは全layerのunion / `targetBlockCount` で算出する。
 - 重複して塗られたブロックは1回だけ数える。
 - 初回投稿では1layerでよい。
+- 追記投稿では親versionまでのlayerを維持し、今回追記分を最後のlayerとして保存する。
+- Workerは追記投稿保存時、最後のlayerの `versionId` を今回作成したversion IDへ置き換える。
+- 追記投稿では親versionのunionと同じ塗り範囲を `PROGRESS_MAP_UNCHANGED` で拒否する。
 - Workerは保存前にprogressを再計算し、`versions.progress` にも同じ値を保存する。
 - `isRejected=true` の場合、送信されたprogressMapではなくWorker生成の全塗りprogressMapを保存する。
 
 layerの `kind` 候補:
 
 - `initial`
+- `followup`
 - `completion_fill`
 - `rejected_auto_fill`
 
@@ -461,6 +473,41 @@ layerの `kind` 候補:
 - `version_number`: 整数。表示時に `verX.0` 形式へ変換する。
 - `branch_label`: 同じ親からの分岐識別子。
 - `branch_path`: ツリー表示、ページング、祖先DL制御、並び順に使う内部パス。
+
+BRANCH-01Aの追記投稿では以下で分岐を生成する。
+
+- `version_number = parent.version_number + 1`
+- 同じ親を持つ既存子version数を数え、0件目を `a`、1件目を `b`、以降 `c`...`z`、`aa`... とする。
+- `branch_label` にはこのsuffixを保存する。
+- `branch_path = parent.branch_path + '/' + branch_label` とする。
+- 例: 親 `root` の1件目は `root/a`、2件目は `root/b`。
+- 例: 親 `root/a` の1件目は `root/a/a`。
+- DBの `UNIQUE(chart_id, branch_path)` で競合を防ぐ。
+- 表示名 `displayVersion` はDBに保存せず、API側で `version_number` / `branch_label` / `branch_path` から生成する。
+
+## progress=100到達時の親version DL制御
+
+追記投稿で新versionのprogressが100になった場合、完成version自体はDL可能にする。
+
+同一分岐上の祖先のうち `progress BETWEEN 1 AND 99` の途中versionのみ、以下を設定する。
+
+- `download_blocked=1`
+- `download_block_reason='superseded_by_completed_descendant'`
+- `download_blocked_at=CURRENT_TIMESTAMP`
+- `collapsed_by_completion=1`
+- `collapsed_reason='superseded_by_completed_descendant'`
+- `collapsed_at=CURRENT_TIMESTAMP`
+- `collapsed_by_version_id=<new version id>`
+
+対象外:
+
+- 新しく作成されたprogress=100 version
+- 既にprogress=100の祖先version
+- `progress=0` のversion
+- 他分岐のversion
+- 非表示version
+
+この処理ではD1行やR2ファイルは物理削除しない。DL不可から30日経過したR2譜面ファイル削除は、将来のCron Triggerで実行する。
 
 ## 投稿一覧
 
@@ -535,7 +582,7 @@ PROG-01で `versions` に追加したカラム:
 | `progress_image_size` | 進捗画像ファイルサイズ。 |
 | `progress_image_sha256` | 進捗画像SHA256。 |
 | `progress_image_created_at` | 進捗画像作成日時。 |
-| `collapsed_by_completion` | 完成到達後に通常一覧で折り畳むか。 |
+| `collapsed_by_completion` | 完成到達後に通常一覧で折り畳むか。BRANCH-01Aでは同一分岐上の途中versionに設定する。 |
 | `collapsed_reason` | 折り畳み理由。 |
 | `collapsed_at` | 折り畳み日時。 |
 | `collapsed_by_version_id` | 折り畳み原因になった完成version ID。 |
@@ -556,6 +603,8 @@ APIエラーは必ず JSON で `code`, `message`, `detail` を返す。
 
 `POST /api/charts` は `progressMap` JSON文字列を受け取れる。Workerは `progressMap` のrangesからprogressを再計算し、`versions.progress` と `versions.progress_map_json` に保存する。
 
+`POST /api/charts/:chartId/versions` は `file`, `parentVersionId`, `author`, `progressMap`, `password` を必須として受け取る。Workerは追記元を検証し、分岐versionを作成し、progressMapのunionからprogressを再計算して保存する。
+
 `GET /api/charts` のversionレスポンスでは以下も返せる。
 
 - `playNotes`
@@ -565,7 +614,7 @@ APIエラーは必ず JSON で `code`, `message`, `detail` を返す。
 - `measureNotes`
 - `progressMap`
 
-`progressImage` / `collapsedByCompletion` は後続Phaseで実装する。
+`progressImage` は後続Phaseで実装する。`collapsedByCompletion` はDB更新済みデータをGET側で表示・折り畳みに使う後続Phaseで扱う。
 
 ## エラー設計
 
@@ -594,16 +643,22 @@ APIエラーは必ず JSON で `code`, `message`, `detail` を返す。
 | `AUDIO_FILE_NOT_ALLOWED` | 音源ファイルはアップロードできません。 |
 | `ZIP_INSPECTION_FAILED` | zipファイルの検査に失敗しました。 |
 | `TITLE_ARTIST_PARSE_FAILED` | 譜面情報の読み取りに失敗しました。 |
+| `TITLE_ARTIST_MISMATCH` | 譜面ファイルの曲名またはアーティストが追記先と一致しません。 |
 | `INVALID_PROGRESS` | 進捗度の値が不正です。 |
 | `INVALID_PROGRESS_MAP` | 進捗マップ情報が不正です。 |
 | `PROGRESS_MAP_OUT_OF_RANGE` | 進捗マップの範囲が不正です。 |
 | `PROGRESS_MAP_BLOCK_COUNT_MISMATCH` | 進捗マップのブロック数が一致しません。 |
+| `PROGRESS_MAP_UNCHANGED` | 進捗マップに変更がありません。 |
 | `INVALID_REJECTED_FLAG_FOR_FOLLOWUP` | 追記投稿では没譜面チェックを指定できません。 |
 | `REJECTED_CHART_CANNOT_BE_EXTENDED` | 没譜面から追記投稿はできません。 |
 | `DUPLICATE_FILE` | 同じファイルは投稿できません。 |
 | `CHART_NOT_FOUND` | 対象の差分が見つかりません。 |
+| `PARENT_VERSION_NOT_FOUND` | 追記元のバージョンが見つかりません。 |
+| `PARENT_VERSION_CHART_MISMATCH` | 追記元のバージョンが指定差分に属していません。 |
 | `VERSION_NOT_FOUND` | 対象のバージョンが見つかりません。 |
 | `FILE_NOT_FOUND` | ファイルが見つかりません。 |
+| `BRANCH_CREATE_FAILED` | 分岐番号の作成に失敗しました。 |
+| `VERSION_INSERT_FAILED` | 追記データの保存に失敗しました。 |
 | `R2_UPLOAD_FAILED` | ファイル保存に失敗しました。 |
 | `R2_DOWNLOAD_FAILED` | ファイル取得に失敗しました。 |
 | `DB_READ_FAILED` | データ取得に失敗しました。 |
@@ -612,6 +667,8 @@ APIエラーは必ず JSON で `code`, `message`, `detail` を返す。
 | `CORS_ORIGIN_NOT_ALLOWED` | 許可されていないOriginです。 |
 | `METHOD_NOT_ALLOWED` | 許可されていないHTTPメソッドです。 |
 | `CONFIG_MISSING` | 必要な設定が不足しています。 |
+| `SERVER_CONFIG_ERROR` | サーバー設定が不足しています。 |
+| `UNKNOWN_ERROR` | 予期しないエラーが発生しました。 |
 | `INTERNAL_ERROR` | 予期しないエラーが発生しました。 |
 
 管理ログ用コード:
@@ -621,3 +678,4 @@ APIエラーは必ず JSON で `code`, `message`, `detail` を返す。
 | `R2_USAGE_EXCEEDED_8GB` | `warning` | R2使用量が8GBを超えた。 |
 | `AUTO_FILE_DELETE_SUCCEEDED` | `info` | DL不可から30日経過したR2ファイルの自動削除に成功した。 |
 | `AUTO_FILE_DELETE_FAILED` | `error` | DL不可から30日経過したR2ファイルの自動削除に失敗した。 |
+| `R2_ORPHAN_FILE` | `error` | D1登録失敗後のR2 cleanupにも失敗し、孤児ファイルが残った可能性がある。 |
