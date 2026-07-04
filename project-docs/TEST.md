@@ -53,8 +53,8 @@ BRANCH-01A 追記投稿API:
 BRANCH-01A-CHECK スクリプト確認:
 
 - 初回投稿済みchartに対して `scripts/test-append-version.ps1` で追記投稿できること
-- スクリプトが `API_BASE_URL`, `chartId`, `parentVersionId`, `filePath` を引数で受け取れること
-- `API_BASE_URL` を省略した場合に `http://localhost:8787` が使われること
+- スクリプトが `ApiBaseUrl`, `ChartId`, `ParentVersionId`, `FilePath` を引数で受け取れること
+- `ApiBaseUrl` を省略した場合に `http://localhost:8787` が使われること
 - スクリプトが `GET /api/charts` から親versionの `progressMap` を取得すること
 - 親versionの `progressMap` を複製し、未塗りブロックを少なくとも1つ追加して送信すること
 - 追加できる未塗りブロックが無い場合、分かりやすいエラーを表示すること
@@ -218,23 +218,23 @@ curl.exe -X POST "http://localhost:8787/api/charts" `
 
 ```powershell
 .\scripts\test-append-version.ps1 `
-  -chartId $chartId `
-  -parentVersionId $parentVersionId `
-  -filePath .\branch-append.bms `
-  -author append-author `
-  -password test-password
+  -ChartId $chartId `
+  -ParentVersionId $parentVersionId `
+  -FilePath .\branch-append.bms `
+  -Author append-author `
+  -Password test-password
 ```
 
 Windows PowerShell 5.1確認例:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-append-version.ps1 `
-  -API_BASE_URL "http://localhost:8787" `
-  -chartId "chart_xxx" `
-  -parentVersionId "version_xxx" `
-  -filePath ".\branch-append.bms" `
-  -author "append-author" `
-  -password "test-password"
+  -ApiBaseUrl "http://localhost:8787" `
+  -ChartId "chart_xxx" `
+  -ParentVersionId "version_xxx" `
+  -FilePath ".\branch-append.bms" `
+  -Author "append-author" `
+  -Password "test-password"
 ```
 
 期待:
@@ -250,13 +250,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-append-ve
 
 ```powershell
 .\scripts\test-append-version.ps1 `
-  -API_BASE_URL "https://bms-wip-charts-worker.monsta3228gsl.workers.dev" `
-  -chartId $chartId `
-  -parentVersionId $parentVersionId `
-  -filePath .\branch-append.bms `
-  -author append-author `
-  -comment "production append test" `
-  -password "your-password"
+  -ApiBaseUrl "https://bms-wip-charts-worker.monsta3228gsl.workers.dev" `
+  -ChartId $chartId `
+  -ParentVersionId $parentVersionId `
+  -FilePath .\branch-append.bms `
+  -Author append-author `
+  -Comment "production append test" `
+  -Password "your-password"
 ```
 
 期待:
@@ -269,11 +269,11 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-append-ve
 
 ```powershell
 .\scripts\test-append-version.ps1 `
-  -chartId $chartId `
-  -parentVersionId $parentVersionId `
-  -filePath .\branch-append.bms `
-  -author append-author-2 `
-  -password test-password
+  -ChartId $chartId `
+  -ParentVersionId $parentVersionId `
+  -FilePath .\branch-append.bms `
+  -Author append-author-2 `
+  -Password test-password
 ```
 
 期待:
@@ -459,13 +459,13 @@ GitHub Pagesでは以下だけ確認する。
 
 ```powershell
 .\scripts\test-append-version.ps1 `
-  -API_BASE_URL "https://bms-wip-charts-worker.monsta3228gsl.workers.dev" `
-  -chartId $chartId `
-  -parentVersionId $parentVersionId `
-  -filePath .\branch-append.bms `
-  -author append-author `
-  -comment "production append test" `
-  -password "your-password"
+  -ApiBaseUrl "https://bms-wip-charts-worker.monsta3228gsl.workers.dev" `
+  -ChartId $chartId `
+  -ParentVersionId $parentVersionId `
+  -FilePath .\branch-append.bms `
+  -Author append-author `
+  -Comment "production append test" `
+  -Password "your-password"
 ```
 
 期待:
