@@ -120,12 +120,22 @@ function Get-PropertyValue($object, [string]$name) {
 }
 
 function Set-JsonProperty($object, [string]$name, $value) {
-  if ($null -ne $object.PSObject.Properties[$name]) {
-    $object.$name = $value
-    return
-  }
+  Add-Member -InputObject $object -MemberType NoteProperty -Name $name -Value $value -Force
+}
 
-  Add-Member -InputObject $object -MemberType NoteProperty -Name $name -Value $value
+function New-ObjectArrayList($items) {
+  $list = New-Object 'System.Collections.ArrayList'
+  foreach ($item in @($items)) {
+    [void]$list.Add($item)
+  }
+  return $list
+}
+
+function New-RangeArray([int]$startIndex, [int]$endIndex) {
+  $range = New-Object 'object[]' 2
+  $range[0] = $startIndex
+  $range[1] = $endIndex
+  return $range
 }
 
 function Get-PaintedIndexes($progressMap) {
@@ -186,14 +196,20 @@ function Add-OnePaintedBlock($progressMap) {
 
   [void]$painted.Add([int]$nextIndex)
 
+  $ranges = New-Object 'System.Collections.ArrayList'
+  [void]$ranges.Add((New-RangeArray -startIndex ([int]$nextIndex) -endIndex ([int]$nextIndex)))
+
   $newLayer = [pscustomobject]@{
     versionId = "pending"
     color = "#2563eb"
     kind = "followup"
-    ranges = @(,@([int]$nextIndex, [int]$nextIndex))
+    ranges = $ranges.ToArray()
   }
 
-  Set-JsonProperty $progressMap "layers" (@(@($progressMap.layers) + $newLayer))
+  $layers = New-ObjectArrayList $progressMap.layers
+  [void]$layers.Add($newLayer)
+
+  Set-JsonProperty $progressMap "layers" ($layers.ToArray())
   Set-JsonProperty $progressMap "progress" ([int][Math]::Round(($painted.Count / $targetBlockCount) * 100))
 
   return [pscustomobject]@{
