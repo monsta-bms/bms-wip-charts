@@ -26,6 +26,7 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。
 - 進捗マップ上段の標準化ブロック単位密度表示
 - 初回投稿時の `progress_map_json` 保存
 - `GET /api/charts` の `progressMap` 返却
+- `progressMap` の一覧側簡易サムネイル表示
 - `versions.file_deleted_at` / `versions.file_delete_reason` の自動削除準備カラム
 - PROG-01 進捗グラフ用DBカラムとJSON/API仕様
 
@@ -471,6 +472,7 @@ layerの `kind` 候補:
 - 想定難易度
 - 差分作者
 - 進捗度
+- `progressMap` がある場合の簡易進捗サムネイル
 - 没譜面バッジ
 - コメント
 - DLリンク
@@ -478,7 +480,26 @@ layerの `kind` 候補:
 
 一覧の想定難易度は `difficulty` のみを表示する。`level` は併記しない。
 
-将来の進捗グラフ対応後は、各version行または展開表示で進捗画像サムネイルを表示できるようにする。
+PROG-04Bでは、保存済み `progressMap` があるversion行に読み取り専用の簡易進捗サムネイルを表示する。これは進捗画像PNG/R2保存ではなく、ブラウザ上で `progressMap` を復元して表示するMVP表示とする。
+
+### 一覧側progressMapサムネイル
+
+一覧側の簡易進捗サムネイルは以下の仕様とする。
+
+- `GET /api/charts` の `version.progressMap` を利用する。
+- `progressMap.schemaVersion=2` かつ `blockMode=standardized_measure` を対象にする。
+- `progressMap.blocks.length` を総ブロック数として扱う。
+- `progressMap.layers[].ranges` をすべて展開し、塗り済みblock indexのunionを作る。
+- 複数layerが同じblockを塗っていても、表示上は1回だけ塗り済みとして扱う。
+- MVPではlayerごとの色分けは行わず、unionを緑系の塗りとして表示する。
+- 将来の追記versionでは、layerごとに色分けできるように表示処理を拡張できる設計にする。
+- 表示は横長の小さいブロックバーと `progress xx%` の数値にする。
+- ブロック数が多い場合は、一覧行が大きくなりすぎないように表示セル数を間引き・集約してよい。
+- クリック操作や編集操作は持たせない。
+- `progressMap` がnull、欠落、不正JSON、または必須構造不足の場合はサムネイルを表示せず、従来の進捗度表示だけを維持する。
+- サムネイル復元失敗は画面全体のエラーにせず、必要なら `console.warn` に留める。
+
+将来の進捗画像対応後は、各version行または展開表示でR2保存済みの進捗画像サムネイルを表示できるようにする。
 
 ## DB仕様
 
