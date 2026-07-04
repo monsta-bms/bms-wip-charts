@@ -171,6 +171,11 @@ function Format-JsonBody($body, [string]$bodyText) {
   return "<empty response body>"
 }
 
+function Test-StubResponse($body) {
+  $mode = Get-PropertyValue $body "mode"
+  return $null -ne $mode -and ([string]$mode).Trim().ToLowerInvariant() -eq "stub"
+}
+
 function Set-JsonProperty($object, [string]$name, $value) {
   Add-Member -InputObject $object -MemberType NoteProperty -Name $name -Value $value -Force
 }
@@ -368,6 +373,13 @@ $result = Invoke-MultipartPost `
   -targetPassword $Password
 
 if ($result.IsSuccess) {
+  if (Test-StubResponse $result.Body) {
+    Write-Host "API returned stub response. Deploy or route implementation is not active." -ForegroundColor Red
+    Write-Host "Full response body:"
+    Write-Host (Format-JsonBody $result.Body $result.BodyText)
+    exit 1
+  }
+
   Write-Host "Append request succeeded." -ForegroundColor Green
   Write-Host "Full response body:"
   Write-Host (Format-JsonBody $result.Body $result.BodyText)
