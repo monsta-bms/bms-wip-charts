@@ -58,10 +58,13 @@ BRANCH-01A-CHECK スクリプト確認:
 - スクリプトが `GET /api/charts` から親versionの `progressMap` を取得すること
 - 親versionの `progressMap` を複製し、未塗りブロックを少なくとも1つ追加して送信すること
 - 追加できる未塗りブロックが無い場合、分かりやすいエラーを表示すること
-- 成功時に `versionId`, `branchPath`, `progress` が表示されること
+- 成功時にレスポンスJSON全文が整形表示されること
+- 成功時に `versionId`, `branchPath`, `progress` が返っていれば表示されること
+- 成功レスポンスに `versionId`, `branchPath`, `progress` が無い場合でも `<not returned>` と表示し、スクリプト自体は失敗扱いにしないこと
 - 失敗時に `code`, `message`, `detail` が表示されること
 - `branchPath` が `root/a` などで返ること
 - `GET /api/charts` で新versionが増えていること
+- 実際の成功確認は `GET /api/charts` で対象chartの `versions` が増えたか確認すること
 - 同じ親versionへもう一度追記すると `root/b` になること
 - 親とprogressMapが同一の場合は `PROGRESS_MAP_UNCHANGED` になること
 - Windows PowerShell 5.1ではスクリプト内メッセージをASCII英語にして文字化けを避けること
@@ -243,8 +246,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-append-ve
 - `API_BASE_URL: http://localhost:8787` が表示される
 - 親versionの `progressMap` から未塗りブロックが1つ追加される
 - HTTP 201で成功する
-- `versionId`, `branchPath`, `progress` が表示される
-- 1回目の `branchPath` が `root/a` 相当になる
+- 成功レスポンスJSON全文が表示される
+- `versionId`, `branchPath`, `progress` が返っていれば表示される
+- 返っていない項目は `<not returned>` と表示され、スクリプト自体は成功終了する
+- 1回目の `branchPath` が `root/a` 相当になるかは、レスポンスまたは `GET /api/charts` で確認する
 - Windows PowerShell 5.1でもスクリプト内メッセージが文字化けせず、ParserErrorにならない
 
 本番確認例:
@@ -263,7 +268,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-append-ve
 期待:
 
 - 本番Workerへmultipart投稿される
-- 成功時に `versionId`, `branchPath`, `progress` が表示される
+- 成功時にレスポンスJSON全文が表示される
+- `versionId`, `branchPath`, `progress` が返っていれば表示される
+- 返っていない項目は `<not returned>` と表示される
 - 失敗時に `code`, `message`, `detail` が表示される
 
 同じ親versionへ2回目の追記確認:
@@ -473,7 +480,8 @@ GitHub Pagesでは以下だけ確認する。
 
 - CORS設定が既存のGitHub Pages Originを壊していない
 - HTTP 201
-- `branchPath`, `progress`, `progressMap`, `file.downloadUrl` が返る
+- 成功レスポンスJSON全文が表示される
+- `versionId`, `branchPath`, `progress` が無いレスポンスでもスクリプト自体は成功終了する
 - `GET /api/charts` で追記versionが表示される
 - `GET /api/files/:fileId` で新versionのファイルを取得できる
 
