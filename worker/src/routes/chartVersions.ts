@@ -26,7 +26,7 @@ type PostLogContext = {
   fileSha256?: string | null;
 };
 
-type ChartLookupRow = {
+type ChartRow = {
   chart_id: string;
   chart_name: string;
   chart_is_hidden: number;
@@ -40,11 +40,8 @@ type ChartLookupRow = {
 type ParentVersionRow = {
   id: string;
   chart_id: string;
-  parent_version_id: string | null;
   version_number: number;
-  branch_label: string;
   branch_path: string;
-  progress: number;
   progress_map_json: string | null;
   difficulty: string | null;
   level: string | null;
@@ -52,13 +49,8 @@ type ParentVersionRow = {
   is_rejected: number;
 };
 
-type ExistingVersionRow = {
-  id: string;
-};
-
-type ChildCountRow = {
-  child_count: number;
-};
+type ExistingVersionRow = { id: string };
+type ChildCountRow = { child_count: number };
 
 type AppendVersionInput = {
   file: File;
@@ -89,13 +81,9 @@ function makeId(prefix: string): string {
 }
 
 function getClientIpMarker(request: Request): string {
-  const cfIp = request.headers.get("CF-Connecting-IP")?.trim();
-  if (cfIp) {
-    return cfIp;
-  }
-
-  const forwardedFor = request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim();
-  return forwardedFor || "unknown";
+  return request.headers.get("CF-Connecting-IP")?.trim()
+    || request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim()
+    || "unknown";
 }
 
 function getUserAgentMarker(request: Request): string {
@@ -103,9 +91,10 @@ function getUserAgentMarker(request: Request): string {
 }
 
 async function buildPostLogContext(request: Request, secret: string): Promise<PostLogContext> {
-  const ipHash = await hashWithSecret(`ip:${getClientIpMarker(request)}`, secret);
-  const uaHash = await hashWithSecret(`ua:${getUserAgentMarker(request)}`, secret);
-  return { ipHash, uaHash };
+  return {
+    ipHash: await hashWithSecret(`ip:${getClientIpMarker(request)}`, secret),
+    uaHash: await hashWithSecret(`ua:${getUserAgentMarker(request)}`, secret)
+  };
 }
 
 function parseBooleanField(value: string): boolean {
@@ -113,11 +102,7 @@ function parseBooleanField(value: string): boolean {
 }
 
 function isFormFile(value: FormDataEntryValue | null): value is File {
-  return typeof value === "object" &&
-    value !== null &&
-    "arrayBuffer" in value &&
-    "name" in value &&
-    "size" in value;
+  return typeof value === "object" && value !== null && "arrayBuffer" in value && "name" in value && "size" in value;
 }
 
 function getFormText(form: FormData, name: string): string {
@@ -158,37 +143,22 @@ function buildBranchLabel(index: number): string {
 }
 
 function buildDisplayVersion(versionNumber: number, branchLabel: string, branchPath: string): string {
-  const base = `ver${versionNumber}.0`;
   const suffix = branchLabel.trim() || branchPath
     .split("/")
     .filter((part) => part && part !== "root")
     .join("");
-
+  const base = `ver${versionNumber}.0`;
   return suffix ? `${base}-${suffix}` : base;
 }
 
-function normalizeForIdentity(value: string | null): string {
-  return normalizeText(value ?? "");
-}
-
-function isMetadataTitleCompatible(uploadTitle: string | null, songTitle: string): boolean {
-  const uploaded = normalizeForIdentity(uploadTitle);
-  const existing = normalizeForIdentity(songTitle);
+function metadataTextMatches(uploadedValue: string | null, existingValue: string): boolean {
+  const uploaded = normalizeText(uploadedValue ?? "");
+  const existing = normalizeText(existingValue);
   if (!uploaded || !existing) {
     return true;
   }
 
   // TODO: Replace this tolerant check with a stricter title/diff-name parser when BMS title conventions are finalized.
-  return uploaded === existing || uploaded.includes(existing) || existing.includes(uploaded);
-}
-
-function isMetadataArtistCompatible(uploadArtist: string | null, songArtist: string): boolean {
-  const uploaded = normalizeForIdentity(uploadArtist);
-  const existing = normalizeForIdentity(songArtist);
-  if (!uploaded || !existing) {
-    return true;
-  }
-
   return uploaded === existing || uploaded.includes(existing) || existing.includes(uploaded);
 }
 
@@ -360,7 +330,6 @@ async function parseAppendVersionInput(
   const author = getFormText(form, "author");
   const progressMapText = getFormText(form, "progressMap");
   const password = getFormText(form, "password");
-
   const missingFields = [
     ["parentVersionId", parentVersionId],
     ["author", author],
@@ -425,7 +394,6 @@ async function parseAppendVersionInput(
         fileSha256,
         message: errorDetail(error)
       });
-
       metadataWarning = {
         code: "BMS_METADATA_PARSE_FAILED",
         message: "譜面情報の自動読み取りに失敗しました。",
@@ -442,7 +410,6 @@ async function parseAppendVersionInput(
         fileSha256,
         message: errorDetail(error)
       });
-
       analysisWarnings.push({
         code: "BMS_ANALYSIS_FAILED",
         message: "譜面の小節解析に失敗したため、進捗グラフ情報なしで投稿します。",
@@ -475,7 +442,7 @@ async function parseAppendVersionInput(
   };
 }
 
-async function selectChart(env: Env, chartId: string): Promise<ChartLookupRow | null> {
+async function selectChart(env: Env, chartId: string): Promise<ChartRow | null> {
   return env.DB.prepare(`
     SELECT
       charts.id AS chart_id,
@@ -490,7 +457,7 @@ async function selectChart(env: Env, chartId: string): Promise<ChartLookupRow | 
     INNER JOIN songs ON songs.id = charts.song_id
     WHERE charts.id = ?
     LIMIT 1
-  `).bind(chartId).first<ChartLookupRow>();
+  `).bind(chartId).first<ChartRow>();
 }
 
 async function selectParentVersion(env: Env, parentVersionId: string): Promise<ParentVersionRow | null> {
@@ -498,11 +465,8 @@ async function selectParentVersion(env: Env, parentVersionId: string): Promise<P
     SELECT
       id,
       chart_id,
-      parent_version_id,
       version_number,
-      branch_label,
       branch_path,
-      progress,
       progress_map_json,
       difficulty,
       level,
@@ -520,8 +484,8 @@ async function validateChartAndParent(
   context: PostLogContext,
   chartId: string,
   parentVersionId: string
-): Promise<{ ok: true; chart: ChartLookupRow; parent: ParentVersionRow } | { ok: false; response: Response }> {
-  let chart: ChartLookupRow | null;
+): Promise<{ ok: true; value: { chart: ChartRow; parent: ParentVersionRow } } | { ok: false; response: Response }> {
+  let chart: ChartRow | null;
   let parent: ParentVersionRow | null;
 
   try {
@@ -534,7 +498,6 @@ async function validateChartAndParent(
       parentVersionId,
       message: errorDetail(error)
     });
-
     return {
       ok: false,
       response: await failAppendVersion(request, env, context, {
@@ -609,7 +572,7 @@ async function validateChartAndParent(
     };
   }
 
-  return { ok: true, chart, parent };
+  return { ok: true, value: { chart, parent } };
 }
 
 async function countExistingChildren(env: Env, parentVersionId: string): Promise<number> {
@@ -618,7 +581,6 @@ async function countExistingChildren(env: Env, parentVersionId: string): Promise
     FROM versions
     WHERE parent_version_id = ?
   `).bind(parentVersionId).first<ChildCountRow>();
-
   return Number(row?.child_count ?? 0);
 }
 
@@ -627,7 +589,6 @@ function buildSafeR2Key(chartId: string, branchPath: string, fileId: string, ext
     .split("/")
     .map((part) => part.replace(/[^A-Za-z0-9_-]/g, "_") || "branch")
     .join("/");
-
   return `charts/${chartId}/versions/${safeBranchPath}/${fileId}${extension}`;
 }
 
@@ -638,15 +599,7 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
       code: "SERVER_CONFIG_ERROR",
       target: "HASH_SECRET"
     });
-
-    return apiError(
-      request,
-      env,
-      500,
-      "SERVER_CONFIG_ERROR",
-      "サーバー設定が不足しています。",
-      "HASH_SECRET secret is not configured."
-    );
+    return apiError(request, env, 500, "SERVER_CONFIG_ERROR", "サーバー設定が不足しています。", "HASH_SECRET secret is not configured.");
   }
 
   const context = await buildPostLogContext(request, secret);
@@ -666,8 +619,7 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
 
     const { chart, parent } = parentValidation.value;
 
-    if (!isMetadataTitleCompatible(input.parsedMetadata.title, chart.song_title) ||
-      !isMetadataArtistCompatible(input.parsedMetadata.artist, chart.song_artist)) {
+    if (!metadataTextMatches(input.parsedMetadata.title, chart.song_title) || !metadataTextMatches(input.parsedMetadata.artist, chart.song_artist)) {
       console.error("[append-version-title-artist-check] BMS metadata does not match parent song", {
         code: "TITLE_ARTIST_MISMATCH",
         chartId,
@@ -675,7 +627,6 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
         parsedTitle: input.parsedMetadata.title,
         parsedArtist: input.parsedMetadata.artist
       });
-
       return failAppendVersion(request, env, context, {
         status: 409,
         code: "TITLE_ARTIST_MISMATCH",
@@ -698,7 +649,6 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
         fileSha256: input.fileSha256,
         message: errorDetail(error)
       });
-
       return failAppendVersion(request, env, context, {
         status: 500,
         code: "DB_READ_FAILED",
@@ -725,7 +675,6 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
         parentVersionId: input.parentVersionId,
         message: errorDetail(error)
       });
-
       return failAppendVersion(request, env, context, {
         status: 500,
         code: "BRANCH_CREATE_FAILED",
@@ -757,7 +706,6 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
         versionId,
         message: preparedProgressMap.failure.detail
       });
-
       return failAppendVersion(request, env, context, preparedProgressMap.failure);
     }
 
@@ -766,29 +714,21 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
     const difficulty = input.difficulty || parent.difficulty || null;
     const level = input.level || parent.level || (difficulty ? extractLevelFromDifficulty(difficulty) : "") || null;
     const measureNotesJson = input.bmsAnalysis ? JSON.stringify(input.bmsAnalysis.measureNotesJson) : null;
-    const progressMapJson = preparedProgressMap.progressMapJson;
     const title = input.parsedMetadata.title || chart.song_title;
     const artist = input.parsedMetadata.artist || chart.song_artist;
     const responseWarnings: ApiWarning[] = [
       ...(input.metadataWarning ? [input.metadataWarning] : []),
       ...input.analysisWarnings
     ];
-    const warningDetail = responseWarnings
-      .map((warning) => warning.detail ? `${warning.code}:${warning.detail}` : warning.code)
-      .join(", ") || "none";
+    const warningDetail = responseWarnings.map((warning) => warning.detail ? `${warning.code}:${warning.detail}` : warning.code).join(", ") || "none";
     const analysisDetail = input.bmsAnalysis
       ? `bmsAnalysis=ok; playNotes=${input.bmsAnalysis.playNotes}; firstNoteMeasure=${input.bmsAnalysis.firstNoteMeasure ?? "null"}; lastNoteMeasure=${input.bmsAnalysis.lastNoteMeasure ?? "null"}; targetMeasureCount=${input.bmsAnalysis.targetMeasureCount}`
       : `bmsAnalysis=skipped_or_failed; extension=${input.extension}`;
 
     try {
       await env.FILES.put(r2Key, input.fileBytes, {
-        httpMetadata: {
-          contentType: input.file.type || "application/octet-stream"
-        },
-        customMetadata: {
-          fileId,
-          fileSha256: input.fileSha256
-        }
+        httpMetadata: { contentType: input.file.type || "application/octet-stream" },
+        customMetadata: { fileId, fileSha256: input.fileSha256 }
       });
     } catch (error) {
       console.error("[append-version-r2-upload] failed to upload chart file to R2", {
@@ -799,7 +739,6 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
         fileId,
         message: errorDetail(error)
       });
-
       return failAppendVersion(request, env, context, {
         status: 500,
         code: "R2_UPLOAD_FAILED",
@@ -859,7 +798,7 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
         input.bmsAnalysis?.lastNoteMeasure ?? null,
         input.bmsAnalysis?.targetMeasureCount ?? null,
         measureNotesJson,
-        progressMapJson,
+        preparedProgressMap.progressMapJson,
         input.comment,
         difficulty,
         level,
@@ -900,12 +839,7 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
           AND progress BETWEEN 1 AND 99
           AND branch_path <> ?
           AND ? LIKE branch_path || '/%'
-      `).bind(
-        versionId,
-        chartId,
-        branchPath,
-        branchPath
-      ));
+      `).bind(versionId, chartId, branchPath, branchPath));
     }
 
     statements.push(env.DB.prepare(`
@@ -948,7 +882,6 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
         branchPath,
         message: detail
       });
-
       await cleanupR2AfterDbFailure(env, r2Key, fileId, error);
 
       try {
@@ -1007,13 +940,7 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
     });
 
     try {
-      await writePostLog(
-        env,
-        context,
-        "rejected",
-        "UNKNOWN_ERROR",
-        `Unexpected append version failure: ${errorDetail(error)}`
-      );
+      await writePostLog(env, context, "rejected", "UNKNOWN_ERROR", `Unexpected append version failure: ${errorDetail(error)}`);
     } catch (postLogError) {
       console.error("[post-log-write] failed to write append unknown failure log", {
         code: "POST_LOG_WRITE_FAILED",
@@ -1033,20 +960,9 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
   }
 }
 
-export function handleChartVersionsRoute(
-  request: Request,
-  env: Env,
-  chartId: string
-): Promise<Response> | Response {
+export function handleChartVersionsRoute(request: Request, env: Env, chartId: string): Promise<Response> | Response {
   if (!chartId) {
-    return apiError(
-      request,
-      env,
-      400,
-      "INVALID_CHART_ID",
-      "曲IDが不正です。",
-      "chartId path parameter is empty."
-    );
+    return apiError(request, env, 400, "INVALID_CHART_ID", "曲IDが不正です。", "chartId path parameter is empty.");
   }
 
   if (request.method !== "POST") {
