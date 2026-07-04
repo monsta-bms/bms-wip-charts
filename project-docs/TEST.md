@@ -60,8 +60,15 @@ BRANCH-01A-CHECK スクリプト確認:
 - スクリプトが `GET /api/charts` から親versionの `progressMap` を取得すること
 - 親versionの `progressMap` を複製し、未塗りブロックを少なくとも1つ追加して送信すること
 - 追加できる未塗りブロックが無い場合、分かりやすいエラーを表示すること
+- `progressMap` は `ConvertTo-Json -Depth 50 -Compress` でJSON文字列化されること
+- 送信前に `progressMapJson | ConvertFrom-Json` でvalid JSON確認が行われること
+- 送信前に `progressMapJson` の先頭200文字が表示され、`{"schemaVersion"` のようなJSON形式になっていること
+- PowerShellオブジェクト表記の `@{schemaVersion=2; ...}` はJSONではないため送信しないこと
 - スクリプトはPowerShellの `MultipartFormDataContent` ではなく `curl.exe -F` でmultipart送信すること
+- 長いJSONフォーム値は一時JSONファイルに保存し、`curl.exe -F "progressMap=<file;type=application/json"` でフォーム項目として送ること
+- `progressMap` はファイルアップロードではなくJSON本文のフォーム項目なので、`@` ではなく `<` を使うこと
 - `Content-Disposition header in FormData part is missing a name` が出る場合は、確認スクリプトのmultipart生成方式を疑うこと
+- `INVALID_PROGRESS_MAP` が出る場合は、送信前の `progressMapJson preview` と一時JSONの生成処理を確認すること
 - 成功時にレスポンスJSON全文が整形表示されること
 - 成功時に `versionId`, `branchPath`, `progress` が返っていれば表示されること
 - 成功レスポンスに `versionId`, `branchPath`, `progress` が無い場合でも `<not returned>` と表示し、スクリプト自体は失敗扱いにしないこと
@@ -250,13 +257,17 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-append-ve
 
 - `API_BASE_URL: http://localhost:8787` が表示される
 - 親versionの `progressMap` から未塗りブロックが1つ追加される
+- `progressMapJson preview:` にJSON先頭200文字が表示される
+- previewが `{` で始まり、`"schemaVersion"` のようにキーがダブルクォート付きである
 - スクリプトが `curl.exe -F` でmultipart送信する
+- `progressMap` は一時JSONファイルから `-F "progressMap=<temp.json;type=application/json"` で送信される
 - HTTP 201で成功する
 - 成功レスポンスJSON全文が表示される
 - `versionId`, `branchPath`, `progress` が返っていれば表示される
 - 返っていない項目は `<not returned>` と表示され、スクリプト自体は成功終了する
 - `mode=stub` が返った場合はスクリプトが失敗終了し、デプロイまたはルーティングが有効でないことが分かる
 - `Content-Disposition header in FormData part is missing a name` が出る場合は、PowerShell側のmultipart生成方式を疑う
+- `INVALID_PROGRESS_MAP` が出る場合は、`progressMapJson preview` が `@{...}` ではなくJSON形式になっているか確認する
 - 1回目の `branchPath` が `root/a` 相当になるかは、レスポンスまたは `GET /api/charts` で確認する
 - Windows PowerShell 5.1でもスクリプト内メッセージが文字化けせず、ParserErrorにならない
 
@@ -318,7 +329,11 @@ curl.exe "http://localhost:8787/api/charts?page=1&pageSize=200"
 ```powershell
 $chartId = "chart_xxx"
 $parentVersionId = "version_parent"
-$appendMap = '{"schemaVersion":2,"blockMode":"standardized_measure","firstMeasure":1,"lastMeasure":3,"targetBlockCount":3,"blocks":[{"index":0,"startMeasure":1,"endMeasure":1,"startTimeSec":0,"endTimeSec":1,"playNotes":2},{"index":1,"startMeasure":2,"endMeasure":2,"startTimeSec":1,"endTimeSec":2,"playNotes":2},{"index":2,"startMeasure":3,"endMeasure":3,"startTimeSec":2,"endTimeSec":3,"playNotes":2}],"layers":[{"versionId":"version_parent","color":"#1f7a5c","kind":"initial","ranges":[[0,0]]},{"versionId":"pending","color":"#2563eb","kind":"followup","ranges":[[1,1]]}],"progress":67}'
+$appendMapObject = '{"schemaVersion":2,"blockMode":"standardized_measure","firstMeasure":1,"lastMeasure":3,"targetBlockCount":3,"blocks":[{"index":0,"startMeasure":1,"endMeasure":1,"startTimeSec":0,"endTimeSec":1,"playNotes":2},{"index":1,"startMeasure":2,"endMeasure":2,"startTimeSec":1,"endTimeSec":2,"playNotes":2},{"index":2,"startMeasure":3,"endMeasure":3,"startTimeSec":2,"endTimeSec":3,"playNotes":2}],"layers":[{"versionId":"version_parent","color":"#1f7a5c","kind":"initial","ranges":[[0,0]]},{"versionId":"pending","color":"#2563eb","kind":"followup","ranges":[[1,1]]}],"progress":67}' | ConvertFrom-Json
+$appendMap = $appendMapObject | ConvertTo-Json -Depth 50 -Compress
+$appendMap | ConvertFrom-Json | Out-Null
+$tempProgressMap = Join-Path $env:TEMP "append-progress-map.json"
+[System.IO.File]::WriteAllText($tempProgressMap, $appendMap, [System.Text.UTF8Encoding]::new($false))
 
 curl.exe -sS -w "`nHTTP_STATUS:%{http_code}" -X POST "http://localhost:8787/api/charts/$chartId/versions" `
   -F "file=@.\branch-append.bms;type=application/octet-stream" `
@@ -326,7 +341,7 @@ curl.exe -sS -w "`nHTTP_STATUS:%{http_code}" -X POST "http://localhost:8787/api/
   -F "difficulty=★12" `
   -F "level=12" `
   -F "author=append-author" `
-  -F "progressMap=$appendMap" `
+  -F "progressMap=<$tempProgressMap;type=application/json" `
   -F "comment=append test" `
   -F "password=test-password"
 ```
