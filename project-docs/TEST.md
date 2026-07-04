@@ -52,42 +52,48 @@ BRANCH-01A 追記投稿API:
 - `console.error` に処理段階名が含まれること
 - APIエラーが必ず `code`, `message`, `detail` のJSONになること
 
-BRANCH-01A-CHECK スクリプト確認:
+BRANCH-01A-CHECK Node.jsスクリプト確認:
 
-- 初回投稿済みchartに対して `scripts/test-append-version.ps1` で追記投稿できること
-- スクリプトが `ApiBaseUrl`, `ChartId`, `ParentVersionId`, `FilePath` を引数で受け取れること
-- `ApiBaseUrl` を省略した場合に `http://localhost:8787` が使われること
-- スクリプトが `GET /api/charts` から親versionの `progressMap` を取得すること
-- 親versionの `progressMap` を複製し、未塗りブロックを少なくとも1つ追加して送信すること
-- 追加できる未塗りブロックが無い場合、分かりやすいエラーを表示すること
-- `progressMap` は `ConvertTo-Json -Depth 50 -Compress` でJSON文字列化されること
-- 送信前に `progressMapJson | ConvertFrom-Json` でvalid JSON確認が行われること
-- `progressMap.layers` は1件だけでもJSON配列として出力されること
-- `progressMap.layers[0].ranges` は1件だけでも配列の配列として出力されること
-- PowerShellでは単一要素配列が潰れやすいため、JSON化後に `layers` / `ranges` を再検証してからPOSTすること
-- JSON化後の `layers` / `ranges` 検証に失敗した場合、POSTせず原因が分かるエラーで停止すること
-- 送信前に `progressMapJson` の先頭200文字が表示され、`{"schemaVersion"` のようなJSON形式になっていること
-- 送信前に `progressMapJson layers array: True; layers count: ...; first ranges array: True; first range length: 2` のような配列検証結果が表示されること
-- 必要に応じて `-WriteDebugProgressMap` を付けると `scripts/debug-progressMap.json` に確認用JSONを出力できること
-- PowerShellオブジェクト表記の `@{schemaVersion=2; ...}` はJSONではないため送信しないこと
-- スクリプトはPowerShellの `MultipartFormDataContent` ではなく `curl.exe -F` でmultipart送信すること
-- 長いJSONフォーム値は一時JSONファイルに保存し、`curl.exe -F "progressMap=<file;type=application/json"` でフォーム項目として送ること
-- `progressMap` はファイルアップロードではなくJSON本文のフォーム項目なので、`@` ではなく `<` を使うこと
-- `Content-Disposition header in FormData part is missing a name` が出る場合は、確認スクリプトのmultipart生成方式を疑うこと
-- `INVALID_PROGRESS_MAP` が出る場合は、送信前の `progressMapJson preview` と一時JSONの生成処理を確認すること
-- `INVALID_PROGRESS_MAP` かつ `progressMap.layers must be an array` が出る場合は、`layers` が `[{...}]` ではなく `{...}` に潰れていないか確認すること
-- 成功時にレスポンスJSON全文が整形表示されること
+- 通常確認は `scripts/test-append-version.mjs` を使うこと
+- Node.js 20以上で、外部npm依存なしに動くこと
+- PowerShell版 `scripts/test-append-version.ps1` は残っているが、多重配列JSONが壊れやすいため推奨しないこと
+- スクリプトが `apiBaseUrl`, `chartId`, `parentVersionId`, `filePath`, `author`, `password`, `comment` を引数で受け取れること
+- `apiBaseUrl` を省略した場合に `http://localhost:8787` が使われること
+- スクリプトが `GET /api/charts` から指定chartId / parentVersionId の親versionを取得すること
+- 親versionの `progressMap` が無い場合、分かりやすいエラーで終了すること
+- 親versionの `progressMap` をJSONとして複製し、親layersを引き継ぐこと
+- `progressMap.blocks` から未塗りblockを1つ探すこと
+- 未塗りblockが無い場合、分かりやすいエラーで終了すること
+- 新しいfollowup layerが追加されること
+- 新しいfollowup layerは `versionId=pending`, `color=#2563eb`, `kind=followup` になること
+- 新しいfollowup layerの `ranges` が `[[追加blockIndex,追加blockIndex]]` になること
+- `progressMap.layers` は1件だけでもJSON配列として送信されること
+- `progressMap.layers[0].ranges` は1件だけでも配列の配列として送信されること
+- `Array.isArray(progressMap.layers)` がtrueであること
+- `Array.isArray(progressMap.layers[0].ranges)` がtrueであること
+- `Array.isArray(progressMap.layers[0].ranges[0])` がtrueであること
+- `progressMap.layers[0].ranges[0].length === 2` であること
+- `JSON.stringify(progressMap)` 後も `layers` と `ranges` の配列構造が壊れないこと
+- `progress` は全layerのrangesのunionから再計算されること
+- `multipart/form-data` で `file`, `parentVersionId`, `author`, `progressMap`, `comment`, `password` が送信されること
+- BMSファイルはNode標準の `Blob` と `FormData` で送信されること
+- 成功時にレスポンスJSON全文が表示されること
 - 成功時に `versionId`, `branchPath`, `progress` が返っていれば表示されること
 - 成功レスポンスに `versionId`, `branchPath`, `progress` が無い場合でも `<not returned>` と表示し、スクリプト自体は失敗扱いにしないこと
 - レスポンスに `mode="stub"` が含まれる場合は `API returned stub response. Deploy or route implementation is not active.` と表示し、スクリプトを失敗扱いにすること
-- 失敗時に `code`, `message`, `detail` が表示されること
+- 失敗時にHTTP status, `code`, `message`, `detail` が表示されること
 - `branchPath` が `root/a` などで返ること
 - `GET /api/charts` で新versionが増えていること
 - 実際の成功確認は `GET /api/charts` で対象chartの `versions` が増えたか確認すること
-- 同じ親versionへもう一度追記すると `root/b` になること
+- 同じ親versionへ別内容ファイルで2回追記すると `root/a`, `root/b` のように分岐すること
 - 親とprogressMapが同一の場合は `PROGRESS_MAP_UNCHANGED` になること
+
+PowerShell版スクリプトについて:
+
+- `scripts/test-append-version.ps1` は過去の確認用として残す
+- PowerShellでは `progressMap.layers[].ranges` のような配列の中の配列が単一要素時に崩れやすい
+- PowerShell版で `INVALID_PROGRESS_MAP` や `progressMap.layers must be an array` が出る場合は、Node.js版で確認すること
 - Windows PowerShell 5.1ではスクリプト内メッセージをASCII英語にして文字化けを避けること
-- `ConvertFrom-Json` 由来の `progressMap.layers` / `ranges` は固定サイズ配列になる場合があるため、`.Add()` で直接追加せず、配列再代入または `ArrayList` / `List` 変換で加工すること
 
 分岐生成:
 
@@ -235,29 +241,56 @@ curl.exe -X POST "http://localhost:8787/api/charts" `
 
 ## 追記投稿スクリプト確認
 
-長いcurlを手打ちせず、`scripts/test-append-version.ps1` を使って追記投稿を確認する。
+長いcurlを手打ちせず、Node.js版の `scripts/test-append-version.mjs` を使って追記投稿を確認する。
+Node.js 20以上が必要。外部npm installは不要。
 
 ローカル確認例:
 
 ```powershell
-.\scripts\test-append-version.ps1 `
-  -ChartId $chartId `
-  -ParentVersionId $parentVersionId `
-  -FilePath .\branch-append.bms `
-  -Author append-author `
-  -Password test-password
+node .\scripts\test-append-version.mjs `
+  --apiBaseUrl "http://localhost:8787" `
+  --chartId $chartId `
+  --parentVersionId $parentVersionId `
+  --filePath ".\branch-append.bms" `
+  --author "append-author" `
+  --password "test-password"
 ```
 
-Windows PowerShell 5.1確認例:
+cmd.exe形式の本番確認例:
+
+```cmd
+node .\scripts\test-append-version.mjs ^
+  --apiBaseUrl "https://bms-wip-charts-worker.monsta3228gsl.workers.dev" ^
+  --chartId "chart_xxx" ^
+  --parentVersionId "version_xxx" ^
+  --filePath ".\branch-append.bms" ^
+  --author "append-author" ^
+  --password "test-password"
+```
+
+PowerShell形式の本番確認例:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-append-version.ps1 `
-  -ApiBaseUrl "http://localhost:8787" `
-  -ChartId "chart_xxx" `
-  -ParentVersionId "version_xxx" `
-  -FilePath ".\branch-append.bms" `
-  -Author "append-author" `
-  -Password "test-password"
+node .\scripts\test-append-version.mjs `
+  --apiBaseUrl "https://bms-wip-charts-worker.monsta3228gsl.workers.dev" `
+  --chartId "chart_xxx" `
+  --parentVersionId "version_xxx" `
+  --filePath ".\branch-append.bms" `
+  --author "append-author" `
+  --password "test-password"
+```
+
+任意コメント付き:
+
+```powershell
+node .\scripts\test-append-version.mjs `
+  --apiBaseUrl "http://localhost:8787" `
+  --chartId $chartId `
+  --parentVersionId $parentVersionId `
+  --filePath ".\branch-append.bms" `
+  --author "append-author" `
+  --password "test-password" `
+  --comment "append test"
 ```
 
 期待:
@@ -266,54 +299,43 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-append-ve
 - 親versionの `progressMap` から未塗りブロックが1つ追加される
 - `progressMapJson preview:` にJSON先頭200文字が表示される
 - previewが `{` で始まり、`"schemaVersion"` のようにキーがダブルクォート付きである
-- `progressMapJson layers array: True; layers count: ...; first ranges array: True; first range length: 2` が表示される
-- JSON化後の `layers` が配列でない場合、POSTせずにスクリプトが停止する
-- JSON化後の `ranges` が配列の配列でない場合、POSTせずにスクリプトが停止する
-- スクリプトが `curl.exe -F` でmultipart送信する
-- `progressMap` は一時JSONファイルから `-F "progressMap=<temp.json;type=application/json"` で送信される
-- 必要に応じて `-WriteDebugProgressMap` 付きで実行し、`scripts/debug-progressMap.json` の `layers` が `[{...}]`、`ranges` が `[[0,0]]` になっていることを確認できる
+- `progressMap layers array: true; ... first range array: true; first range length: 2` が表示される
+- `progressMap.layers` が `[{...}]` として送信される
+- `progressMap.layers[].ranges` が `[[0,0]]` のような配列の配列として送信される
+- スクリプトがNode標準の `fetch` / `FormData` / `Blob` でmultipart送信する
 - HTTP 201で成功する
 - 成功レスポンスJSON全文が表示される
 - `versionId`, `branchPath`, `progress` が返っていれば表示される
 - 返っていない項目は `<not returned>` と表示され、スクリプト自体は成功終了する
 - `mode=stub` が返った場合はスクリプトが失敗終了し、デプロイまたはルーティングが有効でないことが分かる
-- `Content-Disposition header in FormData part is missing a name` が出る場合は、PowerShell側のmultipart生成方式を疑う
-- `INVALID_PROGRESS_MAP` が出る場合は、`progressMapJson preview` が `@{...}` ではなくJSON形式になっているか確認する
-- `progressMap.layers must be an array` が出る場合は、`progressMapJson layers array` の表示とデバッグJSONを確認する
+- 失敗時にHTTP status, `code`, `message`, `detail` が表示される
 - 1回目の `branchPath` が `root/a` 相当になるかは、レスポンスまたは `GET /api/charts` で確認する
-- Windows PowerShell 5.1でもスクリプト内メッセージが文字化けせず、ParserErrorにならない
+- 追記成功後、`GET /api/charts` で対象chartの `versions` が増えている
 
-本番確認例:
+PowerShell版確認スクリプトについて:
 
 ```powershell
 .\scripts\test-append-version.ps1 `
-  -ApiBaseUrl "https://bms-wip-charts-worker.monsta3228gsl.workers.dev" `
   -ChartId $chartId `
   -ParentVersionId $parentVersionId `
   -FilePath .\branch-append.bms `
   -Author append-author `
-  -Comment "production append test" `
-  -Password "your-password"
+  -Password test-password
 ```
 
-期待:
-
-- 本番Workerへmultipart投稿される
-- 成功時にレスポンスJSON全文が表示される
-- `versionId`, `branchPath`, `progress` が返っていれば表示される
-- 返っていない項目は `<not returned>` と表示される
-- `mode=stub` が返った場合は失敗扱いになり、`API returned stub response. Deploy or route implementation is not active.` と表示される
-- 失敗時に `code`, `message`, `detail` が表示される
+- PowerShell版は残すが、通常確認ではNode.js版を推奨する
+- PowerShell版で `progressMap.layers must be an array` などの多重配列JSONエラーが出る場合は、Node.js版で確認する
 
 同じ親versionへ2回目の追記確認:
 
 ```powershell
-.\scripts\test-append-version.ps1 `
-  -ChartId $chartId `
-  -ParentVersionId $parentVersionId `
-  -FilePath .\branch-append.bms `
-  -Author append-author-2 `
-  -Password test-password
+node .\scripts\test-append-version.mjs `
+  --apiBaseUrl "http://localhost:8787" `
+  --chartId $chartId `
+  --parentVersionId $parentVersionId `
+  --filePath ".\branch-append-2.bms" `
+  --author "append-author-2" `
+  --password "test-password"
 ```
 
 期待:
@@ -337,6 +359,7 @@ curl.exe "http://localhost:8787/api/charts?page=1&pageSize=200"
 ## 追記投稿の正常系curl例
 
 スクリプトを使わずに直接確認したい場合の例。
+PowerShellの多重配列JSONは崩れやすいため、通常はNode.js版スクリプトを使う。
 
 ```powershell
 $chartId = "chart_xxx"
@@ -499,17 +522,17 @@ GitHub Pagesでは以下だけ確認する。
 
 ## 本番Worker確認
 
-本番へdeploy後に、ローカル確認と同じcurlまたは `scripts/test-append-version.ps1` を本番URLへ向けて実行する。
+本番へdeploy後に、Node.js版スクリプトを本番URLへ向けて実行する。
 
 ```powershell
-.\scripts\test-append-version.ps1 `
-  -ApiBaseUrl "https://bms-wip-charts-worker.monsta3228gsl.workers.dev" `
-  -ChartId $chartId `
-  -ParentVersionId $parentVersionId `
-  -FilePath .\branch-append.bms `
-  -Author append-author `
-  -Comment "production append test" `
-  -Password "your-password"
+node .\scripts\test-append-version.mjs `
+  --apiBaseUrl "https://bms-wip-charts-worker.monsta3228gsl.workers.dev" `
+  --chartId $chartId `
+  --parentVersionId $parentVersionId `
+  --filePath ".\branch-append.bms" `
+  --author "append-author" `
+  --comment "production append test" `
+  --password "your-password"
 ```
 
 期待:
