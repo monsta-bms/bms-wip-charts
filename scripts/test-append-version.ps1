@@ -123,23 +123,33 @@ function Set-JsonProperty($object, [string]$name, $value) {
   Add-Member -InputObject $object -MemberType NoteProperty -Name $name -Value $value -Force
 }
 
-function New-ObjectArrayList($items) {
-  $list = New-Object 'System.Collections.ArrayList'
-  foreach ($item in @($items)) {
-    [void]$list.Add($item)
-  }
-  return $list
-}
-
 function New-RangeArray([int]$startIndex, [int]$endIndex) {
   $range = New-Object 'object[]' 2
   $range[0] = $startIndex
   $range[1] = $endIndex
-  return $range
+  Write-Output -NoEnumerate $range
+}
+
+function New-SingleRangeArray($range) {
+  $ranges = New-Object 'object[]' 1
+  $ranges[0] = $range
+  return $ranges
+}
+
+function Append-ArrayItem($items, $newItem) {
+  $existingItems = @($items)
+  $updatedItems = New-Object 'object[]' ($existingItems.Count + 1)
+
+  for ($index = 0; $index -lt $existingItems.Count; $index += 1) {
+    $updatedItems[$index] = $existingItems[$index]
+  }
+
+  $updatedItems[$existingItems.Count] = $newItem
+  return $updatedItems
 }
 
 function Get-PaintedIndexes($progressMap) {
-  $painted = New-Object 'System.Collections.Generic.HashSet[int]'
+  $painted = [System.Collections.Generic.HashSet[int]]::new()
 
   foreach ($layer in @($progressMap.layers)) {
     foreach ($range in @($layer.ranges)) {
@@ -154,12 +164,12 @@ function Get-PaintedIndexes($progressMap) {
       }
 
       for ($index = $startIndex; $index -le $endIndex; $index += 1) {
-        [void]$painted.Add($index)
+        [void]$painted.Add([int]$index)
       }
     }
   }
 
-  return $painted
+  Write-Output -NoEnumerate $painted
 }
 
 function Add-OnePaintedBlock($progressMap) {
@@ -184,7 +194,7 @@ function Add-OnePaintedBlock($progressMap) {
   $painted = Get-PaintedIndexes $progressMap
   $nextIndex = $null
   for ($index = 0; $index -lt $targetBlockCount; $index += 1) {
-    if (-not $painted.Contains($index)) {
+    if (-not $painted.Contains([int]$index)) {
       $nextIndex = $index
       break
     }
@@ -194,22 +204,21 @@ function Add-OnePaintedBlock($progressMap) {
     throw "No unpainted block is available. The parent progressMap is already fully painted. To check PROGRESS_MAP_UNCHANGED, send the parent progressMap without changes."
   }
 
-  [void]$painted.Add([int]$nextIndex)
+  if (-not $painted.Contains([int]$nextIndex)) {
+    [void]$painted.Add([int]$nextIndex)
+  }
 
-  $ranges = New-Object 'System.Collections.ArrayList'
-  [void]$ranges.Add((New-RangeArray -startIndex ([int]$nextIndex) -endIndex ([int]$nextIndex)))
-
+  $newRange = New-RangeArray -startIndex ([int]$nextIndex) -endIndex ([int]$nextIndex)
   $newLayer = [pscustomobject]@{
     versionId = "pending"
     color = "#2563eb"
     kind = "followup"
-    ranges = $ranges.ToArray()
+    ranges = New-SingleRangeArray $newRange
   }
 
-  $layers = New-ObjectArrayList $progressMap.layers
-  [void]$layers.Add($newLayer)
+  $layers = Append-ArrayItem $progressMap.layers $newLayer
 
-  Set-JsonProperty $progressMap "layers" ($layers.ToArray())
+  Set-JsonProperty $progressMap "layers" $layers
   Set-JsonProperty $progressMap "progress" ([int][Math]::Round(($painted.Count / $targetBlockCount) * 100))
 
   return [pscustomobject]@{
