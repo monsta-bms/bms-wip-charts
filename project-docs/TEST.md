@@ -406,3 +406,28 @@ code: DUPLICATE_FILE
 message: 同じファイルは投稿できません。
 detail: A version with the same file_sha256 already exists.
 ```
+
+## PROG-04B 一覧側progressMapサムネイル確認
+
+- `progressMap` があるversionで、一覧に小さな進捗サムネイルが表示されること
+- `progressMap.layers[].ranges` が塗り済み範囲として表示されること
+- 未塗り範囲が薄い色で表示されること
+- `progress xx%` の数値が表示されること
+- 複数layerや重複rangeがある場合でも、unionとして塗り済み表示になること
+- `progressMap` がないversionでも一覧表示が壊れないこと
+- `progressMap` のJSONが不正でも画面全体が壊れないこと
+- 不正な `progressMap` は画面エラーではなく、必要に応じて `console.warn` に留まること
+- 一覧行が大きくなりすぎないこと
+- 既存のDLリンクが壊れていないこと
+- 既存の追記投稿ボタン表示が壊れていないこと
+- 既存の投稿フォームが壊れていないこと
+
+## GitHub PagesでのPROG-04B確認
+
+1. `https://monsta-bms.github.io/bms-wip-charts/` を開く。
+2. PROG-04A以降に投稿した `progressMap` 付きversionが一覧に表示されることを確認する。
+3. 対象version行に、緑/薄グレーの横長サムネイルバーと `progress xx%` が表示されることを確認する。
+4. サムネイルの塗り済み範囲が、投稿時に塗った範囲と大きく矛盾しないことを確認する。
+5. `progressMap` がない既存versionでは、サムネイルが表示されなくても進捗度・コメント・DLリンクが従来通り表示されることを確認する。
+6. ブラウザ開発者ツールのConsoleで、不正な `progressMap` がある場合でも画面全体が停止せず、警告程度で済むことを確認する。
+7. スマホ幅または狭い画面幅でも、一覧行が大きく崩れないことを確認する。
