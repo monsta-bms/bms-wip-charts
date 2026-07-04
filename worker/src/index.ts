@@ -1,5 +1,6 @@
 import { handleAdminRoute } from "./routes/admin";
-import { handleChartsRoute, handleChartVersionsRoute } from "./routes/charts";
+import { handleChartVersionsRoute } from "./routes/chartVersions";
+import { handleChartsRoute } from "./routes/charts";
 import { handleFileRoute } from "./routes/files";
 import {
   apiError,
@@ -20,7 +21,7 @@ function handleHealth(request: Request, env: Env): Response {
   return ok(request, env, {
     status: "ok",
     service: "bms-wip-charts-worker",
-    phase: "phase-10-e"
+    phase: "branch-01a"
   });
 }
 
