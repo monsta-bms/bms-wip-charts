@@ -9,39 +9,35 @@
 
 .EXAMPLE
   .\scripts\test-append-version.ps1 `
-    -chartId "chart_xxx" `
-    -parentVersionId "version_xxx" `
-    -filePath ".\branch-append.bms"
+    -ChartId "chart_xxx" `
+    -ParentVersionId "version_xxx" `
+    -FilePath ".\branch-append.bms"
 
 .EXAMPLE
   .\scripts\test-append-version.ps1 `
-    -API_BASE_URL "https://bms-wip-charts-worker.monsta3228gsl.workers.dev" `
-    -chartId "chart_xxx" `
-    -parentVersionId "version_xxx" `
-    -filePath ".\branch-append.bms" `
-    -password "your-password"
+    -ApiBaseUrl "https://bms-wip-charts-worker.monsta3228gsl.workers.dev" `
+    -ChartId "chart_xxx" `
+    -ParentVersionId "version_xxx" `
+    -FilePath ".\branch-append.bms" `
+    -Password "your-password"
 #>
 
 [CmdletBinding()]
 param(
-  [Alias("ApiBaseUrl")]
-  [string]$API_BASE_URL = "http://localhost:8787",
+  [string]$ApiBaseUrl = "http://localhost:8787",
 
   [Parameter(Mandatory = $true)]
-  [Alias("ChartId")]
-  [string]$chartId,
+  [string]$ChartId,
 
   [Parameter(Mandatory = $true)]
-  [Alias("ParentVersionId")]
-  [string]$parentVersionId,
+  [string]$ParentVersionId,
 
   [Parameter(Mandatory = $true)]
-  [Alias("FilePath")]
-  [string]$filePath,
+  [string]$FilePath,
 
-  [string]$author = "append-check",
-  [string]$comment = "BRANCH-01A-CHECK append test",
-  [string]$password = "test-password"
+  [string]$Author = "append-check",
+  [string]$Comment = "BRANCH-01A-CHECK append test",
+  [string]$Password = "test-password"
 )
 
 Set-StrictMode -Version Latest
@@ -50,7 +46,7 @@ $ErrorActionPreference = "Stop"
 function ConvertTo-ApiBaseUrl([string]$value) {
   $trimmed = $value.Trim()
   if ([string]::IsNullOrWhiteSpace($trimmed)) {
-    throw "API_BASE_URL is empty. Example: http://localhost:8787"
+    throw "ApiBaseUrl is empty. Example: http://localhost:8787"
   }
 
   return $trimmed.TrimEnd("/")
@@ -265,15 +261,15 @@ function Invoke-MultipartPost(
   }
 }
 
-$apiBaseUrl = ConvertTo-ApiBaseUrl $API_BASE_URL
-$resolvedFile = (Resolve-Path -LiteralPath $filePath).ProviderPath
+$apiBaseUrl = ConvertTo-ApiBaseUrl $ApiBaseUrl
+$resolvedFile = (Resolve-Path -LiteralPath $FilePath).ProviderPath
 
 Write-Host "API_BASE_URL: $apiBaseUrl"
-Write-Host "chartId: $chartId"
-Write-Host "parentVersionId: $parentVersionId"
+Write-Host "chartId: $ChartId"
+Write-Host "parentVersionId: $ParentVersionId"
 Write-Host "filePath: $resolvedFile"
 
-$parent = Find-ParentVersion -apiBaseUrl $apiBaseUrl -targetChartId $chartId -targetParentVersionId $parentVersionId
+$parent = Find-ParentVersion -apiBaseUrl $apiBaseUrl -targetChartId $ChartId -targetParentVersionId $ParentVersionId
 $parentVersion = $parent.Version
 $progressMap = Copy-JsonObject $parentVersion.progressMap
 $appendMap = Add-OnePaintedBlock $progressMap
@@ -283,16 +279,16 @@ Write-Host "Parent displayVersion: $($parentVersion.displayVersion)"
 Write-Host "Added block index: $($appendMap.AddedBlockIndex)"
 Write-Host "Expected recalculated progress: $($appendMap.Progress)%"
 
-$encodedChartId = [System.Uri]::EscapeDataString($chartId)
+$encodedChartId = [System.Uri]::EscapeDataString($ChartId)
 $postUrl = "$apiBaseUrl/api/charts/$encodedChartId/versions"
 $result = Invoke-MultipartPost `
   -uri $postUrl `
   -resolvedFilePath $resolvedFile `
-  -targetParentVersionId $parentVersionId `
-  -targetAuthor $author `
+  -targetParentVersionId $ParentVersionId `
+  -targetAuthor $Author `
   -progressMapJson $progressMapJson `
-  -targetComment $comment `
-  -targetPassword $password
+  -targetComment $Comment `
+  -targetPassword $Password
 
 if ($result.IsSuccess) {
   Write-Host "Append request succeeded." -ForegroundColor Green
