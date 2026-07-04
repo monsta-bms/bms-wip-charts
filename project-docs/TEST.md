@@ -21,6 +21,8 @@ https://monsta-bms.github.io/bms-wip-charts/
 BRANCH-01A 追記投稿API:
 
 - `POST /api/charts/:chartId/versions` が `multipart/form-data` を受け付けること
+- `POST /api/charts/:chartId/versions` が `worker/src/routes/chartVersions.ts` の本実装へ到達すること
+- Phase 9 stubの `mode=stub` や `Version append is accepted only as a Phase 9 stub` が返らないこと
 - 必須項目 `file`, `parentVersionId`, `author`, `progressMap`, `password` が不足した場合に `INVALID_FORM` を返すこと
 - 任意項目 `difficulty`, `level`, `comment` が送信できること
 - `difficulty` / `level` 未送信時は親versionの値を継承すること
@@ -61,6 +63,7 @@ BRANCH-01A-CHECK スクリプト確認:
 - 成功時にレスポンスJSON全文が整形表示されること
 - 成功時に `versionId`, `branchPath`, `progress` が返っていれば表示されること
 - 成功レスポンスに `versionId`, `branchPath`, `progress` が無い場合でも `<not returned>` と表示し、スクリプト自体は失敗扱いにしないこと
+- レスポンスに `mode="stub"` が含まれる場合は `API returned stub response. Deploy or route implementation is not active.` と表示し、スクリプトを失敗扱いにすること
 - 失敗時に `code`, `message`, `detail` が表示されること
 - `branchPath` が `root/a` などで返ること
 - `GET /api/charts` で新versionが増えていること
@@ -249,6 +252,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-append-ve
 - 成功レスポンスJSON全文が表示される
 - `versionId`, `branchPath`, `progress` が返っていれば表示される
 - 返っていない項目は `<not returned>` と表示され、スクリプト自体は成功終了する
+- `mode=stub` が返った場合はスクリプトが失敗終了し、デプロイまたはルーティングが有効でないことが分かる
 - 1回目の `branchPath` が `root/a` 相当になるかは、レスポンスまたは `GET /api/charts` で確認する
 - Windows PowerShell 5.1でもスクリプト内メッセージが文字化けせず、ParserErrorにならない
 
@@ -271,6 +275,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-append-ve
 - 成功時にレスポンスJSON全文が表示される
 - `versionId`, `branchPath`, `progress` が返っていれば表示される
 - 返っていない項目は `<not returned>` と表示される
+- `mode=stub` が返った場合は失敗扱いになり、`API returned stub response. Deploy or route implementation is not active.` と表示される
 - 失敗時に `code`, `message`, `detail` が表示される
 
 同じ親versionへ2回目の追記確認:
@@ -482,6 +487,7 @@ GitHub Pagesでは以下だけ確認する。
 - HTTP 201
 - 成功レスポンスJSON全文が表示される
 - `versionId`, `branchPath`, `progress` が無いレスポンスでもスクリプト自体は成功終了する
+- `mode=stub` が返った場合はスクリプトが失敗し、Worker本体のdeployまたはroute実装が有効でないことを判断できる
 - `GET /api/charts` で追記versionが表示される
 - `GET /api/files/:fileId` で新versionのファイルを取得できる
 
