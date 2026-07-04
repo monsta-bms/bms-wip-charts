@@ -48,13 +48,13 @@ async function routeRequest(request: Request, env: Env): Promise<Response> {
     return handleHealth(request, env);
   }
 
-  if (path === "/api/charts") {
-    return handleChartsRoute(request, env);
-  }
-
   const versionMatch = path.match(/^\/api\/charts\/([^/]+)\/versions$/);
   if (versionMatch) {
     return handleChartVersionsRoute(request, env, decodeURIComponent(versionMatch[1]));
+  }
+
+  if (path === "/api/charts") {
+    return handleChartsRoute(request, env);
   }
 
   const fileMatch = path.match(/^\/api\/files\/([^/]+)$/);
