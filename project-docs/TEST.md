@@ -65,6 +65,7 @@ BRANCH-01A-CHECK スクリプト確認:
 - 同じ親versionへもう一度追記すると `root/b` になること
 - 親とprogressMapが同一の場合は `PROGRESS_MAP_UNCHANGED` になること
 - Windows PowerShell 5.1ではスクリプト内メッセージをASCII英語にして文字化けを避けること
+- `ConvertFrom-Json` 由来の `progressMap.layers` / `ranges` は固定サイズ配列になる場合があるため、`.Add()` で直接追加せず、配列再代入または `ArrayList` / `List` 変換で加工すること
 
 分岐生成:
 
