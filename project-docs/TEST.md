@@ -60,6 +60,8 @@ BRANCH-01A-CHECK スクリプト確認:
 - スクリプトが `GET /api/charts` から親versionの `progressMap` を取得すること
 - 親versionの `progressMap` を複製し、未塗りブロックを少なくとも1つ追加して送信すること
 - 追加できる未塗りブロックが無い場合、分かりやすいエラーを表示すること
+- スクリプトはPowerShellの `MultipartFormDataContent` ではなく `curl.exe -F` でmultipart送信すること
+- `Content-Disposition header in FormData part is missing a name` が出る場合は、確認スクリプトのmultipart生成方式を疑うこと
 - 成功時にレスポンスJSON全文が整形表示されること
 - 成功時に `versionId`, `branchPath`, `progress` が返っていれば表示されること
 - 成功レスポンスに `versionId`, `branchPath`, `progress` が無い場合でも `<not returned>` と表示し、スクリプト自体は失敗扱いにしないこと
@@ -248,11 +250,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-append-ve
 
 - `API_BASE_URL: http://localhost:8787` が表示される
 - 親versionの `progressMap` から未塗りブロックが1つ追加される
+- スクリプトが `curl.exe -F` でmultipart送信する
 - HTTP 201で成功する
 - 成功レスポンスJSON全文が表示される
 - `versionId`, `branchPath`, `progress` が返っていれば表示される
 - 返っていない項目は `<not returned>` と表示され、スクリプト自体は成功終了する
 - `mode=stub` が返った場合はスクリプトが失敗終了し、デプロイまたはルーティングが有効でないことが分かる
+- `Content-Disposition header in FormData part is missing a name` が出る場合は、PowerShell側のmultipart生成方式を疑う
 - 1回目の `branchPath` が `root/a` 相当になるかは、レスポンスまたは `GET /api/charts` で確認する
 - Windows PowerShell 5.1でもスクリプト内メッセージが文字化けせず、ParserErrorにならない
 
@@ -316,8 +320,8 @@ $chartId = "chart_xxx"
 $parentVersionId = "version_parent"
 $appendMap = '{"schemaVersion":2,"blockMode":"standardized_measure","firstMeasure":1,"lastMeasure":3,"targetBlockCount":3,"blocks":[{"index":0,"startMeasure":1,"endMeasure":1,"startTimeSec":0,"endTimeSec":1,"playNotes":2},{"index":1,"startMeasure":2,"endMeasure":2,"startTimeSec":1,"endTimeSec":2,"playNotes":2},{"index":2,"startMeasure":3,"endMeasure":3,"startTimeSec":2,"endTimeSec":3,"playNotes":2}],"layers":[{"versionId":"version_parent","color":"#1f7a5c","kind":"initial","ranges":[[0,0]]},{"versionId":"pending","color":"#2563eb","kind":"followup","ranges":[[1,1]]}],"progress":67}'
 
-curl.exe -X POST "http://localhost:8787/api/charts/$chartId/versions" `
-  -F "file=@.\branch-append.bms;type=text/plain" `
+curl.exe -sS -w "`nHTTP_STATUS:%{http_code}" -X POST "http://localhost:8787/api/charts/$chartId/versions" `
+  -F "file=@.\branch-append.bms;type=application/octet-stream" `
   -F "parentVersionId=$parentVersionId" `
   -F "difficulty=★12" `
   -F "level=12" `
