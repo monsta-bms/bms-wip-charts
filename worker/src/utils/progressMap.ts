@@ -3,7 +3,7 @@ import type { BmsAnalysis } from "./bms";
 const PROGRESS_MAP_COLOR = "#1f7a5c";
 const MAX_PROGRESS_MAP_BLOCKS = 5000;
 
-type ProgressMapLayerKind = "initial" | "completion_fill" | "rejected_auto_fill";
+type ProgressMapLayerKind = "initial" | "followup" | "completion_fill" | "rejected_auto_fill";
 
 type ProgressMapBlock = {
   index: number;
@@ -32,7 +32,7 @@ export type ProgressMapJson = {
   progress: number;
 };
 
-type ProgressMapFailure = {
+export type ProgressMapFailure = {
   status: number;
   code: string;
   message: string;
@@ -56,6 +56,13 @@ type PrepareProgressMapParams = {
   bmsAnalysis: BmsAnalysis | null;
 };
 
+type PrepareAppendProgressMapParams = {
+  rawProgressMap: string;
+  versionId: string;
+  parentProgressMapJson: string | null;
+  bmsAnalysis: BmsAnalysis | null;
+};
+
 type ProgressMapLayout = {
   ok: true;
   firstMeasure: number | null;
@@ -70,7 +77,8 @@ function failure(code: string, detail: string, status = 400): ProgressMapFailure
   const messages: Record<string, string> = {
     INVALID_PROGRESS_MAP: "進捗マップ情報が不正です。",
     PROGRESS_MAP_OUT_OF_RANGE: "進捗マップの範囲が不正です。",
-    PROGRESS_MAP_BLOCK_COUNT_MISMATCH: "進捗マップのブロック数が一致しません。"
+    PROGRESS_MAP_BLOCK_COUNT_MISMATCH: "進捗マップのブロック数が一致しません。",
+    PROGRESS_MAP_UNCHANGED: "進捗マップに変更がありません。"
   };
 
   return {
@@ -313,6 +321,16 @@ function collectPaintedIndexes(root: Record<string, unknown>, targetBlockCount: 
   return { ok: true, indexes };
 }
 
+function collectRangeIndexes(ranges: Array<[number, number]>): Set<number> {
+  const indexes = new Set<number>();
+  for (const [startIndex, endIndex] of ranges) {
+    for (let index = startIndex; index <= endIndex; index += 1) {
+      indexes.add(index);
+    }
+  }
+  return indexes;
+}
+
 function normalizeLayerKind(root: Record<string, unknown>, progress: number): ProgressMapLayerKind {
   const firstLayer = Array.isArray(root.layers) && isRecord(root.layers[0]) ? root.layers[0] : null;
   const kind = firstLayer?.kind;
@@ -321,6 +339,113 @@ function normalizeLayerKind(root: Record<string, unknown>, progress: number): Pr
   }
 
   return "initial";
+}
+
+function normalizeLayerKindValue(value: unknown, fallback: ProgressMapLayerKind): ProgressMapLayerKind {
+  if (value === "initial" || value === "followup" || value === "completion_fill" || value === "rejected_auto_fill") {
+    return value;
+  }
+
+  return fallback;
+}
+
+function normalizeLayerColor(value: unknown): string {
+  if (typeof value !== "string") {
+    return PROGRESS_MAP_COLOR;
+  }
+
+  const color = value.trim();
+  return color ? color.slice(0, 32) : PROGRESS_MAP_COLOR;
+}
+
+function normalizeVersionId(value: unknown, fallbackVersionId: string): string {
+  if (typeof value !== "string") {
+    return fallbackVersionId;
+  }
+
+  const versionId = value.trim();
+  return versionId && versionId !== "pending" ? versionId.slice(0, 160) : fallbackVersionId;
+}
+
+function normalizeLayerRanges(
+  ranges: unknown,
+  targetBlockCount: number,
+  layerIndex: number
+): { ok: true; ranges: Array<[number, number]> } | { ok: false; failure: ProgressMapFailure } {
+  if (!Array.isArray(ranges)) {
+    return { ok: false, failure: failure("INVALID_PROGRESS_MAP", `layers[${layerIndex}].ranges must be an array.`) };
+  }
+
+  const indexes = new Set<number>();
+  for (const [rangeIndex, range] of ranges.entries()) {
+    if (!Array.isArray(range) || range.length !== 2 || !isSafeNonNegativeInteger(range[0]) || !isSafeNonNegativeInteger(range[1])) {
+      return {
+        ok: false,
+        failure: failure("INVALID_PROGRESS_MAP", `layers[${layerIndex}].ranges[${rangeIndex}] must be [startIndex, endIndex].`)
+      };
+    }
+
+    const [startIndex, endIndex] = range;
+    if (startIndex > endIndex) {
+      return {
+        ok: false,
+        failure: failure("PROGRESS_MAP_OUT_OF_RANGE", `Range start must be less than or equal to end: ${startIndex}-${endIndex}.`)
+      };
+    }
+
+    if (targetBlockCount === 0 || endIndex >= targetBlockCount) {
+      return {
+        ok: false,
+        failure: failure("PROGRESS_MAP_OUT_OF_RANGE", `Range ${startIndex}-${endIndex} exceeds targetBlockCount ${targetBlockCount}.`)
+      };
+    }
+
+    for (let index = startIndex; index <= endIndex; index += 1) {
+      indexes.add(index);
+    }
+  }
+
+  return { ok: true, ranges: compressBlockIndexesToRanges(indexes) };
+}
+
+function normalizeFollowupLayers(
+  root: Record<string, unknown>,
+  targetBlockCount: number,
+  versionId: string
+): { ok: true; layers: ProgressMapLayer[]; paintedIndexes: Set<number> } | { ok: false; failure: ProgressMapFailure } {
+  if (!Array.isArray(root.layers)) {
+    return { ok: false, failure: failure("INVALID_PROGRESS_MAP", "progressMap.layers must be an array.") };
+  }
+
+  const layers: ProgressMapLayer[] = [];
+  const paintedIndexes = new Set<number>();
+  const lastLayerIndex = root.layers.length - 1;
+
+  for (const [layerIndex, layer] of root.layers.entries()) {
+    if (!isRecord(layer)) {
+      return { ok: false, failure: failure("INVALID_PROGRESS_MAP", `layers[${layerIndex}] must be an object.`) };
+    }
+
+    const normalizedRanges = normalizeLayerRanges(layer.ranges, targetBlockCount, layerIndex);
+    if (!normalizedRanges.ok) {
+      return normalizedRanges;
+    }
+
+    for (const index of collectRangeIndexes(normalizedRanges.ranges)) {
+      paintedIndexes.add(index);
+    }
+
+    const fallbackKind: ProgressMapLayerKind = layerIndex === lastLayerIndex ? "followup" : "initial";
+    const incomingVersionId = normalizeVersionId(layer.versionId, versionId);
+    layers.push({
+      versionId: layerIndex === lastLayerIndex ? versionId : incomingVersionId,
+      color: normalizeLayerColor(layer.color),
+      kind: normalizeLayerKindValue(layer.kind, fallbackKind),
+      ranges: normalizedRanges.ranges
+    });
+  }
+
+  return { ok: true, layers, paintedIndexes };
 }
 
 function buildProgressMapJson(
@@ -353,6 +478,35 @@ function buildProgressMapJson(
   };
 }
 
+function buildPaintedSignature(targetBlockCount: number, indexes: Set<number>): string {
+  return `${targetBlockCount}:${compressBlockIndexesToRanges(indexes)
+    .map(([startIndex, endIndex]) => `${startIndex}-${endIndex}`)
+    .join(",")}`;
+}
+
+function buildStoredProgressMapSignature(rawProgressMap: string | null): string | null {
+  if (!rawProgressMap?.trim()) {
+    return null;
+  }
+
+  const parsed = parseProgressMap(rawProgressMap);
+  if (!parsed.ok) {
+    return null;
+  }
+
+  const layout = normalizeLayout(parsed.value, null);
+  if (!layout.ok || !isRecord(parsed.value)) {
+    return null;
+  }
+
+  const painted = collectPaintedIndexes(parsed.value, layout.targetBlockCount);
+  if (!painted.ok) {
+    return null;
+  }
+
+  return buildPaintedSignature(layout.targetBlockCount, painted.indexes);
+}
+
 function normalizeClientProgressMap(
   rawProgressMap: string,
   versionId: string,
@@ -382,6 +536,67 @@ function normalizeClientProgressMap(
     : Math.round((painted.indexes.size / layout.targetBlockCount) * 100);
   const kind = normalizeLayerKind(parsed.value, progress);
   const progressMap = buildProgressMapJson(versionId, layout, kind, painted.indexes, progress);
+
+  return {
+    ok: true,
+    progress,
+    progressMap,
+    progressMapJson: JSON.stringify(progressMap)
+  };
+}
+
+function normalizeAppendProgressMap(
+  rawProgressMap: string,
+  versionId: string,
+  parentProgressMapJson: string | null,
+  bmsAnalysis: BmsAnalysis | null
+): ProgressMapResult {
+  const parsed = parseProgressMap(rawProgressMap);
+  if (!parsed.ok) {
+    return parsed;
+  }
+
+  const layout = normalizeLayout(parsed.value, bmsAnalysis);
+  if (!layout.ok) {
+    return layout;
+  }
+
+  if (!isRecord(parsed.value)) {
+    return { ok: false, failure: failure("INVALID_PROGRESS_MAP", "progressMap must be an object.") };
+  }
+
+  const normalizedLayers = normalizeFollowupLayers(parsed.value, layout.targetBlockCount, versionId);
+  if (!normalizedLayers.ok) {
+    return normalizedLayers;
+  }
+
+  const progress = layout.targetBlockCount === 0
+    ? 0
+    : Math.round((normalizedLayers.paintedIndexes.size / layout.targetBlockCount) * 100);
+  const nextSignature = buildPaintedSignature(layout.targetBlockCount, normalizedLayers.paintedIndexes);
+  const parentSignature = buildStoredProgressMapSignature(parentProgressMapJson);
+
+  if (parentSignature !== null && parentSignature === nextSignature) {
+    return {
+      ok: false,
+      failure: failure(
+        "PROGRESS_MAP_UNCHANGED",
+        "Follow-up progressMap painted ranges are identical to the parent version.",
+        409
+      )
+    };
+  }
+
+  const progressMap: ProgressMapJson = {
+    schemaVersion: 2,
+    blockMode: "standardized_measure",
+    firstMeasure: layout.firstMeasure,
+    lastMeasure: layout.lastMeasure,
+    targetBlockCount: layout.targetBlockCount,
+    blocks: layout.blocks,
+    layers: normalizedLayers.layers,
+    progress
+  };
 
   return {
     ok: true,
@@ -471,4 +686,20 @@ export function prepareProgressMap(params: PrepareProgressMapParams): ProgressMa
   }
 
   return normalizeClientProgressMap(params.rawProgressMap, params.versionId, params.bmsAnalysis);
+}
+
+export function prepareAppendProgressMap(params: PrepareAppendProgressMapParams): ProgressMapResult {
+  if (!params.rawProgressMap.trim()) {
+    return {
+      ok: false,
+      failure: failure("INVALID_PROGRESS_MAP", "progressMap field is required for follow-up versions.")
+    };
+  }
+
+  return normalizeAppendProgressMap(
+    params.rawProgressMap,
+    params.versionId,
+    params.parentProgressMapJson,
+    params.bmsAnalysis
+  );
 }
