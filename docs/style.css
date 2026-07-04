@@ -277,6 +277,59 @@ h2 {
   line-height: 1.45;
 }
 
+.append-context {
+  background: #f7fbfa;
+  border: 1px solid rgba(37, 111, 93, 0.22);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+}
+
+.append-context-title {
+  color: var(--primary-dark);
+  font-weight: 800;
+}
+
+.append-context-grid {
+  display: grid;
+  gap: 8px 14px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+}
+
+.append-context-grid div {
+  min-width: 0;
+}
+
+.append-context-grid dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.append-context-grid dd {
+  font-weight: 700;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.append-context-note,
+.append-disabled-note {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.submit-panel.is-append-mode .song-info-section,
+.submit-panel.is-append-mode .chart-name-field,
+.submit-panel.is-append-mode .rejected-field {
+  display: none;
+}
+
 .difficulty-picker {
   background: #fbfcfd;
   border: 1px solid var(--line);
@@ -484,6 +537,14 @@ button.progress-map-block::before {
   transition: background-color 80ms ease-out;
 }
 
+button.progress-map-block::after {
+  background: transparent;
+  content: "";
+  inset: 0;
+  position: absolute;
+  transition: background-color 80ms ease-out;
+}
+
 button.progress-map-block:first-child {
   border-left: 0;
 }
@@ -504,6 +565,18 @@ button.progress-map-block.is-painted:disabled::before,
 button.progress-map-block.is-painted:disabled:hover::before,
 button.progress-map-block.is-painted:disabled:focus-visible::before {
   background: rgba(37, 111, 93, 0.44);
+}
+
+button.progress-map-block.is-parent-painted::before,
+button.progress-map-block.is-parent-painted:hover::before,
+button.progress-map-block.is-parent-painted:focus-visible::before {
+  background: rgba(37, 111, 93, 0.2);
+}
+
+button.progress-map-block.is-current-painted::after,
+button.progress-map-block.is-current-painted:hover::after,
+button.progress-map-block.is-current-painted:focus-visible::after {
+  background: rgba(37, 99, 235, 0.5);
 }
 
 button.progress-map-block:disabled,
@@ -656,6 +729,7 @@ textarea[aria-invalid="true"] {
 
 .form-actions {
   display: flex;
+  gap: 10px;
   justify-content: flex-end;
   margin-top: 18px;
 }
@@ -824,6 +898,11 @@ textarea[aria-invalid="true"] {
   justify-content: flex-end;
 }
 
+.version-actions .append-disabled-note {
+  flex-basis: 100%;
+  text-align: right;
+}
+
 .download-disabled {
   color: var(--muted);
   font-weight: 800;
@@ -836,6 +915,10 @@ textarea[aria-invalid="true"] {
 
   .version-actions {
     justify-content: flex-start;
+  }
+
+  .version-actions .append-disabled-note {
+    text-align: left;
   }
 }
 
@@ -854,6 +937,7 @@ textarea[aria-invalid="true"] {
     padding: 16px;
   }
 
+  .append-context-grid,
   .two-column-fields,
   .management-grid,
   .version-row {
