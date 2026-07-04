@@ -285,12 +285,44 @@ function Add-OnePaintedBlock($progressMap) {
   }
 }
 
+function ConvertTo-ProgressMapJson($progressMap) {
+  $json = $progressMap | ConvertTo-Json -Depth 50 -Compress
+  $trimmedJson = $json.TrimStart()
+
+  if (-not $trimmedJson.StartsWith("{")) {
+    throw "JSON validation failed: progressMap JSON must start with '{'. Actual prefix: $($trimmedJson.Substring(0, [Math]::Min(20, $trimmedJson.Length)))"
+  }
+
+  try {
+    $null = $json | ConvertFrom-Json
+  } catch {
+    throw "JSON validation failed: progressMap must be valid JSON before POST. $($_.Exception.Message)"
+  }
+
+  return $json
+}
+
+function Get-PreviewText([string]$value, [int]$maxLength) {
+  if ($value.Length -le $maxLength) {
+    return $value
+  }
+
+  return $value.Substring(0, $maxLength)
+}
+
+function Write-ProgressMapTempFile([string]$progressMapJson) {
+  $tempPath = Join-Path ([System.IO.Path]::GetTempPath()) ("bms-wip-progress-map-" + [System.Guid]::NewGuid().ToString("N") + ".json")
+  $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+  [System.IO.File]::WriteAllText($tempPath, $progressMapJson, $utf8NoBom)
+  return $tempPath
+}
+
 function Invoke-CurlMultipartPost(
   [string]$uri,
   [string]$resolvedFilePath,
   [string]$targetParentVersionId,
   [string]$targetAuthor,
-  [string]$progressMapJson,
+  [string]$progressMapTempPath,
   [string]$targetComment,
   [string]$targetPassword
 ) {
@@ -307,7 +339,7 @@ function Invoke-CurlMultipartPost(
     "-F", "file=@$resolvedFilePath;type=application/octet-stream",
     "-F", "parentVersionId=$targetParentVersionId",
     "-F", "author=$targetAuthor",
-    "-F", "progressMap=$progressMapJson",
+    "-F", "progressMap=<$progressMapTempPath;type=application/json",
     "-F", "comment=$targetComment",
     "-F", "password=$targetPassword"
   )
@@ -354,22 +386,33 @@ $parent = Find-ParentVersion -apiBaseUrl $apiBaseUrl -targetChartId $ChartId -ta
 $parentVersion = $parent.Version
 $progressMap = Copy-JsonObject $parentVersion.progressMap
 $appendMap = Add-OnePaintedBlock $progressMap
-$progressMapJson = $appendMap.ProgressMap | ConvertTo-Json -Depth 100 -Compress
+$progressMapJson = ConvertTo-ProgressMapJson $appendMap.ProgressMap
+$progressMapPreview = Get-PreviewText $progressMapJson 200
 
 Write-Host "Parent displayVersion: $($parentVersion.displayVersion)"
 Write-Host "Added block index: $($appendMap.AddedBlockIndex)"
 Write-Host "Expected recalculated progress: $($appendMap.Progress)%"
+Write-Host "progressMapJson preview: $progressMapPreview"
 
 $encodedChartId = [System.Uri]::EscapeDataString($ChartId)
 $postUrl = "$apiBaseUrl/api/charts/$encodedChartId/versions"
-$result = Invoke-CurlMultipartPost `
-  -uri $postUrl `
-  -resolvedFilePath $resolvedFile `
-  -targetParentVersionId $ParentVersionId `
-  -targetAuthor $Author `
-  -progressMapJson $progressMapJson `
-  -targetComment $Comment `
-  -targetPassword $Password
+$progressMapTempPath = $null
+
+try {
+  $progressMapTempPath = Write-ProgressMapTempFile $progressMapJson
+  $result = Invoke-CurlMultipartPost `
+    -uri $postUrl `
+    -resolvedFilePath $resolvedFile `
+    -targetParentVersionId $ParentVersionId `
+    -targetAuthor $Author `
+    -progressMapTempPath $progressMapTempPath `
+    -targetComment $Comment `
+    -targetPassword $Password
+} finally {
+  if (-not [string]::IsNullOrWhiteSpace($progressMapTempPath) -and (Test-Path -LiteralPath $progressMapTempPath)) {
+    Remove-Item -LiteralPath $progressMapTempPath -Force -ErrorAction SilentlyContinue
+  }
+}
 
 if ($result.IsSuccess) {
   if (Test-StubResponse $result.Body) {
