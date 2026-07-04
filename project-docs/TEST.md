@@ -62,13 +62,20 @@ BRANCH-01A-CHECK スクリプト確認:
 - 追加できる未塗りブロックが無い場合、分かりやすいエラーを表示すること
 - `progressMap` は `ConvertTo-Json -Depth 50 -Compress` でJSON文字列化されること
 - 送信前に `progressMapJson | ConvertFrom-Json` でvalid JSON確認が行われること
+- `progressMap.layers` は1件だけでもJSON配列として出力されること
+- `progressMap.layers[0].ranges` は1件だけでも配列の配列として出力されること
+- PowerShellでは単一要素配列が潰れやすいため、JSON化後に `layers` / `ranges` を再検証してからPOSTすること
+- JSON化後の `layers` / `ranges` 検証に失敗した場合、POSTせず原因が分かるエラーで停止すること
 - 送信前に `progressMapJson` の先頭200文字が表示され、`{"schemaVersion"` のようなJSON形式になっていること
+- 送信前に `progressMapJson layers array: True; layers count: ...; first ranges array: True; first range length: 2` のような配列検証結果が表示されること
+- 必要に応じて `-WriteDebugProgressMap` を付けると `scripts/debug-progressMap.json` に確認用JSONを出力できること
 - PowerShellオブジェクト表記の `@{schemaVersion=2; ...}` はJSONではないため送信しないこと
 - スクリプトはPowerShellの `MultipartFormDataContent` ではなく `curl.exe -F` でmultipart送信すること
 - 長いJSONフォーム値は一時JSONファイルに保存し、`curl.exe -F "progressMap=<file;type=application/json"` でフォーム項目として送ること
 - `progressMap` はファイルアップロードではなくJSON本文のフォーム項目なので、`@` ではなく `<` を使うこと
 - `Content-Disposition header in FormData part is missing a name` が出る場合は、確認スクリプトのmultipart生成方式を疑うこと
 - `INVALID_PROGRESS_MAP` が出る場合は、送信前の `progressMapJson preview` と一時JSONの生成処理を確認すること
+- `INVALID_PROGRESS_MAP` かつ `progressMap.layers must be an array` が出る場合は、`layers` が `[{...}]` ではなく `{...}` に潰れていないか確認すること
 - 成功時にレスポンスJSON全文が整形表示されること
 - 成功時に `versionId`, `branchPath`, `progress` が返っていれば表示されること
 - 成功レスポンスに `versionId`, `branchPath`, `progress` が無い場合でも `<not returned>` と表示し、スクリプト自体は失敗扱いにしないこと
@@ -259,8 +266,12 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-append-ve
 - 親versionの `progressMap` から未塗りブロックが1つ追加される
 - `progressMapJson preview:` にJSON先頭200文字が表示される
 - previewが `{` で始まり、`"schemaVersion"` のようにキーがダブルクォート付きである
+- `progressMapJson layers array: True; layers count: ...; first ranges array: True; first range length: 2` が表示される
+- JSON化後の `layers` が配列でない場合、POSTせずにスクリプトが停止する
+- JSON化後の `ranges` が配列の配列でない場合、POSTせずにスクリプトが停止する
 - スクリプトが `curl.exe -F` でmultipart送信する
 - `progressMap` は一時JSONファイルから `-F "progressMap=<temp.json;type=application/json"` で送信される
+- 必要に応じて `-WriteDebugProgressMap` 付きで実行し、`scripts/debug-progressMap.json` の `layers` が `[{...}]`、`ranges` が `[[0,0]]` になっていることを確認できる
 - HTTP 201で成功する
 - 成功レスポンスJSON全文が表示される
 - `versionId`, `branchPath`, `progress` が返っていれば表示される
@@ -268,6 +279,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-append-ve
 - `mode=stub` が返った場合はスクリプトが失敗終了し、デプロイまたはルーティングが有効でないことが分かる
 - `Content-Disposition header in FormData part is missing a name` が出る場合は、PowerShell側のmultipart生成方式を疑う
 - `INVALID_PROGRESS_MAP` が出る場合は、`progressMapJson preview` が `@{...}` ではなくJSON形式になっているか確認する
+- `progressMap.layers must be an array` が出る場合は、`progressMapJson layers array` の表示とデバッグJSONを確認する
 - 1回目の `branchPath` が `root/a` 相当になるかは、レスポンスまたは `GET /api/charts` で確認する
 - Windows PowerShell 5.1でもスクリプト内メッセージが文字化けせず、ParserErrorにならない
 
