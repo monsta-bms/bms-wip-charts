@@ -1,10 +1,11 @@
 <#
 .SYNOPSIS
-  POST /api/charts/:chartId/versions の手動確認用スクリプト。
+  Manual test script for POST /api/charts/:chartId/versions.
 
 .DESCRIPTION
-  GET /api/charts から親versionの progressMap を取得し、未塗りブロックを1つ追加したprogressMapを作って追記投稿します。
-  Worker側で最後のlayer.versionIdが実versionIdへ置き換えられる前提です。
+  This script reads the parent version progressMap from GET /api/charts,
+  paints one additional unpainted block, and submits a multipart follow-up post.
+  The API is expected to replace the last layer versionId with the created versionId.
 
 .EXAMPLE
   .\scripts\test-append-version.ps1 `
@@ -49,7 +50,7 @@ $ErrorActionPreference = "Stop"
 function ConvertTo-ApiBaseUrl([string]$value) {
   $trimmed = $value.Trim()
   if ([string]::IsNullOrWhiteSpace($trimmed)) {
-    throw "API_BASE_URL が空です。例: http://localhost:8787"
+    throw "API_BASE_URL is empty. Example: http://localhost:8787"
   }
 
   return $trimmed.TrimEnd("/")
@@ -59,7 +60,7 @@ function Invoke-JsonGet([string]$uri) {
   try {
     return Invoke-RestMethod -Method Get -Uri $uri
   } catch {
-    throw "GET に失敗しました: $uri`n$($_.Exception.Message)"
+    throw "GET failed: $uri`n$($_.Exception.Message)"
   }
 }
 
@@ -94,7 +95,7 @@ function Find-ParentVersion([string]$apiBaseUrl, [string]$targetChartId, [string
     $page += 1
   }
 
-  throw "GET /api/charts で chartId='$targetChartId' の parentVersionId='$targetParentVersionId' が見つかりませんでした。chartId / parentVersionId / pageSize / 対象versionの非表示状態を確認してください。"
+  throw "Parent version not found in GET /api/charts. chartId='$targetChartId', parentVersionId='$targetParentVersionId'. Check chartId, parentVersionId, pagination, and hidden state."
 }
 
 function Copy-JsonObject($value) {
@@ -157,21 +158,21 @@ function Get-PaintedIndexes($progressMap) {
 
 function Add-OnePaintedBlock($progressMap) {
   if ($null -eq $progressMap) {
-    throw "親versionに progressMap がありません。PROG-04A以降に投稿されたprogressMap付きversionを親にしてください。"
+    throw "Parent version has no progressMap. Use a parent version created after PROG-04A with progressMap data."
   }
 
   if ($progressMap.schemaVersion -ne 2 -or $progressMap.blockMode -ne "standardized_measure") {
-    throw "親versionの progressMap が schemaVersion=2 / blockMode=standardized_measure ではありません。"
+    throw "Parent progressMap must use schemaVersion=2 and blockMode=standardized_measure."
   }
 
   $targetBlockCount = [int](Get-PropertyValue $progressMap "targetBlockCount")
   if ($targetBlockCount -le 0) {
-    throw "親versionの progressMap.targetBlockCount が0以下です。追記用の未塗りブロックを追加できません。"
+    throw "Parent progressMap.targetBlockCount is zero or negative. Cannot add an unpainted block."
   }
 
   $blocks = @($progressMap.blocks)
   if ($blocks.Count -ne $targetBlockCount) {
-    throw "親versionの progressMap.blocks.length と targetBlockCount が一致しません。blocks=$($blocks.Count), targetBlockCount=$targetBlockCount"
+    throw "Parent progressMap block count mismatch. blocks=$($blocks.Count), targetBlockCount=$targetBlockCount"
   }
 
   $painted = Get-PaintedIndexes $progressMap
@@ -184,7 +185,7 @@ function Add-OnePaintedBlock($progressMap) {
   }
 
   if ($null -eq $nextIndex) {
-    throw "追加できる未塗りブロックがありません。親versionのprogressMapはすでに全塗りです。PROGRESS_MAP_UNCHANGED確認には、progressMapを変更せずに直接APIへ送ってください。"
+    throw "No unpainted block is available. The parent progressMap is already fully painted. To check PROGRESS_MAP_UNCHANGED, send the parent progressMap without changes."
   }
 
   [void]$painted.Add([int]$nextIndex)
@@ -294,14 +295,14 @@ $result = Invoke-MultipartPost `
   -targetPassword $password
 
 if ($result.IsSuccess) {
-  Write-Host "追記投稿に成功しました。" -ForegroundColor Green
+  Write-Host "Append request succeeded." -ForegroundColor Green
   Write-Host "versionId: $($result.Body.versionId)"
   Write-Host "branchPath: $($result.Body.branchPath)"
   Write-Host "progress: $($result.Body.progress)"
   exit 0
 }
 
-Write-Host "追記投稿に失敗しました。" -ForegroundColor Red
+Write-Host "Append request failed." -ForegroundColor Red
 Write-Host "HTTP status: $($result.StatusCode)"
 
 if ($null -ne $result.Body) {
