@@ -285,11 +285,7 @@ function Add-OnePaintedBlock($progressMap) {
   }
 }
 
-function New-StringContent([string]$value) {
-  return [System.Net.Http.StringContent]::new($value, [System.Text.Encoding]::UTF8)
-}
-
-function Invoke-MultipartPost(
+function Invoke-CurlMultipartPost(
   [string]$uri,
   [string]$resolvedFilePath,
   [string]$targetParentVersionId,
@@ -298,48 +294,51 @@ function Invoke-MultipartPost(
   [string]$targetComment,
   [string]$targetPassword
 ) {
-  Add-Type -AssemblyName System.Net.Http
+  $curlCommand = Get-Command curl.exe -ErrorAction SilentlyContinue
+  if ($null -eq $curlCommand) {
+    throw "curl.exe was not found. Install curl or use Windows built-in curl.exe."
+  }
 
-  $client = [System.Net.Http.HttpClient]::new()
-  $form = [System.Net.Http.MultipartFormDataContent]::new()
-  $fileStream = $null
+  $curlArgs = @(
+    "-sS",
+    "-w", "`nHTTP_STATUS:%{http_code}",
+    "-X", "POST",
+    $uri,
+    "-F", "file=@$resolvedFilePath;type=application/octet-stream",
+    "-F", "parentVersionId=$targetParentVersionId",
+    "-F", "author=$targetAuthor",
+    "-F", "progressMap=$progressMapJson",
+    "-F", "comment=$targetComment",
+    "-F", "password=$targetPassword"
+  )
 
-  try {
-    $fileStream = [System.IO.File]::OpenRead($resolvedFilePath)
-    $fileContent = [System.Net.Http.StreamContent]::new($fileStream)
-    $fileContent.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse("application/octet-stream")
+  $output = & $curlCommand.Source @curlArgs 2>&1
+  $curlExitCode = $LASTEXITCODE
+  $outputText = ($output | ForEach-Object { [string]$_ }) -join "`n"
 
-    $form.Add($fileContent, "file", [System.IO.Path]::GetFileName($resolvedFilePath))
-    $form.Add((New-StringContent $targetParentVersionId), "parentVersionId")
-    $form.Add((New-StringContent $targetAuthor), "author")
-    $form.Add((New-StringContent $progressMapJson), "progressMap")
-    $form.Add((New-StringContent $targetComment), "comment")
-    $form.Add((New-StringContent $targetPassword), "password")
+  $statusCode = 0
+  $bodyText = $outputText
+  $statusMatch = [regex]::Match($outputText, "(?s)^(.*)\r?\nHTTP_STATUS:(\d{3})\s*$")
+  if ($statusMatch.Success) {
+    $bodyText = $statusMatch.Groups[1].Value
+    $statusCode = [int]$statusMatch.Groups[2].Value
+  }
 
-    $response = $client.PostAsync($uri, $form).GetAwaiter().GetResult()
-    $responseText = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
-
-    $parsed = $null
-    if (-not [string]::IsNullOrWhiteSpace($responseText)) {
-      try {
-        $parsed = $responseText | ConvertFrom-Json
-      } catch {
-        $parsed = $null
-      }
+  $parsed = $null
+  if (-not [string]::IsNullOrWhiteSpace($bodyText)) {
+    try {
+      $parsed = $bodyText | ConvertFrom-Json
+    } catch {
+      $parsed = $null
     }
+  }
 
-    return [pscustomobject]@{
-      IsSuccess = $response.IsSuccessStatusCode
-      StatusCode = [int]$response.StatusCode
-      BodyText = $responseText
-      Body = $parsed
-    }
-  } finally {
-    if ($null -ne $fileStream) {
-      $fileStream.Dispose()
-    }
-    $form.Dispose()
-    $client.Dispose()
+  return [pscustomobject]@{
+    IsSuccess = ($curlExitCode -eq 0 -and $statusCode -ge 200 -and $statusCode -lt 300)
+    StatusCode = $statusCode
+    BodyText = $bodyText
+    Body = $parsed
+    CurlExitCode = $curlExitCode
   }
 }
 
@@ -363,7 +362,7 @@ Write-Host "Expected recalculated progress: $($appendMap.Progress)%"
 
 $encodedChartId = [System.Uri]::EscapeDataString($ChartId)
 $postUrl = "$apiBaseUrl/api/charts/$encodedChartId/versions"
-$result = Invoke-MultipartPost `
+$result = Invoke-CurlMultipartPost `
   -uri $postUrl `
   -resolvedFilePath $resolvedFile `
   -targetParentVersionId $ParentVersionId `
@@ -396,6 +395,9 @@ if ($result.IsSuccess) {
 
 Write-Host "Append request failed." -ForegroundColor Red
 Write-Host "HTTP status: $($result.StatusCode)"
+if ($result.CurlExitCode -ne 0) {
+  Write-Host "curlExitCode: $($result.CurlExitCode)"
+}
 
 if ($null -ne $result.Body) {
   $errorCode = Get-PropertyValue $result.Body "code"
