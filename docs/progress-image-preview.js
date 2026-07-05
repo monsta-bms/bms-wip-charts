@@ -79,12 +79,20 @@
     return "";
   }
 
+  function getLayerFollowupIndex(layer, layerIndex) {
+    if (Number.isInteger(Number(layer?.followupIndex))) {
+      return Math.max(0, Number(layer.followupIndex));
+    }
+
+    return Math.max(0, Number(layerIndex) - 1);
+  }
+
   function getLayerFillColor(layer, layerIndex, layerCount, contextMode) {
     const role = resolveLayerRole(layer, layerIndex, layerCount, contextMode);
     if (window.BmsProgressLayerColors?.getLayerFillColor) {
       return window.BmsProgressLayerColors.getLayerFillColor(layer, layerIndex, {
         role,
-        followupIndex: Math.max(0, layerIndex - 1)
+        followupIndex: getLayerFollowupIndex(layer, layerIndex)
       });
     }
 
@@ -406,6 +414,35 @@
     return "#1f7a5c";
   }
 
+  function getAppendParentBranchPath() {
+    const parentVersionElement = document.querySelector("#appendParentVersion");
+    const rawText = `${parentVersionElement?.title || ""} ${parentVersionElement?.textContent || ""}`;
+    const branchMatch = rawText.match(/branchPath:\s*([^\s/]+(?:\/[A-Za-z]+)*)|\b(root(?:\/[A-Za-z]+)*)\b/);
+    return branchMatch?.[1] || branchMatch?.[2] || "root";
+  }
+
+  function getBranchDepth(branchPath) {
+    const parts = String(branchPath || "root").split("/").filter(Boolean);
+    return Math.max(0, parts[0] === "root" ? parts.length - 1 : parts.length);
+  }
+
+  function getCurrentAppendFollowupIndex() {
+    return getBranchDepth(getAppendParentBranchPath());
+  }
+
+  function syncVisibleProgressLayerCssVariables() {
+    const isAppendMode = document.querySelector(".submit-panel")?.classList.contains("is-append-mode");
+    if (!window.BmsProgressLayerColors?.getFollowupColor) {
+      return;
+    }
+
+    const followupIndex = isAppendMode ? getCurrentAppendFollowupIndex() : 0;
+    document.documentElement.style.setProperty(
+      "--progress-fill-current",
+      window.BmsProgressLayerColors.getFollowupColor(followupIndex).fill
+    );
+  }
+
   function buildProgressMapFromVisibleEditor() {
     const blockElements = Array.from(document.querySelectorAll("#progressMapBlocks .progress-map-block"));
     if (blockElements.length === 0) {
@@ -418,6 +455,7 @@
     const initialIndexes = new Set();
     const appendMode = document.querySelector(".submit-panel")?.classList.contains("is-append-mode");
     const rejected = Boolean(document.querySelector("#isRejected")?.checked);
+    const followupIndex = appendMode ? getCurrentAppendFollowupIndex() : 0;
 
     blockElements.forEach((blockElement, fallbackIndex) => {
       const index = Number.isInteger(Number(blockElement.dataset.blockIndex))
@@ -452,7 +490,8 @@
       });
       layers.push({
         versionId: "preview-current",
-        color: getLayerStorageColor({ kind: "followup" }, 1, { role: "current", followupIndex: 0 }),
+        color: getLayerStorageColor({ kind: "followup", followupIndex }, 1, { role: "current", followupIndex }),
+        followupIndex,
         kind: "followup",
         ranges: compressRanges(currentIndexes)
       });
@@ -546,6 +585,7 @@
       </div>
     `;
     progressMap.insertAdjacentElement("afterend", panel);
+    syncVisibleProgressLayerCssVariables();
 
     const elements = {
       button: panel.querySelector("#progressImagePreviewButton"),
@@ -558,6 +598,7 @@
     elements.button.addEventListener("click", async () => {
       elements.status.textContent = "PNGプレビューを生成中です。";
       elements.status.classList.remove("is-error");
+      syncVisibleProgressLayerCssVariables();
 
       try {
         const previewSource = getCurrentProgressMapForPreview();
@@ -574,6 +615,12 @@
         elements.status.classList.add("is-error");
         elements.previewFrame.hidden = true;
         elements.downloadLink.hidden = true;
+      }
+    });
+
+    document.addEventListener("click", (event) => {
+      if (event.target.closest(".append-version-button, #cancelAppendButton")) {
+        window.setTimeout(syncVisibleProgressLayerCssVariables, 0);
       }
     });
   }
