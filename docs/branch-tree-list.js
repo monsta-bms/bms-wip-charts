@@ -218,19 +218,19 @@
     return version?.downloadBlockReason || version?.download_block_reason || "download_blocked";
   }
 
-  function renderProgressBadges(version, progress) {
-    const completedBadge = isCompleted(version, progress) ? `<span class="completed-badge">完成</span>` : "";
-    const rejectedBadge = isRejected(version) ? `<span class="rejected-badge">没譜面</span>` : "";
-    return `${completedBadge}${rejectedBadge}`;
+  function renderProgressBadges(version) {
+    return isRejected(version) ? `<span class="rejected-badge">没譜面</span>` : "";
   }
 
   function renderStateBadges(node, progress) {
     const version = node.version;
+    const completed = isCompleted(version, progress);
     const leafBadge = !node.hasChildren && !isRejected(version) ? `<span class="leaf-badge">末端</span>` : "";
+    const completedBadge = completed ? `<span class="completed-badge compact">完成</span>` : "";
+    const incompleteBadge = !completed && !isRejected(version) ? `<span class="incomplete-badge">未完成</span>` : "";
     const rejectedBadge = isRejected(version) ? `<span class="append-locked-badge">追記不可</span>` : "";
     const collapsedBadge = isCollapsedByCompletion(version) ? `<span class="intermediate-badge">中間</span>` : "";
-    const completedBadge = isCompleted(version, progress) ? `<span class="completed-badge compact">完成</span>` : "";
-    return `${leafBadge}${completedBadge}${rejectedBadge}${collapsedBadge}`;
+    return `${leafBadge}${completedBadge}${incompleteBadge}${rejectedBadge}${collapsedBadge}`;
   }
 
   function enhanceDownloadControl(row, version) {
@@ -264,6 +264,35 @@
     }
   }
 
+  function applyColumnClasses(row, version) {
+    const tag = row.querySelector(":scope > .version-tag");
+    const actions = row.querySelector(":scope > .version-actions");
+    const metaBlocks = Array.from(row.querySelectorAll(":scope > .meta-block"));
+    const [difficultyCell, authorCell, progressCell, thumbnailCell, commentCell] = metaBlocks;
+
+    tag?.classList.add("version-tree-cell");
+    difficultyCell?.classList.add("difficulty-cell");
+    authorCell?.classList.add("author-cell");
+    progressCell?.classList.add("progress-cell");
+    thumbnailCell?.classList.add("thumbnail-cell");
+    commentCell?.classList.add("comment-cell");
+    actions?.classList.add("actions-cell");
+
+    const authorValue = authorCell?.querySelector(".meta-value");
+    if (authorValue) {
+      const author = String(version?.author || "未入力");
+      authorValue.textContent = author;
+      authorValue.title = author;
+    }
+
+    const commentValue = commentCell?.querySelector(".meta-value");
+    if (commentValue) {
+      const comment = String(version?.comment || "");
+      commentValue.textContent = comment;
+      commentValue.title = comment;
+    }
+  }
+
   function enhanceRow(row, node) {
     const version = node.version;
     const branchPath = getBranchPath(version);
@@ -275,6 +304,8 @@
     const tag = row.querySelector(".version-tag");
     const progressBlock = [...row.querySelectorAll(".meta-block")]
       .find((block) => block.querySelector(".progress-pill"));
+
+    applyColumnClasses(row, version);
 
     row.classList.add("version-tree-row");
     row.classList.toggle("is-completed", completed);
@@ -312,7 +343,7 @@
 
       const oldBadges = progressBlock.querySelectorAll(".completed-badge, .rejected-badge");
       oldBadges.forEach((badge) => badge.remove());
-      progressBlock.insertAdjacentHTML("beforeend", renderProgressBadges(version, progress));
+      progressBlock.insertAdjacentHTML("beforeend", renderProgressBadges(version));
     }
 
     enhanceDownloadControl(row, version);
