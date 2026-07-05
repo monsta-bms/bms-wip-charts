@@ -300,7 +300,7 @@
   }
 
   function getDownloadBlockReason(version) {
-    return version?.downloadBlockReason || version?.download_block_reason || "download_blocked";
+    return version?.downloadBlockReason || version?.download_block_reason || "download blocked";
   }
 
   function getProgress(version) {
@@ -396,7 +396,6 @@
   function renderStateBadges(node, progress) {
     const version = node.version;
     const badges = [];
-    const supersededIntermediate = isSupersededIntermediateNode(node);
 
     if (isRejected(version)) {
       badges.push(`<span class="rejected-badge compact">没譜面</span>`);
@@ -404,9 +403,7 @@
       badges.push(`<span class="completed-badge compact">完成</span>`);
     }
 
-    if (!supersededIntermediate && isDownloadBlocked(version)) {
-      badges.push(`<span class="download-blocked-badge">DL不可</span>`);
-    } else if (isDeleteRequested(version)) {
+    if (isDeleteRequested(version)) {
       badges.push(`<span class="delete-requested-badge">削除申請中</span>`);
     } else if (isHiddenVersion(version)) {
       badges.push(`<span class="hidden-badge">非表示</span>`);
@@ -430,7 +427,7 @@
     if (blocked) {
       const disabled = document.createElement("span");
       disabled.className = "download-disabled download-button download-blocked-control";
-      disabled.title = getDownloadBlockReason(version);
+      disabled.title = `download blocked: ${getDownloadBlockReason(version)}`;
       disabled.textContent = "DL不可";
       existingDownload.replaceWith(disabled);
       return;
@@ -494,7 +491,7 @@
     gutter.classList.add("has-toggle");
     gutter.innerHTML = `
       <button class="intermediate-toggle-button group-toggle-button" type="button" data-collapsed-group-id="${html(groupId)}" data-count="${count}" aria-expanded="${expanded ? "true" : "false"}" aria-label="${html(label)}" title="${html(label)}">
-        ${expanded ? "−" : "+"}
+        ${expanded ? `−${count}` : `+${count}`}
       </button>
     `;
   }
@@ -646,7 +643,7 @@
       button.setAttribute("aria-expanded", expanded ? "true" : "false");
       button.setAttribute("aria-label", label);
       button.title = label;
-      button.textContent = expanded ? "−" : "+";
+      button.textContent = expanded ? `−${count}` : `+${count}`;
       button.closest(".version-row")?.classList.toggle("is-group-expanded", expanded);
     });
   }
