@@ -84,16 +84,20 @@
 }
 
 .version-row.version-tree-row.is-intermediate-history {
-  background: #fffaf2;
-  border-left: 3px solid rgba(138, 90, 0, 0.22);
-  opacity: 0.88;
+  background: linear-gradient(90deg, rgba(138, 90, 0, 0.055), transparent 120px), #fffaf2;
+  border-left: 0;
+  opacity: 0.92;
 }
 
 .version-row.version-tree-row.is-intermediate-history[hidden] {
   display: none;
 }
 
-.version-row.version-tree-row.is-download-blocked {
+.version-row.version-tree-row.is-intermediate-history .version-main-label {
+  color: #5f6770;
+}
+
+.version-row.version-tree-row.is-download-blocked:not(.is-intermediate-history) {
   background-image: linear-gradient(90deg, rgba(138, 90, 0, 0.05), transparent 38%);
 }
 
@@ -115,7 +119,7 @@
 }
 
 .group-gutter-cell::before {
-  border-left: 1px solid rgba(121, 134, 146, 0.46);
+  border-left: 1px dashed rgba(102, 114, 127, 0.52);
   bottom: -1px;
   content: "";
   left: 50%;
@@ -129,6 +133,10 @@
 .version-row.version-tree-row.has-intermediate-group-control .group-gutter-cell::before,
 .version-row.version-tree-row.is-intermediate-history .group-gutter-cell::before {
   opacity: 1;
+}
+
+.version-row.version-tree-row.has-intermediate-group-control:not(.is-group-expanded) .group-gutter-cell::before {
+  bottom: 50%;
 }
 
 .group-gutter-cell.has-toggle::before {
@@ -160,10 +168,28 @@
   z-index: 1;
 }
 
+.version-row.version-tree-row.has-intermediate-group-control .group-toggle-button {
+  background: #f8fbfa;
+  border-color: rgba(31, 122, 92, 0.44);
+  box-shadow: 0 0 0 2px #ffffff;
+  color: var(--primary-dark);
+}
+
+.version-row.version-tree-row.has-intermediate-group-control.is-group-expanded .group-toggle-button {
+  background: var(--primary-dark);
+  border-color: var(--primary-dark);
+  color: #ffffff;
+}
+
 .group-toggle-button:hover {
   background: #edf8f2;
   border-color: rgba(31, 122, 92, 0.55);
   color: var(--primary-dark);
+}
+
+.version-row.version-tree-row.has-intermediate-group-control.is-group-expanded .group-toggle-button:hover {
+  background: #145d47;
+  color: #ffffff;
 }
 
 .group-toggle-button:focus-visible {
@@ -288,6 +314,11 @@
   display: inline-flex;
   flex-wrap: wrap;
   gap: 4px;
+}
+
+.version-row.version-tree-row.is-intermediate-history .intermediate-badge,
+.version-row.version-tree-row.is-intermediate-history .download-blocked-badge {
+  display: none;
 }
 
 .completed-badge,
