@@ -267,15 +267,39 @@
 
   function isSupersededIntermediateNode(node) {
     const version = node.version;
-    return isCollapsedByCompletion(version) &&
-      getCollapsedReason(version) === completedCollapseReason &&
-      getDownloadBlockReason(version) === completedCollapseReason &&
+    return getDownloadBlockReason(version) === completedCollapseReason &&
       getProgress(version) < 100 &&
-      Boolean(getCollapsedByVersionId(version)) &&
+      Boolean(isCollapsedByCompletion(version) || getCollapsedReason(version) === completedCollapseReason || isDownloadBlocked(version)) &&
       !isHiddenVersion(version);
   }
 
-  function hasVisibleNonGroupChild(node, groupId, childrenByNodeKey) {
+  function inferCompletedDescendantId(node, treeNodes) {
+    const branchPath = getBranchPath(node.version);
+    const descendantPrefix = branchPath === "root" ? "root/" : `${branchPath}/`;
+    const candidates = treeNodes
+      .filter((candidate) => {
+        const candidatePath = getBranchPath(candidate.version);
+        return candidatePath.startsWith(descendantPrefix) &&
+          isCompleted(candidate.version, getProgress(candidate.version)) &&
+          !isHiddenVersion(candidate.version) &&
+          getVersionId(candidate.version);
+      })
+      .sort((a, b) => {
+        const depthDiff = a.depth - b.depth;
+        if (depthDiff !== 0) {
+          return depthDiff;
+        }
+        return getCreatedAtTime(a.version) - getCreatedAtTime(b.version);
+      });
+
+    return candidates[0] ? getVersionId(candidates[0].version) : "";
+  }
+
+  function getCollapseGroupId(node, treeNodes) {
+    return getCollapsedByVersionId(node.version) || inferCompletedDescendantId(node, treeNodes);
+  }
+
+  function hasVisibleNonGroupChild(node, groupId, childrenByNodeKey, treeNodes) {
     const children = childrenByNodeKey.get(getNodeKey(node.version)) || [];
     return children.some((child) => {
       const childVersion = child.version;
@@ -283,7 +307,7 @@
         return false;
       }
 
-      if (isSupersededIntermediateNode(child) && getCollapsedByVersionId(childVersion) === groupId) {
+      if (isSupersededIntermediateNode(child) && getCollapseGroupId(child, treeNodes) === groupId) {
         return false;
       }
 
@@ -291,17 +315,17 @@
     });
   }
 
-  function shouldCollapseIntermediateNode(node, childrenByNodeKey, completionIds) {
+  function shouldCollapseIntermediateNode(node, childrenByNodeKey, completionIds, treeNodes) {
     if (node.depth === 0 || !isSupersededIntermediateNode(node)) {
       return false;
     }
 
-    const groupId = getCollapsedByVersionId(node.version);
-    if (!completionIds.has(groupId)) {
+    const groupId = getCollapseGroupId(node, treeNodes);
+    if (!groupId || !completionIds.has(groupId)) {
       return false;
     }
 
-    return !hasVisibleNonGroupChild(node, groupId, childrenByNodeKey);
+    return !hasVisibleNonGroupChild(node, groupId, childrenByNodeKey, treeNodes);
   }
 
   function buildIntermediateGroups(treeNodes, childrenByNodeKey) {
@@ -309,11 +333,11 @@
     const groups = new Map();
 
     for (const node of treeNodes) {
-      if (!shouldCollapseIntermediateNode(node, childrenByNodeKey, completionIds)) {
+      if (!shouldCollapseIntermediateNode(node, childrenByNodeKey, completionIds, treeNodes)) {
         continue;
       }
 
-      const groupId = getCollapsedByVersionId(node.version);
+      const groupId = getCollapseGroupId(node, treeNodes);
       const nodes = groups.get(groupId) || [];
       nodes.push(node);
       groups.set(groupId, nodes);
@@ -613,7 +637,7 @@
           return;
         }
 
-        const groupId = getCollapsedByVersionId(node.version);
+        const groupId = getCollapseGroupId(node, treeNodes);
         const collapsible = intermediateGroups.has(groupId) && intermediateGroups.get(groupId)?.includes(node);
         const expanded = groupId ? expandedIntermediateGroups.has(groupId) : false;
         enhanceRow(row, node, collapsible ? { collapsedGroupId: groupId, expanded } : {});
