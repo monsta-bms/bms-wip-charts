@@ -214,23 +214,41 @@
     return version?.downloadBlocked === true || version?.download_blocked === true;
   }
 
+  function isDeleteRequested(version) {
+    return version?.deleteRequested === true || version?.delete_requested === true;
+  }
+
+  function isHiddenVersion(version) {
+    return version?.hidden === true || version?.isHidden === true || version?.is_hidden === true;
+  }
+
   function getDownloadBlockReason(version) {
     return version?.downloadBlockReason || version?.download_block_reason || "download_blocked";
   }
 
-  function renderProgressBadges(version) {
-    return isRejected(version) ? `<span class="rejected-badge">没譜面</span>` : "";
+  function renderProgressBadges() {
+    return "";
   }
 
   function renderStateBadges(node, progress) {
     const version = node.version;
-    const completed = isCompleted(version, progress);
-    const leafBadge = !node.hasChildren && !isRejected(version) ? `<span class="leaf-badge">末端</span>` : "";
-    const completedBadge = completed ? `<span class="completed-badge compact">完成</span>` : "";
-    const incompleteBadge = !completed && !isRejected(version) ? `<span class="incomplete-badge">未完成</span>` : "";
-    const rejectedBadge = isRejected(version) ? `<span class="append-locked-badge">追記不可</span>` : "";
-    const collapsedBadge = isCollapsedByCompletion(version) ? `<span class="intermediate-badge">中間</span>` : "";
-    return `${leafBadge}${completedBadge}${incompleteBadge}${rejectedBadge}${collapsedBadge}`;
+    const badges = [];
+
+    if (isRejected(version)) {
+      badges.push(`<span class="rejected-badge compact">没譜面</span>`);
+    } else if (isCompleted(version, progress)) {
+      badges.push(`<span class="completed-badge compact">完成</span>`);
+    }
+
+    if (isDownloadBlocked(version)) {
+      badges.push(`<span class="download-blocked-badge">DL不可</span>`);
+    } else if (isDeleteRequested(version)) {
+      badges.push(`<span class="delete-requested-badge">削除申請中</span>`);
+    } else if (isHiddenVersion(version)) {
+      badges.push(`<span class="hidden-badge">非表示</span>`);
+    }
+
+    return badges.slice(0, 2).join("");
   }
 
   function enhanceDownloadControl(row, version) {
@@ -301,6 +319,8 @@
     const rejected = isRejected(version);
     const collapsed = isCollapsedByCompletion(version);
     const blocked = isDownloadBlocked(version);
+    const deleteRequested = isDeleteRequested(version);
+    const hidden = isHiddenVersion(version);
     const tag = row.querySelector(".version-tag");
     const progressBlock = [...row.querySelectorAll(".meta-block")]
       .find((block) => block.querySelector(".progress-pill"));
@@ -313,6 +333,8 @@
     row.classList.toggle("is-leaf", !node.hasChildren);
     row.classList.toggle("is-collapsed-by-completion", collapsed);
     row.classList.toggle("is-download-blocked", blocked);
+    row.classList.toggle("is-delete-requested", deleteRequested);
+    row.classList.toggle("is-hidden-version", hidden);
     row.dataset.depth = String(node.depth);
     row.dataset.branchPath = branchPath;
     row.style.setProperty("--tree-depth", String(node.depth));
@@ -320,9 +342,10 @@
     if (tag) {
       const connector = node.depth === 0 ? "" : node.isLast ? "└" : "├";
       const parentText = node.parent ? `from ${getDisplayVersion(node.parent)}` : "起点";
+      const leafText = node.hasChildren ? "" : " / 末端";
       tag.classList.add("version-tree-tag");
       tag.style.setProperty("--tree-depth", String(node.depth));
-      tag.title = `branchPath: ${branchPath}`;
+      tag.title = `branchPath: ${branchPath}${leafText}`;
       tag.innerHTML = `
         <span class="tree-connector" aria-hidden="true">${html(connector)}</span>
         <span class="version-label-stack">
@@ -330,7 +353,7 @@
             <span class="version-main-label">${html(getDisplayVersion(version))}</span>
             <span class="version-state-badges">${renderStateBadges(node, progress)}</span>
           </span>
-          <span class="version-parent-line" title="branchPath: ${html(branchPath)}">${html(parentText)}</span>
+          <span class="version-parent-line" title="branchPath: ${html(branchPath)}${html(leafText)}">${html(parentText)}</span>
         </span>
       `;
     }
