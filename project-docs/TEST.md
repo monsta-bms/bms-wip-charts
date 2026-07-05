@@ -240,6 +240,26 @@ python -m http.server 8000
 
 ローカル静的ページから本番Workerへ接続する場合はCORS Originが異なるため、必要に応じてWorkerの `ALLOWED_ORIGINS` にローカルOriginを追加する。
 
+## TREE-01A 追加確認
+
+- `branchPath` が通常表示で目立ちすぎないこと
+- version名の下に `from verX.X` または `起点` が表示され、親versionが分かること
+- `root/a`, `root/a/b` などの内部branchPathは、version表示付近のhover/titleで確認できること
+- root versionがツリーの起点として表示されること
+- `root/a` がrootの子として表示されること
+- `root/b` がrootの別分岐として表示されること
+- `root/a/a` がroot/aの子として表示されること
+- 子を持たないversionに `末端` バッジが出ること
+- `progress=100` または `completed=true` のversionに `完成` バッジが出ること
+- `isRejected=true` のversionに没譜面バッジまたは追記不可表示が出ること
+- DLがテキストリンクではなくボタン風に表示されること
+- `downloadBlocked=true` のversionではDLボタンがdisabled表示になること
+- PC表示で `想定難易度`, `差分作者`, `進捗度`, `コメント` などの行内ラベルの重複が減っていること
+- スマホ幅ではラベル付き表示に戻り、大きく崩れないこと
+- 追記投稿ボタンが正しい `parentVersionId` で動くこと
+- progressMapサムネイルがツリー線やボタンと重ならないこと
+- 既存の初回投稿と追記投稿が壊れていないこと
+
 ## 注意
 
 同じファイルを再投稿すると `DUPLICATE_FILE` になる。再テスト時はファイル内容を少し変更するか、テスト用D1/R2を初期化する。
