@@ -111,9 +111,24 @@
     window.__bmsProgressImageFormDataHookInstalled = true;
   }
 
+  function updatePreviewStatusCopy() {
+    const status = document.querySelector("#progressImagePreviewStatus");
+    if (!status || !status.textContent.includes("まだ送信されません")) {
+      return;
+    }
+
+    status.textContent = "PNGは投稿時に自動送信されます。";
+  }
+
   window.BmsProgressImageFormData = {
     appendProgressImageToFormData
   };
 
   installFetchHook();
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", updatePreviewStatusCopy, { once: true });
+  } else {
+    updatePreviewStatusCopy();
+  }
 })();
