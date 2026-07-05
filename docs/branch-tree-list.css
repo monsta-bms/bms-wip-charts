@@ -69,12 +69,12 @@
 .version-row.version-tree-row[data-depth]:not([data-depth="0"]) .version-tree-cell::after {
   border-top: 1px solid rgba(79, 90, 101, 0.46);
   left: calc((var(--tree-depth, 0) * var(--version-tree-indent)) + 7px);
-  top: 19px;
+  top: 20px;
   width: 13px;
 }
 
 .version-tree-tag {
-  align-items: center;
+  align-items: flex-start;
   display: flex;
   gap: 5px;
   min-width: 0;
@@ -84,13 +84,10 @@
 }
 
 .tree-connector {
-  color: #596673;
   flex: 0 0 auto;
-  font-size: 0.78rem;
-  font-weight: 900;
   line-height: 1.35;
   min-width: 14px;
-  padding-top: 1px;
+  padding-top: 2px;
   text-align: center;
 }
 
@@ -107,7 +104,7 @@
 
 .version-label-stack {
   display: grid;
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -127,6 +124,7 @@
   white-space: nowrap;
 }
 
+.version-branch-line,
 .version-parent-line {
   color: #6d7a86;
   font-size: 0.72rem;
@@ -135,6 +133,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.version-branch-line {
+  color: #536372;
+  font-weight: 800;
 }
 
 .version-state-badges {
