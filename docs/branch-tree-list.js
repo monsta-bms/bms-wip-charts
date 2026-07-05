@@ -45,28 +45,9 @@
     return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
   }
 
-  function getBaseDisplayVersion(version) {
-    const versionNumber = getVersionNumber(version);
-    if (versionNumber !== Number.MAX_SAFE_INTEGER) {
-      return `ver${versionNumber}.0`;
-    }
-
-    return getDisplayVersion(version).replace(/-[a-z]+(?:\/[a-z]+)*$/i, "");
-  }
-
   function getCreatedAtTime(version) {
     const time = Date.parse(version?.createdAt || version?.created_at || "");
     return Number.isFinite(time) ? time : 0;
-  }
-
-  function getBranchLabel(version) {
-    const explicit = version?.branchLabel || version?.branch_label;
-    if (explicit) {
-      return String(explicit);
-    }
-
-    const parts = getBranchPath(version).split("/").filter(Boolean);
-    return parts[parts.length - 1] || "root";
   }
 
   function getParentBranchPath(version) {
@@ -74,40 +55,30 @@
     return parts.length > 1 ? parts.slice(0, -1).join("/") : "";
   }
 
-  function buildDisplayVersionLabel(version, siblingCount) {
-    const baseVersion = getBaseDisplayVersion(version);
-    if (!getParentBranchPath(version) || Number(siblingCount) < 2) {
-      return baseVersion;
-    }
-
-    return `${baseVersion}-${getBranchLabel(version)}`;
-  }
-
   function getNodeKey(version) {
     return getVersionId(version) || getBranchPath(version);
   }
 
-  function branchLabelRank(label) {
-    const value = String(label || "").toLowerCase();
-    if (value === "root") {
-      return 0;
+  function getLineName(index) {
+    let value = Number(index);
+    if (!Number.isFinite(value) || value < 0) {
+      return "A";
     }
 
-    if (!/^[a-z]+$/.test(value)) {
-      return Number.MAX_SAFE_INTEGER;
+    let name = "";
+    value += 1;
+    while (value > 0) {
+      const remainder = (value - 1) % 26;
+      name = String.fromCharCode(65 + remainder) + name;
+      value = Math.floor((value - 1) / 26);
     }
-
-    let rank = 0;
-    for (const character of value) {
-      rank = rank * 26 + (character.charCodeAt(0) - 96);
-    }
-    return rank;
+    return name;
   }
 
-  function compareVersions(a, b) {
-    const labelDiff = branchLabelRank(getBranchLabel(a)) - branchLabelRank(getBranchLabel(b));
-    if (labelDiff !== 0) {
-      return labelDiff;
+  function compareSiblingVersions(a, b) {
+    const createdAtDiff = getCreatedAtTime(a) - getCreatedAtTime(b);
+    if (createdAtDiff !== 0) {
+      return createdAtDiff;
     }
 
     const pathCompare = getBranchPath(a).localeCompare(getBranchPath(b), "en", { numeric: true });
@@ -115,12 +86,7 @@
       return pathCompare;
     }
 
-    const versionDiff = getVersionNumber(a) - getVersionNumber(b);
-    if (versionDiff !== 0) {
-      return versionDiff;
-    }
-
-    return getCreatedAtTime(a) - getCreatedAtTime(b);
+    return String(getVersionId(a)).localeCompare(String(getVersionId(b)), "en", { numeric: true });
   }
 
   function buildLookup(versions) {
@@ -171,7 +137,7 @@
     const visited = new Set();
 
     function childVersions(version) {
-      return (childrenByParentKey.get(getNodeKey(version)) || []).sort(compareVersions);
+      return (childrenByParentKey.get(getNodeKey(version)) || []).sort(compareSiblingVersions);
     }
 
     function siblingCountFor(version) {
@@ -183,7 +149,7 @@
       return (childrenByParentKey.get(getNodeKey(parent)) || []).length;
     }
 
-    function walk(version, parent, depth, isLast, siblingCount, parentSiblingCount) {
+    function walk(version, parent, depth, isLast, siblingCount, parentSiblingCount, siblingIndex) {
       const versionKey = getNodeKey(version);
       if (visited.has(versionKey)) {
         return;
@@ -198,21 +164,22 @@
         isLast,
         siblingCount,
         parentSiblingCount,
+        siblingIndex,
         hasChildren: children.length > 0
       });
 
       children.forEach((child, index) => {
-        walk(child, version, depth + 1, index === children.length - 1, children.length, siblingCount);
+        walk(child, version, depth + 1, index === children.length - 1, children.length, siblingCount, index);
       });
     }
 
-    roots.sort(compareVersions).forEach((root, index) => {
-      walk(root, null, 0, index === roots.length - 1, roots.length, 0);
+    roots.sort(compareSiblingVersions).forEach((root, index) => {
+      walk(root, null, 0, index === roots.length - 1, roots.length, 0, index);
     });
 
     versions
       .filter((version) => !visited.has(getNodeKey(version)))
-      .sort((a, b) => getBranchPath(a).localeCompare(getBranchPath(b), "en", { numeric: true }))
+      .sort(compareSiblingVersions)
       .forEach((version, index, missing) => {
         const parent = getParentVersion(version, lookup);
         nodes.push({
@@ -222,11 +189,94 @@
           isLast: index === missing.length - 1,
           siblingCount: siblingCountFor(version),
           parentSiblingCount: parent ? siblingCountFor(parent) : 0,
+          siblingIndex: index,
           hasChildren: false
         });
       });
 
     return nodes;
+  }
+
+  function buildVersionTreeLabels(treeNodes) {
+    const labels = new Map();
+    const childrenByParentKey = new Map();
+    const rootNodes = [];
+    let nextLineIndex = 0;
+
+    for (const node of treeNodes) {
+      if (!node.parent) {
+        rootNodes.push(node);
+        continue;
+      }
+
+      const parentKey = getNodeKey(node.parent);
+      const children = childrenByParentKey.get(parentKey) || [];
+      children.push(node);
+      childrenByParentKey.set(parentKey, children);
+    }
+
+    function assignChildren(parentNode) {
+      const parentKey = getNodeKey(parentNode.version);
+      const parentInfo = labels.get(parentKey);
+      const children = childrenByParentKey.get(parentKey) || [];
+
+      children.forEach((childNode, index) => {
+        const childKey = getNodeKey(childNode.version);
+        if (labels.has(childKey)) {
+          return;
+        }
+
+        const continuesParentLine = parentInfo?.lineIndex !== null && parentInfo?.lineIndex !== undefined && index === 0;
+        const lineIndex = continuesParentLine ? parentInfo.lineIndex : nextLineIndex++;
+        const lineNumber = continuesParentLine ? parentInfo.lineNumber + 1 : 1;
+        const line = getLineName(lineIndex);
+        const label = `${line}${lineNumber}`;
+
+        labels.set(childKey, {
+          label,
+          fromLabel: parentInfo ? `from ${parentInfo.label}` : "from BASE",
+          line,
+          lineIndex,
+          lineNumber
+        });
+      });
+
+      children.forEach(assignChildren);
+    }
+
+    rootNodes.forEach((rootNode) => {
+      const rootKey = getNodeKey(rootNode.version);
+      if (!labels.has(rootKey)) {
+        labels.set(rootKey, {
+          label: "BASE",
+          fromLabel: "起点",
+          line: null,
+          lineIndex: null,
+          lineNumber: null
+        });
+      }
+    });
+
+    rootNodes.forEach(assignChildren);
+
+    for (const node of treeNodes) {
+      const nodeKey = getNodeKey(node.version);
+      if (labels.has(nodeKey)) {
+        continue;
+      }
+
+      const lineIndex = nextLineIndex++;
+      const line = getLineName(lineIndex);
+      labels.set(nodeKey, {
+        label: `${line}1`,
+        fromLabel: node.parent ? "from unknown" : "起点",
+        line,
+        lineIndex,
+        lineNumber: 1
+      });
+    }
+
+    return labels;
   }
 
   function isCompleted(version, progress) {
@@ -342,10 +392,14 @@
     }
   }
 
-  function enhanceRow(row, node) {
+  function enhanceRow(row, node, treeLabels) {
     const version = node.version;
     const branchPath = getBranchPath(version);
-    const displayVersionLabel = buildDisplayVersionLabel(version, node.siblingCount);
+    const labelInfo = treeLabels.get(getNodeKey(version)) || {
+      label: node.parent ? "A1" : "BASE",
+      fromLabel: node.parent ? "from unknown" : "起点"
+    };
+    const displayVersionLabel = labelInfo.label;
     const progress = Number.isFinite(Number(version?.progress)) ? Number(version.progress) : 0;
     const completed = isCompleted(version, progress);
     const rejected = isRejected(version);
@@ -372,13 +426,11 @@
     row.style.setProperty("--tree-depth", String(node.depth));
 
     if (tag) {
-      const parentText = node.parent
-        ? `from ${buildDisplayVersionLabel(node.parent, node.parentSiblingCount)}`
-        : "起点";
       const leafText = node.hasChildren ? "" : " / 末端";
+      const titleText = `displayVersion: ${getDisplayVersion(version)} / branchPath: ${branchPath}${leafText}`;
       tag.classList.add("version-tree-tag");
       tag.style.setProperty("--tree-depth", String(node.depth));
-      tag.title = `branchPath: ${branchPath}${leafText}`;
+      tag.title = titleText;
       tag.innerHTML = `
         <span class="tree-connector" aria-hidden="true"></span>
         <span class="version-label-stack">
@@ -386,7 +438,7 @@
             <span class="version-main-label">${html(displayVersionLabel)}</span>
             <span class="version-state-badges">${renderStateBadges(node, progress)}</span>
           </span>
-          <span class="version-parent-line" title="branchPath: ${html(branchPath)}${html(leafText)}">${html(parentText)}</span>
+          <span class="version-parent-line" title="${html(titleText)}">${html(labelInfo.fromLabel)}</span>
         </span>
       `;
     }
@@ -410,7 +462,7 @@
     header.className = "version-list-header";
     header.setAttribute("aria-hidden", "true");
     header.innerHTML = `
-      <span>ver</span>
+      <span>版</span>
       <span>難易度</span>
       <span>作者</span>
       <span>進捗</span>
@@ -445,13 +497,14 @@
       });
 
       const treeNodes = buildTreeNodes(versions);
+      const treeLabels = buildVersionTreeLabels(treeNodes);
       const fragment = document.createDocumentFragment();
       treeNodes.forEach((node) => {
         const row = rowsByVersion.get(getNodeKey(node.version));
         if (!row) {
           return;
         }
-        enhanceRow(row, node);
+        enhanceRow(row, node, treeLabels);
         fragment.appendChild(row);
       });
 
