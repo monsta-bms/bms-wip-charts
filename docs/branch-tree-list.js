@@ -36,6 +36,10 @@
     return version?.branchPath || version?.branch_path || "root";
   }
 
+  function getDisplayVersion(version) {
+    return version?.displayVersion || version?.display_version || "ver?.?";
+  }
+
   function getVersionNumber(version) {
     const value = Number(version?.versionNumber ?? version?.version_number);
     return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
@@ -54,6 +58,15 @@
 
     const parts = getBranchPath(version).split("/").filter(Boolean);
     return parts[parts.length - 1] || "root";
+  }
+
+  function getParentBranchPath(version) {
+    const parts = getBranchPath(version).split("/").filter(Boolean);
+    return parts.length > 1 ? parts.slice(0, -1).join("/") : "";
+  }
+
+  function getNodeKey(version) {
+    return getVersionId(version) || getBranchPath(version);
   }
 
   function branchLabelRank(label) {
@@ -92,12 +105,9 @@
     return getCreatedAtTime(a) - getCreatedAtTime(b);
   }
 
-  function buildTreeNodes(versions) {
+  function buildLookup(versions) {
     const byId = new Map();
     const byPath = new Map();
-    const childrenByParentId = new Map();
-    const childrenByParentPath = new Map();
-    const roots = [];
 
     for (const version of versions) {
       const versionId = getVersionId(version);
@@ -108,88 +118,122 @@
       byPath.set(branchPath, version);
     }
 
-    for (const version of versions) {
-      const versionId = getVersionId(version);
-      const parentId = getParentVersionId(version);
-      const branchPath = getBranchPath(version);
-      const pathParts = branchPath.split("/").filter(Boolean);
-      const parentPath = pathParts.length > 1 ? pathParts.slice(0, -1).join("/") : "";
+    return { byId, byPath };
+  }
 
-      if (parentId && byId.has(parentId)) {
-        const children = childrenByParentId.get(parentId) || [];
-        children.push(version);
-        childrenByParentId.set(parentId, children);
-        continue;
-      }
-
-      if (parentPath && byPath.has(parentPath)) {
-        const children = childrenByParentPath.get(parentPath) || [];
-        children.push(version);
-        childrenByParentPath.set(parentPath, children);
-        continue;
-      }
-
-      roots.push(version);
-      if (!versionId && branchPath === "root") {
-        roots.push(version);
-      }
+  function getParentVersion(version, lookup) {
+    const parentId = getParentVersionId(version);
+    if (parentId && lookup.byId.has(parentId)) {
+      return lookup.byId.get(parentId);
     }
 
-    const uniqueRoots = [...new Set(roots)].sort(compareVersions);
+    const parentPath = getParentBranchPath(version);
+    return parentPath && lookup.byPath.has(parentPath) ? lookup.byPath.get(parentPath) : null;
+  }
+
+  function buildTreeNodes(versions) {
+    const lookup = buildLookup(versions);
+    const childrenByParentKey = new Map();
+    const roots = [];
+
+    for (const version of versions) {
+      const parent = getParentVersion(version, lookup);
+      if (!parent) {
+        roots.push(version);
+        continue;
+      }
+
+      const parentKey = getNodeKey(parent);
+      const children = childrenByParentKey.get(parentKey) || [];
+      children.push(version);
+      childrenByParentKey.set(parentKey, children);
+    }
+
     const nodes = [];
     const visited = new Set();
 
     function childVersions(version) {
-      const versionId = getVersionId(version);
-      const branchPath = getBranchPath(version);
-      const byParentId = versionId ? childrenByParentId.get(versionId) || [] : [];
-      const byParentPath = childrenByParentPath.get(branchPath) || [];
-      return [...new Set([...byParentId, ...byParentPath])].sort(compareVersions);
+      return (childrenByParentKey.get(getNodeKey(version)) || []).sort(compareVersions);
     }
 
-    function walk(version, depth, isLast) {
-      const versionId = getVersionId(version) || getBranchPath(version);
-      if (visited.has(versionId)) {
+    function walk(version, parent, depth, isLast) {
+      const versionKey = getNodeKey(version);
+      if (visited.has(versionKey)) {
         return;
       }
 
-      visited.add(versionId);
+      visited.add(versionKey);
       const children = childVersions(version);
       nodes.push({
         version,
+        parent,
         depth,
         isLast,
         hasChildren: children.length > 0
       });
 
       children.forEach((child, index) => {
-        walk(child, depth + 1, index === children.length - 1);
+        walk(child, version, depth + 1, index === children.length - 1);
       });
     }
 
-    uniqueRoots.forEach((root, index) => {
-      walk(root, 0, index === uniqueRoots.length - 1);
+    roots.sort(compareVersions).forEach((root, index) => {
+      walk(root, null, 0, index === roots.length - 1);
     });
 
-    const missing = versions
-      .filter((version) => !visited.has(getVersionId(version) || getBranchPath(version)))
-      .sort((a, b) => getBranchPath(a).localeCompare(getBranchPath(b), "en", { numeric: true }));
-
-    missing.forEach((version, index) => {
-      nodes.push({ version, depth: getBranchPath(version).split("/").filter(Boolean).length - 1, isLast: index === missing.length - 1, hasChildren: false });
-    });
+    versions
+      .filter((version) => !visited.has(getNodeKey(version)))
+      .sort((a, b) => getBranchPath(a).localeCompare(getBranchPath(b), "en", { numeric: true }))
+      .forEach((version, index, missing) => {
+        const parent = getParentVersion(version, lookup);
+        nodes.push({
+          version,
+          parent,
+          depth: Math.max(0, getBranchPath(version).split("/").filter(Boolean).length - 1),
+          isLast: index === missing.length - 1,
+          hasChildren: false
+        });
+      });
 
     return nodes;
   }
 
+  function isCompleted(version, progress) {
+    return version?.completed === true || Number(progress) === 100;
+  }
+
+  function isRejected(version) {
+    return version?.isRejected === true || version?.is_rejected === true;
+  }
+
+  function isCollapsedByCompletion(version) {
+    return version?.collapsedByCompletion === true || version?.collapsed_by_completion === true;
+  }
+
+  function isDownloadBlocked(version) {
+    return version?.downloadBlocked === true || version?.download_blocked === true;
+  }
+
+  function getDownloadBlockReason(version) {
+    return version?.downloadBlockReason || version?.download_block_reason || "download_blocked";
+  }
+
   function renderProgressBadges(version, progress) {
-    const completed = version?.completed === true || Number(progress) === 100;
-    const rejectedBadge = version?.isRejected ? `<span class="rejected-badge">没譜面</span>` : "";
-    const completedBadge = completed ? `<span class="completed-badge">完成</span>` : "";
+    const completedBadge = isCompleted(version, progress) ? `<span class="completed-badge">完成</span>` : "";
+    const rejectedBadge = isRejected(version) ? `<span class="rejected-badge">没譜面</span>` : "";
     return `${completedBadge}${rejectedBadge}`;
   }
 
-  function replaceDownloadControl(row, version) {
+  function renderStateBadges(node, progress) {
+    const version = node.version;
+    const leafBadge = !node.hasChildren && !isRejected(version) ? `<span class="leaf-badge">末端</span>` : "";
+    const rejectedBadge = isRejected(version) ? `<span class="append-locked-badge">追記不可</span>` : "";
+    const collapsedBadge = isCollapsedByCompletion(version) ? `<span class="intermediate-badge">中間</span>` : "";
+    const completedBadge = isCompleted(version, progress) ? `<span class="completed-badge compact">完成</span>` : "";
+    return `${leafBadge}${completedBadge}${rejectedBadge}${collapsedBadge}`;
+  }
+
+  function enhanceDownloadControl(row, version) {
     const actions = row.querySelector(".version-actions");
     if (!actions) {
       return;
@@ -200,45 +244,63 @@
       return;
     }
 
-    const blocked = version?.downloadBlocked === true || version?.download_blocked === true;
-    if (!blocked) {
+    const blocked = isDownloadBlocked(version);
+    if (blocked) {
+      const disabled = document.createElement("span");
+      disabled.className = "download-disabled download-button download-blocked-control";
+      disabled.title = getDownloadBlockReason(version);
+      disabled.textContent = "DL不可";
+      existingDownload.replaceWith(disabled);
       return;
     }
 
-    const reason = version?.downloadBlockReason || version?.download_block_reason || "download_blocked";
-    const disabled = document.createElement("span");
-    disabled.className = "download-disabled download-blocked-control";
-    disabled.title = reason;
-    disabled.textContent = "DL不可";
-    existingDownload.replaceWith(disabled);
+    existingDownload.classList.add("download-button");
+    if (existingDownload.tagName.toLowerCase() === "a") {
+      existingDownload.classList.add("download-available-control");
+      existingDownload.setAttribute("aria-label", `${getDisplayVersion(version)} をダウンロード`);
+    } else {
+      existingDownload.classList.add("download-blocked-control");
+      existingDownload.title = "download url is not available";
+    }
   }
 
   function enhanceRow(row, node) {
     const version = node.version;
     const branchPath = getBranchPath(version);
     const progress = Number.isFinite(Number(version?.progress)) ? Number(version.progress) : 0;
-    const completed = version?.completed === true || progress === 100;
-    const collapsed = version?.collapsedByCompletion === true || version?.collapsed_by_completion === true;
-    const blocked = version?.downloadBlocked === true || version?.download_blocked === true;
+    const completed = isCompleted(version, progress);
+    const rejected = isRejected(version);
+    const collapsed = isCollapsedByCompletion(version);
+    const blocked = isDownloadBlocked(version);
     const tag = row.querySelector(".version-tag");
     const progressBlock = [...row.querySelectorAll(".meta-block")]
       .find((block) => block.querySelector(".progress-pill"));
 
     row.classList.add("version-tree-row");
     row.classList.toggle("is-completed", completed);
+    row.classList.toggle("is-rejected", rejected);
+    row.classList.toggle("is-leaf", !node.hasChildren);
     row.classList.toggle("is-collapsed-by-completion", collapsed);
     row.classList.toggle("is-download-blocked", blocked);
     row.dataset.depth = String(node.depth);
+    row.dataset.branchPath = branchPath;
     row.style.setProperty("--tree-depth", String(node.depth));
 
     if (tag) {
-      const connector = node.depth === 0 ? "root" : node.isLast ? "└" : "├";
+      const connector = node.depth === 0 ? "" : node.isLast ? "└" : "├";
+      const parentText = node.parent ? `from ${getDisplayVersion(node.parent)}` : "起点";
       tag.classList.add("version-tree-tag");
       tag.style.setProperty("--tree-depth", String(node.depth));
+      tag.title = `branchPath: ${branchPath}`;
       tag.innerHTML = `
         <span class="tree-connector" aria-hidden="true">${html(connector)}</span>
-        <span class="version-main-label">${html(version?.displayVersion || "ver?.?")}</span>
-        <span class="branch-path-badge">${html(branchPath)}</span>
+        <span class="version-label-stack">
+          <span class="version-title-line">
+            <span class="version-main-label">${html(getDisplayVersion(version))}</span>
+            <span class="version-state-badges">${renderStateBadges(node, progress)}</span>
+          </span>
+          <span class="version-parent-line" title="branchPath: ${html(branchPath)}">${html(parentText)}</span>
+        </span>
       `;
     }
 
@@ -253,7 +315,23 @@
       progressBlock.insertAdjacentHTML("beforeend", renderProgressBadges(version, progress));
     }
 
-    replaceDownloadControl(row, version);
+    enhanceDownloadControl(row, version);
+  }
+
+  function createVersionListHeader() {
+    const header = document.createElement("div");
+    header.className = "version-list-header";
+    header.setAttribute("aria-hidden", "true");
+    header.innerHTML = `
+      <span>ver</span>
+      <span>難易度</span>
+      <span>作者</span>
+      <span>進捗</span>
+      <span>進捗サムネイル</span>
+      <span>コメント</span>
+      <span>操作</span>
+    `;
+    return header;
   }
 
   function enhanceTreeDisplay(data) {
@@ -275,15 +353,14 @@
 
       const rowsByVersion = new Map();
       versions.forEach((version, index) => {
-        const key = getVersionId(version) || getBranchPath(version) || String(index);
+        const key = getNodeKey(version) || String(index);
         rowsByVersion.set(key, rows[index]);
       });
 
       const treeNodes = buildTreeNodes(versions);
       const fragment = document.createDocumentFragment();
       treeNodes.forEach((node) => {
-        const key = getVersionId(node.version) || getBranchPath(node.version);
-        const row = rowsByVersion.get(key);
+        const row = rowsByVersion.get(getNodeKey(node.version));
         if (!row) {
           return;
         }
@@ -293,6 +370,7 @@
 
       if (fragment.childNodes.length > 0) {
         list.innerHTML = "";
+        list.appendChild(createVersionListHeader());
         list.appendChild(fragment);
       }
     });
