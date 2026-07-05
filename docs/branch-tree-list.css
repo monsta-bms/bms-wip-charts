@@ -78,27 +78,34 @@
   background: #f4fbf7;
 }
 
+.version-row.version-tree-row.has-intermediate-group-control.is-completed {
+  background: linear-gradient(90deg, rgba(31, 122, 92, 0.1), rgba(244, 251, 247, 0.95) 92px), #f4fbf7;
+}
+
 .version-row.version-tree-row.is-collapsed-by-completion {
   background: #fbfcfd;
   opacity: 0.74;
 }
 
 .version-row.version-tree-row.is-intermediate-history {
-  background: linear-gradient(90deg, rgba(138, 90, 0, 0.055), transparent 120px), #fffaf2;
+  background: linear-gradient(90deg, rgba(112, 96, 74, 0.08), transparent 132px), #f6f4ef;
   border-left: 0;
-  opacity: 0.92;
+  color: #69747e;
+  opacity: 0.82;
 }
 
 .version-row.version-tree-row.is-intermediate-history[hidden] {
   display: none;
 }
 
-.version-row.version-tree-row.is-intermediate-history .version-main-label {
-  color: #5f6770;
+.version-row.version-tree-row.is-intermediate-history .version-main-label,
+.version-row.version-tree-row.is-intermediate-history .meta-value,
+.version-row.version-tree-row.is-intermediate-history .version-parent-line {
+  color: #67727d;
 }
 
 .version-row.version-tree-row.is-download-blocked:not(.is-intermediate-history) {
-  background-image: linear-gradient(90deg, rgba(138, 90, 0, 0.05), transparent 38%);
+  background-image: linear-gradient(90deg, rgba(138, 90, 0, 0.035), transparent 34%);
 }
 
 .group-gutter-header,
@@ -139,6 +146,17 @@
   bottom: 50%;
 }
 
+.version-row.version-tree-row.has-intermediate-group-control .group-gutter-cell::after {
+  border-top: 1px dashed rgba(31, 122, 92, 0.42);
+  content: "";
+  left: 50%;
+  pointer-events: none;
+  position: absolute;
+  right: -10px;
+  top: 50%;
+  transform: translateY(-0.5px);
+}
+
 .group-gutter-cell.has-toggle::before {
   opacity: 1;
 }
@@ -156,21 +174,22 @@
   cursor: pointer;
   display: inline-flex;
   font-family: inherit;
-  font-size: 0.86rem;
+  font-size: 0.76rem;
   font-weight: 900;
   height: 24px;
   justify-content: center;
   line-height: 1;
   min-height: 24px;
-  padding: 0;
+  min-width: 30px;
+  padding: 0 5px;
   position: relative;
-  width: 24px;
+  width: auto;
   z-index: 1;
 }
 
 .version-row.version-tree-row.has-intermediate-group-control .group-toggle-button {
   background: #f8fbfa;
-  border-color: rgba(31, 122, 92, 0.44);
+  border-color: rgba(31, 122, 92, 0.52);
   box-shadow: 0 0 0 2px #ffffff;
   color: var(--primary-dark);
 }
@@ -316,6 +335,8 @@
   gap: 4px;
 }
 
+.intermediate-badge,
+.download-blocked-badge,
 .version-row.version-tree-row.is-intermediate-history .intermediate-badge,
 .version-row.version-tree-row.is-intermediate-history .download-blocked-badge {
   display: none;
@@ -335,6 +356,11 @@
   line-height: 1.2;
   padding: 2px 7px;
   white-space: nowrap;
+}
+
+.intermediate-badge,
+.download-blocked-badge {
+  display: none;
 }
 
 .completed-badge {
