@@ -20,6 +20,7 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。�
 - 一覧側の分岐ツリー可読性改善
 - 一覧側の分岐ツリー列揃え改善
 - 一覧側の分岐ツリーバッジ整理とツリー線改善
+- 一覧側の分岐ツリー文字記号削除とbranch系列表示
 - `GET /api/charts` のD1実データ読み取り
 - `POST /api/charts` の初回投稿
 - `POST /api/charts/:chartId/versions` の追記投稿
@@ -368,8 +369,9 @@ layerの `kind` 候補:
 
 各version行には以下を表示する。
 
-- `displayVersion`
-- 親version表示。rootは `起点`、子versionは `from verX.X` の形式にする。
+- version本体表示。`version_number` から `verX.0` の形式にする。
+- root以外のbranch系列補助表示。`branch a/b/a` のように `branch_path` から `root/` を除いた系列を小さく表示する。
+- 親version表示。rootは `起点`、子versionは `from verX.0-a/b` のように親のbranch系列を含める。
 - 重要状態バッジ。通常表示は `完成`, `没譜面`, `DL不可`, `削除申請中`, 管理非表示系に限定する。
 - 想定難易度
 - 差分作者
@@ -392,10 +394,20 @@ layerの `kind` 候補:
 表示例:
 
 ```text
-ver1.0            起点        20%
-├ ver2.0-a        from ver1.0 21%
-└ ver2.0-b        from ver1.0 35%
-   └ ver3.0-b-a   from ver2.0-b 100% 完成
+ver1.0
+起点
+
+ver2.0
+branch a
+from ver1.0
+
+ver3.0
+branch a/b
+from ver2.0-a
+
+ver4.0
+branch a/b/a
+from ver3.0-a/b
 ```
 
 表示仕様:
@@ -405,9 +417,10 @@ ver1.0            起点        20%
 - `depth=1` は `root/a`, `root/b` などとする。
 - `depth=2` は `root/a/a` などとする。
 - depthに応じたインデントはver列内だけで処理する。
-- ver列内にツリー専用のガターを作り、縦線と横線で親子関係を示す。
+- ver列内にツリー専用のガターを作り、CSSの縦線と横線で親子関係を示す。
+- `└`, `├`, `│`, `─` などの文字ツリー記号は通常表示に使わない。
 - ツリー線は薄すぎないグレーにし、他列や進捗サムネイルに干渉しないようにする。
-- 通常表示では内部 `branchPath` ではなく、`from verX.X` を優先して表示する。
+- 通常表示では内部 `branchPath` ではなく、`branch a/b` と `from verX.0-a/b` を優先して表示する。
 - `branchPath` はhover/titleなどの補助情報として保持する。
 - スマホ幅ではツリー線やインデントを簡略化してよいが、親子関係は最低限分かるようにする。
 
