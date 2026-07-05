@@ -16,6 +16,7 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。�
 
 - GitHub Pages の静的1ページUI
 - GitHub Pages から本番Worker APIへの一覧取得、初回投稿、追記投稿UI
+- 一覧側のversion分岐ツリー表示
 - `GET /api/charts` のD1実データ読み取り
 - `POST /api/charts` の初回投稿
 - `POST /api/charts/:chartId/versions` の追記投稿
@@ -43,7 +44,7 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。�
 - Cron Trigger
 - R2自動削除本体
 - Turnstile
-- 完成到達後の一覧折り畳みUI
+- 完成到達後の本格的な一覧折り畳み/展開UI
 - お気に入り★
 - 本格的な譜面ミニビュー
 
@@ -82,15 +83,6 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。�
 - 進捗度
 - 管理パスワード
 
-入力誘導:
-
-- 曲名 placeholder: `一致していない場合修正してください。`
-- アーティスト placeholder: `一致していない場合修正してください。`
-- 仮差分名 placeholder: `例: [ANOTHER] / [ALITHER] / 仮差分`
-- 仮差分名 補足: `同じ曲の別差分を区別するための名前です。`
-- 差分作者 placeholder: `例: tester / anonymous`
-- コメント placeholder: `音源URL、作業メモ、注意点など`
-
 ### 追記投稿UI
 
 一覧の各version行に `追記投稿` ボタンを表示する。ボタンを押すと、ページ上部の投稿フォームを追記モードへ切り替える。
@@ -98,7 +90,7 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。�
 追記モードでは以下を表示する。
 
 - `追記投稿: verX.0 から` の見出し
-- `parent: displayVersion / branchPath` 相当の追記元情報
+- `displayVersion / branchPath` の追記元情報
 - 追記元の曲名、アーティスト、仮差分名
 - 追記元から継承した想定難易度。ユーザーは編集できる
 - 追記元の `progressMap`
@@ -127,8 +119,6 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。�
 
 `progress=100` のversionから追記する場合は、フォームを開く前に確認ダイアログで警告する。
 
-BMS/BME/BMLファイル選択時に `#TITLE` / `#ARTIST` を読める場合は追記元と簡易比較し、不一致の可能性があれば画面に警告する。最終判定はWorker API側で行う。
-
 ### 想定難易度UI
 
 想定難易度欄は、テキスト入力ではなく「シンボルタブ + 数字チップ式UI」とする。
@@ -140,9 +130,7 @@ BMS/BME/BMLファイル選択時に `#TITLE` / `#ARTIST` を読める場合は�
 - `st`: 1〜15
 - `手入力`: 2桁までの数字を含む自由入力
 
-通常シンボルでは数字を常に1〜25まで表示し、シンボルごとの上限を超える数字はdisabledにする。
-
-追記モードでは親versionの `difficulty` / `level` を初期値として反映し、ユーザーが編集できる。送信時は `difficulty` と、抽出可能な場合の `level` を送る。
+追記モードでは親versionの `difficulty` / `level` を初期値として反映し、ユーザーが編集できる。
 
 ## 進捗マップUI
 
@@ -190,22 +178,12 @@ BMS/BME/BMLファイル選択時に `#TITLE` / `#ARTIST` を読める場合は�
 
 8ブロック区切り位置の下には、3桁ゼロ埋めの小節番号を表示する。表示スペースが狭い場合は16/32ブロック単位などに間引いてよい。
 
-hover表示と右クリックポップアップでは、小節範囲、秒数範囲、notesを表示する。
-
 ### 塗り操作
 
 クリック操作:
 
 - 未塗りブロックをクリックすると塗られる。
 - 塗り済みブロックをクリックすると解除される。
-
-ドラッグ操作は範囲プレビュー方式とする。
-
-- `pointerdown` 時に現在の塗り状態を保存する。
-- `anchorBlock` から `currentBlock` までを `dragRange` とする。
-- 開始ブロックが未塗りなら `dragRange` を塗る。
-- 開始ブロックが塗り済みなら `dragRange` を解除する。
-- `dragRange` 外は開始時の状態へ戻す。
 
 追記モードでは親layerは読み取り専用とし、今回のfollowup layerだけを編集する。親だけで塗られているブロックは解除できない。親塗り済みブロックへの重ね塗りはできる。
 
@@ -226,7 +204,6 @@ round(塗られた標準化ブロック数のunion / 標準化ブロック総数
 - `progress >= 80` かつ `progress < 100` で有効化する。
 - 押すと未塗りブロックをすべて塗る。
 - `progress=100` にする。
-- 初回投稿では `completion_fill` layerとして保存できる。
 - 追記投稿では今回追記layerに未塗り分を追加し、`progress=100` として送信する。
 
 ### 没譜面との連動
@@ -364,6 +341,7 @@ layerの `kind` 候補:
 - 同じ親を持つ既存子version数を数え、0件目を `a`、1件目を `b`、以降 `c`...`z`、`aa`... とする。
 - `branch_path = parent.branch_path + '/' + branch_label` とする。
 - 例: 親 `root` の1件目は `root/a`、2件目は `root/b`。
+- 例: `root/a` への1件目は `root/a/a`。
 
 ## progress=100到達時の親version DL制御
 
@@ -383,21 +361,88 @@ layerの `kind` 候補:
 
 ## 投稿一覧
 
-投稿一覧では、song単位で曲名とアーティストを表示し、その下にchart単位の差分を表示する。
+投稿一覧では、song単位で曲名とアーティストを表示し、その下にchart単位の差分を表示する。version行では曲名・アーティスト・サブタイトル・サブアーティストを繰り返さない。
 
 各version行には以下を表示する。
 
-- 表示version名
+- `displayVersion`
+- `branchPath` の短い表示
 - 想定難易度
 - 差分作者
 - 進捗度
 - `progressMap` がある場合の簡易進捗サムネイル
+- コメントの短い表示
 - 没譜面バッジ
-- コメント
-- DLリンク
+- DLリンクまたはDL不可表示
 - 追記投稿ボタン
 
 一覧の想定難易度は `difficulty` のみを表示する。`level` は併記しない。
+
+### 分岐ツリー表示
+
+BRANCH-01Cでは、同じchart内のversionsを `parentVersionId` と `branchPath` に基づいてツリー表示する。
+
+表示例:
+
+```text
+ver1.0           root        20%
+├ ver2.0-a       root/a      21%
+└ ver2.0-b       root/b      35%
+   └ ver3.0-b-a  root/b/a    100%
+```
+
+表示仕様:
+
+- `branchPath` を `/` で分割し、depthを算出する。
+- `depth=0` はrootとする。
+- `depth=1` は `root/a`, `root/b` などとする。
+- `depth=2` は `root/a/a` などとする。
+- depthに応じてversion名の左paddingを増やす。
+- 可能な範囲で薄いグレーのツリー線と `├` / `└` を表示する。
+- スマホ幅ではツリー線やインデントを簡略化してよいが、親子関係は最低限分かるようにする。
+
+ソート方針:
+
+1. `branchPath` のツリー順
+2. `versionNumber`
+3. `createdAt`
+
+同じ親からの分岐suffixは `a`, `b`, ... `z`, `aa` の自然順になるように扱う。
+
+### completed / progress=100 表示
+
+`progress=100` または `completed=true` のversionは、以下で目立たせる。
+
+- 100%の進捗バッジ
+- `完成` バッジ
+- 薄い緑背景
+
+注意:
+
+- `progress=100` のversion自体はDL可能。
+- DL可否は `downloadBlocked` を基準にする。
+
+### downloadBlocked 表示
+
+`downloadBlocked=true` のversionではDLリンクを無効化し、`DL不可` と表示する。
+
+`downloadBlockReason` がある場合は、title属性などの控えめな補足として保持する。
+
+理由候補:
+
+- `superseded_by_completed_descendant`
+- `withdrawn`
+- `delete_requested`
+- `admin_blocked`
+- `admin_hidden`
+
+### collapsedByCompletion 表示
+
+本格的な折り畳み/展開UIは後続のTREE-01で扱う。
+
+BRANCH-01Cでは、`collapsedByCompletion=true` が返っているversionを完全には消さず、薄い表示にする。
+
+### 一覧側progressMapサムネイル
 
 `progressMap` サムネイルは `layers[].ranges` のunionを緑系で表示する。追記UIでは親layerを薄い緑、今回追記layerを青で表示する。
 
