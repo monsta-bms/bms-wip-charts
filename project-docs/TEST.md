@@ -30,7 +30,7 @@ BRANCH-01C 分岐ツリー一覧表示:
 - CSSのツリー線で親子関係が分かること
 - 同じ親からの分岐が並んで見えること
 - 表示順が `root`, `root/a`, `root/a/a`, `root/b` のような自然なツリー順になること
-- 各version行に表示専用の版ラベル, `author`, `progress`, `difficulty`, progressMapサムネイル, DL, 追記投稿が表示されること
+- 各version行に表示専用の数字パス版ラベル, `author`, `progress`, `difficulty`, progressMapサムネイル, DL, 追記投稿が表示されること
 - progressMapサムネイルがツリー表示でも崩れないこと
 - `progress=100` または `completed=true` のversionが完成バッジや薄い緑背景で分かりやすく表示されること
 - `progress=100` のversion自体では、`downloadBlocked` でない限りDLが有効なままであること
@@ -85,7 +85,7 @@ BRANCH-01B 追記投稿UI:
 - Worker側で成功した場合、追記モードが閉じること
 - 成功後に `GET /api/charts` が再取得されること
 - 新しいversionが一覧に表示されること
-- 新しいversionの内部 `displayVersion` / `branchPath` / `progress` が保持され、一覧では表示専用の版ラベルが再計算されること
+- 新しいversionの内部 `displayVersion` / `branchPath` / `progress` が保持され、一覧では表示専用の数字パス版ラベルが再計算されること
 - 新しいversionの `progressMap` サムネイルが一覧に表示されること
 - APIエラー時は `code`, `message`, `detail` が画面上部に表示されること
 - APIエラー時はフォーム入力状態が維持されること
@@ -186,10 +186,10 @@ BMSメタデータ警告:
 12. 今回追記分として未塗りブロックを1つ以上塗る。
 13. 差分作者と管理パスワードを入力する。
 14. 追記投稿する。
-15. 成功後に一覧が再取得され、新versionがrootの子として `A1` / `from BASE` のように表示されることを確認する。
-16. rootへもう一度追記し、root直下の別分岐が `A1`, `B1` のように並ぶことを確認する。
-17. `A1` の `追記投稿` ボタンから追記し、最初の子が `A2` / `from A1` として表示されることを確認する。
-18. `A1` からさらに別分岐を作り、`B1` または `C1` のような別系統ラベルになることを確認する。
+15. 成功後に一覧が再取得され、新versionがrootの子として `1` / `from BASE` のように表示されることを確認する。
+16. rootへもう一度追記し、root直下の別分岐が `1`, `2` のように並ぶことを確認する。
+17. `1` の `追記投稿` ボタンから追記し、最初の子が `1-1` / `from 1` として表示されることを確認する。
+18. `1` からさらに別分岐を作り、`1-2` や `1-3` のような数字パスラベルになることを確認する。
 19. 新versionのサムネイルが追加後のprogressを反映していることを確認する。
 20. `progress=100` にしたversionが完成表示になり、`downloadBlocked` でない限りDL可能なままであることを確認する。
 21. ブラウザ幅を狭め、スマホ幅でもツリー表示と追記ボタンが大きく崩れないことを確認する。
@@ -244,7 +244,7 @@ python -m http.server 8000
 ## TREE-01A 追加確認
 
 - `branchPath` が通常表示で目立ちすぎないこと
-- 版ラベルの下に `from BASE`, `from A1`, または `起点` が表示され、親versionが分かること
+- 版ラベルの下に `from BASE`, `from 1`, または `起点` が表示され、親versionが分かること
 - `root/a`, `root/a/b` などの内部branchPathは、版表示付近のhover/titleで確認できること
 - root versionが `BASE` として表示されること
 - `root/a` がrootの子として表示されること
@@ -266,8 +266,8 @@ python -m http.server 8000
 - ヘッダーとversion行の各列が揃っていること
 - depthが変わっても、難易度・作者・進捗・サムネイル・コメント・操作列の開始位置がずれないこと
 - ツリーのインデントが版列内だけで処理されること
-- コメント欄に `branchPath` や `from BASE` / `from A1` が混ざらないこと
-- `from BASE`, `from A1`, または `起点` が版列内に小さく表示されること
+- コメント欄に `branchPath` や `from BASE` / `from 1` が混ざらないこと
+- `from BASE`, `from 1`, または `起点` が版列内に小さく表示されること
 - `branchPath` は通常表示されず、hover/titleなどの補助情報に限定されること
 - `未描` 表記が使われていないこと
 - `progress<100` のversionでは `未完成` バッジを通常表示せず、進捗%で状態が分かること
@@ -290,8 +290,8 @@ python -m http.server 8000
 - `downloadBlocked=true` では `DL不可` バッジが表示されること
 - `deleteRequested=true` では `削除申請中` バッジが表示されること
 - コメント欄に `branchPath` が表示されないこと
-- コメント欄に `from BASE`, `from A1`, `追記元 ver...` などが表示されないこと
-- `from BASE`, `from A1`, または `起点` は版列内に表示されること
+- コメント欄に `from BASE`, `from 1`, `追記元 ver...` などが表示されないこと
+- `from BASE`, `from 1`, または `起点` は版列内に表示されること
 - `branchPath` は通常非表示、またはtooltip/titleで確認できること
 - 版列内のツリー線で親子関係が分かること
 - 深い階層でも難易度・作者・進捗・サムネイル・コメント・操作列がずれないこと
@@ -309,22 +309,22 @@ python -m http.server 8000
 - progressMapサムネイルが壊れていないこと
 - 既存投稿・追記投稿が壊れていないこと
 
-## BRANCH-01C-UI-5 追加確認
+## BRANCH-01C-UI-6 追加確認
 
-- 一覧ヘッダーが `ver` ではなく `版` になっていること
-- root versionが `BASE` と表示されること
-- root versionの補助表示が `起点` になっていること
-- rootの最初の子が `A1` と表示されること
-- `A1` の最初の子が `A2` と表示されること
-- `A1` から別分岐した子が `B1` / `C1` と表示されること
-- `B1` の子が `B2` と表示されること
-- `C1` の子が `C2` と表示されること
-- `ver3.0` や `ver4.0` のような世代番号だけの表示になっていないこと
-- `ver4.0` が複数出て区別できない状態になっていないこと
-- from表示が `from A1` / `from B1` のようになっていること
-- `branchPath` が通常表示されていないこと
-- コメント欄に `branchPath` やfrom情報が混ざらないこと
-- 内部 `branchPath` は変更されていないこと
+- 一覧ヘッダーが `版` になっていること
+- root が `BASE` と表示されること
+- root の補助表示が `起点` になっていること
+- `root/a` が `1` と表示されること
+- `root/a/a` が `1-1` と表示されること
+- `root/a/b` が `1-2` と表示されること
+- `root/a/b/a` が `1-2-1` と表示されること
+- `root/b` が `2` と表示されること
+- `root/c/a` が `3-1` と表示されること
+- from表示も数字パス方式になっていること
+- `A1`, `B1`, `C1` 表記が通常表示に出ないこと
+- `ver3.0`, `ver4.0` 表記が通常表示に出ないこと
+- 後から分岐が追加されても既存branchPathの表示ラベルが変わらないこと
+- `branchPath` や `displayVersion` は内部値として維持されていること
 - `displayVersion` や `branchPath` は必要に応じてtitle属性で確認できること
 - DLボタン、追記投稿ボタン、progressMapサムネイルが壊れていないこと
 - 既存投稿・追記投稿が壊れていないこと
