@@ -40,11 +40,6 @@
     return version?.displayVersion || version?.display_version || "ver?.?";
   }
 
-  function getVersionNumber(version) {
-    const value = Number(version?.versionNumber ?? version?.version_number);
-    return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
-  }
-
   function getCreatedAtTime(version) {
     const time = Date.parse(version?.createdAt || version?.created_at || "");
     return Number.isFinite(time) ? time : 0;
@@ -59,20 +54,35 @@
     return getVersionId(version) || getBranchPath(version);
   }
 
-  function getLineName(index) {
-    let value = Number(index);
-    if (!Number.isFinite(value) || value < 0) {
-      return "A";
+  function branchSegmentToNumber(segment) {
+    const value = String(segment || "").trim().toLowerCase();
+    if (!/^[a-z]+$/.test(value)) {
+      return value || "0";
     }
 
-    let name = "";
-    value += 1;
-    while (value > 0) {
-      const remainder = (value - 1) % 26;
-      name = String.fromCharCode(65 + remainder) + name;
-      value = Math.floor((value - 1) / 26);
+    let number = 0;
+    for (const character of value) {
+      number = number * 26 + (character.charCodeAt(0) - 96);
     }
-    return name;
+    return String(number);
+  }
+
+  function buildVersionPathLabel(branchPath) {
+    const parts = String(branchPath || "root").split("/").filter(Boolean);
+    const pathParts = parts[0] === "root" ? parts.slice(1) : parts;
+    if (pathParts.length === 0) {
+      return "BASE";
+    }
+
+    return pathParts.map(branchSegmentToNumber).join("-");
+  }
+
+  function buildFromLabel(parentVersion) {
+    if (!parentVersion) {
+      return "起点";
+    }
+
+    return `from ${buildVersionPathLabel(getBranchPath(parentVersion))}`;
   }
 
   function compareSiblingVersions(a, b) {
@@ -197,88 +207,6 @@
     return nodes;
   }
 
-  function buildVersionTreeLabels(treeNodes) {
-    const labels = new Map();
-    const childrenByParentKey = new Map();
-    const rootNodes = [];
-    let nextLineIndex = 0;
-
-    for (const node of treeNodes) {
-      if (!node.parent) {
-        rootNodes.push(node);
-        continue;
-      }
-
-      const parentKey = getNodeKey(node.parent);
-      const children = childrenByParentKey.get(parentKey) || [];
-      children.push(node);
-      childrenByParentKey.set(parentKey, children);
-    }
-
-    function assignChildren(parentNode) {
-      const parentKey = getNodeKey(parentNode.version);
-      const parentInfo = labels.get(parentKey);
-      const children = childrenByParentKey.get(parentKey) || [];
-
-      children.forEach((childNode, index) => {
-        const childKey = getNodeKey(childNode.version);
-        if (labels.has(childKey)) {
-          return;
-        }
-
-        const continuesParentLine = parentInfo?.lineIndex !== null && parentInfo?.lineIndex !== undefined && index === 0;
-        const lineIndex = continuesParentLine ? parentInfo.lineIndex : nextLineIndex++;
-        const lineNumber = continuesParentLine ? parentInfo.lineNumber + 1 : 1;
-        const line = getLineName(lineIndex);
-        const label = `${line}${lineNumber}`;
-
-        labels.set(childKey, {
-          label,
-          fromLabel: parentInfo ? `from ${parentInfo.label}` : "from BASE",
-          line,
-          lineIndex,
-          lineNumber
-        });
-      });
-
-      children.forEach(assignChildren);
-    }
-
-    rootNodes.forEach((rootNode) => {
-      const rootKey = getNodeKey(rootNode.version);
-      if (!labels.has(rootKey)) {
-        labels.set(rootKey, {
-          label: "BASE",
-          fromLabel: "起点",
-          line: null,
-          lineIndex: null,
-          lineNumber: null
-        });
-      }
-    });
-
-    rootNodes.forEach(assignChildren);
-
-    for (const node of treeNodes) {
-      const nodeKey = getNodeKey(node.version);
-      if (labels.has(nodeKey)) {
-        continue;
-      }
-
-      const lineIndex = nextLineIndex++;
-      const line = getLineName(lineIndex);
-      labels.set(nodeKey, {
-        label: `${line}1`,
-        fromLabel: node.parent ? "from unknown" : "起点",
-        line,
-        lineIndex,
-        lineNumber: 1
-      });
-    }
-
-    return labels;
-  }
-
   function isCompleted(version, progress) {
     return version?.completed === true || Number(progress) === 100;
   }
@@ -392,14 +320,11 @@
     }
   }
 
-  function enhanceRow(row, node, treeLabels) {
+  function enhanceRow(row, node) {
     const version = node.version;
     const branchPath = getBranchPath(version);
-    const labelInfo = treeLabels.get(getNodeKey(version)) || {
-      label: node.parent ? "A1" : "BASE",
-      fromLabel: node.parent ? "from unknown" : "起点"
-    };
-    const displayVersionLabel = labelInfo.label;
+    const displayVersionLabel = buildVersionPathLabel(branchPath);
+    const parentText = buildFromLabel(node.parent);
     const progress = Number.isFinite(Number(version?.progress)) ? Number(version.progress) : 0;
     const completed = isCompleted(version, progress);
     const rejected = isRejected(version);
@@ -438,7 +363,7 @@
             <span class="version-main-label">${html(displayVersionLabel)}</span>
             <span class="version-state-badges">${renderStateBadges(node, progress)}</span>
           </span>
-          <span class="version-parent-line" title="${html(titleText)}">${html(labelInfo.fromLabel)}</span>
+          <span class="version-parent-line" title="${html(titleText)}">${html(parentText)}</span>
         </span>
       `;
     }
@@ -497,14 +422,13 @@
       });
 
       const treeNodes = buildTreeNodes(versions);
-      const treeLabels = buildVersionTreeLabels(treeNodes);
       const fragment = document.createDocumentFragment();
       treeNodes.forEach((node) => {
         const row = rowsByVersion.get(getNodeKey(node.version));
         if (!row) {
           return;
         }
-        enhanceRow(row, node, treeLabels);
+        enhanceRow(row, node);
         fragment.appendChild(row);
       });
 
