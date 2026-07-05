@@ -118,6 +118,49 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。�
 
 `.zip`、プレイノートなしBMS、解析失敗時は進捗マップを表示しない、または控えめなメッセージを表示する。
 
+### BMS解析範囲
+
+プレイノート範囲と、進捗マップの表示・進捗対象範囲は別に管理する。
+
+- `first_note_measure` は最初のプレイノート小節。
+- `last_note_measure` は最後のプレイノート小節。
+- `displayFirstMeasure` は最初のプレイノート小節。
+- `displayLastMeasure` は曲終端小節。
+- `target_measure_count` は `displayFirstMeasure` から `displayLastMeasure` までの小節数。
+- `progressMap.blocks`、進捗マップUI、進捗PNGは `displayFirstMeasure` から `displayLastMeasure` までを基準にする。
+
+曲終端候補:
+
+- プレイノートチャンネル `11-19`, `21-29`, `51-59`, `61-69`
+- BGM `01`
+- 小節長 `02`
+- BPM `03`, `08`
+- STOP `09`
+
+BGAだけの後ろ余白は進捗対象を延ばす理由にしない。曲頭側の完全な空白小節も通常表示に含めない。
+
+`measure_notes_json` はschemaVersion 2として、以下のようにプレイノート範囲と表示範囲を分けて保存する。
+
+```json
+{
+  "schemaVersion": 2,
+  "firstPlayableMeasure": 1,
+  "lastPlayableMeasure": 22,
+  "displayFirstMeasure": 1,
+  "displayLastMeasure": 94,
+  "targetMeasureCount": 94,
+  "playNotes": 542,
+  "lnPolicy": "count_start_only",
+  "measures": [
+    { "measure": 1, "playNotes": 12 },
+    { "measure": 23, "playNotes": 0 },
+    { "measure": 94, "playNotes": 0 }
+  ]
+}
+```
+
+既存投稿済みデータと既存PNGは自動再生成しない。新規投稿・追記投稿から新しい解析基準で保存する。
+
 ### progress計算
 
 進捗度は標準化ブロック数で算出する。
@@ -189,6 +232,7 @@ round(塗られた標準化ブロック数のunion / 標準化ブロック総数
 - `schemaVersion=2` とする。
 - `blockMode=standardized_measure` とする。
 - `blocks` は下段の標準化ブロックと1対1対応する。
+- `blocks` は曲終端基準の表示範囲まで作る。
 - `ranges` は連続したブロックindexを `[startIndex, endIndex]` で圧縮して持つ。
 - progressは全layerのunion / `targetBlockCount` で算出する。
 - 重複して塗られたブロックは1回だけ数える。
@@ -214,6 +258,7 @@ layerの `kind` 候補:
 - 進捗PNG生成に失敗した場合は投稿を止めず、`console.warn` に処理段階名付きで警告を残し、`progressImage` なしで投稿を継続してよい。
 - Worker側では `progressImage` がある場合のみ検証・保存する。
 - `progressImage` は任意項目であり、未送信の場合も投稿は成功してよい。
+- PNGの表示終端は `progressMap.blocks` と同じ曲終端基準にする。
 
 Worker側検証:
 
