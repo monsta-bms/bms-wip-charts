@@ -2,6 +2,7 @@
   const listElement = document.querySelector("#chartList");
   const completedCollapseReason = "superseded_by_completed_descendant";
   const expandedIntermediateGroups = new Set();
+  let latestCharts = [];
 
   if (!listElement || typeof renderCharts !== "function") {
     return;
@@ -86,6 +87,14 @@
 
     return `from ${buildVersionPathLabel(getBranchPath(parentVersion))}`;
   }
+
+  window.BmsVersionLabels = {
+    branchSegmentToNumber,
+    buildVersionPathLabel,
+    buildFromLabel,
+    getBranchPath,
+    getDisplayVersion
+  };
 
   function compareSiblingVersions(a, b) {
     const createdAtDiff = getCreatedAtTime(a) - getCreatedAtTime(b);
@@ -424,7 +433,38 @@
     appendButton.replaceWith(locked);
   }
 
+  function ensureGroupGutter(row) {
+    let gutter = row.querySelector(":scope > .group-gutter-cell");
+    if (!gutter) {
+      gutter = document.createElement("div");
+      gutter.className = "group-gutter-cell";
+      row.insertBefore(gutter, row.firstElementChild);
+    }
+    return gutter;
+  }
+
+  function clearGroupGutterControl(row) {
+    const gutter = ensureGroupGutter(row);
+    gutter.innerHTML = "";
+    gutter.classList.remove("has-toggle");
+    row.classList.remove("has-intermediate-group-control");
+    delete row.dataset.intermediateGroupCount;
+  }
+
+  function setGroupGutterControl(row, groupId, count, expanded) {
+    const gutter = ensureGroupGutter(row);
+    row.classList.add("has-intermediate-group-control");
+    row.dataset.intermediateGroupCount = String(count);
+    gutter.classList.add("has-toggle");
+    gutter.innerHTML = `
+      <button class="intermediate-toggle-button group-toggle-button" type="button" data-collapsed-group-id="${html(groupId)}" data-count="${count}" aria-expanded="${expanded ? "true" : "false"}" title="中間履歴 ${count}件">
+        ${expanded ? "−" : "+"}
+      </button>
+    `;
+  }
+
   function applyColumnClasses(row, version) {
+    ensureGroupGutter(row);
     const tag = row.querySelector(":scope > .version-tag");
     const actions = row.querySelector(":scope > .version-actions");
     const metaBlocks = Array.from(row.querySelectorAll(":scope > .meta-block"));
@@ -471,6 +511,7 @@
       .find((block) => block.querySelector(".progress-pill"));
 
     applyColumnClasses(row, version);
+    clearGroupGutterControl(row);
 
     row.classList.add("version-tree-row");
     row.classList.toggle("is-completed", completed);
@@ -533,6 +574,7 @@
     header.className = "version-list-header";
     header.setAttribute("aria-hidden", "true");
     header.innerHTML = `
+      <span class="group-gutter-header" title="中間履歴の開閉"></span>
       <span>版</span>
       <span>難易度</span>
       <span>作者</span>
@@ -542,22 +584,6 @@
       <span>操作</span>
     `;
     return header;
-  }
-
-  function createIntermediateToggleRow(groupId, count, expanded, depth) {
-    const row = document.createElement("div");
-    row.className = "intermediate-toggle-row";
-    row.dataset.collapsedGroupId = groupId;
-    row.style.setProperty("--tree-depth", String(Math.max(0, depth - 1)));
-    row.innerHTML = `
-      <div class="intermediate-toggle-content">
-        <button class="intermediate-toggle-button" type="button" data-collapsed-group-id="${html(groupId)}" data-count="${count}" aria-expanded="${expanded ? "true" : "false"}">
-          ${expanded ? "中間履歴を隠す" : `中間履歴を表示（${count}）`}
-        </button>
-        <span class="intermediate-toggle-note">完成版までのDL不可履歴</span>
-      </div>
-    `;
-    return row;
   }
 
   function setIntermediateGroupExpanded(list, groupId, expanded) {
@@ -580,11 +606,67 @@
 
       const count = button.dataset.count || "0";
       button.setAttribute("aria-expanded", expanded ? "true" : "false");
-      button.textContent = expanded ? "中間履歴を隠す" : `中間履歴を表示（${count}）`;
+      button.title = `中間履歴 ${count}件`;
+      button.textContent = expanded ? "−" : "+";
     });
   }
 
+  function getChartId(entry) {
+    const chart = entry?.chart || {};
+    return chart.id || chart.chartId || entry?.chartId || "";
+  }
+
+  function findAppendContext(chartId, parentVersionId) {
+    for (const entry of latestCharts) {
+      if (getChartId(entry) !== chartId) {
+        continue;
+      }
+
+      const versions = Array.isArray(entry.versions) ? entry.versions : [];
+      const version = versions.find((item) => getVersionId(item) === parentVersionId);
+      if (version) {
+        return { entry, version, versions };
+      }
+    }
+
+    return null;
+  }
+
+  function updateAppendContextLabels(button) {
+    const context = findAppendContext(button.dataset.chartId || "", button.dataset.parentVersionId || "");
+    if (!context) {
+      return;
+    }
+
+    const lookup = buildLookup(context.versions);
+    const parent = getParentVersion(context.version, lookup);
+    const currentLabel = buildVersionPathLabel(getBranchPath(context.version));
+    const fromLabel = buildFromLabel(parent);
+    const rawTitle = `displayVersion: ${getDisplayVersion(context.version)} / branchPath: ${getBranchPath(context.version)}`;
+    const appendContextTitle = document.querySelector("#appendContextTitle");
+    const appendParentVersion = document.querySelector("#appendParentVersion");
+
+    if (appendContextTitle) {
+      appendContextTitle.textContent = `追記投稿: ${currentLabel} から`;
+      appendContextTitle.title = rawTitle;
+    }
+
+    if (appendParentVersion) {
+      appendParentVersion.innerHTML = `
+        <span class="append-version-label">${html(currentLabel)}</span>
+        <span class="append-version-from">${html(fromLabel)}</span>
+      `;
+      appendParentVersion.title = rawTitle;
+    }
+  }
+
   listElement.addEventListener("click", (event) => {
+    const appendButton = event.target.closest(".append-version-button");
+    if (appendButton) {
+      window.setTimeout(() => updateAppendContextLabels(appendButton), 0);
+      return;
+    }
+
     const button = event.target.closest(".intermediate-toggle-button");
     if (!button) {
       return;
@@ -604,6 +686,7 @@
 
   function enhanceTreeDisplay(data) {
     const charts = Array.isArray(data?.charts) ? data.charts : [];
+    latestCharts = charts;
     const chartGroups = Array.from(listElement.querySelectorAll(".chart-group"));
 
     charts.forEach((entry, chartIndex) => {
@@ -665,7 +748,7 @@
         const groupedRows = collapsedRowsByGroup.get(versionId) || [];
         if (groupedRows.length > 0) {
           const expanded = expandedIntermediateGroups.has(versionId);
-          fragment.appendChild(createIntermediateToggleRow(versionId, groupedRows.length, expanded, node.depth));
+          setGroupGutterControl(row, versionId, groupedRows.length, expanded);
           groupedRows.forEach((groupedRow) => {
             groupedRow.hidden = !expanded;
             fragment.appendChild(groupedRow);
