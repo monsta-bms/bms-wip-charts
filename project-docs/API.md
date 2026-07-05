@@ -79,11 +79,11 @@ APIエラーは必ず以下のJSON形式で返す。
 
 | column | 内容 |
 | --- | --- |
-| `play_notes` | BMS解析で算出したプレイノート総数。 |
-| `first_note_measure` | 進捗対象の開始小節。 |
-| `last_note_measure` | 進捗対象の終了小節。 |
-| `target_measure_count` | 進捗対象小節数。 |
-| `measure_notes_json` | 小節ごとのプレイノート数JSON。 |
+| `play_notes` | BMS解析で算出したプレイノート総数。LNはMVPでは開始のみ数える。 |
+| `first_note_measure` | 最初にプレイノートが出現した小節。 |
+| `last_note_measure` | 最後にプレイノートが出現した小節。 |
+| `target_measure_count` | 表示・進捗対象小節数。`displayFirstMeasure` から `displayLastMeasure` までを数える。 |
+| `measure_notes_json` | 小節ごとのプレイノート数JSON。schemaVersion 2ではプレイノート範囲と表示範囲を分けて持つ。 |
 | `progress_map_json` | 標準化ブロック単位の進捗塗りJSON。 |
 | `progress_image_key` | 進捗画像PNGのR2 key。 |
 | `progress_image_mime` | 進捗画像のMIME。MVPでは `image/png`。 |
@@ -95,11 +95,45 @@ APIエラーは必ず以下のJSON形式で返す。
 | `collapsed_at` | 折り畳みにした日時。 |
 | `collapsed_by_version_id` | 折り畳み原因になった完成version ID。 |
 
+## BMS解析範囲
+
+プレイノート範囲と、進捗マップの表示・進捗対象範囲は別に扱う。
+
+- `first_note_measure` / `last_note_measure` はプレイノートだけで決める。
+- `displayFirstMeasure` は最初のプレイノート小節とする。
+- `displayLastMeasure` は曲終端基準で決める。
+- 曲終端候補には、プレイノート、BGM `01`、小節長 `02`、BPM `03` / `08`、STOP `09` を含める。
+- BGAだけの終端は進捗対象を延ばす理由にしない。
+- 曲頭側の完全な空白小節は通常表示に含めない。
+- `progressMap.blocks` と進捗PNGは `displayFirstMeasure` から `displayLastMeasure` までを元に作る。
+- 既存投稿済みデータと既存PNGは自動再生成しない。
+
+`measure_notes_json` schemaVersion 2 例:
+
+```json
+{
+  "schemaVersion": 2,
+  "firstPlayableMeasure": 1,
+  "lastPlayableMeasure": 22,
+  "displayFirstMeasure": 1,
+  "displayLastMeasure": 94,
+  "targetMeasureCount": 94,
+  "playNotes": 542,
+  "lnPolicy": "count_start_only",
+  "measures": [
+    { "measure": 1, "playNotes": 12 },
+    { "measure": 23, "playNotes": 0 },
+    { "measure": 94, "playNotes": 0 }
+  ]
+}
+```
+
 ## progressMap / progressImage
 
 `progressMap` が正データで、進捗PNGは表示・履歴確認用の派生データとして扱う。
 
 - `progressMap` はD1の `versions.progress_map_json` に保存する。
+- `progressMap.blocks` は曲終端基準の表示範囲に揃える。
 - `progressImage` は `progressMap` からフロント側Canvasで生成したPNG Blob。
 - `progressImage` は譜面ファイル本体とは別のR2 objectとして保存する。
 - 譜面ファイル本体が将来 `file_deleted_at` により削除されても、進捗画像は履歴確認用として残す。
@@ -132,6 +166,8 @@ D1から投稿一覧を取得する。
 versionレスポンスには以下を含める。
 
 - `progressMap`: `progress_map_json` をparseしたJSON、または `null`
+- `measureNotes`: `measure_notes_json` をparseしたJSON、または `null`
+- `playNotes`, `firstNoteMeasure`, `lastNoteMeasure`, `targetMeasureCount`
 - `progressImage`: 進捗画像がある場合のみ以下のobject、ない場合は `null`
 - `collapsedByCompletion`, `collapsedReason`, `collapsedAt`, `collapsedByVersionId`
 - `downloadBlocked`, `downloadBlockReason`, `downloadBlockedAt`
@@ -193,6 +229,7 @@ versionレスポンスには以下を含める。
 - 単体譜面ファイルは2MBまで、zipファイルは5MBまで。
 - 音源ファイルのアップロードは禁止する。
 - 同一 `file_sha256` は `DUPLICATE_FILE` で拒否する。
+- 単体BMS/BME/BMLでは、Worker側解析でプレイノート範囲と曲終端基準の表示範囲を保存する。
 - `progressMap` が送られた場合、Worker側でJSONを検証し、塗り済みunionから `progress` を再計算して保存する。
 - `progressImage` が送られた場合、Worker側でPNG検証後にR2へ保存し、`versions.progress_image_*` へ保存する。
 - `progressImage` が送信されていない場合は従来通り投稿を成功させる。
