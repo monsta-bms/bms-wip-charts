@@ -28,37 +28,7 @@
   }
 
   function cleanVersionComment(value) {
-    return String(value || "")
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => {
-        if (!line) {
-          return false;
-        }
-
-        if (/^(branchPath|displayVersion)\s*:/i.test(line)) {
-          return false;
-        }
-
-        if (/^追記元\s+ver/i.test(line)) {
-          return false;
-        }
-
-        if (/^from\s+(BASE|\d+(?:-\d+)*)$/i.test(line)) {
-          return false;
-        }
-
-        if (/^root(?:\/[a-z]+)+$/i.test(line)) {
-          return false;
-        }
-
-        if (/^ver\d+(?:\.0)?(?:-[a-z]+)?\s*\/\s*root(?:\/[a-z]+)*$/i.test(line)) {
-          return false;
-        }
-
-        return true;
-      })
-      .join("\n");
+    return String(value ?? "");
   }
 
   function getVersionId(version) {
@@ -520,7 +490,7 @@
 
     const commentValue = commentCell?.querySelector(".meta-value");
     if (commentValue) {
-      const comment = cleanVersionComment(version?.comment || "");
+      const comment = cleanVersionComment(version?.comment ?? "");
       commentValue.textContent = comment;
       commentValue.title = comment;
     }
