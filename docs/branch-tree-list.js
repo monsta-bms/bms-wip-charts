@@ -45,6 +45,30 @@
     return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
   }
 
+  function getBaseDisplayVersion(version) {
+    const versionNumber = getVersionNumber(version);
+    if (versionNumber !== Number.MAX_SAFE_INTEGER) {
+      return `ver${versionNumber}.0`;
+    }
+
+    return getDisplayVersion(version).replace(/-[a-z]+(?:\/[a-z]+)*$/i, "");
+  }
+
+  function getBranchSeriesLabel(version) {
+    const parts = getBranchPath(version).split("/").filter(Boolean);
+    if (parts[0] === "root") {
+      parts.shift();
+    }
+
+    return parts.join("/");
+  }
+
+  function getVersionSeriesLabel(version) {
+    const branchSeries = getBranchSeriesLabel(version);
+    const baseVersion = getBaseDisplayVersion(version);
+    return branchSeries ? `${baseVersion}-${branchSeries}` : baseVersion;
+  }
+
   function getCreatedAtTime(version) {
     const time = Date.parse(version?.createdAt || version?.created_at || "");
     return Number.isFinite(time) ? time : 0;
@@ -275,7 +299,7 @@
     existingDownload.classList.add("download-button");
     if (existingDownload.tagName.toLowerCase() === "a") {
       existingDownload.classList.add("download-available-control");
-      existingDownload.setAttribute("aria-label", `${getDisplayVersion(version)} をダウンロード`);
+      existingDownload.setAttribute("aria-label", `${getVersionSeriesLabel(version)} をダウンロード`);
     } else {
       existingDownload.classList.add("download-blocked-control");
       existingDownload.title = "download url is not available";
@@ -314,6 +338,7 @@
   function enhanceRow(row, node) {
     const version = node.version;
     const branchPath = getBranchPath(version);
+    const branchSeries = getBranchSeriesLabel(version);
     const progress = Number.isFinite(Number(version?.progress)) ? Number(version.progress) : 0;
     const completed = isCompleted(version, progress);
     const rejected = isRejected(version);
@@ -340,19 +365,23 @@
     row.style.setProperty("--tree-depth", String(node.depth));
 
     if (tag) {
-      const connector = node.depth === 0 ? "" : node.isLast ? "└" : "├";
-      const parentText = node.parent ? `from ${getDisplayVersion(node.parent)}` : "起点";
+      const parentText = node.parent ? `from ${getVersionSeriesLabel(node.parent)}` : "起点";
+      const branchText = branchSeries ? `branch ${branchSeries}` : "";
       const leafText = node.hasChildren ? "" : " / 末端";
+      const branchLine = branchText
+        ? `<span class="version-branch-line" title="branchPath: ${html(branchPath)}">${html(branchText)}</span>`
+        : "";
       tag.classList.add("version-tree-tag");
       tag.style.setProperty("--tree-depth", String(node.depth));
       tag.title = `branchPath: ${branchPath}${leafText}`;
       tag.innerHTML = `
-        <span class="tree-connector" aria-hidden="true">${html(connector)}</span>
+        <span class="tree-connector" aria-hidden="true"></span>
         <span class="version-label-stack">
           <span class="version-title-line">
-            <span class="version-main-label">${html(getDisplayVersion(version))}</span>
+            <span class="version-main-label">${html(getBaseDisplayVersion(version))}</span>
             <span class="version-state-badges">${renderStateBadges(node, progress)}</span>
           </span>
+          ${branchLine}
           <span class="version-parent-line" title="branchPath: ${html(branchPath)}${html(leafText)}">${html(parentText)}</span>
         </span>
       `;
