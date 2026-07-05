@@ -19,9 +19,11 @@ export type BmsMeasureNote = {
 };
 
 export type BmsMeasureNotesJson = {
-  schemaVersion: 1;
-  firstMeasure: number | null;
-  lastMeasure: number | null;
+  schemaVersion: 2;
+  firstPlayableMeasure: number | null;
+  lastPlayableMeasure: number | null;
+  displayFirstMeasure: number | null;
+  displayLastMeasure: number | null;
   targetMeasureCount: number;
   playNotes: number;
   lnPolicy: "count_start_only";
@@ -33,6 +35,8 @@ export type BmsAnalysis = {
   playNotes: number;
   firstNoteMeasure: number | null;
   lastNoteMeasure: number | null;
+  displayFirstMeasure: number | null;
+  displayLastMeasure: number | null;
   targetMeasureCount: number;
   measureNotesJson: BmsMeasureNotesJson;
   warnings: BmsAnalysisWarning[];
@@ -62,6 +66,8 @@ const longNoteChannelRanges = [
   [51, 59],
   [61, 69]
 ] as const;
+
+const timeProgressChannels = new Set(["01", "02", "03", "08", "09"]);
 
 export function normalizeText(value: string): string {
   return value
@@ -171,6 +177,34 @@ function isPlayNoteChannel(channel: string): boolean {
   return isNormalPlayNoteChannel(channel) || isLongNoteChannel(channel);
 }
 
+function hasNonZeroDataObject(data: string): boolean {
+  const pairCount = Math.floor(data.trim().length / 2);
+  for (let pairIndex = 0; pairIndex < pairCount; pairIndex += 1) {
+    if (data.slice(pairIndex * 2, pairIndex * 2 + 2).toUpperCase() !== "00") {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isPositiveNumberText(value: string): boolean {
+  const numberValue = Number.parseFloat(value.trim());
+  return Number.isFinite(numberValue) && numberValue > 0;
+}
+
+function isTimeProgressChannel(channel: string): boolean {
+  return timeProgressChannels.has(channel) || isPlayNoteChannel(channel);
+}
+
+function hasTimeProgressData(channel: string, data: string): boolean {
+  if (channel === "02") {
+    return isPositiveNumberText(data);
+  }
+
+  return isTimeProgressChannel(channel) && hasNonZeroDataObject(data);
+}
+
 function pushWarning(
   warnings: BmsAnalysisWarning[],
   code: BmsAnalysisWarning["code"],
@@ -186,15 +220,21 @@ function pushWarning(
 
 function buildMeasureNotesJson(
   playNotes: number,
-  firstMeasure: number | null,
-  lastMeasure: number | null,
+  firstPlayableMeasure: number | null,
+  lastPlayableMeasure: number | null,
+  displayFirstMeasure: number | null,
+  displayLastMeasure: number | null,
   measures: BmsMeasureNote[]
 ): BmsMeasureNotesJson {
   return {
-    schemaVersion: 1,
-    firstMeasure,
-    lastMeasure,
-    targetMeasureCount: firstMeasure === null || lastMeasure === null ? 0 : lastMeasure - firstMeasure + 1,
+    schemaVersion: 2,
+    firstPlayableMeasure,
+    lastPlayableMeasure,
+    displayFirstMeasure,
+    displayLastMeasure,
+    targetMeasureCount: displayFirstMeasure === null || displayLastMeasure === null
+      ? 0
+      : displayLastMeasure - displayFirstMeasure + 1,
     playNotes,
     lnPolicy: "count_start_only",
     measures
@@ -236,16 +276,18 @@ export function analyzeBmsText(text: string): BmsAnalysis {
   const warnings: BmsAnalysisWarning[] = [];
   const measureCounts = new Map<number, number>();
   const longNoteEvents: LongNoteEvent[] = [];
+  const timeProgressMeasures: number[] = [];
   let playNotes = 0;
 
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.replace(/^\uFEFF/, "").trim();
-    const match = line.match(/^#(\d{3})([0-9A-Za-z]{2}):([0-9A-Za-z]*)/);
+    const match = line.match(/^#(\d{3})([0-9A-Za-z]{2}):([0-9A-Za-z.]*)/);
     if (!match) {
       continue;
     }
 
-    const [, measureText, channel, data] = match;
+    const [, measureText, rawChannel, data] = match;
+    const channel = rawChannel.toUpperCase();
     if (!/^\d{2}$/.test(channel)) {
       pushWarning(
         warnings,
@@ -256,11 +298,15 @@ export function analyzeBmsText(text: string): BmsAnalysis {
       continue;
     }
 
+    const measure = Number(measureText);
+    if (hasTimeProgressData(channel, data)) {
+      timeProgressMeasures.push(measure);
+    }
+
     if (!isPlayNoteChannel(channel)) {
       continue;
     }
 
-    const measure = Number(measureText);
     const pairCount = Math.floor(data.length / 2);
     let lineNotes = 0;
 
@@ -296,30 +342,44 @@ export function analyzeBmsText(text: string): BmsAnalysis {
       playNotes: 0,
       firstNoteMeasure: null,
       lastNoteMeasure: null,
+      displayFirstMeasure: null,
+      displayLastMeasure: null,
       targetMeasureCount: 0,
-      measureNotesJson: buildMeasureNotesJson(0, null, null, []),
+      measureNotesJson: buildMeasureNotesJson(0, null, null, null, null, []),
       warnings
     };
   }
 
   const firstNoteMeasure = Math.min(...noteMeasures);
   const lastNoteMeasure = Math.max(...noteMeasures);
+  const displayFirstMeasure = firstNoteMeasure;
+  const trailingTimeMeasures = timeProgressMeasures.filter((measure) => measure >= displayFirstMeasure);
+  const displayLastMeasure = Math.max(lastNoteMeasure, ...trailingTimeMeasures);
   const measures: BmsMeasureNote[] = [];
 
-  for (let measure = firstNoteMeasure; measure <= lastNoteMeasure; measure += 1) {
+  for (let measure = displayFirstMeasure; measure <= displayLastMeasure; measure += 1) {
     measures.push({
       measure,
       playNotes: measureCounts.get(measure) ?? 0
     });
   }
 
-  const measureNotesJson = buildMeasureNotesJson(playNotes, firstNoteMeasure, lastNoteMeasure, measures);
+  const measureNotesJson = buildMeasureNotesJson(
+    playNotes,
+    firstNoteMeasure,
+    lastNoteMeasure,
+    displayFirstMeasure,
+    displayLastMeasure,
+    measures
+  );
 
   return {
     encoding: null,
     playNotes,
     firstNoteMeasure,
     lastNoteMeasure,
+    displayFirstMeasure,
+    displayLastMeasure,
     targetMeasureCount: measureNotesJson.targetMeasureCount,
     measureNotesJson,
     warnings
