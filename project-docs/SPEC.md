@@ -20,7 +20,7 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。�
 - 一覧側の分岐ツリー可読性改善
 - 一覧側の分岐ツリー列揃え改善
 - 一覧側の分岐ツリーバッジ整理とツリー線改善
-- 一覧側の分岐ツリー文字記号削除とbranch系列表示
+- 一覧側の分岐ツリー文字記号削除と表示用suffixルール改善
 - `GET /api/charts` のD1実データ読み取り
 - `POST /api/charts` の初回投稿
 - `POST /api/charts/:chartId/versions` の追記投稿
@@ -369,9 +369,8 @@ layerの `kind` 候補:
 
 各version行には以下を表示する。
 
-- version本体表示。`version_number` から `verX.0` の形式にする。
-- root以外のbranch系列補助表示。`branch a/b/a` のように `branch_path` から `root/` を除いた系列を小さく表示する。
-- 親version表示。rootは `起点`、子versionは `from verX.0-a/b` のように親のbranch系列を含める。
+- 表示専用versionラベル。DB/APIの `displayVersion` や `branchPath` は変更せず、画面側で動的に生成する。
+- 親version表示。rootは `起点`、子versionは `from verX.0` または `from verX.0-b` の形式にする。
 - 重要状態バッジ。通常表示は `完成`, `没譜面`, `DL不可`, `削除申請中`, 管理非表示系に限定する。
 - 想定難易度
 - 差分作者
@@ -383,7 +382,7 @@ layerの `kind` 候補:
 
 `未完成` と `末端` は通常バッジとして表示しない。未完成かどうかは進捗%で判断できるようにし、末端かどうかはツリー線またはhover/titleなどの補助情報で確認できるようにする。
 
-通常表示では `root/a` などの内部 `branchPath` を主情報として目立たせない。必要な場合はhover/titleなどの補助情報で確認できるようにする。コメント欄には投稿者コメントだけを表示し、`branchPath` や `from verX.X` などの分岐情報を混ぜない。
+通常表示では `root/a` などの内部 `branchPath` を主情報として表示しない。必要な場合はhover/titleなどの補助情報で確認できるようにする。コメント欄には投稿者コメントだけを表示し、`branchPath` や `from verX.X` などの分岐情報を混ぜない。
 
 一覧の想定難易度は `difficulty` のみを表示する。`level` は併記しない。
 
@@ -398,16 +397,19 @@ ver1.0
 起点
 
 ver2.0
-branch a
 from ver1.0
 
-ver3.0
-branch a/b
-from ver2.0-a
+ver3.0-a
+from ver2.0
+
+ver3.0-b
+from ver2.0
 
 ver4.0
-branch a/b/a
-from ver3.0-a/b
+from ver3.0-b
+
+ver3.0-c
+from ver2.0
 ```
 
 表示仕様:
@@ -420,9 +422,31 @@ from ver3.0-a/b
 - ver列内にツリー専用のガターを作り、CSSの縦線と横線で親子関係を示す。
 - `└`, `├`, `│`, `─` などの文字ツリー記号は通常表示に使わない。
 - ツリー線は薄すぎないグレーにし、他列や進捗サムネイルに干渉しないようにする。
-- 通常表示では内部 `branchPath` ではなく、`branch a/b` と `from verX.0-a/b` を優先して表示する。
 - `branchPath` はhover/titleなどの補助情報として保持する。
 - スマホ幅ではツリー線やインデントを簡略化してよいが、親子関係は最低限分かるようにする。
+
+### 表示用versionラベルのsuffixルール
+
+画面に表示するversionラベルは、同じ親から複数分岐している場合だけsuffixを付ける。
+
+- 親からの子versionが1つだけの場合: suffixを表示しない。
+- 親からの子versionが2つ以上ある場合: その親配下の子versionに `-a`, `-b`, `-c` などのsuffixを表示する。
+- suffixは `branch_label` または `branchPath` の末尾要素から生成する。
+- root versionにはsuffixを表示しない。
+- 後から同じ親に2本目の子versionが追加された場合、以前 `ver2.0` と表示されていたものが `ver2.0-a` に変わってよい。
+- これは表示専用の変換であり、内部の `versionId`, `branchPath`, DB保存値、APIレスポンスは変更しない。
+
+例:
+
+- `root/a` のみ: `ver2.0`
+- `root/a`, `root/b`: `ver2.0-a`, `ver2.0-b`
+- `root/a/a`, `root/a/b`, `root/a/c`: `ver3.0-a`, `ver3.0-b`, `ver3.0-c`
+- `root/a/b/a` のみ: `ver4.0`
+
+from表示も同じ表示ルールを使う。
+
+- 親が単独枝なら `from ver2.0`
+- 親が兄弟分岐の一つなら `from ver3.0-b`
 
 PC表示では列見出しに近い行を表示し、各version行で `想定難易度`, `差分作者`, `進捗度`, `コメント` などのラベルを繰り返しすぎない。スマホ幅ではラベル付き表示へ戻してよい。
 
