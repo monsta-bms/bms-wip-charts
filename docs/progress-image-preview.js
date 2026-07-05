@@ -10,6 +10,14 @@
     labelY: 112
   };
 
+  const fallbackLayerColors = {
+    initial: "rgba(37, 111, 93, 0.44)",
+    parent: "rgba(37, 111, 93, 0.2)",
+    current: "rgba(37, 99, 235, 0.5)",
+    rejected: "rgba(122, 52, 24, 0.42)",
+    empty: "#edf2f5"
+  };
+
   let currentPreviewUrl = "";
 
   function warnProgressImage(detail) {
@@ -47,8 +55,57 @@
     };
   }
 
-  function collectPaintedIndexes(progressMap, totalBlocks) {
-    const painted = new Set();
+  function normalizeRange(range) {
+    if (!Array.isArray(range) || range.length !== 2) {
+      return null;
+    }
+
+    const start = Number(range[0]);
+    const end = Number(range[1]);
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start > end) {
+      return null;
+    }
+
+    return [start, end];
+  }
+
+  function resolveLayerRole(layer, layerIndex, layerCount, contextMode) {
+    if (contextMode === "visible-append" || contextMode === "append") {
+      return layerIndex === layerCount - 1 && String(layer?.kind || "") !== "parent_preview"
+        ? "current"
+        : "parent";
+    }
+
+    return "";
+  }
+
+  function getLayerFillColor(layer, layerIndex, layerCount, contextMode) {
+    const role = resolveLayerRole(layer, layerIndex, layerCount, contextMode);
+    if (window.BmsProgressLayerColors?.getLayerFillColor) {
+      return window.BmsProgressLayerColors.getLayerFillColor(layer, layerIndex, {
+        role,
+        followupIndex: Math.max(0, layerIndex - 1)
+      });
+    }
+
+    if (role === "parent") {
+      return fallbackLayerColors.parent;
+    }
+    if (role === "current") {
+      return fallbackLayerColors.current;
+    }
+    if (layer?.kind === "rejected_auto_fill") {
+      return fallbackLayerColors.rejected;
+    }
+    if (layer?.kind === "followup" || String(layer?.color || "").toLowerCase() === "#2563eb") {
+      return fallbackLayerColors.current;
+    }
+    return fallbackLayerColors.initial;
+  }
+
+  function collectLayerPaint(progressMap, totalBlocks, contextMode) {
+    const paintedIndexes = new Set();
+    const blockColorByIndex = new Map();
 
     if (!Array.isArray(progressMap.layers)) {
       throw new Error("progressMap.layers is missing.");
@@ -60,31 +117,31 @@
         return;
       }
 
+      const fillColor = getLayerFillColor(layer, layerIndex, progressMap.layers.length, contextMode);
       layer.ranges.forEach((range, rangeIndex) => {
-        if (!Array.isArray(range) || range.length !== 2) {
+        const normalizedRange = normalizeRange(range);
+        if (!normalizedRange) {
           warnProgressImage(`layers[${layerIndex}].ranges[${rangeIndex}] is invalid.`);
           return;
         }
 
-        const start = Number(range[0]);
-        const end = Number(range[1]);
-        if (!Number.isInteger(start) || !Number.isInteger(end) || start > end) {
-          warnProgressImage(`layers[${layerIndex}].ranges[${rangeIndex}] has invalid numbers.`);
-          return;
-        }
-
+        const [start, end] = normalizedRange;
         const safeStart = Math.max(0, start);
         const safeEnd = Math.min(totalBlocks - 1, end);
         for (let index = safeStart; index <= safeEnd; index += 1) {
-          painted.add(index);
+          paintedIndexes.add(index);
+          blockColorByIndex.set(index, fillColor);
         }
       });
     });
 
-    return painted;
+    return {
+      paintedIndexes,
+      blockColorByIndex
+    };
   }
 
-  function normalizeProgressImageModel(progressMapValue) {
+  function normalizeProgressImageModel(progressMapValue, options = {}) {
     const progressMap = parseProgressMap(progressMapValue);
     if (!progressMap || typeof progressMap !== "object") {
       throw new Error("progressMap is missing.");
@@ -95,15 +152,16 @@
     }
 
     const blocks = progressMap.blocks.map(normalizeBlock);
-    const paintedIndexes = collectPaintedIndexes(progressMap, blocks.length);
-    const calculatedProgress = Math.round((paintedIndexes.size / blocks.length) * 100);
+    const layerPaint = collectLayerPaint(progressMap, blocks.length, options.contextMode || "saved");
+    const calculatedProgress = Math.round((layerPaint.paintedIndexes.size / blocks.length) * 100);
     const progress = Number.isFinite(Number(progressMap.progress))
       ? Number(progressMap.progress)
       : calculatedProgress;
 
     return {
       blocks,
-      paintedIndexes,
+      paintedIndexes: layerPaint.paintedIndexes,
+      blockColorByIndex: layerPaint.blockColorByIndex,
       progress
     };
   }
@@ -145,7 +203,7 @@
   }
 
   function createProgressImageCanvas(progressMap, options = {}) {
-    const model = normalizeProgressImageModel(progressMap);
+    const model = normalizeProgressImageModel(progressMap, options);
     const settings = { ...defaultOptions, ...options };
     const canvas = document.createElement("canvas");
     canvas.width = settings.width;
@@ -190,7 +248,7 @@
     blocks.forEach((block, index) => {
       const x = innerX + index * slotWidth;
       const width = Math.max(1, Math.ceil(slotWidth));
-      context.fillStyle = model.paintedIndexes.has(block.index) ? "rgba(37, 111, 93, 0.78)" : "#edf2f5";
+      context.fillStyle = model.blockColorByIndex.get(block.index) || fallbackLayerColors.empty;
       context.fillRect(x, settings.blockTop, width, settings.blockHeight);
     });
 
@@ -336,6 +394,18 @@
     return ranges;
   }
 
+  function getLayerStorageColor(layer, layerIndex, context) {
+    if (window.BmsProgressLayerColors?.getLayerStorageColor) {
+      return window.BmsProgressLayerColors.getLayerStorageColor(layer, layerIndex, context);
+    }
+
+    if (context?.role === "current" || layer?.kind === "followup") {
+      return "#2563eb";
+    }
+
+    return "#1f7a5c";
+  }
+
   function buildProgressMapFromVisibleEditor() {
     const blockElements = Array.from(document.querySelectorAll("#progressMapBlocks .progress-map-block"));
     if (blockElements.length === 0) {
@@ -343,38 +413,71 @@
     }
 
     const blocks = blockElements.map(blockFromElement);
-    const paintedIndexes = new Set();
+    const parentIndexes = new Set();
+    const currentIndexes = new Set();
+    const initialIndexes = new Set();
+    const appendMode = document.querySelector(".submit-panel")?.classList.contains("is-append-mode");
+    const rejected = Boolean(document.querySelector("#isRejected")?.checked);
+
     blockElements.forEach((blockElement, fallbackIndex) => {
       const index = Number.isInteger(Number(blockElement.dataset.blockIndex))
         ? Number(blockElement.dataset.blockIndex)
         : fallbackIndex;
-      if (
-        blockElement.classList.contains("is-painted") ||
-        blockElement.classList.contains("is-parent-painted") ||
-        blockElement.classList.contains("is-current-painted")
-      ) {
-        paintedIndexes.add(index);
+      const parentPainted = blockElement.classList.contains("is-parent-painted");
+      const currentPainted = blockElement.classList.contains("is-current-painted");
+      const painted = blockElement.classList.contains("is-painted");
+
+      if (appendMode) {
+        if (parentPainted) {
+          parentIndexes.add(index);
+        }
+        if (currentPainted) {
+          currentIndexes.add(index);
+        }
+        return;
+      }
+
+      if (painted) {
+        initialIndexes.add(index);
       }
     });
 
+    const layers = [];
+    if (appendMode) {
+      layers.push({
+        versionId: "preview-parent",
+        color: getLayerStorageColor({ kind: "parent_preview" }, 0, { role: "parent" }),
+        kind: "parent_preview",
+        ranges: compressRanges(parentIndexes)
+      });
+      layers.push({
+        versionId: "preview-current",
+        color: getLayerStorageColor({ kind: "followup" }, 1, { role: "current", followupIndex: 0 }),
+        kind: "followup",
+        ranges: compressRanges(currentIndexes)
+      });
+    } else {
+      const layerKind = rejected ? "rejected_auto_fill" : "initial";
+      layers.push({
+        versionId: "preview",
+        color: getLayerStorageColor({ kind: layerKind }, 0, {}),
+        kind: layerKind,
+        ranges: compressRanges(initialIndexes)
+      });
+    }
+
     const progressInput = document.querySelector("#progress");
+    const union = new Set([...parentIndexes, ...currentIndexes, ...initialIndexes]);
     const progress = Number.isFinite(Number(progressInput?.value))
       ? Number(progressInput.value)
-      : Math.round((paintedIndexes.size / blockElements.length) * 100);
+      : Math.round((union.size / blockElements.length) * 100);
 
     return {
       schemaVersion: 2,
       blockMode: "standardized_measure",
       targetBlockCount: blockElements.length,
       blocks,
-      layers: [
-        {
-          versionId: "preview",
-          color: "#1f7a5c",
-          kind: "preview_union",
-          ranges: compressRanges(paintedIndexes)
-        }
-      ],
+      layers,
       progress
     };
   }
@@ -382,24 +485,25 @@
   function getCurrentProgressMapForPreview() {
     const isAppendMode = document.querySelector(".submit-panel")?.classList.contains("is-append-mode");
     if (isAppendMode) {
-      return buildProgressMapFromVisibleEditor();
+      const progressMap = window.BmsAppendProgressMap?.getCurrentProgressMap?.() || buildProgressMapFromVisibleEditor();
+      return { progressMap, contextMode: "append" };
     }
 
     if (window.BmsProgressMapForm?.getCurrentProgressMap) {
       const progressMap = window.BmsProgressMapForm.getCurrentProgressMap();
       if (progressMap) {
-        return progressMap;
+        return { progressMap, contextMode: "initial" };
       }
     }
 
     if (typeof window.buildProgressMapPayload === "function") {
       const progressMap = window.buildProgressMapPayload();
       if (progressMap) {
-        return progressMap;
+        return { progressMap, contextMode: "initial" };
       }
     }
 
-    return buildProgressMapFromVisibleEditor();
+    return { progressMap: buildProgressMapFromVisibleEditor(), contextMode: isAppendMode ? "append" : "initial" };
   }
 
   async function renderProgressImagePreview(progressMap, elements, options = {}) {
@@ -456,12 +560,14 @@
       elements.status.classList.remove("is-error");
 
       try {
-        const progressMapValue = getCurrentProgressMapForPreview();
-        if (!progressMapValue) {
+        const previewSource = getCurrentProgressMapForPreview();
+        if (!previewSource.progressMap) {
           throw new Error("進捗マップ表示後にPNGを生成できます。");
         }
 
-        await renderProgressImagePreview(progressMapValue, elements);
+        await renderProgressImagePreview(previewSource.progressMap, elements, {
+          contextMode: previewSource.contextMode
+        });
       } catch (error) {
         warnProgressImage(error instanceof Error ? error.message : String(error));
         elements.status.textContent = error instanceof Error ? error.message : "PNG生成に失敗しました。";
