@@ -20,7 +20,7 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。�
 - 一覧側の分岐ツリー可読性改善
 - 一覧側の分岐ツリー列揃え改善
 - 一覧側の分岐ツリーバッジ整理とツリー線改善
-- 一覧側の分岐ツリー文字記号削除と表示専用の版ラベル（`BASE` / `A1` / `B1`）生成
+- 一覧側の分岐ツリー文字記号削除と表示専用の数字パス版ラベル（`BASE` / `1` / `1-2`）生成
 - `GET /api/charts` のD1実データ読み取り
 - `POST /api/charts` の初回投稿
 - `POST /api/charts/:chartId/versions` の追記投稿
@@ -369,8 +369,8 @@ layerの `kind` 候補:
 
 各version行には以下を表示する。
 
-- 表示専用の版ラベル。rootは `BASE`、子孫は `A1`, `A2`, `B1`, `B2` のようにフロント側で動的に生成する。
-- 親version表示。rootは `起点`、子versionは `from BASE`, `from A1`, `from B1` のように表示する。
+- 表示専用の版ラベル。rootは `BASE`、子孫は `1`, `1-1`, `1-2`, `1-2-1` のように `branchPath` から数字パスとして生成する。
+- 親version表示。rootは `起点`、子versionは `from BASE`, `from 1`, `from 1-2` のように表示する。
 - 重要状態バッジ。通常表示は `完成`, `没譜面`, `DL不可`, `削除申請中`, 管理非表示系に限定する。
 - 想定難易度
 - 差分作者
@@ -382,7 +382,7 @@ layerの `kind` 候補:
 
 `未完成` と `末端` は通常バッジとして表示しない。未完成かどうかは進捗%で判断できるようにし、末端かどうかはツリー線またはhover/titleなどの補助情報で確認できるようにする。
 
-通常表示では `root/a` などの内部 `branchPath` やAPI由来の `displayVersion` を主情報として表示しない。必要な場合はhover/titleなどの補助情報で確認できるようにする。コメント欄には投稿者コメントだけを表示し、`branchPath` や `from A1` などの分岐情報を混ぜない。
+通常表示では `root/a` などの内部 `branchPath` やAPI由来の `displayVersion` を主情報として表示しない。必要な場合はhover/titleなどの補助情報で確認できるようにする。コメント欄には投稿者コメントだけを表示し、`branchPath` や `from 1-2` などの分岐情報を混ぜない。
 
 一覧の想定難易度は `difficulty` のみを表示する。`level` は併記しない。
 
@@ -396,20 +396,20 @@ layerの `kind` 候補:
 BASE
 起点
 
-A1
+1
 from BASE
 
-A2
-from A1
+1-1
+from 1
 
-B1
-from A1
+1-2
+from 1
 
-B2
-from B1
+1-2-1
+from 1-2
 
-C1
-from A1
+1-3
+from 1
 ```
 
 表示仕様:
@@ -427,43 +427,47 @@ from A1
 
 ### 表示専用の版ラベル
 
-一覧の主表示では、線形履歴向けの `ver1.0`, `ver2.0`, `ver3.0-a` ではなく、分岐ツリー向けの `BASE` と系統ID + 系統内版数を使う。
+一覧の主表示では、線形履歴向けの `ver1.0`, `ver2.0`, `ver3.0-a` や、前フェーズの `A1`, `B1` などの系統IDではなく、`branchPath` から直接生成できる数字パス方式を使う。
 
-このラベルはフロント側で生成する表示専用ラベルであり、永続的な識別子ではない。内部識別には引き続き `versionId` / `branchPath` を使う。DBに保存されている `displayVersion`, `branchPath`, `version_number`, APIレスポンスは変更しない。
+このラベルはフロント側で生成する表示専用ラベルであり、内部識別子ではない。内部識別には引き続き `versionId` / `branchPath` を使う。DBに保存されている `displayVersion`, `branchPath`, `version_number`, APIレスポンスは変更しない。
 
 基本ルール:
 
-- root versionは `BASE` と表示する。
-- rootの子は、同じ親内の安定した順序で `A1`, `B1`, `C1`... を割り当てる。
-- 親の最初の子は親の系統を継続する。
-- 親の2本目以降の子は新しい系統IDを割り当てる。
-- 同じ系統を伸ばす場合は数字を+1する。
-- 系統IDは `A`...`Z`, `AA`, `AB`, `AC`... の順にする。
+- `branchPath=root` は `BASE` と表示する。
+- `root/` を取り除く。
+- 各セグメントをExcel列番号のように数字へ変換する。
+- 数字化したセグメントを `-` でつなぐ。
 
-子の安定順序:
+セグメント変換:
 
-1. `createdAt` 昇順
-2. `branchPath` 昇順
-3. `versionId` 昇順
+- `a` -> `1`
+- `b` -> `2`
+- `z` -> `26`
+- `aa` -> `27`
+- `ab` -> `28`
+- `ba` -> `53`
 
 例:
 
 - `root`: `BASE`
-- `root/a`: `A1`
-- `root/a/a`: `A2`
-- `root/a/b`: `B1`
-- `root/a/b/a`: `B2`
-- `root/a/c`: `C1`
-- `root/a/c/a`: `C2`
+- `root/a`: `1`
+- `root/a/a`: `1-1`
+- `root/a/b`: `1-2`
+- `root/a/b/a`: `1-2-1`
+- `root/b`: `2`
+- `root/c`: `3`
+- `root/c/a`: `3-1`
+- `root/e/a/a/a`: `5-1-1-1`
 
-from表示も同じ表示専用ラベルを使う。
+from表示も同じ数字パス方式を使う。
 
 - rootは `起点`
 - `root/a` は `from BASE`
-- `root/a/a` は `from A1`
-- `root/a/b/a` は `from B1`
+- `root/a/a` は `from 1`
+- `root/a/b/a` は `from 1-2`
+- `root/c/a` は `from 3`
 
-将来、完全に安定した表示ラベルが必要になった場合は、DBに `line_label` や `line_number` 相当を保存する設計を検討する。MVPではフロント側生成でよい。
+同じ `branchPath` なら、後から別分岐が追加されても表示ラベルは変わらない。例: `root/a/c` は常に `1-3`、`root/a/c/a` は常に `1-3-1` とする。
 
 PC表示では列見出しに近い行を表示し、各version行で `想定難易度`, `差分作者`, `進捗度`, `コメント` などのラベルを繰り返しすぎない。スマホ幅ではラベル付き表示へ戻してよい。
 
