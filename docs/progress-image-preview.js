@@ -380,6 +380,11 @@
   }
 
   function getCurrentProgressMapForPreview() {
+    const isAppendMode = document.querySelector(".submit-panel")?.classList.contains("is-append-mode");
+    if (isAppendMode) {
+      return buildProgressMapFromVisibleEditor();
+    }
+
     if (window.BmsProgressMapForm?.getCurrentProgressMap) {
       const progressMap = window.BmsProgressMapForm.getCurrentProgressMap();
       if (progressMap) {
