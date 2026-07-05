@@ -2,7 +2,7 @@
 
 ## 対象
 
-GitHub Pages の静的フロント画面、Worker API接続、D1 migration、BMS解析、進捗マップUI、進捗マップ保存、追記投稿API、仕様ドキュメントを確認する。
+GitHub Pages の静的フロント画面、Worker API接続、初回投稿、追記投稿UI、進捗マップUI、一覧表示を確認する。
 
 本番Worker URL:
 
@@ -18,123 +18,77 @@ https://monsta-bms.github.io/bms-wip-charts/
 
 ## 今回確認するもの
 
-BRANCH-01A 追記投稿API:
+BRANCH-01B 追記投稿UI:
 
-- `POST /api/charts/:chartId/versions` が `multipart/form-data` を受け付けること
-- `POST /api/charts/:chartId/versions` が `worker/src/routes/chartVersions.ts` の本実装へ到達すること
-- Phase 9 stubの `mode=stub` や `Version append is accepted only as a Phase 9 stub` が返らないこと
-- 必須項目 `file`, `parentVersionId`, `author`, `progressMap`, `password` が不足した場合に `INVALID_FORM` を返すこと
-- 任意項目 `difficulty`, `level`, `comment` が送信できること
-- `difficulty` / `level` 未送信時は親versionの値を継承すること
-- `isRejected=true` を送ると `INVALID_REJECTED_FLAG_FOR_FOLLOWUP` を返すこと
-- 親versionが `is_rejected=1` の場合は `REJECTED_CHART_CANNOT_BE_EXTENDED` を返すこと
-- 存在しないchartは `CHART_NOT_FOUND` を返すこと
-- 存在しない親versionは `PARENT_VERSION_NOT_FOUND` を返すこと
-- 親versionが指定chartに属していない場合は `PARENT_VERSION_CHART_MISMATCH` を返すこと
-- 非表示の親versionは追記できないこと
-- 単体BMSの `#TITLE` / `#ARTIST` が追記先songと一致しない場合は `TITLE_ARTIST_MISMATCH` を返すこと
-- 同一 `file_sha256` は `DUPLICATE_FILE` で拒否されること
-- 許可拡張子 `.bms`, `.bme`, `.bml`, `.zip` 以外は拒否されること
-- 単体譜面2MB超過、zip5MB超過が拒否されること
-- `progressMap` が不正JSONの場合は `INVALID_PROGRESS_MAP` を返すこと
-- `progressMap.schemaVersion` が `2` 以外なら `INVALID_PROGRESS_MAP` を返すこと
-- `progressMap.blockMode` が `standardized_measure` 以外なら `INVALID_PROGRESS_MAP` を返すこと
-- `progressMap.blocks.length` と `targetBlockCount` が一致しない場合は `PROGRESS_MAP_BLOCK_COUNT_MISMATCH` を返すこと
-- `progressMap.layers[].ranges` が範囲外の場合は `PROGRESS_MAP_OUT_OF_RANGE` を返すこと
-- 親versionの塗り範囲unionと同じ場合は `PROGRESS_MAP_UNCHANGED` を返すこと
-- Worker側で `progressMap` のunionから `progress` が再計算されること
-- 成功時に `versions.progress_map_json` へ正規化済みJSONが保存されること
-- 追記時に既存layersが維持され、最後のlayerの `versionId` が新しいversion IDへ置き換わること
-- 成功時に `song / chart / parent / version / file` の関連が壊れないこと
-- 成功時にR2へ安全な `r2_key` でファイルが保存されること
-- D1登録失敗時はR2孤児ファイル削除を試みること
-- 成功/失敗ともに可能な範囲で `post_logs.action='append_version'` が記録されること
-- `console.error` に処理段階名が含まれること
-- APIエラーが必ず `code`, `message`, `detail` のJSONになること
+- 一覧の各version行に `追記投稿` ボタンが表示されること
+- `追記投稿` ボタンを押すと投稿フォームが追記モードへ切り替わること
+- 追記モードで `追記投稿: verX.0 から` のように表示されること
+- 追記元の `displayVersion` と `branchPath` が表示されること
+- 追記元の曲名、アーティスト、仮差分名が読み取り専用情報として表示されること
+- 追記モードでは楽曲情報入力欄と仮差分名入力欄が通常入力対象から外れること
+- 親versionの `difficulty` / `level` が想定難易度UIへ初期反映されること
+- 想定難易度は追記モードでも編集できること
+- 親versionの `progressMap` が進捗マップへ読み込まれること
+- 親versionまでのlayerが薄い親レイヤーとして表示されること
+- 今回追記分のlayerが青系で表示されること
+- 親だけで塗られているブロックを解除できないこと
+- 親だけで塗られているブロックへ重ね塗りできること
+- 今回追記layerのブロックはクリックで塗れること
+- 今回追記layerの塗り済みブロックはクリックで解除できること
+- ドラッグで今回追記layerの範囲塗り/範囲解除ができること
+- progressが親layerと今回layerのunionから計算されること
+- 計算されたprogressが既存の進捗度欄に反映されること
+- 今回追記layerが空のまま送信すると `追記範囲が追加されていません。` が表示され、APIへ送信されないこと
+- `progress>=80` かつ `progress<100` で「完成版にする」ボタンが有効になること
+- 「完成版にする」ボタンで未塗りブロックが今回layerへ追加され、progress=100になること
+- `progressMap` がない古いversionでは追記ボタンがdisabledになり、画面から追記できないこと
+- `isRejected=true` の没譜面versionでは追記ボタンがdisabledになり、`没譜面は追記できません` が表示されること
+- `progress=100` の親versionから追記しようとした場合に確認ダイアログが表示されること
+- 追記モードのキャンセルで初回投稿フォームへ戻ること
 
-BRANCH-01A-CHECK Node.jsスクリプト確認:
+追記投稿API送信:
 
-- 通常確認は `scripts/test-append-version.mjs` を使うこと
-- Node.js 20以上で、外部npm依存なしに動くこと
-- PowerShell版 `scripts/test-append-version.ps1` は残っているが、多重配列JSONが壊れやすいため推奨しないこと
-- スクリプトが `apiBaseUrl`, `chartId`, `parentVersionId`, `filePath`, `author`, `password`, `comment` を引数で受け取れること
-- `apiBaseUrl` を省略した場合に `http://localhost:8787` が使われること
-- スクリプトが `GET /api/charts` から指定chartId / parentVersionId の親versionを取得すること
-- 親versionの `progressMap` が無い場合、分かりやすいエラーで終了すること
-- 親versionの `progressMap` をJSONとして複製し、親layersを引き継ぐこと
-- `progressMap.blocks` から未塗りblockを1つ探すこと
-- 未塗りblockが無い場合、分かりやすいエラーで終了すること
-- 新しいfollowup layerが追加されること
-- 新しいfollowup layerは `versionId=pending`, `color=#2563eb`, `kind=followup` になること
-- 新しいfollowup layerの `ranges` が `[[追加blockIndex,追加blockIndex]]` になること
-- `progressMap.layers` は1件だけでもJSON配列として送信されること
-- `progressMap.layers[0].ranges` は1件だけでも配列の配列として送信されること
-- `Array.isArray(progressMap.layers)` がtrueであること
-- `Array.isArray(progressMap.layers[0].ranges)` がtrueであること
-- `Array.isArray(progressMap.layers[0].ranges[0])` がtrueであること
-- `progressMap.layers[0].ranges[0].length === 2` であること
-- `JSON.stringify(progressMap)` 後も `layers` と `ranges` の配列構造が壊れないこと
-- `progress` は全layerのrangesのunionから再計算されること
-- `multipart/form-data` で `file`, `parentVersionId`, `author`, `progressMap`, `comment`, `password` が送信されること
-- BMSファイルはNode標準の `Blob` と `FormData` で送信されること
-- 成功時にレスポンスJSON全文が表示されること
-- 成功時に `versionId`, `branchPath`, `progress` が返っていれば表示されること
-- 成功レスポンスに `versionId`, `branchPath`, `progress` が無い場合でも `<not returned>` と表示し、スクリプト自体は失敗扱いにしないこと
-- レスポンスに `mode="stub"` が含まれる場合は `API returned stub response. Deploy or route implementation is not active.` と表示し、スクリプトを失敗扱いにすること
-- 失敗時にHTTP status, `code`, `message`, `detail` が表示されること
-- `branchPath` が `root/a` などで返ること
-- `GET /api/charts` で新versionが増えていること
-- 実際の成功確認は `GET /api/charts` で対象chartの `versions` が増えたか確認すること
-- 同じ親versionへ別内容ファイルで2回追記すると `root/a`, `root/b` のように分岐すること
-- 親とprogressMapが同一の場合は `PROGRESS_MAP_UNCHANGED` になること
+- 追記フォーム送信時に `POST /api/charts/:chartId/versions` が呼ばれること
+- 送信形式が `multipart/form-data` であること
+- 送信項目に `file`, `parentVersionId`, `author`, `progressMap`, `password`, `difficulty`, `level`, `comment` が含まれること
+- `isRejected` が送信されないこと
+- `title` が送信されないこと
+- `artist` が送信されないこと
+- `chartName` が送信されないこと
+- `progressMap.layers` が親layersを維持し、最後に今回追記layerを追加したJSONになること
+- 今回追記layerが `versionId="pending"`, `color="#2563eb"`, `kind="followup"` になること
+- Worker側で成功した場合、追記モードが閉じること
+- 成功後に `GET /api/charts` が再取得されること
+- 新しいversionが一覧に表示されること
+- 新しいversionの `displayVersion` / `branchPath` / `progress` が表示に反映されること
+- 新しいversionの `progressMap` サムネイルが一覧に表示されること
+- APIエラー時は `code`, `message`, `detail` が画面上部に表示されること
+- APIエラー時はフォーム入力状態が維持されること
 
-PowerShell版スクリプトについて:
+BMSメタデータ警告:
 
-- `scripts/test-append-version.ps1` は過去の確認用として残す
-- PowerShellでは `progressMap.layers[].ranges` のような配列の中の配列が単一要素時に崩れやすい
-- PowerShell版で `INVALID_PROGRESS_MAP` や `progressMap.layers must be an array` が出る場合は、Node.js版で確認すること
-- Windows PowerShell 5.1ではスクリプト内メッセージをASCII英語にして文字化けを避けること
-
-分岐生成:
-
-- 親 `root` への1件目の追記が `branch_path=root/a` になること
-- 親 `root` への2件目の追記が `branch_path=root/b` になること
-- 親 `root/a` への1件目の追記が `branch_path=root/a/a` になること
-- `version_number` が `parent.version_number + 1` になること
-- `displayVersion` がAPI側で生成されること
-- 同時投稿などで `branch_path` が競合した場合はDB unique制約で失敗し、`BRANCH_CREATE_FAILED` になること
-
-progress=100到達時のDL制御:
-
-- 新しく作成された `progress=100` version自体はDL可能なこと
-- 同一分岐上の祖先のうち `progress BETWEEN 1 AND 99` のversionだけが `download_blocked=1` になること
-- DL不可化された祖先に `download_block_reason='superseded_by_completed_descendant'` が保存されること
-- DL不可化された祖先に `download_blocked_at` が保存されること
-- DL不可化された祖先に `collapsed_by_completion=1` が保存されること
-- DL不可化された祖先に `collapsed_reason='superseded_by_completed_descendant'` が保存されること
-- DL不可化された祖先に `collapsed_by_version_id=<完成version id>` が保存されること
-- `progress=100` の祖先versionはDL不可化されないこと
-- 他分岐のversionはDL不可化されないこと
-- D1行やR2ファイルが物理削除されないこと
+- 追記モードで `.bms` / `.bme` / `.bml` を選択したとき、`#TITLE` / `#ARTIST` を読める場合は追記元と簡易比較されること
+- 追記元と一致しない可能性がある場合、`選択ファイルの曲名/アーティストが追記先と一致しない可能性があります。` が表示されること
+- 最終判定はAPI側で行われ、画面警告だけでは投稿を確定拒否しないこと
+- `.zip` 選択時はフロント側メタデータ比較で破綻しないこと
 
 既存機能回帰:
 
-- `GET /api/health` が `status=ok` を返すこと
-- `GET /api/charts` が既存通り `song -> chart -> versions` を返すこと
-- `POST /api/charts` 初回投稿が既存通り動くこと
-- 初回投稿時の `progressMap` 保存が壊れていないこと
-- Worker側BMS解析が壊れていないこと
-- `GET /api/files/:fileId` が既存通りDL可否を判定すること
-- GitHub Pages の初回投稿フォームが壊れていないこと
-- 一覧の `progressMap` サムネイルが壊れていないこと
+- 初回投稿フォームが従来通り表示されること
+- 初回投稿が従来通り `POST /api/charts` へ送信されること
+- 初回投稿では `title`, `artist`, `chartName`, `isRejected` が従来通り送信されること
+- 譜面ファイル選択時のBMSメタデータ自動読取が壊れていないこと
+- 初回投稿の進捗マップ編集が壊れていないこと
 - 想定難易度UIが壊れていないこと
-- 没譜面ON時の `progress=100` 強制が壊れていないこと
+- 没譜面ON時の `progress=100` 固定が壊れていないこと
+- 管理パスワード保存が壊れていないこと
+- 一覧のDLリンクが壊れていないこと
+- 一覧の `progressMap` サムネイルが壊れていないこと
+- APIエラー表示が壊れていないこと
+- スマホ幅でもフォームと一覧が横スクロールせず表示されること
 
 ## 今回確認しないもの
 
-- 追記投稿UI
-- 進捗画像PNGのR2保存
-- ZIP内部のBMS解析
 - 取り下げAPI
 - 削除申請API
 - 難易度表API
@@ -144,26 +98,25 @@ progress=100到達時のDL制御:
 - Cron Trigger
 - R2自動削除処理
 - Turnstile
+- 進捗画像PNGのR2保存
 - 完成到達後の一覧折り畳みUI
 - お気に入り★
 - 本格的な譜面ミニビュー
 
 ## テスト用BMSファイル
 
-PowerShellで基本確認用ファイルを作成する。
-
 初回投稿用:
 
 ```powershell
 @"
 #PLAYER 1
-#TITLE Branch Test
+#TITLE Branch UI Test
 #ARTIST Test Artist
 #BPM 120
 #00111:0102
 #00211:0000
 #00311:01000002
-"@ | Set-Content -Encoding UTF8 .\branch-parent.bms
+"@ | Set-Content -Encoding UTF8 .\branch-ui-parent.bms
 ```
 
 追記投稿用:
@@ -171,13 +124,13 @@ PowerShellで基本確認用ファイルを作成する。
 ```powershell
 @"
 #PLAYER 1
-#TITLE Branch Test
+#TITLE Branch UI Test
 #ARTIST Test Artist
 #BPM 120
 #00111:0102
 #00211:0101
 #00311:01000002
-"@ | Set-Content -Encoding UTF8 .\branch-append.bms
+"@ | Set-Content -Encoding UTF8 .\branch-ui-append.bms
 ```
 
 タイトル不一致確認用:
@@ -189,362 +142,68 @@ PowerShellで基本確認用ファイルを作成する。
 #ARTIST Other Artist
 #BPM 120
 #00111:0102
-"@ | Set-Content -Encoding UTF8 .\branch-mismatch.bms
+"@ | Set-Content -Encoding UTF8 .\branch-ui-mismatch.bms
 ```
 
-## ローカルWorker確認
+## GitHub Pagesでの確認
 
-ローカルWorkerを起動する。
+1. `https://monsta-bms.github.io/bms-wip-charts/` を開く。
+2. 初回投稿フォームから `branch-ui-parent.bms` を選択する。
+3. 曲名/アーティストが自動入力されることを確認する。
+4. 想定難易度、仮差分名、差分作者、管理パスワードを入力する。
+5. 進捗マップで一部だけ塗る。
+6. 初回投稿する。
+7. 投稿成功後、一覧に新しいversionが表示されることを確認する。
+8. 一覧の `追記投稿` ボタンを押す。
+9. フォームが追記モードになり、親情報が表示されることを確認する。
+10. `branch-ui-append.bms` を選択する。
+11. 今回追記分として未塗りブロックを1つ以上塗る。
+12. 差分作者と管理パスワードを入力する。
+13. 追記投稿する。
+14. 成功後に一覧が再取得され、新versionが増えていることを確認する。
+15. 新versionのサムネイルが追加後のprogressを反映していることを確認する。
+
+## エラー表示確認
+
+追記範囲なし:
+
+1. 一覧から追記モードを開く。
+2. ファイル、差分作者、管理パスワードを入力する。
+3. 進捗マップを何も塗らずに送信する。
+4. `追記範囲が追加されていません。` が表示されることを確認する。
+5. Networkタブで `POST /api/charts/:chartId/versions` が送信されていないことを確認する。
+
+曲名/アーティスト警告:
+
+1. 追記モードで `branch-ui-mismatch.bms` を選択する。
+2. `選択ファイルの曲名/アーティストが追記先と一致しない可能性があります。` が表示されることを確認する。
+
+APIエラー:
+
+1. 誤った管理パスワード、またはAPI側で拒否されるファイルを使って送信する。
+2. 画面上部に `code`, `message`, `detail` が表示されることを確認する。
+3. フォーム入力が消えないことを確認する。
+
+## ローカル確認
+
+ローカルで確認する場合は、静的ファイルサーバーとWorkerを別々に起動する。
+
+Worker:
 
 ```bash
 cd worker
 npx wrangler dev
 ```
 
-前提として、ローカルD1にmigrationが適用済みで、`HASH_SECRET` が設定されていることを確認する。
+静的ファイル:
 
 ```bash
-npx wrangler d1 migrations apply wip-bms-charts-db --local
-npx wrangler secret put HASH_SECRET
+cd docs
+python -m http.server 8000
 ```
 
-## 初回投稿で親versionを作る
-
-```powershell
-$initialMap = '{"schemaVersion":2,"blockMode":"standardized_measure","firstMeasure":1,"lastMeasure":3,"targetBlockCount":3,"blocks":[{"index":0,"startMeasure":1,"endMeasure":1,"startTimeSec":0,"endTimeSec":1,"playNotes":2},{"index":1,"startMeasure":2,"endMeasure":2,"startTimeSec":1,"endTimeSec":2,"playNotes":0},{"index":2,"startMeasure":3,"endMeasure":3,"startTimeSec":2,"endTimeSec":3,"playNotes":2}],"layers":[{"versionId":"pending","color":"#1f7a5c","kind":"initial","ranges":[[0,0]]}],"progress":33}'
-
-curl.exe -X POST "http://localhost:8787/api/charts" `
-  -F "file=@.\branch-parent.bms;type=text/plain" `
-  -F "title=Branch Test" `
-  -F "subtitle=" `
-  -F "artist=Test Artist" `
-  -F "subartist=" `
-  -F "chartName=BRANCH-01A Parent" `
-  -F "difficulty=★12" `
-  -F "level=12" `
-  -F "author=parent-author" `
-  -F "progress=0" `
-  -F "progressMap=$initialMap" `
-  -F "comment=parent" `
-  -F "isRejected=false" `
-  -F "password=test-password"
-```
-
-期待:
-
-- HTTP 201
-- `chartId`, `versionId`, `fileId` が返る
-- `progress=33`
-- `progressMap.layers[0].versionId` が実version IDになる
-
-返った `chartId` と `versionId` を以降の `$chartId`, `$parentVersionId` に使う。
-
-## 追記投稿スクリプト確認
-
-長いcurlを手打ちせず、Node.js版の `scripts/test-append-version.mjs` を使って追記投稿を確認する。
-Node.js 20以上が必要。外部npm installは不要。
-
-ローカル確認例:
-
-```powershell
-node .\scripts\test-append-version.mjs `
-  --apiBaseUrl "http://localhost:8787" `
-  --chartId $chartId `
-  --parentVersionId $parentVersionId `
-  --filePath ".\branch-append.bms" `
-  --author "append-author" `
-  --password "test-password"
-```
-
-cmd.exe形式の本番確認例:
-
-```cmd
-node .\scripts\test-append-version.mjs ^
-  --apiBaseUrl "https://bms-wip-charts-worker.monsta3228gsl.workers.dev" ^
-  --chartId "chart_xxx" ^
-  --parentVersionId "version_xxx" ^
-  --filePath ".\branch-append.bms" ^
-  --author "append-author" ^
-  --password "test-password"
-```
-
-PowerShell形式の本番確認例:
-
-```powershell
-node .\scripts\test-append-version.mjs `
-  --apiBaseUrl "https://bms-wip-charts-worker.monsta3228gsl.workers.dev" `
-  --chartId "chart_xxx" `
-  --parentVersionId "version_xxx" `
-  --filePath ".\branch-append.bms" `
-  --author "append-author" `
-  --password "test-password"
-```
-
-任意コメント付き:
-
-```powershell
-node .\scripts\test-append-version.mjs `
-  --apiBaseUrl "http://localhost:8787" `
-  --chartId $chartId `
-  --parentVersionId $parentVersionId `
-  --filePath ".\branch-append.bms" `
-  --author "append-author" `
-  --password "test-password" `
-  --comment "append test"
-```
-
-期待:
-
-- `API_BASE_URL: http://localhost:8787` が表示される
-- 親versionの `progressMap` から未塗りブロックが1つ追加される
-- `progressMapJson preview:` にJSON先頭200文字が表示される
-- previewが `{` で始まり、`"schemaVersion"` のようにキーがダブルクォート付きである
-- `progressMap layers array: true; ... first range array: true; first range length: 2` が表示される
-- `progressMap.layers` が `[{...}]` として送信される
-- `progressMap.layers[].ranges` が `[[0,0]]` のような配列の配列として送信される
-- スクリプトがNode標準の `fetch` / `FormData` / `Blob` でmultipart送信する
-- HTTP 201で成功する
-- 成功レスポンスJSON全文が表示される
-- `versionId`, `branchPath`, `progress` が返っていれば表示される
-- 返っていない項目は `<not returned>` と表示され、スクリプト自体は成功終了する
-- `mode=stub` が返った場合はスクリプトが失敗終了し、デプロイまたはルーティングが有効でないことが分かる
-- 失敗時にHTTP status, `code`, `message`, `detail` が表示される
-- 1回目の `branchPath` が `root/a` 相当になるかは、レスポンスまたは `GET /api/charts` で確認する
-- 追記成功後、`GET /api/charts` で対象chartの `versions` が増えている
-
-PowerShell版確認スクリプトについて:
-
-```powershell
-.\scripts\test-append-version.ps1 `
-  -ChartId $chartId `
-  -ParentVersionId $parentVersionId `
-  -FilePath .\branch-append.bms `
-  -Author append-author `
-  -Password test-password
-```
-
-- PowerShell版は残すが、通常確認ではNode.js版を推奨する
-- PowerShell版で `progressMap.layers must be an array` などの多重配列JSONエラーが出る場合は、Node.js版で確認する
-
-同じ親versionへ2回目の追記確認:
-
-```powershell
-node .\scripts\test-append-version.mjs `
-  --apiBaseUrl "http://localhost:8787" `
-  --chartId $chartId `
-  --parentVersionId $parentVersionId `
-  --filePath ".\branch-append-2.bms" `
-  --author "append-author-2" `
-  --password "test-password"
-```
-
-期待:
-
-- 別内容のファイルを使った場合、2回目の `branchPath` が `root/b` 相当になる
-- 同じファイル内容を使った場合は、既存仕様通り `DUPLICATE_FILE` になる
-
-GET確認:
-
-```powershell
-curl.exe "http://localhost:8787/api/charts?page=1&pageSize=200"
-```
-
-期待:
-
-- 追記投稿後に対象chartの `versions` が増えている
-- 新versionの `parentVersionId` が指定した親version IDになっている
-- 新versionの `branchPath` が `root/a` や `root/b` になっている
-- 新versionの `progressMap` が返る
-
-## 追記投稿の正常系curl例
-
-スクリプトを使わずに直接確認したい場合の例。
-PowerShellの多重配列JSONは崩れやすいため、通常はNode.js版スクリプトを使う。
-
-```powershell
-$chartId = "chart_xxx"
-$parentVersionId = "version_parent"
-$appendMapObject = '{"schemaVersion":2,"blockMode":"standardized_measure","firstMeasure":1,"lastMeasure":3,"targetBlockCount":3,"blocks":[{"index":0,"startMeasure":1,"endMeasure":1,"startTimeSec":0,"endTimeSec":1,"playNotes":2},{"index":1,"startMeasure":2,"endMeasure":2,"startTimeSec":1,"endTimeSec":2,"playNotes":2},{"index":2,"startMeasure":3,"endMeasure":3,"startTimeSec":2,"endTimeSec":3,"playNotes":2}],"layers":[{"versionId":"version_parent","color":"#1f7a5c","kind":"initial","ranges":[[0,0]]},{"versionId":"pending","color":"#2563eb","kind":"followup","ranges":[[1,1]]}],"progress":67}' | ConvertFrom-Json
-$appendMap = $appendMapObject | ConvertTo-Json -Depth 50 -Compress
-$appendMap | ConvertFrom-Json | Out-Null
-$tempProgressMap = Join-Path $env:TEMP "append-progress-map.json"
-[System.IO.File]::WriteAllText($tempProgressMap, $appendMap, [System.Text.UTF8Encoding]::new($false))
-
-curl.exe -sS -w "`nHTTP_STATUS:%{http_code}" -X POST "http://localhost:8787/api/charts/$chartId/versions" `
-  -F "file=@.\branch-append.bms;type=application/octet-stream" `
-  -F "parentVersionId=$parentVersionId" `
-  -F "difficulty=★12" `
-  -F "level=12" `
-  -F "author=append-author" `
-  -F "progressMap=<$tempProgressMap;type=application/json" `
-  -F "comment=append test" `
-  -F "password=test-password"
-```
-
-期待:
-
-- HTTP 201
-- `displayVersion` が `ver2.0-a` 相当になる
-- `branchPath` が `root/a` 相当になる
-- `progress=67`
-- `progressMap.layers` が2件ある
-- 最後のlayerの `versionId` が新しい `versionId` になっている
-- `file.downloadUrl` が `/api/files/<fileId>` になる
-- `analysis.playNotes` が返る
-
-## 2本目分岐の確認
-
-同じ `$parentVersionId` に、別内容のBMSファイルを使ってもう一度追記する。
-
-期待:
-
-- `branchPath` が `root/b` 相当になる
-- 1本目の `root/a` が壊れない
-- `GET /api/charts` で両方のbranchが返る
-
-## 入れ子分岐の確認
-
-1本目追記の `versionId` を `$nestedParentVersionId` として、さらに追記する。
-
-期待:
-
-- `version_number` が親+1になる
-- `branchPath` が `root/a/a` 相当になる
-- `displayVersion` が分岐suffix付きになる
-
-## progress=100完成追記の確認
-
-```powershell
-$completeMap = '{"schemaVersion":2,"blockMode":"standardized_measure","firstMeasure":1,"lastMeasure":3,"targetBlockCount":3,"blocks":[{"index":0,"startMeasure":1,"endMeasure":1,"startTimeSec":0,"endTimeSec":1,"playNotes":2},{"index":1,"startMeasure":2,"endMeasure":2,"startTimeSec":1,"endTimeSec":2,"playNotes":2},{"index":2,"startMeasure":3,"endMeasure":3,"startTimeSec":2,"endTimeSec":3,"playNotes":2}],"layers":[{"versionId":"version_parent","color":"#1f7a5c","kind":"initial","ranges":[[0,0]]},{"versionId":"pending","color":"#2563eb","kind":"completion_fill","ranges":[[1,2]]}],"progress":100}'
-
-curl.exe -X POST "http://localhost:8787/api/charts/$chartId/versions" `
-  -F "file=@.\branch-append.bms;type=text/plain" `
-  -F "parentVersionId=$parentVersionId" `
-  -F "author=complete-author" `
-  -F "progressMap=$completeMap" `
-  -F "comment=complete append" `
-  -F "password=test-password"
-```
-
-期待:
-
-- HTTP 201
-- 新versionの `progress=100`
-- 新version自体は `download_blocked=0`
-- 同一分岐上の `progress BETWEEN 1 AND 99` の祖先だけが `download_blocked=1` になる
-- 祖先の `download_block_reason='superseded_by_completed_descendant'`
-- 祖先の `collapsed_by_completion=1`
-- 他分岐のversionは変更されない
-- `GET /api/files/<完成versionのfileId>` はDL可能
-- `GET /api/files/<DL不可化された祖先fileId>` は `FILE_DOWNLOAD_BLOCKED` を返す
-
-## エラー系確認
-
-progressMapなし:
-
-```powershell
-curl.exe -X POST "http://localhost:8787/api/charts/$chartId/versions" `
-  -F "file=@.\branch-append.bms;type=text/plain" `
-  -F "parentVersionId=$parentVersionId" `
-  -F "author=append-author" `
-  -F "password=test-password"
-```
-
-期待:
-
-- HTTP 400
-- `code=INVALID_FORM` または `INVALID_PROGRESS_MAP`
-- `detail` に不足項目またはprogressMap必須の理由が入る
-
-`isRejected=true`:
-
-```powershell
-curl.exe -X POST "http://localhost:8787/api/charts/$chartId/versions" `
-  -F "file=@.\branch-append.bms;type=text/plain" `
-  -F "parentVersionId=$parentVersionId" `
-  -F "author=append-author" `
-  -F "progressMap=$appendMap" `
-  -F "isRejected=true" `
-  -F "password=test-password"
-```
-
-期待:
-
-- HTTP 400
-- `code=INVALID_REJECTED_FLAG_FOR_FOLLOWUP`
-
-タイトル/アーティスト不一致:
-
-```powershell
-curl.exe -X POST "http://localhost:8787/api/charts/$chartId/versions" `
-  -F "file=@.\branch-mismatch.bms;type=text/plain" `
-  -F "parentVersionId=$parentVersionId" `
-  -F "author=append-author" `
-  -F "progressMap=$appendMap" `
-  -F "password=test-password"
-```
-
-期待:
-
-- HTTP 409
-- `code=TITLE_ARTIST_MISMATCH`
-
-親と同じ塗り範囲:
-
-```powershell
-$sameMap = '{"schemaVersion":2,"blockMode":"standardized_measure","firstMeasure":1,"lastMeasure":3,"targetBlockCount":3,"blocks":[{"index":0,"startMeasure":1,"endMeasure":1,"startTimeSec":0,"endTimeSec":1,"playNotes":2},{"index":1,"startMeasure":2,"endMeasure":2,"startTimeSec":1,"endTimeSec":2,"playNotes":0},{"index":2,"startMeasure":3,"endMeasure":3,"startTimeSec":2,"endTimeSec":3,"playNotes":2}],"layers":[{"versionId":"version_parent","color":"#1f7a5c","kind":"initial","ranges":[[0,0]]}],"progress":33}'
-
-curl.exe -X POST "http://localhost:8787/api/charts/$chartId/versions" `
-  -F "file=@.\branch-append.bms;type=text/plain" `
-  -F "parentVersionId=$parentVersionId" `
-  -F "author=append-author" `
-  -F "progressMap=$sameMap" `
-  -F "password=test-password"
-```
-
-期待:
-
-- HTTP 409
-- `code=PROGRESS_MAP_UNCHANGED`
-
-## GitHub Pagesでの確認
-
-BRANCH-01Aでは追記投稿UIはまだ実装しない。
-
-GitHub Pagesでは以下だけ確認する。
-
-1. `https://monsta-bms.github.io/bms-wip-charts/` を開く。
-2. 初回投稿フォームが従来通り表示される。
-3. 初回投稿が従来通り成功する。
-4. 一覧取得が従来通り成功する。
-5. 追記投稿ボタンが表示されていても、まだ追記UIとしては動作対象外である。
-6. 追記API実装により、初回投稿フォームや一覧サムネイルが壊れていない。
-
-## 本番Worker確認
-
-本番へdeploy後に、Node.js版スクリプトを本番URLへ向けて実行する。
-
-```powershell
-node .\scripts\test-append-version.mjs `
-  --apiBaseUrl "https://bms-wip-charts-worker.monsta3228gsl.workers.dev" `
-  --chartId $chartId `
-  --parentVersionId $parentVersionId `
-  --filePath ".\branch-append.bms" `
-  --author "append-author" `
-  --comment "production append test" `
-  --password "your-password"
-```
-
-期待:
-
-- CORS設定が既存のGitHub Pages Originを壊していない
-- HTTP 201
-- 成功レスポンスJSON全文が表示される
-- `versionId`, `branchPath`, `progress` が無いレスポンスでもスクリプト自体は成功終了する
-- `mode=stub` が返った場合はスクリプトが失敗し、Worker本体のdeployまたはroute実装が有効でないことを判断できる
-- `GET /api/charts` で追記versionが表示される
-- `GET /api/files/:fileId` で新versionのファイルを取得できる
+ローカル静的ページから本番Workerへ接続する場合はCORS Originが異なるため、必要に応じてWorkerの `ALLOWED_ORIGINS` にローカルOriginを追加する。
 
 ## 注意
 
-同じファイルを再投稿すると `DUPLICATE_FILE` になる。再テスト時はファイル内容を少し変更するか、ローカルD1/R2を初期化する。
+同じファイルを再投稿すると `DUPLICATE_FILE` になる。再テスト時はファイル内容を少し変更するか、テスト用D1/R2を初期化する。
