@@ -30,7 +30,7 @@ BRANCH-01C 分岐ツリー一覧表示:
 - 薄いツリー線またはコネクタで親子関係が分かること
 - 同じ親からの分岐が並んで見えること
 - 表示順が `root`, `root/a`, `root/a/a`, `root/b` のような自然なツリー順になること
-- 各version行に `displayVersion`, `branchPath`, `author`, `progress`, `difficulty`, progressMapサムネイル, DL, 追記投稿が表示されること
+- 各version行に `displayVersion`, `author`, `progress`, `difficulty`, progressMapサムネイル, DL, 追記投稿が表示されること
 - progressMapサムネイルがツリー表示でも崩れないこと
 - `progress=100` または `completed=true` のversionが完成バッジや薄い緑背景で分かりやすく表示されること
 - `progress=100` のversion自体では、`downloadBlocked` でない限りDLが有効なままであること
@@ -249,7 +249,7 @@ python -m http.server 8000
 - `root/a` がrootの子として表示されること
 - `root/b` がrootの別分岐として表示されること
 - `root/a/a` がroot/aの子として表示されること
-- 子を持たないversionに `末端` バッジが出ること
+- 子を持たないversionに `末端` バッジが通常表示されないこと
 - `progress=100` または `completed=true` のversionに `完成` バッジが出ること
 - `isRejected=true` のversionに没譜面バッジまたは追記不可表示が出ること
 - DLがテキストリンクではなくボタン風に表示されること
@@ -269,7 +269,7 @@ python -m http.server 8000
 - `from verX.X` または `起点` がver列内に小さく表示されること
 - `branchPath` は通常表示されず、hover/titleなどの補助情報に限定されること
 - `未描` 表記が使われていないこと
-- `progress<100` のversionは `未完成` または作業中として分かること
+- `progress<100` のversionでは `未完成` バッジを通常表示せず、進捗%で状態が分かること
 - `progress=100` のversionは `完成` または `100%` として分かること
 - 作者名が長くても1行省略され、列ずれしないこと
 - コメントが長くても最大2行程度で省略され、列ずれしないこと
@@ -279,6 +279,23 @@ python -m http.server 8000
 - `downloadBlocked=true` でDLボタンがdisabled表示になること
 - `isRejected=true` で追記投稿できないこと
 - スマホ幅で大きく崩れず、横スクロールが出ないこと
+
+## BRANCH-01C-UI-2 追加確認
+
+- `未完成` バッジが通常表示されないこと
+- `末端` バッジが通常表示されないこと
+- `progress=100` または `completed=true` では `完成` バッジが表示されること
+- `isRejected=true` では `没譜面` バッジが表示されること
+- `downloadBlocked=true` では `DL不可` バッジが表示されること
+- `deleteRequested=true` では `削除申請中` バッジが表示されること
+- コメント欄に `branchPath` が表示されないこと
+- コメント欄に `from verX.X` や `追記元 ver...` が表示されないこと
+- `from verX.X` または `起点` はver列内に表示されること
+- `branchPath` は通常非表示、またはtooltip/titleで確認できること
+- ver列内のツリー線で親子関係が分かること
+- 深い階層でも難易度・作者・進捗・サムネイル・コメント・操作列がずれないこと
+- DL/追記投稿ボタンが従来通り動くこと
+- progressMapサムネイルが崩れないこと
 
 ## 注意
 
