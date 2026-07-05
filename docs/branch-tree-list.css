@@ -1,7 +1,7 @@
 .version-list {
-  --group-gutter-width: 30px;
+  --group-gutter-width: 44px;
   --version-tree-indent: 16px;
-  --version-grid-columns: var(--group-gutter-width) minmax(210px, 1.28fr) minmax(70px, 0.46fr) minmax(104px, 0.7fr) minmax(66px, 0.42fr) minmax(176px, 0.95fr) minmax(168px, 0.92fr) minmax(136px, 136px);
+  --version-grid-columns: var(--group-gutter-width) minmax(170px, 1.35fr) 74px minmax(112px, 0.8fr) 78px minmax(160px, 1.05fr) minmax(160px, 1.2fr) 132px;
 }
 
 .version-list-header,
@@ -18,12 +18,56 @@
   font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0;
-  padding: 8px 12px;
+  padding: 8px 18px;
 }
 
 .version-list-header > *,
 .version-row.version-tree-row > * {
   min-width: 0;
+}
+
+.version-list-header > :nth-child(1),
+.group-gutter-cell {
+  grid-column: 1;
+}
+
+.version-list-header > :nth-child(2),
+.version-tree-cell {
+  grid-column: 2;
+}
+
+.version-list-header > :nth-child(3),
+.difficulty-cell {
+  grid-column: 3;
+}
+
+.version-list-header > :nth-child(4),
+.author-cell {
+  grid-column: 4;
+}
+
+.version-list-header > :nth-child(5),
+.progress-cell {
+  grid-column: 5;
+}
+
+.version-list-header > :nth-child(6),
+.thumbnail-cell {
+  grid-column: 6;
+}
+
+.version-list-header > :nth-child(7),
+.comment-cell {
+  grid-column: 7;
+}
+
+.version-list-header > :nth-child(8),
+.actions-cell {
+  grid-column: 8;
+}
+
+.version-list-header > :nth-child(8) {
+  justify-self: end;
 }
 
 .version-row.version-tree-row {
@@ -369,7 +413,9 @@
   flex-wrap: nowrap;
   gap: 6px;
   justify-content: flex-end;
+  justify-self: stretch;
   min-width: 0;
+  width: 100%;
 }
 
 .version-tree-row .append-disabled-note {
@@ -420,16 +466,23 @@
 
 @media (max-width: 960px) {
   .version-list {
-    --version-grid-columns: var(--group-gutter-width) minmax(190px, 1.2fr) minmax(64px, 0.45fr) minmax(92px, 0.62fr) minmax(62px, 0.4fr) minmax(148px, 0.88fr) minmax(130px, 0.82fr) minmax(128px, 128px);
+    --version-grid-columns: var(--group-gutter-width) minmax(142px, 1.2fr) 58px minmax(82px, 0.72fr) 62px minmax(116px, 0.9fr) minmax(116px, 0.95fr) 112px;
+    --version-tree-indent: 13px;
   }
 
   .version-list-header,
   .version-row.version-tree-row {
     column-gap: 8px;
   }
+
+  .version-actions .secondary,
+  .download-button {
+    font-size: 0.74rem;
+    padding: 5px 7px;
+  }
 }
 
-@media (max-width: 840px) {
+@media (max-width: 760px) {
   .version-list {
     --version-tree-indent: 14px;
   }
@@ -481,7 +534,7 @@
 
 @media (max-width: 640px) {
   .version-list {
-    --group-gutter-width: 26px;
+    --group-gutter-width: 30px;
     --version-tree-indent: 12px;
   }
 
