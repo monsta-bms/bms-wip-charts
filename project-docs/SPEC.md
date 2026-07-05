@@ -17,6 +17,7 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。�
 - GitHub Pages の静的1ページUI
 - GitHub Pages から本番Worker APIへの一覧取得、初回投稿、追記投稿UI
 - 一覧側のversion分岐ツリー表示
+- 一覧側の分岐ツリー可読性改善
 - `GET /api/charts` のD1実データ読み取り
 - `POST /api/charts` の初回投稿
 - `POST /api/charts/:chartId/versions` の追記投稿
@@ -366,29 +367,33 @@ layerの `kind` 候補:
 各version行には以下を表示する。
 
 - `displayVersion`
-- `branchPath` の短い表示
+- 親version表示。rootは `起点`、子versionは `from verX.X` の形式にする。
+- 末端バッジ
+- 完成バッジ
+- 没譜面/追記不可表示
 - 想定難易度
 - 差分作者
 - 進捗度
 - `progressMap` がある場合の簡易進捗サムネイル
 - コメントの短い表示
-- 没譜面バッジ
-- DLリンクまたはDL不可表示
+- DLボタンまたはDL不可ボタン
 - 追記投稿ボタン
+
+通常表示では `root/a` などの内部 `branchPath` を主情報として目立たせない。必要な場合はhover/titleなどの補助情報で確認できるようにする。
 
 一覧の想定難易度は `difficulty` のみを表示する。`level` は併記しない。
 
 ### 分岐ツリー表示
 
-BRANCH-01Cでは、同じchart内のversionsを `parentVersionId` と `branchPath` に基づいてツリー表示する。
+同じchart内のversionsを `parentVersionId` と `branchPath` に基づいてツリー表示する。
 
 表示例:
 
 ```text
-ver1.0           root        20%
-├ ver2.0-a       root/a      21%
-└ ver2.0-b       root/b      35%
-   └ ver3.0-b-a  root/b/a    100%
+ver1.0            起点        20%  末端
+├ ver2.0-a        from ver1.0 21%  末端
+└ ver2.0-b        from ver1.0 35%
+   └ ver3.0-b-a   from ver2.0-b 100% 完成 末端
 ```
 
 表示仕様:
@@ -398,8 +403,12 @@ ver1.0           root        20%
 - `depth=1` は `root/a`, `root/b` などとする。
 - `depth=2` は `root/a/a` などとする。
 - depthに応じてversion名の左paddingを増やす。
-- 可能な範囲で薄いグレーのツリー線と `├` / `└` を表示する。
+- 薄いグレーのツリー線と `├` / `└` を表示する。
+- 通常表示では内部 `branchPath` ではなく、`from verX.X` を優先して表示する。
+- `branchPath` はhover/titleなどの補助情報として保持する。
 - スマホ幅ではツリー線やインデントを簡略化してよいが、親子関係は最低限分かるようにする。
+
+PC表示では列見出しに近い行を表示し、各version行で `想定難易度`, `差分作者`, `進捗度`, `コメント` などのラベルを繰り返しすぎない。スマホ幅ではラベル付き表示へ戻してよい。
 
 ソート方針:
 
@@ -408,6 +417,20 @@ ver1.0           root        20%
 3. `createdAt`
 
 同じ親からの分岐suffixは `a`, `b`, ... `z`, `aa` の自然順になるように扱う。
+
+### 末端version表示
+
+子versionを持たないversionには `末端` バッジを表示する。
+
+表示条件:
+
+- そのversionを親に持つ子versionが存在しない。
+- 没譜面versionでは `追記不可` 表示を優先してよい。
+
+意図:
+
+- 利用者が追記候補や最新枝を判断しやすくする。
+- 内部 `branchPath` を読まなくても、どの枝が終端か分かるようにする。
 
 ### completed / progress=100 表示
 
@@ -424,7 +447,9 @@ ver1.0           root        20%
 
 ### downloadBlocked 表示
 
-`downloadBlocked=true` のversionではDLリンクを無効化し、`DL不可` と表示する。
+`downloadBlocked=true` のversionではDLボタンを無効化し、`DL不可` と表示する。
+
+DL可能なversionでは `DL` をテキストリンクではなく小さなボタン風に表示し、`追記投稿` ボタンと並べても違和感がない見た目にする。
 
 `downloadBlockReason` がある場合は、title属性などの控えめな補足として保持する。
 
@@ -438,9 +463,9 @@ ver1.0           root        20%
 
 ### collapsedByCompletion 表示
 
-本格的な折り畳み/展開UIは後続のTREE-01で扱う。
+本格的な折り畳み/展開UIは後続のTREE-01Bで扱う。
 
-BRANCH-01Cでは、`collapsedByCompletion=true` が返っているversionを完全には消さず、薄い表示にする。
+TREE-01Aでは、`collapsedByCompletion=true` が返っているversionを完全には消さず、薄い表示にし、必要に応じて `中間` などの弱い表示を付ける。
 
 ### 一覧側progressMapサムネイル
 
