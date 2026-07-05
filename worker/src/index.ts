@@ -3,6 +3,12 @@ import { handleChartVersionsRoute } from "./routes/chartVersions";
 import { handleChartsRoute } from "./routes/charts";
 import { handleFileRoute } from "./routes/files";
 import {
+  addProgressImagesToChartsResponse,
+  attachProgressImageAfterPostSuccess,
+  handleProgressImageRoute,
+  parseOptionalProgressImage
+} from "./routes/progressImages";
+import {
   apiError,
   Env,
   errorDetail,
@@ -21,8 +27,23 @@ function handleHealth(request: Request, env: Env): Response {
   return ok(request, env, {
     status: "ok",
     service: "bms-wip-charts-worker",
-    phase: "branch-01a"
+    phase: "prog-04c-b"
   });
+}
+
+async function handlePostWithOptionalProgressImage(
+  request: Request,
+  env: Env,
+  handler: () => Promise<Response> | Response
+): Promise<Response> {
+  const parsedImage = await parseOptionalProgressImage(request.clone());
+  if (!parsedImage.ok) {
+    const failure = parsedImage.failure;
+    return apiError(request, env, failure.status, failure.code, failure.message, failure.detail);
+  }
+
+  const response = await handler();
+  return attachProgressImageAfterPostSuccess(request, env, response, parsedImage.value);
 }
 
 async function routeRequest(request: Request, env: Env): Promise<Response> {
@@ -50,11 +71,38 @@ async function routeRequest(request: Request, env: Env): Promise<Response> {
 
   const versionMatch = path.match(/^\/api\/charts\/([^/]+)\/versions$/);
   if (versionMatch) {
-    return handleChartVersionsRoute(request, env, decodeURIComponent(versionMatch[1]));
+    const chartId = decodeURIComponent(versionMatch[1]);
+    if (request.method === "POST") {
+      return handlePostWithOptionalProgressImage(
+        request,
+        env,
+        () => handleChartVersionsRoute(request, env, chartId)
+      );
+    }
+
+    return handleChartVersionsRoute(request, env, chartId);
   }
 
   if (path === "/api/charts") {
-    return handleChartsRoute(request, env);
+    if (request.method === "POST") {
+      return handlePostWithOptionalProgressImage(
+        request,
+        env,
+        () => handleChartsRoute(request, env)
+      );
+    }
+
+    const response = await handleChartsRoute(request, env);
+    if (request.method === "GET") {
+      return addProgressImagesToChartsResponse(request, env, response);
+    }
+
+    return response;
+  }
+
+  const progressImageMatch = path.match(/^\/api\/progress-images\/([^/]+)$/);
+  if (progressImageMatch) {
+    return handleProgressImageRoute(request, env, decodeURIComponent(progressImageMatch[1]));
   }
 
   const fileMatch = path.match(/^\/api\/files\/([^/]+)$/);
