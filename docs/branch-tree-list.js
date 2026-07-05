@@ -1,5 +1,7 @@
 (() => {
   const listElement = document.querySelector("#chartList");
+  const completedCollapseReason = "superseded_by_completed_descendant";
+  const expandedIntermediateGroups = new Set();
 
   if (!listElement || typeof renderCharts !== "function") {
     return;
@@ -207,6 +209,21 @@
     return nodes;
   }
 
+  function buildChildrenByNodeKey(treeNodes) {
+    const childrenByKey = new Map();
+    for (const node of treeNodes) {
+      if (!node.parent) {
+        continue;
+      }
+
+      const parentKey = getNodeKey(node.parent);
+      const children = childrenByKey.get(parentKey) || [];
+      children.push(node);
+      childrenByKey.set(parentKey, children);
+    }
+    return childrenByKey;
+  }
+
   function isCompleted(version, progress) {
     return version?.completed === true || Number(progress) === 100;
   }
@@ -217,6 +234,14 @@
 
   function isCollapsedByCompletion(version) {
     return version?.collapsedByCompletion === true || version?.collapsed_by_completion === true;
+  }
+
+  function getCollapsedByVersionId(version) {
+    return version?.collapsedByVersionId || version?.collapsed_by_version_id || "";
+  }
+
+  function getCollapsedReason(version) {
+    return version?.collapsedReason || version?.collapsed_reason || "";
   }
 
   function isDownloadBlocked(version) {
@@ -235,6 +260,68 @@
     return version?.downloadBlockReason || version?.download_block_reason || "download_blocked";
   }
 
+  function getProgress(version) {
+    const progress = Number(version?.progress);
+    return Number.isFinite(progress) ? progress : 0;
+  }
+
+  function isSupersededIntermediateNode(node) {
+    const version = node.version;
+    return isCollapsedByCompletion(version) &&
+      getCollapsedReason(version) === completedCollapseReason &&
+      getDownloadBlockReason(version) === completedCollapseReason &&
+      getProgress(version) < 100 &&
+      Boolean(getCollapsedByVersionId(version)) &&
+      !isHiddenVersion(version);
+  }
+
+  function hasVisibleNonGroupChild(node, groupId, childrenByNodeKey) {
+    const children = childrenByNodeKey.get(getNodeKey(node.version)) || [];
+    return children.some((child) => {
+      const childVersion = child.version;
+      if (getVersionId(childVersion) === groupId) {
+        return false;
+      }
+
+      if (isSupersededIntermediateNode(child) && getCollapsedByVersionId(childVersion) === groupId) {
+        return false;
+      }
+
+      return !isHiddenVersion(childVersion);
+    });
+  }
+
+  function shouldCollapseIntermediateNode(node, childrenByNodeKey, completionIds) {
+    if (node.depth === 0 || !isSupersededIntermediateNode(node)) {
+      return false;
+    }
+
+    const groupId = getCollapsedByVersionId(node.version);
+    if (!completionIds.has(groupId)) {
+      return false;
+    }
+
+    return !hasVisibleNonGroupChild(node, groupId, childrenByNodeKey);
+  }
+
+  function buildIntermediateGroups(treeNodes, childrenByNodeKey) {
+    const completionIds = new Set(treeNodes.map((node) => getVersionId(node.version)).filter(Boolean));
+    const groups = new Map();
+
+    for (const node of treeNodes) {
+      if (!shouldCollapseIntermediateNode(node, childrenByNodeKey, completionIds)) {
+        continue;
+      }
+
+      const groupId = getCollapsedByVersionId(node.version);
+      const nodes = groups.get(groupId) || [];
+      nodes.push(node);
+      groups.set(groupId, nodes);
+    }
+
+    return groups;
+  }
+
   function renderProgressBadges() {
     return "";
   }
@@ -243,13 +330,15 @@
     const version = node.version;
     const badges = [];
 
-    if (isRejected(version)) {
+    if (isSupersededIntermediateNode(node)) {
+      badges.push(`<span class="intermediate-badge">中間履歴</span>`);
+    } else if (isRejected(version)) {
       badges.push(`<span class="rejected-badge compact">没譜面</span>`);
     } else if (isCompleted(version, progress)) {
       badges.push(`<span class="completed-badge compact">完成</span>`);
     }
 
-    if (isDownloadBlocked(version)) {
+    if (isDownloadBlocked(version) || isSupersededIntermediateNode(node)) {
       badges.push(`<span class="download-blocked-badge">DL不可</span>`);
     } else if (isDeleteRequested(version)) {
       badges.push(`<span class="delete-requested-badge">削除申請中</span>`);
@@ -260,7 +349,7 @@
     return badges.slice(0, 2).join("");
   }
 
-  function enhanceDownloadControl(row, version, displayVersionLabel) {
+  function enhanceDownloadControl(row, version, displayVersionLabel, forceBlocked = false) {
     const actions = row.querySelector(".version-actions");
     if (!actions) {
       return;
@@ -271,7 +360,7 @@
       return;
     }
 
-    const blocked = isDownloadBlocked(version);
+    const blocked = forceBlocked || isDownloadBlocked(version);
     if (blocked) {
       const disabled = document.createElement("span");
       disabled.className = "download-disabled download-button download-blocked-control";
@@ -289,6 +378,26 @@
       existingDownload.classList.add("download-blocked-control");
       existingDownload.title = "download url is not available";
     }
+  }
+
+  function lockAppendControl(row) {
+    const actions = row.querySelector(".version-actions");
+    if (!actions) {
+      return;
+    }
+
+    const appendButton = actions.querySelector(".append-version-button, button.secondary:not(.intermediate-toggle-button)");
+    if (!appendButton) {
+      return;
+    }
+
+    const locked = document.createElement("button");
+    locked.className = "secondary append-disabled-intermediate";
+    locked.type = "button";
+    locked.disabled = true;
+    locked.title = "完成版に置き換え済みの中間履歴のため追記できません";
+    locked.textContent = "追記不可";
+    appendButton.replaceWith(locked);
   }
 
   function applyColumnClasses(row, version) {
@@ -320,18 +429,19 @@
     }
   }
 
-  function enhanceRow(row, node) {
+  function enhanceRow(row, node, options = {}) {
     const version = node.version;
     const branchPath = getBranchPath(version);
     const displayVersionLabel = buildVersionPathLabel(branchPath);
     const parentText = buildFromLabel(node.parent);
-    const progress = Number.isFinite(Number(version?.progress)) ? Number(version.progress) : 0;
+    const progress = getProgress(version);
     const completed = isCompleted(version, progress);
     const rejected = isRejected(version);
     const collapsed = isCollapsedByCompletion(version);
     const blocked = isDownloadBlocked(version);
     const deleteRequested = isDeleteRequested(version);
     const hidden = isHiddenVersion(version);
+    const supersededIntermediate = isSupersededIntermediateNode(node);
     const tag = row.querySelector(".version-tag");
     const progressBlock = [...row.querySelectorAll(".meta-block")]
       .find((block) => block.querySelector(".progress-pill"));
@@ -343,12 +453,21 @@
     row.classList.toggle("is-rejected", rejected);
     row.classList.toggle("is-leaf", !node.hasChildren);
     row.classList.toggle("is-collapsed-by-completion", collapsed);
-    row.classList.toggle("is-download-blocked", blocked);
+    row.classList.toggle("is-download-blocked", blocked || supersededIntermediate);
     row.classList.toggle("is-delete-requested", deleteRequested);
     row.classList.toggle("is-hidden-version", hidden);
+    row.classList.toggle("is-intermediate-history", supersededIntermediate);
     row.dataset.depth = String(node.depth);
     row.dataset.branchPath = branchPath;
     row.style.setProperty("--tree-depth", String(node.depth));
+
+    if (options.collapsedGroupId) {
+      row.dataset.collapsedGroupId = options.collapsedGroupId;
+      row.hidden = !options.expanded;
+    } else {
+      delete row.dataset.collapsedGroupId;
+      row.hidden = false;
+    }
 
     if (tag) {
       const leafText = node.hasChildren ? "" : " / 末端";
@@ -379,7 +498,10 @@
       progressBlock.insertAdjacentHTML("beforeend", renderProgressBadges(version));
     }
 
-    enhanceDownloadControl(row, version, displayVersionLabel);
+    enhanceDownloadControl(row, version, displayVersionLabel, supersededIntermediate);
+    if (supersededIntermediate) {
+      lockAppendControl(row);
+    }
   }
 
   function createVersionListHeader() {
@@ -397,6 +519,64 @@
     `;
     return header;
   }
+
+  function createIntermediateToggleRow(groupId, count, expanded, depth) {
+    const row = document.createElement("div");
+    row.className = "intermediate-toggle-row";
+    row.dataset.collapsedGroupId = groupId;
+    row.style.setProperty("--tree-depth", String(Math.max(0, depth - 1)));
+    row.innerHTML = `
+      <div class="intermediate-toggle-content">
+        <button class="intermediate-toggle-button" type="button" data-collapsed-group-id="${html(groupId)}" data-count="${count}" aria-expanded="${expanded ? "true" : "false"}">
+          ${expanded ? "中間履歴を隠す" : `中間履歴を表示（${count}）`}
+        </button>
+        <span class="intermediate-toggle-note">完成版までのDL不可履歴</span>
+      </div>
+    `;
+    return row;
+  }
+
+  function setIntermediateGroupExpanded(list, groupId, expanded) {
+    if (!list || !groupId) {
+      return;
+    }
+
+    const rows = Array.from(list.querySelectorAll(".version-row.is-intermediate-history"));
+    rows.forEach((row) => {
+      if (row.dataset.collapsedGroupId === groupId) {
+        row.hidden = !expanded;
+      }
+    });
+
+    const buttons = Array.from(list.querySelectorAll(".intermediate-toggle-button"));
+    buttons.forEach((button) => {
+      if (button.dataset.collapsedGroupId !== groupId) {
+        return;
+      }
+
+      const count = button.dataset.count || "0";
+      button.setAttribute("aria-expanded", expanded ? "true" : "false");
+      button.textContent = expanded ? "中間履歴を隠す" : `中間履歴を表示（${count}）`;
+    });
+  }
+
+  listElement.addEventListener("click", (event) => {
+    const button = event.target.closest(".intermediate-toggle-button");
+    if (!button) {
+      return;
+    }
+
+    event.preventDefault();
+    const groupId = button.dataset.collapsedGroupId || "";
+    const nextExpanded = !expandedIntermediateGroups.has(groupId);
+    if (nextExpanded) {
+      expandedIntermediateGroups.add(groupId);
+    } else {
+      expandedIntermediateGroups.delete(groupId);
+    }
+
+    setIntermediateGroupExpanded(button.closest(".version-list"), groupId, nextExpanded);
+  });
 
   function enhanceTreeDisplay(data) {
     const charts = Array.isArray(data?.charts) ? data.charts : [];
@@ -422,13 +602,52 @@
       });
 
       const treeNodes = buildTreeNodes(versions);
+      const childrenByNodeKey = buildChildrenByNodeKey(treeNodes);
+      const intermediateGroups = buildIntermediateGroups(treeNodes, childrenByNodeKey);
+      const collapsedKeys = new Set();
+      const collapsedRowsByGroup = new Map();
+
+      treeNodes.forEach((node) => {
+        const row = rowsByVersion.get(getNodeKey(node.version));
+        if (!row) {
+          return;
+        }
+
+        const groupId = getCollapsedByVersionId(node.version);
+        const collapsible = intermediateGroups.has(groupId) && intermediateGroups.get(groupId)?.includes(node);
+        const expanded = groupId ? expandedIntermediateGroups.has(groupId) : false;
+        enhanceRow(row, node, collapsible ? { collapsedGroupId: groupId, expanded } : {});
+
+        if (collapsible) {
+          collapsedKeys.add(getNodeKey(node.version));
+          const groupedRows = collapsedRowsByGroup.get(groupId) || [];
+          groupedRows.push(row);
+          collapsedRowsByGroup.set(groupId, groupedRows);
+        }
+      });
+
       const fragment = document.createDocumentFragment();
       treeNodes.forEach((node) => {
         const row = rowsByVersion.get(getNodeKey(node.version));
         if (!row) {
           return;
         }
-        enhanceRow(row, node);
+
+        if (collapsedKeys.has(getNodeKey(node.version))) {
+          return;
+        }
+
+        const versionId = getVersionId(node.version);
+        const groupedRows = collapsedRowsByGroup.get(versionId) || [];
+        if (groupedRows.length > 0) {
+          const expanded = expandedIntermediateGroups.has(versionId);
+          fragment.appendChild(createIntermediateToggleRow(versionId, groupedRows.length, expanded, node.depth));
+          groupedRows.forEach((groupedRow) => {
+            groupedRow.hidden = !expanded;
+            fragment.appendChild(groupedRow);
+          });
+        }
+
         fragment.appendChild(row);
       });
 
