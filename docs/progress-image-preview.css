@@ -1,0 +1,72 @@
+.progress-image-preview-panel {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.progress-image-preview-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+button.progress-image-preview-button {
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.progress-image-download-link {
+  align-items: center;
+  background: #f1fbf6;
+  border: 1px solid rgba(37, 111, 93, 0.24);
+  border-radius: 6px;
+  color: var(--primary-dark);
+  display: inline-flex;
+  font-size: 0.82rem;
+  font-weight: 800;
+  min-height: 34px;
+  padding: 0 10px;
+}
+
+.progress-image-preview-status {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.progress-image-preview-status.is-error {
+  color: var(--danger);
+}
+
+.progress-image-preview-frame {
+  background: #f8fafb;
+  border: 1px solid #dfe6ec;
+  border-radius: 8px;
+  overflow: hidden;
+  padding: 8px;
+}
+
+.progress-image-preview {
+  display: block;
+  height: auto;
+  max-width: 100%;
+  width: 640px;
+}
+
+@media (max-width: 640px) {
+  .progress-image-preview-actions,
+  .progress-image-preview-actions button,
+  .progress-image-download-link {
+    width: 100%;
+  }
+
+  .progress-image-download-link {
+    justify-content: center;
+  }
+}
