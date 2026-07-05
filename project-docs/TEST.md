@@ -30,7 +30,7 @@ BRANCH-01C 分岐ツリー一覧表示:
 - CSSのツリー線で親子関係が分かること
 - 同じ親からの分岐が並んで見えること
 - 表示順が `root`, `root/a`, `root/a/a`, `root/b` のような自然なツリー順になること
-- 各version行に `displayVersion`, `author`, `progress`, `difficulty`, progressMapサムネイル, DL, 追記投稿が表示されること
+- 各version行に表示用versionラベル, `author`, `progress`, `difficulty`, progressMapサムネイル, DL, 追記投稿が表示されること
 - progressMapサムネイルがツリー表示でも崩れないこと
 - `progress=100` または `completed=true` のversionが完成バッジや薄い緑背景で分かりやすく表示されること
 - `progress=100` のversion自体では、`downloadBlocked` でない限りDLが有効なままであること
@@ -301,16 +301,23 @@ python -m http.server 8000
 
 - ver列に `└`, `├`, `│`, `─` などの文字ツリー記号が表示されないこと
 - ツリー構造はCSSの線で表示されること
-- `root/a/b/a` のような深い分岐で、親系列が分かる表示になっていること
-- `ver3.0-b` の子が単に `ver4.0-a` とだけ表示されないこと
-- root以外では `branch a/b/a` のような補助表示がver列内に出ること
-- branch系列が長い場合でも列ずれせず、title属性で `branchPath` を確認できること
+- `root/a/b/a` のような深い分岐でも、title属性で内部 `branchPath` を確認できること
 - コメント欄に `branchPath` が混ざらないこと
 - from情報がコメント欄ではなくver列内に表示されること
-- `from ver3.0-a/b` のように親のbranch系列が分かること
 - DL/追記投稿ボタンが壊れていないこと
 - progressMapサムネイルが壊れていないこと
 - 既存投稿・追記投稿が壊れていないこと
+
+## BRANCH-01C-UI-4 追加確認
+
+- 親からの子が1つだけの場合、`ver2.0-a` ではなく `ver2.0` と表示されること
+- 親からの子が複数ある場合、`ver3.0-a` / `ver3.0-b` のようにsuffixが表示されること
+- `ver3.0-b` の子が1つだけの場合、`ver4.0-a` ではなく `ver4.0` と表示されること
+- from表示も同じルールに従い、親が単独枝なら `from ver2.0`、親が兄弟分岐なら `from ver3.0-b` になること
+- `branchPath` は通常表示されないこと
+- 内部 `branchPath` は変更されず、title属性などで確認できること
+- 追記投稿ボタンは正しい `parentVersionId` を使うこと
+- 既存のDL、進捗サムネイル、コメント、列揃えが壊れていないこと
 
 ## 注意
 
