@@ -65,6 +65,10 @@ type VersionRow = {
   file_sha256: string;
   download_blocked: number;
   download_block_reason: string | null;
+  collapsed_by_completion: number;
+  collapsed_reason: string | null;
+  collapsed_at: string | null;
+  collapsed_by_version_id: string | null;
   is_hidden: number;
   hidden_reason: string | null;
   created_at: string;
@@ -364,6 +368,10 @@ function buildVersion(row: VersionRow) {
     downloadBlocked,
     downloadBlockReason: row.download_block_reason,
     downloadBlockedAt: row.download_blocked_at,
+    collapsedByCompletion: toBoolean(row.collapsed_by_completion),
+    collapsedReason: row.collapsed_reason,
+    collapsedAt: row.collapsed_at,
+    collapsedByVersionId: row.collapsed_by_version_id,
     comment: row.comment,
     difficulty: row.difficulty,
     level: row.level,
@@ -578,6 +586,10 @@ async function selectVisibleVersionRows(env: Env, chartIds: string[]): Promise<V
       versions.file_sha256 AS file_sha256,
       versions.download_blocked AS download_blocked,
       versions.download_block_reason AS download_block_reason,
+      versions.collapsed_by_completion AS collapsed_by_completion,
+      versions.collapsed_reason AS collapsed_reason,
+      versions.collapsed_at AS collapsed_at,
+      versions.collapsed_by_version_id AS collapsed_by_version_id,
       versions.is_hidden AS is_hidden,
       versions.hidden_reason AS hidden_reason,
       versions.created_at AS created_at,
