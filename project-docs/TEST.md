@@ -2,7 +2,7 @@
 
 ## 対象
 
-GitHub Pages の静的フロント画面、Worker API接続、初回投稿、追記投稿UI、進捗マップUI、進捗サムネイル、分岐ツリー一覧表示を確認する。
+GitHub Pages の静的フロント画面、Worker API接続、初回投稿、追記投稿UI、進捗マップUI、進捗サムネイル、分岐ツリー一覧表示、完成到達後の中間version折り畳み/展開表示を確認する。
 
 本番Worker URL:
 
@@ -17,6 +17,26 @@ https://monsta-bms.github.io/bms-wip-charts/
 ```
 
 ## 今回確認するもの
+
+TREE-01 完成到達後の中間履歴折り畳み:
+
+- `GET /api/charts` のversionに `collapsedByCompletion`, `collapsedReason`, `collapsedAt`, `collapsedByVersionId`, `downloadBlocked`, `downloadBlockReason` が返ること
+- `collapsedByCompletion=true` のversionが通常一覧で折り畳まれること
+- `downloadBlockReason="superseded_by_completed_descendant"` かつ `progress<100` の中間versionが折り畳み対象になること
+- `progress=100` の完成versionは通常表示されること
+- `progress=100` の完成versionは `downloadBlocked=true` でない限りDL可能のままであること
+- 折り畳まれた中間versionの件数が `中間履歴を表示（N）` に表示されること
+- `中間履歴を表示（N）` ボタンで中間versionを展開できること
+- `中間履歴を隠す` ボタンで再度折り畳めること
+- 展開時に中間versionの作者、コメント、進捗、progressMapサムネイルが確認できること
+- 展開時の中間versionには `中間履歴` または `DL不可` の状態表示が出ること
+- 展開時の中間versionではDLボタンがdisabledまたは `DL不可` 表示になること
+- 展開時の中間versionでは追記投稿ボタンが非表示または `追記不可` 表示になること
+- `isHidden=true` のversionは従来通り表示されないこと
+- 数字パス版ラベル（`BASE`, `1`, `1-2` など）が折り畳み/展開時も維持されること
+- コメント欄に `branchPath` や `from` 情報が混ざらないこと
+- 初回投稿と追記投稿が壊れていないこと
+- スマホ幅でも大きく崩れないこと
 
 BRANCH-01C 分岐ツリー一覧表示:
 
@@ -36,7 +56,6 @@ BRANCH-01C 分岐ツリー一覧表示:
 - `progress=100` のversion自体では、`downloadBlocked` でない限りDLが有効なままであること
 - `downloadBlocked=true` のversionではDLボタンが `DL不可` 表示になり、クリックできないこと
 - `downloadBlockReason` がある場合、DL不可表示のtitle属性などで理由を確認できること
-- `collapsedByCompletion=true` のversionが返る場合、完全非表示ではなく薄い表示になること
 - 追記投稿ボタンが各versionの正しい `parentVersionId` で動くこと
 - 子versionから追記投稿を開始した場合、その子versionが追記元としてフォームに表示されること
 - `isRejected=true` の没譜面versionでは追記投稿できない表示が維持されること
@@ -124,7 +143,6 @@ BMSメタデータ警告:
 - R2自動削除処理
 - Turnstile
 - 進捗画像PNGのR2保存
-- 完成到達後の本格的な折り畳み/展開UI
 - お気に入り★
 - 本格的な譜面ミニビュー
 
@@ -192,7 +210,11 @@ BMSメタデータ警告:
 18. `1` からさらに別分岐を作り、`1-2` や `1-3` のような数字パスラベルになることを確認する。
 19. 新versionのサムネイルが追加後のprogressを反映していることを確認する。
 20. `progress=100` にしたversionが完成表示になり、`downloadBlocked` でない限りDL可能なままであることを確認する。
-21. ブラウザ幅を狭め、スマホ幅でもツリー表示と追記ボタンが大きく崩れないことを確認する。
+21. 完成versionへ至る途中の `collapsedByCompletion=true` 中間versionが通常一覧で折り畳まれることを確認する。
+22. 完成version付近の `中間履歴を表示（N）` を押し、中間versionの作者・コメント・進捗・progressMapサムネイルを確認する。
+23. 展開された中間versionのDLが `DL不可` で、追記操作が `追記不可` になっていることを確認する。
+24. `中間履歴を隠す` を押し、再度折り畳めることを確認する。
+25. ブラウザ幅を狭め、スマホ幅でもツリー表示と追記ボタンが大きく崩れないことを確認する。
 
 ## エラー表示確認
 
@@ -328,6 +350,23 @@ python -m http.server 8000
 - `displayVersion` や `branchPath` は必要に応じてtitle属性で確認できること
 - DLボタン、追記投稿ボタン、progressMapサムネイルが壊れていないこと
 - 既存投稿・追記投稿が壊れていないこと
+
+## TREE-01 追加確認
+
+- `collapsedByCompletion=true` のversionが通常一覧で折り畳まれること
+- `progress=100` の完成versionは通常表示されること
+- `progress=100` の完成versionはDL可能のままであること
+- 折り畳まれた中間versionの件数が表示されること
+- `中間履歴を表示` ボタンで展開できること
+- `中間履歴を隠す` ボタンで折り畳めること
+- 展開時に中間versionの作者、コメント、進捗、progressMapサムネイルが確認できること
+- 展開時の中間versionではDLボタンがdisabledであること
+- 展開時の中間versionでは追記投稿ボタンが非表示またはdisabledであること
+- `isHidden=true` のversionは従来通り表示されないこと
+- 数字パス版ラベルが維持されること
+- コメント欄に `branchPath` や `from` 情報が混ざらないこと
+- 初回投稿と追記投稿が壊れていないこと
+- スマホ幅でも大きく崩れないこと
 
 ## 注意
 
