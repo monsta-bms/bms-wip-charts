@@ -27,6 +27,40 @@
     });
   }
 
+  function cleanVersionComment(value) {
+    return String(value || "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => {
+        if (!line) {
+          return false;
+        }
+
+        if (/^(branchPath|displayVersion)\s*:/i.test(line)) {
+          return false;
+        }
+
+        if (/^追記元\s+ver/i.test(line)) {
+          return false;
+        }
+
+        if (/^from\s+(BASE|\d+(?:-\d+)*)$/i.test(line)) {
+          return false;
+        }
+
+        if (/^root(?:\/[a-z]+)+$/i.test(line)) {
+          return false;
+        }
+
+        if (/^ver\d+(?:\.0)?(?:-[a-z]+)?\s*\/\s*root(?:\/[a-z]+)*$/i.test(line)) {
+          return false;
+        }
+
+        return true;
+      })
+      .join("\n");
+  }
+
   function getVersionId(version) {
     return version?.id || version?.versionId || "";
   }
@@ -362,16 +396,15 @@
   function renderStateBadges(node, progress) {
     const version = node.version;
     const badges = [];
+    const supersededIntermediate = isSupersededIntermediateNode(node);
 
-    if (isSupersededIntermediateNode(node)) {
-      badges.push(`<span class="intermediate-badge">中間履歴</span>`);
-    } else if (isRejected(version)) {
+    if (isRejected(version)) {
       badges.push(`<span class="rejected-badge compact">没譜面</span>`);
     } else if (isCompleted(version, progress)) {
       badges.push(`<span class="completed-badge compact">完成</span>`);
     }
 
-    if (isDownloadBlocked(version) || isSupersededIntermediateNode(node)) {
+    if (!supersededIntermediate && isDownloadBlocked(version)) {
       badges.push(`<span class="download-blocked-badge">DL不可</span>`);
     } else if (isDeleteRequested(version)) {
       badges.push(`<span class="delete-requested-badge">削除申請中</span>`);
@@ -447,17 +480,20 @@
     const gutter = ensureGroupGutter(row);
     gutter.innerHTML = "";
     gutter.classList.remove("has-toggle");
-    row.classList.remove("has-intermediate-group-control");
+    row.classList.remove("has-intermediate-group-control", "is-group-expanded");
     delete row.dataset.intermediateGroupCount;
   }
 
   function setGroupGutterControl(row, groupId, count, expanded) {
     const gutter = ensureGroupGutter(row);
+    const actionText = expanded ? "隠す" : "表示";
+    const label = `中間履歴 ${count}件を${actionText}`;
     row.classList.add("has-intermediate-group-control");
+    row.classList.toggle("is-group-expanded", expanded);
     row.dataset.intermediateGroupCount = String(count);
     gutter.classList.add("has-toggle");
     gutter.innerHTML = `
-      <button class="intermediate-toggle-button group-toggle-button" type="button" data-collapsed-group-id="${html(groupId)}" data-count="${count}" aria-expanded="${expanded ? "true" : "false"}" title="中間履歴 ${count}件">
+      <button class="intermediate-toggle-button group-toggle-button" type="button" data-collapsed-group-id="${html(groupId)}" data-count="${count}" aria-expanded="${expanded ? "true" : "false"}" aria-label="${html(label)}" title="${html(label)}">
         ${expanded ? "−" : "+"}
       </button>
     `;
@@ -487,7 +523,7 @@
 
     const commentValue = commentCell?.querySelector(".meta-value");
     if (commentValue) {
-      const comment = String(version?.comment || "");
+      const comment = cleanVersionComment(version?.comment || "");
       commentValue.textContent = comment;
       commentValue.title = comment;
     }
@@ -605,9 +641,13 @@
       }
 
       const count = button.dataset.count || "0";
+      const actionText = expanded ? "隠す" : "表示";
+      const label = `中間履歴 ${count}件を${actionText}`;
       button.setAttribute("aria-expanded", expanded ? "true" : "false");
-      button.title = `中間履歴 ${count}件`;
+      button.setAttribute("aria-label", label);
+      button.title = label;
       button.textContent = expanded ? "−" : "+";
+      button.closest(".version-row")?.classList.toggle("is-group-expanded", expanded);
     });
   }
 
