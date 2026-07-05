@@ -17,6 +17,13 @@ type ApiFailure = {
   detail: string;
 };
 
+type FormDataReadableRequest = {
+  headers: {
+    get(name: string): string | null;
+  };
+  formData(): Promise<FormData>;
+};
+
 export type ProgressImageUpload = {
   bytes: ArrayBuffer;
   mime: "image/png";
@@ -96,7 +103,7 @@ export function buildProgressImageObject(versionId: string, row: ProgressImageRo
 }
 
 export async function parseOptionalProgressImage(
-  request: Request
+  request: FormDataReadableRequest
 ): Promise<{ ok: true; value: ProgressImageUpload | null } | { ok: false; failure: ApiFailure }> {
   const contentType = request.headers.get("Content-Type") ?? "";
   if (!contentType.toLowerCase().includes("multipart/form-data")) {
