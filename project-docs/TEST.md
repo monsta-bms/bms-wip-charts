@@ -16,6 +16,32 @@ GitHub Pages URL:
 https://monsta-bms.github.io/bms-wip-charts/
 ```
 
+## PROG-04C-C 確認項目
+
+曲終端基準の進捗範囲:
+
+- `bas3.bms` のように、最後のプレイノート後にもBGM/BPM/STOP/小節長イベントが残る譜面を選択する。
+- 進捗マップの表示終端が最後のプレイノート小節ではなく、曲終端小節まで伸びること。
+- 曲頭側の完全な空白小節は通常表示に混ざらないこと。
+- BGAのみの後ろ余白では進捗対象が延びないこと。
+- BGM `01` が後ろにある場合は曲終端候補として扱われること。
+- BPM `03` / `08` が後ろにある場合は曲終端候補として扱われること。
+- STOP `09` が後ろにある場合は曲終端候補として扱われること。
+- 小節長 `02` が後ろにある場合は曲終端候補として扱われること。
+- 進捗マップ下段のブロック数が曲終端基準の表示範囲に対応すること。
+- progress計算が、最後のプレイノートまでではなく曲終端までのブロック数を分母にしていること。
+- `progressMap.blocks` が曲終端まで作成されること。
+- `progressMap.firstMeasure` / `progressMap.lastMeasure` が表示範囲を示すこと。
+- Worker保存後の `measureNotes.schemaVersion` が `2` であること。
+- Worker保存後の `measureNotes.firstPlayableMeasure` / `lastPlayableMeasure` がプレイノート範囲を示すこと。
+- Worker保存後の `measureNotes.displayFirstMeasure` / `displayLastMeasure` が表示・進捗対象範囲を示すこと。
+- `targetMeasureCount` が `displayFirstMeasure` から `displayLastMeasure` までの小節数になること。
+- 生成した進捗PNGが、進捗マップと同じ曲終端まで表示されること。
+- 一覧サムネイルが、保存された `progressMap.blocks` に従って曲終端まで表示されること。
+- 追記投稿フォームでは、親versionの曲終端基準 `progressMap.blocks` を引き継ぐこと。
+- 既存投稿済みデータや既存PNGは自動再生成されないこと。
+- `bas3.bms` は確認用ファイルとして使い、リポジトリへ恒久追加しないこと。
+
 ## PROG-04C-B 確認項目
 
 進捗PNG送信:
@@ -77,19 +103,21 @@ GET API:
 1. `https://monsta-bms.github.io/bms-wip-charts/` を開く。
 2. 投稿フォームで単体 `.bms` / `.bme` / `.bml` を選択する。
 3. 進捗マップが表示されることを確認する。
-4. 進捗マップを一部塗る。
-5. `進捗画像を確認` を押し、PNGプレビューが表示されることを確認する。
-6. Networkタブを開き、投稿時の `POST /api/charts` のFormDataに `progressMap` と `progressImage` が含まれることを確認する。
-7. 投稿成功後、`GET /api/charts` のversionに `progressImage.url` が返ることを確認する。
-8. `progressImage.url` を開き、PNGが表示またはダウンロードされることを確認する。
-9. 一覧の `追記投稿` を押す。
-10. 追記モードで親layerと今回layerが進捗マップに表示されることを確認する。
-11. 今回追記分を塗る。
-12. `進捗画像を確認` を押し、親layerと今回layerの色がPNGで見分けられることを確認する。
-13. Networkタブで `POST /api/charts/:chartId/versions` のFormDataに `progressMap` と `progressImage` が含まれることを確認する。
-14. 追記成功後、`GET /api/charts` の新versionに `progressImage.url` が返ることを確認する。
-15. `GET /api/progress-images/:versionId` で追記versionのPNGが返ることを確認する。
-16. 一覧の既存progressMapサムネイルが従来通り表示されることを確認する。
+4. `bas3.bms` のような曲終端イベントが長い譜面では、最後のプレイノート後の空白・BGM区間も進捗対象として表示されることを確認する。
+5. 進捗マップを一部塗る。
+6. `進捗画像を確認` を押し、PNGプレビューが進捗マップと同じ終端まで表示されることを確認する。
+7. Networkタブを開き、投稿時の `POST /api/charts` のFormDataに `progressMap` と `progressImage` が含まれることを確認する。
+8. 投稿成功後、`GET /api/charts` のversionに `progressImage.url` が返ることを確認する。
+9. `GET /api/charts` の `measureNotes` で `firstPlayableMeasure` / `lastPlayableMeasure` と `displayFirstMeasure` / `displayLastMeasure` が分かれていることを確認する。
+10. `progressImage.url` を開き、PNGが表示またはダウンロードされることを確認する。
+11. 一覧の `追記投稿` を押す。
+12. 追記モードで親layerと今回layerが進捗マップに表示されることを確認する。
+13. 今回追記分を塗る。
+14. `進捗画像を確認` を押し、親layerと今回layerの色がPNGで見分けられることを確認する。
+15. Networkタブで `POST /api/charts/:chartId/versions` のFormDataに `progressMap` と `progressImage` が含まれることを確認する。
+16. 追記成功後、`GET /api/charts` の新versionに `progressImage.url` が返ることを確認する。
+17. `GET /api/progress-images/:versionId` で追記versionのPNGが返ることを確認する。
+18. 一覧の既存progressMapサムネイルが従来通り表示されることを確認する。
 
 ## curl確認例
 
