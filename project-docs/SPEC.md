@@ -21,6 +21,7 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。�
 - 一覧側の分岐ツリー列揃え改善
 - 一覧側の分岐ツリーバッジ整理とツリー線改善
 - 一覧側の分岐ツリー文字記号削除と表示専用の数字パス版ラベル（`BASE` / `1` / `1-2`）生成
+- 一覧側の完成到達後の中間version折り畳み/展開UI
 - `GET /api/charts` のD1実データ読み取り
 - `POST /api/charts` の初回投稿
 - `POST /api/charts/:chartId/versions` の追記投稿
@@ -48,7 +49,6 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。�
 - Cron Trigger
 - R2自動削除本体
 - Turnstile
-- 完成到達後の本格的な一覧折り畳み/展開UI
 - お気に入り★
 - 本格的な譜面ミニビュー
 
@@ -120,6 +120,8 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。�
 - 今回追記分のlayerが空のままの送信
 
 没譜面versionでは追記投稿ボタンをdisabledにし、`没譜面は追記できません` を表示する。
+
+完成versionに置き換えられた中間履歴versionでは、一覧UI上で追記投稿ボタンをdisabledまたは非表示にし、`追記不可` として扱う。
 
 `progress=100` のversionから追記する場合は、フォームを開く前に確認ダイアログで警告する。
 
@@ -493,6 +495,7 @@ PC表示では列見出しに近い行を表示し、各version行で `想定難
 - `DL不可`: `downloadBlocked=true` または `download_blocked=true`。
 - `削除申請中`: `deleteRequested=true` または `delete_requested=true`。
 - 管理非表示系: `hidden`, `isHidden`, `is_hidden` などがtrueの場合。
+- `中間履歴`: 完成versionに置き換えられた中間versionを展開表示している場合。
 
 表示しない通常バッジ:
 
@@ -532,11 +535,52 @@ DL可能なversionでは `DL` をテキストリンクではなく小さなボ�
 - `admin_blocked`
 - `admin_hidden`
 
-### collapsedByCompletion 表示
+### 完成到達後の中間履歴折り畳み
 
-本格的な折り畳み/展開UIは後続のTREE-01Bで扱う。
+progress=100に到達した完成versionへ至る途中のversionは、通常一覧では折り畳む。
 
-TREE-01A/BRANCH-01C-UI系では、`collapsedByCompletion=true` が返っているversionを完全には消さず、薄い表示にする。通常バッジとして `中間` などを常時表示する必要はない。
+折り畳み対象:
+
+- `collapsedByCompletion=true`
+- `downloadBlockReason='superseded_by_completed_descendant'`
+- `progress < 100`
+- `collapsedByVersionId` が存在する
+
+補助的に、古いAPIレスポンスで `collapsedByCompletion` が欠けている場合でも、`downloadBlocked=true` かつ `downloadBlockReason='superseded_by_completed_descendant'` のversionは中間履歴候補として扱える。
+
+通常一覧で表示するもの:
+
+- root / `BASE` の起点行。
+- `progress=100` の完成version。
+- `collapsedByCompletion=false` の通常version。
+- 他の可視分岐の親として必要なversion。
+
+完成version自体は折り畳まず、`downloadBlocked=true` でない限りDL可能のまま表示する。
+
+完成versionの近くに以下の切り替えボタンを表示する。
+
+- `中間履歴を表示（N）`
+- `中間履歴を隠す`
+
+切り替え状態はブラウザ内だけで保持してよい。ページ再読み込み後は初期状態へ戻ってよい。
+
+展開された中間versionでは以下を表示する。
+
+- 数字パス版ラベル。
+- from表示。
+- 作者。
+- 進捗度。
+- progressMapサムネイル。
+- 投稿者コメント。
+- `中間履歴` / `DL不可` の小さな状態表示。
+- disabledの `DL不可` ボタン。
+- disabledの `追記不可` 表示。
+
+展開された中間versionのコメント欄にも、投稿者コメントだけを表示する。`branchPath`, `from` 情報、内部version情報をコメント欄へ混ぜない。
+
+MVPでは、折り畳み時のツリー線の完全な正確さより、通常一覧の軽さと展開時に必要情報を確認できることを優先する。展開された中間履歴は、完成versionの近くの履歴グループとして表示してよい。
+
+`isHidden=true` のversionは従来通り通常一覧に出さない。`isHidden` と `collapsedByCompletion` は別状態として扱う。
 
 ### 一覧側progressMapサムネイル
 
@@ -600,6 +644,8 @@ APIエラーは必ず JSON で `code`, `message`, `detail` を返す。
 - `GET /api/files/:fileId`
 - `POST /api/admin/hide-version`
 - `POST /api/admin/ban`
+
+`GET /api/charts` は折り畳み表示に使う `collapsedByCompletion`, `collapsedReason`, `collapsedAt`, `collapsedByVersionId`, `downloadBlocked`, `downloadBlockReason` をversionごとに返す。
 
 `POST /api/charts` は `progressMap` JSON文字列を受け取れる。Workerは `progressMap` のrangesからprogressを再計算し、`versions.progress` と `versions.progress_map_json` に保存する。
 
