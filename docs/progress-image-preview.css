@@ -1,3 +1,32 @@
+:root {
+  --progress-fill-initial: rgba(37, 111, 93, 0.44);
+  --progress-fill-parent: rgba(37, 111, 93, 0.2);
+  --progress-fill-current: rgba(37, 99, 235, 0.5);
+  --progress-fill-rejected: rgba(122, 52, 24, 0.42);
+  --progress-fill-empty: #edf2f5;
+}
+
+button.progress-map-block.is-painted::before,
+button.progress-map-block.is-painted:hover::before,
+button.progress-map-block.is-painted:focus-visible::before,
+button.progress-map-block.is-painted:disabled::before,
+button.progress-map-block.is-painted:disabled:hover::before,
+button.progress-map-block.is-painted:disabled:focus-visible::before {
+  background: var(--progress-fill-initial);
+}
+
+button.progress-map-block.is-parent-painted::before,
+button.progress-map-block.is-parent-painted:hover::before,
+button.progress-map-block.is-parent-painted:focus-visible::before {
+  background: var(--progress-fill-parent);
+}
+
+button.progress-map-block.is-current-painted::after,
+button.progress-map-block.is-current-painted:hover::after,
+button.progress-map-block.is-current-painted:focus-visible::after {
+  background: var(--progress-fill-current);
+}
+
 .progress-image-preview-panel {
   background: #ffffff;
   border: 1px solid var(--line);
