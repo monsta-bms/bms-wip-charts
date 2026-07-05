@@ -19,6 +19,7 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。�
 - 一覧側のversion分岐ツリー表示
 - 一覧側の分岐ツリー可読性改善
 - 一覧側の分岐ツリー列揃え改善
+- 一覧側の分岐ツリーバッジ整理とツリー線改善
 - `GET /api/charts` のD1実データ読み取り
 - `POST /api/charts` の初回投稿
 - `POST /api/charts/:chartId/versions` の追記投稿
@@ -369,10 +370,7 @@ layerの `kind` 候補:
 
 - `displayVersion`
 - 親version表示。rootは `起点`、子versionは `from verX.X` の形式にする。
-- 末端バッジ
-- 完成バッジ
-- 未完成バッジ
-- 没譜面/追記不可表示
+- 重要状態バッジ。通常表示は `完成`, `没譜面`, `DL不可`, `削除申請中`, 管理非表示系に限定する。
 - 想定難易度
 - 差分作者
 - 進捗度
@@ -380,6 +378,8 @@ layerの `kind` 候補:
 - コメントの短い表示
 - DLボタンまたはDL不可ボタン
 - 追記投稿ボタン
+
+`未完成` と `末端` は通常バッジとして表示しない。未完成かどうかは進捗%で判断できるようにし、末端かどうかはツリー線またはhover/titleなどの補助情報で確認できるようにする。
 
 通常表示では `root/a` などの内部 `branchPath` を主情報として目立たせない。必要な場合はhover/titleなどの補助情報で確認できるようにする。コメント欄には投稿者コメントだけを表示し、`branchPath` や `from verX.X` などの分岐情報を混ぜない。
 
@@ -392,10 +392,10 @@ layerの `kind` 候補:
 表示例:
 
 ```text
-ver1.0            起点        20%  末端
-├ ver2.0-a        from ver1.0 21%  末端
+ver1.0            起点        20%
+├ ver2.0-a        from ver1.0 21%
 └ ver2.0-b        from ver1.0 35%
-   └ ver3.0-b-a   from ver2.0-b 100% 完成 末端
+   └ ver3.0-b-a   from ver2.0-b 100% 完成
 ```
 
 表示仕様:
@@ -405,7 +405,8 @@ ver1.0            起点        20%  末端
 - `depth=1` は `root/a`, `root/b` などとする。
 - `depth=2` は `root/a/a` などとする。
 - depthに応じたインデントはver列内だけで処理する。
-- 薄いグレーのツリー線と `├` / `└` を表示する。
+- ver列内にツリー専用のガターを作り、縦線と横線で親子関係を示す。
+- ツリー線は薄すぎないグレーにし、他列や進捗サムネイルに干渉しないようにする。
 - 通常表示では内部 `branchPath` ではなく、`from verX.X` を優先して表示する。
 - `branchPath` はhover/titleなどの補助情報として保持する。
 - スマホ幅ではツリー線やインデントを簡略化してよいが、親子関係は最低限分かるようにする。
@@ -431,19 +432,24 @@ PC表示では列見出しに近い行を表示し、各version行で `想定難
 
 同じ親からの分岐suffixは `a`, `b`, ... `z`, `aa` の自然順になるように扱う。
 
-### 末端version表示
+### 重要状態バッジ表示
 
-子versionを持たないversionには `末端` バッジを表示する。
+通常表示する状態バッジは、利用者の判断に必要な重要状態だけに限定する。
 
 表示条件:
 
-- そのversionを親に持つ子versionが存在しない。
-- 没譜面versionでは `追記不可` 表示を優先してよい。
+- `完成`: `progress=100` または `completed=true`。
+- `没譜面`: `isRejected=true` または `is_rejected=true`。
+- `DL不可`: `downloadBlocked=true` または `download_blocked=true`。
+- `削除申請中`: `deleteRequested=true` または `delete_requested=true`。
+- 管理非表示系: `hidden`, `isHidden`, `is_hidden` などがtrueの場合。
 
-意図:
+表示しない通常バッジ:
 
-- 利用者が追記候補や最新枝を判断しやすくする。
-- 内部 `branchPath` を読まなくても、どの枝が終端か分かるようにする。
+- `未完成`
+- `末端`
+
+複数状態が重なる場合でも、通常表示のバッジは最大2個程度に抑える。
 
 ### completed / progress=100 表示
 
@@ -453,7 +459,7 @@ PC表示では列見出しに近い行を表示し、各version行で `想定難
 - `完成` バッジ
 - 薄い緑背景
 
-`progress<100` のversionでは `未完成` 表示を使ってよい。`未描` という表記は使わない。
+`progress<100` のversionでは `未完成` バッジを通常表示しない。`未描` という表記も使わない。
 
 注意:
 
@@ -462,7 +468,7 @@ PC表示では列見出しに近い行を表示し、各version行で `想定難
 
 ### downloadBlocked 表示
 
-`downloadBlocked=true` のversionではDLボタンを無効化し、`DL不可` と表示する。
+`downloadBlocked=true` のversionではDLボタンを無効化し、`DL不可` と表示する。ver列の重要状態バッジにも `DL不可` を表示してよい。
 
 DL可能なversionでは `DL` をテキストリンクではなく小さなボタン風に表示し、`追記投稿` ボタンと並べても違和感がない見た目にする。
 
@@ -480,7 +486,7 @@ DL可能なversionでは `DL` をテキストリンクではなく小さなボ�
 
 本格的な折り畳み/展開UIは後続のTREE-01Bで扱う。
 
-TREE-01Aでは、`collapsedByCompletion=true` が返っているversionを完全には消さず、薄い表示にし、必要に応じて `中間` などの弱い表示を付ける。
+TREE-01A/BRANCH-01C-UI系では、`collapsedByCompletion=true` が返っているversionを完全には消さず、薄い表示にする。通常バッジとして `中間` などを常時表示する必要はない。
 
 ### 一覧側progressMapサムネイル
 
