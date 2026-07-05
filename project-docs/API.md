@@ -37,6 +37,7 @@ https://monsta-bms.github.io
 - 初回投稿時と追記投稿時の `progress_map_json` 保存
 - `GET /api/charts` の `progressMap` 返却
 - 一覧側 `progressMap` サムネイル表示
+- 完成到達後の中間version折り畳み/展開表示
 
 まだ実装しないもの:
 
@@ -51,7 +52,6 @@ https://monsta-bms.github.io
 - ZIP内部のBMS解析
 - 進捗画像R2保存処理
 - 一覧への進捗画像表示
-- 完成到達後の一覧折り畳みUI
 
 ## 共通仕様
 
@@ -126,6 +126,8 @@ schema / migrationファイル:
 | `progress_map_json` | 標準化ブロック単位の進捗塗りJSON。 |
 | `progress_image_key` | 進捗画像のR2 key。未実装。 |
 | `collapsed_by_completion` | 完成到達後に通常一覧で折り畳むか。 |
+| `collapsed_reason` | 折り畳み理由。 |
+| `collapsed_at` | 折り畳みにした日時。 |
 | `collapsed_by_version_id` | 折り畳み原因になった完成version ID。 |
 
 ## 難易度表示方針
@@ -245,6 +247,20 @@ D1から投稿一覧を取得する。
 - `is_rejected=1` のversionは `isRejected: true` を返し、UIでは没譜面バッジで区別する。
 - BMS解析済みversionでは `playNotes`, `firstNoteMeasure`, `lastNoteMeasure`, `targetMeasureCount`, `measureNotes` を返す。
 - `progress_map_json` 保存済みversionでは `progressMap` を返す。
+- 完成到達により中間履歴扱いになったversionでは `collapsedByCompletion`, `collapsedReason`, `collapsedAt`, `collapsedByVersionId` を返す。
+- DL不可状態として `downloadBlocked`, `downloadBlockReason`, `downloadBlockedAt` を返す。
+
+versionの折り畳み関連フィールド:
+
+| field | 内容 |
+| --- | --- |
+| `collapsedByCompletion` | 完成versionへ至る中間履歴として通常一覧で折り畳む対象か。 |
+| `collapsedReason` | 折り畳み理由。完成到達による場合は `superseded_by_completed_descendant`。 |
+| `collapsedAt` | 折り畳みにした日時。 |
+| `collapsedByVersionId` | 折り畳み原因になった完成version ID。 |
+| `downloadBlocked` | DL不可か。 |
+| `downloadBlockReason` | DL不可理由。 |
+| `downloadBlockedAt` | DL不可にした日時。 |
 
 空DB時のレスポンス例:
 
@@ -258,6 +274,33 @@ D1から投稿一覧を取得する。
   }
 }
 ```
+
+### 一覧側の完成中間履歴折り畳み
+
+GitHub Pages側では、以下を満たすversionを通常一覧で折り畳む。
+
+- `collapsedByCompletion=true`
+- `downloadBlockReason="superseded_by_completed_descendant"`
+- `progress < 100`
+- `collapsedByVersionId` が存在する
+
+完成version自体は折り畳まない。`progress=100` の完成versionは、`downloadBlocked=true` でない限りDL可能のまま表示する。
+
+折り畳まれた中間versionは、完成versionの近くに表示する `中間履歴を表示（N）` ボタンで展開できる。展開状態はブラウザ内だけで保持し、ページ再読み込み後は初期状態へ戻ってよい。
+
+展開された中間versionでは以下を表示する。
+
+- 数字パス版ラベル
+- from表示
+- 作者
+- 進捗
+- progressMapサムネイル
+- コメント
+- `中間履歴` / `DL不可` の状態表示
+- disabledの `DL不可` ボタン
+- disabledの `追記不可` 表示
+
+`isHidden=true` のversionは従来通り通常一覧には出さない。
 
 ### POST /api/charts
 
@@ -378,6 +421,7 @@ D1から投稿一覧を取得する。
 - `progressMap` がない古いversionは画面から追記できない。
 - `isRejected=true` のversionは追記ボタンをdisabledにする。
 - `progress=100` の親versionから追記する場合は確認ダイアログを出す。
+- 完成versionに置き換えられた中間履歴versionは、一覧UI上では `追記不可` として操作を抑制する。
 
 送信する `FormData`:
 
@@ -455,6 +499,8 @@ DBには `displayVersion` / `display_version` を保存しない。
 - `version_number`
 - `branch_label`
 - `branch_path`
+
+GitHub Pagesの通常一覧では、APIの `displayVersion` を主表示には使わず、`branchPath` から生成した数字パス版ラベルを表示する。
 
 ## 主なエラー
 
