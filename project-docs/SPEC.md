@@ -20,7 +20,7 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。�
 - 一覧側の分岐ツリー可読性改善
 - 一覧側の分岐ツリー列揃え改善
 - 一覧側の分岐ツリーバッジ整理とツリー線改善
-- 一覧側の分岐ツリー文字記号削除と表示用suffixルール改善
+- 一覧側の分岐ツリー文字記号削除と表示専用の版ラベル（`BASE` / `A1` / `B1`）生成
 - `GET /api/charts` のD1実データ読み取り
 - `POST /api/charts` の初回投稿
 - `POST /api/charts/:chartId/versions` の追記投稿
@@ -335,7 +335,7 @@ layerの `kind` 候補:
 `versions` は以下を持つ。
 
 - `parent_version_id`: 親version。rootだけNULL、それ以外は必須。
-- `version_number`: 整数。表示時に `verX.0` 形式へ変換する。
+- `version_number`: 整数。APIの `displayVersion` 生成や内部管理に使う。
 - `branch_label`: 同じ親からの分岐識別子。
 - `branch_path`: ツリー表示、ページング、祖先DL制御、並び順に使う内部パス。
 
@@ -369,8 +369,8 @@ layerの `kind` 候補:
 
 各version行には以下を表示する。
 
-- 表示専用versionラベル。DB/APIの `displayVersion` や `branchPath` は変更せず、画面側で動的に生成する。
-- 親version表示。rootは `起点`、子versionは `from verX.0` または `from verX.0-b` の形式にする。
+- 表示専用の版ラベル。rootは `BASE`、子孫は `A1`, `A2`, `B1`, `B2` のようにフロント側で動的に生成する。
+- 親version表示。rootは `起点`、子versionは `from BASE`, `from A1`, `from B1` のように表示する。
 - 重要状態バッジ。通常表示は `完成`, `没譜面`, `DL不可`, `削除申請中`, 管理非表示系に限定する。
 - 想定難易度
 - 差分作者
@@ -382,7 +382,7 @@ layerの `kind` 候補:
 
 `未完成` と `末端` は通常バッジとして表示しない。未完成かどうかは進捗%で判断できるようにし、末端かどうかはツリー線またはhover/titleなどの補助情報で確認できるようにする。
 
-通常表示では `root/a` などの内部 `branchPath` を主情報として表示しない。必要な場合はhover/titleなどの補助情報で確認できるようにする。コメント欄には投稿者コメントだけを表示し、`branchPath` や `from verX.X` などの分岐情報を混ぜない。
+通常表示では `root/a` などの内部 `branchPath` やAPI由来の `displayVersion` を主情報として表示しない。必要な場合はhover/titleなどの補助情報で確認できるようにする。コメント欄には投稿者コメントだけを表示し、`branchPath` や `from A1` などの分岐情報を混ぜない。
 
 一覧の想定難易度は `difficulty` のみを表示する。`level` は併記しない。
 
@@ -393,23 +393,23 @@ layerの `kind` 候補:
 表示例:
 
 ```text
-ver1.0
+BASE
 起点
 
-ver2.0
-from ver1.0
+A1
+from BASE
 
-ver3.0-a
-from ver2.0
+A2
+from A1
 
-ver3.0-b
-from ver2.0
+B1
+from A1
 
-ver4.0
-from ver3.0-b
+B2
+from B1
 
-ver3.0-c
-from ver2.0
+C1
+from A1
 ```
 
 表示仕様:
@@ -418,56 +418,65 @@ from ver2.0
 - `depth=0` はrootとする。
 - `depth=1` は `root/a`, `root/b` などとする。
 - `depth=2` は `root/a/a` などとする。
-- depthに応じたインデントはver列内だけで処理する。
-- ver列内にツリー専用のガターを作り、CSSの縦線と横線で親子関係を示す。
+- depthに応じたインデントは版列内だけで処理する。
+- 版列内にツリー専用のガターを作り、CSSの縦線と横線で親子関係を示す。
 - `└`, `├`, `│`, `─` などの文字ツリー記号は通常表示に使わない。
 - ツリー線は薄すぎないグレーにし、他列や進捗サムネイルに干渉しないようにする。
 - `branchPath` はhover/titleなどの補助情報として保持する。
 - スマホ幅ではツリー線やインデントを簡略化してよいが、親子関係は最低限分かるようにする。
 
-### 表示用versionラベルのsuffixルール
+### 表示専用の版ラベル
 
-画面に表示するversionラベルは、同じ親から複数分岐している場合だけsuffixを付ける。
+一覧の主表示では、線形履歴向けの `ver1.0`, `ver2.0`, `ver3.0-a` ではなく、分岐ツリー向けの `BASE` と系統ID + 系統内版数を使う。
 
-- 親からの子versionが1つだけの場合: suffixを表示しない。
-- 親からの子versionが2つ以上ある場合: その親配下の子versionに `-a`, `-b`, `-c` などのsuffixを表示する。
-- suffixは `branch_label` または `branchPath` の末尾要素から生成する。
-- root versionにはsuffixを表示しない。
-- 後から同じ親に2本目の子versionが追加された場合、以前 `ver2.0` と表示されていたものが `ver2.0-a` に変わってよい。
-- これは表示専用の変換であり、内部の `versionId`, `branchPath`, DB保存値、APIレスポンスは変更しない。
+このラベルはフロント側で生成する表示専用ラベルであり、永続的な識別子ではない。内部識別には引き続き `versionId` / `branchPath` を使う。DBに保存されている `displayVersion`, `branchPath`, `version_number`, APIレスポンスは変更しない。
+
+基本ルール:
+
+- root versionは `BASE` と表示する。
+- rootの子は、同じ親内の安定した順序で `A1`, `B1`, `C1`... を割り当てる。
+- 親の最初の子は親の系統を継続する。
+- 親の2本目以降の子は新しい系統IDを割り当てる。
+- 同じ系統を伸ばす場合は数字を+1する。
+- 系統IDは `A`...`Z`, `AA`, `AB`, `AC`... の順にする。
+
+子の安定順序:
+
+1. `createdAt` 昇順
+2. `branchPath` 昇順
+3. `versionId` 昇順
 
 例:
 
-- `root/a` のみ: `ver2.0`
-- `root/a`, `root/b`: `ver2.0-a`, `ver2.0-b`
-- `root/a/a`, `root/a/b`, `root/a/c`: `ver3.0-a`, `ver3.0-b`, `ver3.0-c`
-- `root/a/b/a` のみ: `ver4.0`
+- `root`: `BASE`
+- `root/a`: `A1`
+- `root/a/a`: `A2`
+- `root/a/b`: `B1`
+- `root/a/b/a`: `B2`
+- `root/a/c`: `C1`
+- `root/a/c/a`: `C2`
 
-from表示も同じ表示ルールを使う。
+from表示も同じ表示専用ラベルを使う。
 
-- 親が単独枝なら `from ver2.0`
-- 親が兄弟分岐の一つなら `from ver3.0-b`
+- rootは `起点`
+- `root/a` は `from BASE`
+- `root/a/a` は `from A1`
+- `root/a/b/a` は `from B1`
+
+将来、完全に安定した表示ラベルが必要になった場合は、DBに `line_label` や `line_number` 相当を保存する設計を検討する。MVPではフロント側生成でよい。
 
 PC表示では列見出しに近い行を表示し、各version行で `想定難易度`, `差分作者`, `進捗度`, `コメント` などのラベルを繰り返しすぎない。スマホ幅ではラベル付き表示へ戻してよい。
 
 列揃えの仕様:
 
 - ヘッダー行とversion行は同じgrid列定義を使う。
-- 列は `ver`, `難易度`, `作者`, `進捗`, `進捗サムネイル`, `コメント`, `操作` とする。
-- ツリーのdepthで動かすのはver列内のインデントだけとする。
+- 列は `版`, `難易度`, `作者`, `進捗`, `進捗サムネイル`, `コメント`, `操作` とする。
+- ツリーのdepthで動かすのは版列内のインデントだけとする。
 - 難易度・作者・進捗・サムネイル・コメント・操作列の開始位置はdepthに影響されない。
 - 作者名は1行省略表示とし、全文はtitle属性で確認できるようにする。
 - コメントは最大2行程度に制限し、全文はtitle属性で確認できるようにする。
 - DL/追記投稿ボタンは操作列の右端に揃える。
 - `progressMap` サムネイルは列幅内で横長に表示し、コメントや操作列を押し出さない。
-
-ソート方針:
-
-1. `branchPath` のツリー順
-2. `versionNumber`
-3. `createdAt`
-
-同じ親からの分岐suffixは `a`, `b`, ... `z`, `aa` の自然順になるように扱う。
 
 ### 重要状態バッジ表示
 
@@ -505,7 +514,7 @@ PC表示では列見出しに近い行を表示し、各version行で `想定難
 
 ### downloadBlocked 表示
 
-`downloadBlocked=true` のversionではDLボタンを無効化し、`DL不可` と表示する。ver列の重要状態バッジにも `DL不可` を表示してよい。
+`downloadBlocked=true` のversionではDLボタンを無効化し、`DL不可` と表示する。版列の重要状態バッジにも `DL不可` を表示してよい。
 
 DL可能なversionでは `DL` をテキストリンクではなく小さなボタン風に表示し、`追記投稿` ボタンと並べても違和感がない見た目にする。
 
