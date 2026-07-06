@@ -16,6 +16,21 @@ GitHub Pages URL:
 https://monsta-bms.github.io/bms-wip-charts/
 ```
 
+## PROG-04D-FIX 確認項目
+
+保存済みR2 PNGを確実に使う確認:
+
+- `GET /api/charts` のversionに `progressImage.url` があることを確認する。
+- `progressImage.url` があるversionでは、一覧DOM内に `img.progress-thumbnail-image` が実際に挿入されること。
+- `img.progress-thumbnail-image` の `src` が `API_BASE_URL` と結合済みの絶対URLになっていること。
+- Chrome DevTools Networkで `/api/progress-images/:versionId` のリクエストが出ること。
+- `/api/progress-images/:versionId` のレスポンスが `200 OK` / `image/png` になること。
+- PNG読み込み成功時は、最初から `progressMap` 再描画を選ばず、`img` 表示になること。
+- `progressImage.url` がある場合、console.debugに `[progress-thumbnail-image]` と最終 `src` が出ること。
+- `img.onerror` の場合だけ `progressMap` 再描画へfallbackすること。
+- `progressImage.url` がない古い投稿では、従来通り `progressMap` 再描画サムネイルが表示されること。
+- `progressImage.url` も `progressMap` もない投稿では、一覧全体が壊れないこと。
+
 ## PROG-04D 確認項目
 
 一覧サムネイルのR2 PNG優先表示:
@@ -130,17 +145,19 @@ GET API:
 8. 投稿成功後、`GET /api/charts` のversionに `progressImage.url` が返ることを確認する。
 9. 一覧の進捗サムネイルが `progressImage.url` のPNG画像として表示されることを確認する。
 10. Networkタブで `/api/progress-images/:versionId` が取得されていることを確認する。
-11. `GET /api/charts` の `measureNotes` で `firstPlayableMeasure` / `lastPlayableMeasure` と `displayFirstMeasure` / `displayLastMeasure` が分かれていることを確認する。
-12. `progressImage.url` を開き、PNGが表示またはダウンロードされることを確認する。
-13. 画像URLを一時的にブロックする、またはテストデータで存在しないURLにして、progressMap簡易サムネイルへfallbackすることを確認する。
-14. 一覧の `追記投稿` を押す。
-15. 追記モードで親layerと今回layerが進捗マップに表示されることを確認する。
-16. 今回追記分を塗る。
-17. `進捗画像を確認` を押し、親layerと今回layerの色がPNGで見分けられることを確認する。
-18. Networkタブで `POST /api/charts/:chartId/versions` のFormDataに `progressMap` と `progressImage` が含まれることを確認する。
-19. 追記成功後、`GET /api/charts` の新versionに `progressImage.url` が返ることを確認する。
-20. `GET /api/progress-images/:versionId` で追記versionのPNGが返ることを確認する。
-21. 一覧の保存済みR2 PNGサムネイル、またはfallbackのprogressMapサムネイルが表示されることを確認する。
+11. Elementsタブで一覧サムネイルに `img.progress-thumbnail-image` が挿入され、`src` が本番Workerの絶対URLになっていることを確認する。
+12. Consoleで `[progress-thumbnail-image]` のdebug出力に最終 `src` が出ることを確認する。
+13. `GET /api/charts` の `measureNotes` で `firstPlayableMeasure` / `lastPlayableMeasure` と `displayFirstMeasure` / `displayLastMeasure` が分かれていることを確認する。
+14. `progressImage.url` を開き、PNGが表示またはダウンロードされることを確認する。
+15. 画像URLを一時的にブロックする、またはテストデータで存在しないURLにして、progressMap簡易サムネイルへfallbackすることを確認する。
+16. 一覧の `追記投稿` を押す。
+17. 追記モードで親layerと今回layerが進捗マップに表示されることを確認する。
+18. 今回追記分を塗る。
+19. `進捗画像を確認` を押し、親layerと今回layerの色がPNGで見分けられることを確認する。
+20. Networkタブで `POST /api/charts/:chartId/versions` のFormDataに `progressMap` と `progressImage` が含まれることを確認する。
+21. 追記成功後、`GET /api/charts` の新versionに `progressImage.url` が返ることを確認する。
+22. `GET /api/progress-images/:versionId` で追記versionのPNGが返ることを確認する。
+23. 一覧の保存済みR2 PNGサムネイル、またはfallbackのprogressMapサムネイルが表示されることを確認する。
 
 ## curl確認例
 
