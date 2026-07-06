@@ -31,12 +31,48 @@
     return value;
   }
 
+  function resolveApiUrl(value) {
+    const url = String(value || "").trim();
+    if (!url) {
+      return "";
+    }
+
+    if (/^https?:\/\//i.test(url)) {
+      return url;
+    }
+
+    try {
+      if (typeof buildApiUrl === "function") {
+        return buildApiUrl(url);
+      }
+    } catch (error) {
+      warnProgressThumbnail("unknown", `buildApiUrl failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    try {
+      const fallbackBase = typeof API_BASE_URL !== "undefined" ? API_BASE_URL : window.location.origin;
+      return new URL(url, fallbackBase).toString();
+    } catch (error) {
+      warnProgressThumbnail("unknown", `progressImage.url is invalid: ${error instanceof Error ? error.message : String(error)}`);
+      return "";
+    }
+  }
+
   function warnProgressThumbnail(versionId, detail) {
     console.warn("[progress-thumbnail-render] failed to render progress thumbnail", {
       code: "PROGRESS_THUMBNAIL_RENDER_SKIPPED",
       versionId: versionId || "unknown",
       detail
     });
+  }
+
+  function getProgressImageUrl(version) {
+    const progressImage = version?.progressImage || version?.progress_image || null;
+    const rawUrl = typeof progressImage === "string"
+      ? progressImage
+      : progressImage?.url || version?.progressImageUrl || version?.progress_image_url || "";
+
+    return resolveApiUrl(rawUrl);
   }
 
   function parseProgressMap(progressMap, versionId) {
@@ -135,6 +171,19 @@
     };
   }
 
+  function getVersionProgress(version, fallbackModel) {
+    const versionProgress = Number(version?.progress);
+    if (Number.isFinite(versionProgress)) {
+      return versionProgress;
+    }
+
+    if (fallbackModel && Number.isFinite(Number(fallbackModel.progress))) {
+      return Number(fallbackModel.progress);
+    }
+
+    return 0;
+  }
+
   function isCellPainted(model, cellIndex, cellCount) {
     const startIndex = Math.floor((cellIndex * model.totalBlocks) / cellCount);
     const nextStart = Math.floor(((cellIndex + 1) * model.totalBlocks) / cellCount);
@@ -149,24 +198,74 @@
     return false;
   }
 
-  function renderProgressThumbnail(version) {
-    const model = normalizeProgressThumbnail(version);
-    if (!model) {
-      return "";
-    }
-
+  function renderProgressMapThumbnailBar(model) {
     const cellCount = Math.max(1, Math.min(model.totalBlocks, thumbnailMaxCells));
     const cells = Array.from({ length: cellCount }, (_, cellIndex) => {
       const painted = isCellPainted(model, cellIndex, cellCount);
       return `<span class="progress-thumbnail-cell${painted ? " is-painted" : ""}" aria-hidden="true"></span>`;
     }).join("");
 
+    return `<div class="progress-thumbnail-bar" style="--progress-thumbnail-cells: ${cellCount};">${cells}</div>`;
+  }
+
+  function renderProgressThumbnail(version) {
+    const versionId = version?.id || version?.versionId || "unknown";
+    const model = normalizeProgressThumbnail(version);
+    const imageUrl = getProgressImageUrl(version);
+    const progress = getVersionProgress(version, model);
+    const fallbackBar = model ? renderProgressMapThumbnailBar(model) : "";
+
+    if (imageUrl) {
+      return `
+        <div class="progress-thumbnail has-progress-image" aria-label="progress ${html(progress)}%" data-version-id="${html(versionId)}">
+          <div class="progress-thumbnail-image-wrap">
+            <img class="progress-thumbnail-image" src="${html(imageUrl)}" alt="progress image" loading="lazy" decoding="async">
+          </div>
+          <div class="progress-thumbnail-fallback"${fallbackBar ? " hidden" : " hidden"}>${fallbackBar}</div>
+          <span class="progress-thumbnail-value">progress ${html(progress)}%</span>
+        </div>
+      `;
+    }
+
+    if (!model) {
+      return "";
+    }
+
     return `
-      <div class="progress-thumbnail" aria-label="progress ${html(model.progress)}%">
-        <div class="progress-thumbnail-bar" style="--progress-thumbnail-cells: ${cellCount};">${cells}</div>
+      <div class="progress-thumbnail" aria-label="progress ${html(model.progress)}%" data-version-id="${html(versionId)}">
+        ${fallbackBar}
         <span class="progress-thumbnail-value">progress ${html(model.progress)}%</span>
       </div>
     `;
+  }
+
+  function handleProgressImageError(event) {
+    const image = event.target?.closest?.("img.progress-thumbnail-image");
+    if (!image) {
+      return;
+    }
+
+    const thumbnail = image.closest(".progress-thumbnail");
+    if (!thumbnail) {
+      return;
+    }
+
+    const versionId = thumbnail.dataset.versionId || "unknown";
+    warnProgressThumbnail(versionId, "progressImage failed to load; falling back to progressMap thumbnail.");
+
+    const imageWrap = thumbnail.querySelector(".progress-thumbnail-image-wrap");
+    const fallback = thumbnail.querySelector(".progress-thumbnail-fallback");
+    if (imageWrap) {
+      imageWrap.hidden = true;
+    }
+
+    thumbnail.classList.add("is-image-fallback");
+    if (fallback && fallback.innerHTML.trim()) {
+      fallback.hidden = false;
+      return;
+    }
+
+    thumbnail.classList.add("is-empty");
   }
 
   function renderEmptyList() {
@@ -250,6 +349,12 @@
       `;
     }).join("");
   }
+
+  if (listElement) {
+    listElement.addEventListener("error", handleProgressImageError, true);
+  }
+
+  window.renderProgressThumbnail = renderProgressThumbnail;
 
   try {
     renderCharts = renderChartsWithProgressThumbnails;
