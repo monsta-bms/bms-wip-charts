@@ -2,7 +2,7 @@
 
 ## 対象
 
-GitHub Pages の静的フロント画面、Worker API接続、初回投稿、追記投稿UI、進捗マップUI、進捗サムネイル、分岐ツリー一覧表示、完成到達後の中間version折り畳み/展開表示、進捗PNGのR2保存を確認する。
+GitHub Pages の静的フロント画面、Worker API接続、初回投稿、追記投稿UI、進捗マップUI、進捗サムネイル、分岐ツリー一覧表示、完成到達後の中間version折り畳み/展開表示、進捗PNGのR2保存、一覧での保存済みR2 PNG優先サムネイル表示を確認する。
 
 本番Worker URL:
 
@@ -15,6 +15,26 @@ GitHub Pages URL:
 ```text
 https://monsta-bms.github.io/bms-wip-charts/
 ```
+
+## PROG-04D 確認項目
+
+一覧サムネイルのR2 PNG優先表示:
+
+- `progressImage.url` があるversionでは、一覧の進捗サムネイルがR2保存済みPNGの `img` として表示されること。
+- `progressImage.url` が `/api/progress-images/:versionId` の相対URLでも、GitHub Pages側で `API_BASE_URL` と結合されて表示されること。
+- R2 PNG表示時も `progress xx%` 表示が維持されること。
+- 画像サイズが一覧行の高さや列揃えを崩さないこと。
+- 数字パス版ラベル、難易度、作者、進捗、サムネイル、コメント、操作列の位置がずれないこと。
+- 中間履歴折り畳み/展開表示でもサムネイル列が崩れないこと。
+- DLボタンと追記投稿ボタンが従来通り動作すること。
+
+fallback:
+
+- `progressImage.url` がない古い投稿では、従来通り `progressMap` から簡易サムネイルが再描画されること。
+- `progressImage.url` の画像読み込みに失敗した場合、`progressMap` から再描画した簡易サムネイルへfallbackすること。
+- 画像読み込み失敗時に画面全体が壊れないこと。
+- `progressImage.url` も `progressMap` もない投稿では、サムネイルなしでも一覧が壊れないこと。
+- 画像読み込み失敗時はconsole.warnに `[progress-thumbnail-render]` の処理段階名付きで確認できること。
 
 ## PROG-04C-C 確認項目
 
@@ -108,16 +128,19 @@ GET API:
 6. `進捗画像を確認` を押し、PNGプレビューが進捗マップと同じ終端まで表示されることを確認する。
 7. Networkタブを開き、投稿時の `POST /api/charts` のFormDataに `progressMap` と `progressImage` が含まれることを確認する。
 8. 投稿成功後、`GET /api/charts` のversionに `progressImage.url` が返ることを確認する。
-9. `GET /api/charts` の `measureNotes` で `firstPlayableMeasure` / `lastPlayableMeasure` と `displayFirstMeasure` / `displayLastMeasure` が分かれていることを確認する。
-10. `progressImage.url` を開き、PNGが表示またはダウンロードされることを確認する。
-11. 一覧の `追記投稿` を押す。
-12. 追記モードで親layerと今回layerが進捗マップに表示されることを確認する。
-13. 今回追記分を塗る。
-14. `進捗画像を確認` を押し、親layerと今回layerの色がPNGで見分けられることを確認する。
-15. Networkタブで `POST /api/charts/:chartId/versions` のFormDataに `progressMap` と `progressImage` が含まれることを確認する。
-16. 追記成功後、`GET /api/charts` の新versionに `progressImage.url` が返ることを確認する。
-17. `GET /api/progress-images/:versionId` で追記versionのPNGが返ることを確認する。
-18. 一覧の既存progressMapサムネイルが従来通り表示されることを確認する。
+9. 一覧の進捗サムネイルが `progressImage.url` のPNG画像として表示されることを確認する。
+10. Networkタブで `/api/progress-images/:versionId` が取得されていることを確認する。
+11. `GET /api/charts` の `measureNotes` で `firstPlayableMeasure` / `lastPlayableMeasure` と `displayFirstMeasure` / `displayLastMeasure` が分かれていることを確認する。
+12. `progressImage.url` を開き、PNGが表示またはダウンロードされることを確認する。
+13. 画像URLを一時的にブロックする、またはテストデータで存在しないURLにして、progressMap簡易サムネイルへfallbackすることを確認する。
+14. 一覧の `追記投稿` を押す。
+15. 追記モードで親layerと今回layerが進捗マップに表示されることを確認する。
+16. 今回追記分を塗る。
+17. `進捗画像を確認` を押し、親layerと今回layerの色がPNGで見分けられることを確認する。
+18. Networkタブで `POST /api/charts/:chartId/versions` のFormDataに `progressMap` と `progressImage` が含まれることを確認する。
+19. 追記成功後、`GET /api/charts` の新versionに `progressImage.url` が返ることを確認する。
+20. `GET /api/progress-images/:versionId` で追記versionのPNGが返ることを確認する。
+21. 一覧の保存済みR2 PNGサムネイル、またはfallbackのprogressMapサムネイルが表示されることを確認する。
 
 ## curl確認例
 
@@ -172,4 +195,4 @@ python -m http.server 8000
 
 同じ譜面ファイルを再投稿すると `DUPLICATE_FILE` になる。再テスト時はファイル内容を少し変更するか、テスト用D1/R2を初期化する。
 
-今回のフェーズでは、一覧サムネイルは引き続き `progressMap` から再描画する。R2保存済みPNGへの完全切替は次フェーズで確認する。
+PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNGを優先し、画像がない・読めない場合に `progressMap` からの再描画へfallbackする。
