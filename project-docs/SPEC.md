@@ -29,13 +29,12 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。�
 - 初回投稿時と追記投稿時の `progress_map_json` 保存
 - フロント側での進捗PNG生成、FormData添付、R2保存
 - `versions.progress_image_*` metadata保存
-- 一覧側の `progressMap` 簡易サムネイル表示
+- 一覧側の保存済み `progressImage.url` 優先サムネイル表示と `progressMap` fallback表示
 - 分岐version管理、`branch_path` 生成、完成到達時の親version DL不可化
 - `versions.file_deleted_at` / `versions.file_delete_reason` の自動削除準備カラム
 
 未実装:
 
-- 一覧サムネイルのR2進捗画像への完全切替
 - ZIP内部のBMS解析
 - 取り下げAPI
 - 削除申請API
@@ -284,6 +283,15 @@ DB保存:
 
 `GET /api/charts` は進捗画像が保存済みの場合に `progressImage` objectを返す。`GET /api/progress-images/:versionId` はR2からPNG本体を返す。
 
+一覧サムネイルは以下の優先順位で表示する。
+
+1. `version.progressImage.url` がある場合は、`img` で保存済みR2 PNGを表示する。
+2. `progressImage.url` がない場合は、従来通り `progressMap` から簡易サムネイルをブラウザ側で再描画する。
+3. R2 PNGの読み込みに失敗した場合も、同じversionの `progressMap` から再描画したサムネイルへfallbackする。
+4. `progressImage.url` も `progressMap` もない場合は、サムネイルなしの控えめな空表示にする。
+
+`progressImage.url` は `/api/progress-images/:versionId` のような相対URLで返るため、GitHub Pages側では `API_BASE_URL` と結合して表示する。MVPではcache bustingは行わない。将来、同じversionIdの画像を再生成する場合はquery付与などを検討する。
+
 ## 分岐version管理
 
 単線version管理ではなく、分岐ツリー型version管理にする。
@@ -329,12 +337,11 @@ DB保存:
 - 想定難易度
 - 差分作者
 - 進捗度
-- `progressMap` がある場合の簡易進捗サムネイル
+- `progressImage.url` がある場合は保存済みR2 PNGの進捗サムネイル
+- `progressImage.url` がない、または読み込みに失敗した場合は `progressMap` から再描画した簡易進捗サムネイル
 - コメントの短い表示
 - DLボタンまたはDL不可ボタン
 - 追記投稿ボタン
-
-現時点の一覧サムネイルは `progressMap` から再描画する。`progressImage` を一覧サムネイルへ完全利用する処理は次フェーズ以降で行う。
 
 ## 自動削除準備
 
