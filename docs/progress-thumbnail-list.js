@@ -1,6 +1,8 @@
 (() => {
   const thumbnailMaxCells = 96;
   const listElement = document.querySelector("#chartList");
+  let progressThumbnailMountFrame = 0;
+  let progressThumbnailObserver = null;
 
   function html(value) {
     if (typeof escapeHtml === "function") {
@@ -78,9 +80,29 @@
     document.head.appendChild(style);
   }
 
+  function warnProgressThumbnail(versionId, detail) {
+    console.warn("[progress-thumbnail-render] failed to render progress thumbnail", {
+      code: "PROGRESS_THUMBNAIL_RENDER_SKIPPED",
+      versionId: versionId || "unknown",
+      detail
+    });
+  }
+
+  function debugProgressImage(versionId, src) {
+    console.debug("[progress-thumbnail-image] using stored progress image", {
+      versionId: versionId || "unknown",
+      src
+    });
+  }
+
   function resolveApiUrl(value) {
     const url = String(value || "").trim();
     if (!url) {
+      return "";
+    }
+
+    if (/^blob:/i.test(url)) {
+      warnProgressThumbnail("unknown", "blob URL is not allowed for list thumbnails; use progressImage.url from R2.");
       return "";
     }
 
@@ -105,27 +127,22 @@
     }
   }
 
-  function warnProgressThumbnail(versionId, detail) {
-    console.warn("[progress-thumbnail-render] failed to render progress thumbnail", {
-      code: "PROGRESS_THUMBNAIL_RENDER_SKIPPED",
-      versionId: versionId || "unknown",
-      detail
-    });
-  }
+  function getRawProgressImageUrl(version) {
+    const progressImage = version?.progressImage || version?.progress_image || null;
+    if (typeof progressImage === "string") {
+      return progressImage;
+    }
 
-  function debugProgressImage(versionId, src) {
-    console.debug("[progress-thumbnail-image] using stored progress image", {
-      versionId: versionId || "unknown",
-      src
-    });
+    return progressImage?.url ||
+      progressImage?.downloadUrl ||
+      progressImage?.download_url ||
+      version?.progressImageUrl ||
+      version?.progress_image_url ||
+      "";
   }
 
   function getProgressImageUrl(version) {
-    const progressImage = version?.progressImage || version?.progress_image || null;
-    const rawUrl = typeof progressImage === "string"
-      ? progressImage
-      : progressImage?.url || version?.progressImageUrl || version?.progress_image_url || "";
-
+    const rawUrl = getRawProgressImageUrl(version);
     return resolveApiUrl(rawUrl);
   }
 
@@ -264,10 +281,15 @@
 
   function renderProgressThumbnail(version) {
     const versionId = version?.id || version?.versionId || "unknown";
-    const model = normalizeProgressThumbnail(version);
+    const rawImageUrl = getRawProgressImageUrl(version);
     const imageUrl = getProgressImageUrl(version);
+    const model = normalizeProgressThumbnail(version);
     const progress = getVersionProgress(version, model);
     const fallbackBar = model ? renderProgressMapThumbnailBar(model) : "";
+
+    if (rawImageUrl && !imageUrl) {
+      warnProgressThumbnail(versionId, "progressImage.url exists but could not be resolved; falling back to progressMap thumbnail.");
+    }
 
     if (imageUrl) {
       return `
@@ -325,27 +347,86 @@
   function mountProgressImageThumbnails(root = document) {
     const thumbnails = Array.from(root.querySelectorAll(".progress-thumbnail.has-progress-image[data-progress-image-src]"));
     thumbnails.forEach((thumbnail) => {
-      if (thumbnail.dataset.progressImageMounted === "true") {
-        return;
-      }
-
       const src = thumbnail.dataset.progressImageSrc || "";
       const wrap = thumbnail.querySelector(".progress-thumbnail-image-wrap");
-      if (!src || !wrap) {
+      const versionId = thumbnail.dataset.versionId || "unknown";
+
+      if (!src) {
+        warnProgressThumbnail(versionId, "progressImage.url exists but resolved img src is empty.");
         return;
       }
 
-      const versionId = thumbnail.dataset.versionId || "unknown";
+      if (/^blob:/i.test(src)) {
+        warnProgressThumbnail(versionId, "blob URL was rejected for list thumbnail; falling back to progressMap thumbnail.");
+        const existing = thumbnail.querySelector("img.progress-thumbnail-image");
+        if (existing) {
+          fallbackProgressImage(existing);
+        }
+        return;
+      }
+
+      if (!wrap) {
+        warnProgressThumbnail(versionId, "progressImage.url exists but thumbnail image container is missing.");
+        return;
+      }
+
+      const currentImage = wrap.querySelector("img.progress-thumbnail-image");
+      if (thumbnail.dataset.progressImageMounted === "true" && currentImage?.getAttribute("src") === src) {
+        return;
+      }
+
       const image = document.createElement("img");
       image.className = "progress-thumbnail-image";
       image.alt = "progress image";
       image.decoding = "async";
       image.loading = "eager";
+      image.addEventListener("load", () => {
+        thumbnail.classList.add("is-image-loaded");
+      });
       image.addEventListener("error", () => fallbackProgressImage(image));
+
+      wrap.hidden = false;
       wrap.replaceChildren(image);
       thumbnail.dataset.progressImageMounted = "true";
       debugProgressImage(versionId, src);
       image.src = src;
+    });
+  }
+
+  function scheduleProgressImageThumbnailMount(root = listElement || document) {
+    if (!root) {
+      return;
+    }
+
+    if (progressThumbnailMountFrame) {
+      window.cancelAnimationFrame?.(progressThumbnailMountFrame);
+      progressThumbnailMountFrame = 0;
+    }
+
+    const run = () => {
+      progressThumbnailMountFrame = 0;
+      mountProgressImageThumbnails(root);
+    };
+
+    if (typeof window.requestAnimationFrame === "function") {
+      progressThumbnailMountFrame = window.requestAnimationFrame(run);
+      return;
+    }
+
+    window.setTimeout(run, 0);
+  }
+
+  function installProgressThumbnailObserver() {
+    if (!listElement || progressThumbnailObserver || typeof MutationObserver !== "function") {
+      return;
+    }
+
+    progressThumbnailObserver = new MutationObserver(() => {
+      scheduleProgressImageThumbnailMount(listElement);
+    });
+    progressThumbnailObserver.observe(listElement, {
+      childList: true,
+      subtree: true
     });
   }
 
@@ -430,10 +511,11 @@
       `;
     }).join("");
 
-    mountProgressImageThumbnails(listElement);
+    scheduleProgressImageThumbnailMount(listElement);
   }
 
   ensureProgressImageThumbnailStyle();
+  installProgressThumbnailObserver();
 
   if (listElement) {
     listElement.addEventListener("error", handleProgressImageError, true);
@@ -441,6 +523,7 @@
 
   window.renderProgressThumbnail = renderProgressThumbnail;
   window.mountProgressImageThumbnails = mountProgressImageThumbnails;
+  window.scheduleProgressImageThumbnailMount = scheduleProgressImageThumbnailMount;
 
   try {
     renderCharts = renderChartsWithProgressThumbnails;
