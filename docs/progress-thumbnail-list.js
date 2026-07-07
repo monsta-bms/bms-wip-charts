@@ -3,6 +3,9 @@
   const listElement = document.querySelector("#chartList");
   let progressThumbnailMountFrame = 0;
   let progressThumbnailObserver = null;
+  let progressThumbnailBridgeInstalled = false;
+  let progressImageGenerationWarnCount = 0;
+  const maxProgressImageGenerationWarnings = 5;
 
   function html(value) {
     if (typeof escapeHtml === "function") {
@@ -84,6 +87,19 @@
     console.warn("[progress-thumbnail-render] failed to render progress thumbnail", {
       code: "PROGRESS_THUMBNAIL_RENDER_SKIPPED",
       versionId: versionId || "unknown",
+      detail
+    });
+  }
+
+  function warnProgressImageNotGenerated(version, detail) {
+    if (progressImageGenerationWarnCount >= maxProgressImageGenerationWarnings) {
+      return;
+    }
+
+    progressImageGenerationWarnCount += 1;
+    console.warn("[progress-thumbnail-image] progressImage url exists but R2 image thumbnail was not generated", {
+      versionId: getVersionId(version) || "unknown",
+      progressImageUrl: getRawProgressImageUrl(version),
       detail
     });
   }
@@ -173,6 +189,10 @@
 
   function getVersionId(version) {
     return version?.id || version?.versionId || version?.version_id || "";
+  }
+
+  function getBranchPath(version) {
+    return version?.branchPath || version?.branch_path || "";
   }
 
   function pickProgressImageUrl(value) {
@@ -541,6 +561,74 @@
     window.setTimeout(run, 0);
   }
 
+  function findVersionForRow(row, versions, fallbackIndex) {
+    const branchPath = row.dataset.branchPath || "";
+    if (branchPath) {
+      const byBranchPath = versions.find((version) => getBranchPath(version) === branchPath);
+      if (byBranchPath) {
+        return byBranchPath;
+      }
+    }
+
+    const thumbnailVersionId = row.querySelector(".progress-thumbnail[data-version-id]")?.dataset.versionId || "";
+    if (thumbnailVersionId) {
+      const byThumbnailId = versions.find((version) => getVersionId(version) === thumbnailVersionId);
+      if (byThumbnailId) {
+        return byThumbnailId;
+      }
+    }
+
+    return versions[fallbackIndex] || null;
+  }
+
+  function applyStoredProgressThumbnails(data, root = listElement) {
+    const charts = Array.isArray(data?.charts) ? data.charts : [];
+    if (!root || charts.length === 0) {
+      return;
+    }
+
+    const chartGroups = Array.from(root.querySelectorAll(".chart-group"));
+    charts.forEach((entry, chartIndex) => {
+      const group = chartGroups[chartIndex];
+      const versions = Array.isArray(entry?.versions) ? entry.versions : [];
+      const list = group?.querySelector(".version-list");
+      const rows = Array.from(list?.querySelectorAll(":scope > .version-row") || []);
+      if (!group || !list || versions.length === 0 || rows.length === 0) {
+        return;
+      }
+
+      let fallbackIndex = 0;
+      rows.forEach((row) => {
+        const version = findVersionForRow(row, versions, fallbackIndex);
+        fallbackIndex += 1;
+        if (!version) {
+          return;
+        }
+
+        const thumbnailCell = row.querySelector(":scope > .thumbnail-cell, :scope > .progress-thumbnail-block");
+        if (!thumbnailCell) {
+          return;
+        }
+
+        const rawImageUrl = getRawProgressImageUrl(version);
+        const thumbnail = renderProgressThumbnail(version);
+        if (thumbnail) {
+          thumbnailCell.classList.remove("is-empty");
+          thumbnailCell.innerHTML = thumbnail;
+        } else {
+          thumbnailCell.classList.add("is-empty");
+          thumbnailCell.innerHTML = "";
+        }
+
+        if (rawImageUrl && !thumbnailCell.querySelector(".progress-thumbnail.has-progress-image")) {
+          warnProgressImageNotGenerated(version, "renderProgressThumbnail did not return has-progress-image markup.");
+        }
+      });
+    });
+
+    scheduleProgressImageThumbnailMount(root);
+  }
+
   function installProgressThumbnailObserver() {
     if (!listElement || progressThumbnailObserver || typeof MutationObserver !== "function") {
       return;
@@ -639,6 +727,70 @@
     scheduleProgressImageThumbnailMount(listElement);
   }
 
+  function installFinalProgressThumbnailBridge() {
+    if (progressThumbnailBridgeInstalled || typeof renderCharts !== "function") {
+      return;
+    }
+
+    const finalRenderCharts = renderCharts;
+    if (finalRenderCharts.__progressThumbnailFinalBridge) {
+      progressThumbnailBridgeInstalled = true;
+      return;
+    }
+
+    const renderChartsWithFinalProgressThumbnails = (data) => {
+      finalRenderCharts(data);
+      applyStoredProgressThumbnails(data, listElement);
+    };
+    renderChartsWithFinalProgressThumbnails.__progressThumbnailFinalBridge = true;
+    renderChartsWithFinalProgressThumbnails.__progressThumbnailBase = finalRenderCharts;
+
+    try {
+      renderCharts = renderChartsWithFinalProgressThumbnails;
+    } catch (error) {
+      window.renderCharts = renderChartsWithFinalProgressThumbnails;
+    }
+
+    progressThumbnailBridgeInstalled = true;
+    if (typeof loadCharts === "function") {
+      loadCharts();
+    }
+  }
+
+  function debugProgressThumbnails(root = listElement || document) {
+    const scope = root || document;
+    const progressThumbnails = Array.from(scope.querySelectorAll(".progress-thumbnail"));
+    const imageThumbnails = Array.from(scope.querySelectorAll(".progress-thumbnail.has-progress-image"));
+    const images = Array.from(scope.querySelectorAll("img.progress-thumbnail-image"));
+    const sourceNodes = Array.from(scope.querySelectorAll("[data-progress-image-src]"));
+    const summary = {
+      progressThumbnailCount: progressThumbnails.length,
+      hasProgressImageCount: imageThumbnails.length,
+      imageElementCount: images.length,
+      dataProgressImageSrcCount: sourceNodes.length,
+      hasScheduleProgressImageThumbnailMount: typeof window.scheduleProgressImageThumbnailMount === "function",
+      hasRenderProgressThumbnail: typeof window.renderProgressThumbnail === "function"
+    };
+    const samples = sourceNodes.slice(0, 10).map((node, index) => ({
+      index,
+      dataProgressImageSrc: node.dataset.progressImageSrc || "",
+      imgSrc: images[index]?.src || ""
+    }));
+
+    console.log("[progress-thumbnail-debug] summary", summary);
+    if (typeof console.table === "function") {
+      console.table(samples);
+    } else {
+      console.log("[progress-thumbnail-debug] samples", samples);
+    }
+
+    return {
+      ...summary,
+      dataProgressImageSrcSamples: sourceNodes.slice(0, 10).map((node) => node.dataset.progressImageSrc || ""),
+      imgSrcSamples: images.slice(0, 10).map((image) => image.src || "")
+    };
+  }
+
   ensureProgressImageThumbnailStyle();
   installProgressThumbnailObserver();
 
@@ -649,6 +801,8 @@
   window.renderProgressThumbnail = renderProgressThumbnail;
   window.mountProgressImageThumbnails = mountProgressImageThumbnails;
   window.scheduleProgressImageThumbnailMount = scheduleProgressImageThumbnailMount;
+  window.applyStoredProgressThumbnails = applyStoredProgressThumbnails;
+  window.debugProgressThumbnails = debugProgressThumbnails;
 
   try {
     renderCharts = renderChartsWithProgressThumbnails;
@@ -659,4 +813,6 @@
   if (typeof loadCharts === "function") {
     loadCharts();
   }
+
+  window.setTimeout(installFinalProgressThumbnailBridge, 0);
 })();
