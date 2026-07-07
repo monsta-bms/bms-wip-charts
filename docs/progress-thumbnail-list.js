@@ -127,18 +127,143 @@
     }
   }
 
-  function getRawProgressImageUrl(version) {
-    const progressImage = version?.progressImage || version?.progress_image || null;
-    if (typeof progressImage === "string") {
-      return progressImage;
+  const progressImageObjectKeys = [
+    "progressImage",
+    "progress_image",
+    "progressImageObject",
+    "progress_image_object"
+  ];
+
+  const progressImageUrlKeys = [
+    "progressImageUrl",
+    "progressImageURL",
+    "progress_image_url",
+    "progress_image_URL",
+    "progressImageSrc",
+    "progress_image_src",
+    "progressImageHref",
+    "progress_image_href",
+    "progressImagePath",
+    "progress_image_path"
+  ];
+
+  const progressImageNestedUrlKeys = [
+    "url",
+    "href",
+    "src",
+    "path",
+    "downloadUrl",
+    "download_url",
+    "imageUrl",
+    "image_url",
+    "imageURL",
+    "progressImageUrl",
+    "progressImageURL",
+    "progress_image_url"
+  ];
+
+  function firstStringValue(values) {
+    for (const value of values) {
+      if (typeof value === "string" && value.trim()) {
+        return value.trim();
+      }
+    }
+    return "";
+  }
+
+  function getVersionId(version) {
+    return version?.id || version?.versionId || version?.version_id || "";
+  }
+
+  function pickProgressImageUrl(value) {
+    if (typeof value === "string") {
+      return value;
     }
 
-    return progressImage?.url ||
-      progressImage?.downloadUrl ||
-      progressImage?.download_url ||
-      version?.progressImageUrl ||
-      version?.progress_image_url ||
-      "";
+    if (!value || typeof value !== "object") {
+      return "";
+    }
+
+    const directUrl = firstStringValue(progressImageNestedUrlKeys.map((key) => value[key]));
+    if (directUrl) {
+      return directUrl;
+    }
+
+    const nestedCandidates = [value.image, value.file, value.progressImage, value.progress_image];
+    for (const nested of nestedCandidates) {
+      if (nested && nested !== value) {
+        const nestedUrl = pickProgressImageUrl(nested);
+        if (nestedUrl) {
+          return nestedUrl;
+        }
+      }
+    }
+
+    return "";
+  }
+
+  function hasProgressImageMetadata(value) {
+    if (!value || typeof value !== "object") {
+      return false;
+    }
+
+    if (pickProgressImageUrl(value)) {
+      return true;
+    }
+
+    return Boolean(
+      value.key ||
+      value.r2Key ||
+      value.r2_key ||
+      value.sha256 ||
+      value.mime ||
+      value.mimeType ||
+      value.mime_type ||
+      value.createdAt ||
+      value.created_at ||
+      Number.isFinite(Number(value.size))
+    );
+  }
+
+  function getRawProgressImageUrl(version) {
+    if (!version || typeof version !== "object") {
+      return "";
+    }
+
+    const directUrl = firstStringValue(progressImageUrlKeys.map((key) => version[key]));
+    if (directUrl) {
+      return directUrl;
+    }
+
+    for (const key of progressImageObjectKeys) {
+      const objectUrl = pickProgressImageUrl(version[key]);
+      if (objectUrl) {
+        return objectUrl;
+      }
+    }
+
+    for (const [key, value] of Object.entries(version)) {
+      const normalizedKey = key.toLowerCase().replace(/[_-]/g, "");
+      if (!normalizedKey.includes("progress") || !normalizedKey.includes("image")) {
+        continue;
+      }
+
+      const discoveredUrl = pickProgressImageUrl(value);
+      if (discoveredUrl) {
+        return discoveredUrl;
+      }
+    }
+
+    const versionId = getVersionId(version);
+    if (versionId) {
+      for (const key of progressImageObjectKeys) {
+        if (hasProgressImageMetadata(version[key])) {
+          return `/api/progress-images/${encodeURIComponent(versionId)}`;
+        }
+      }
+    }
+
+    return "";
   }
 
   function getProgressImageUrl(version) {
