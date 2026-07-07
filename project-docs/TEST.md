@@ -16,6 +16,26 @@ GitHub Pages URL:
 https://monsta-bms.github.io/bms-wip-charts/
 ```
 
+## PROG-04D-FIX4 確認項目
+
+一覧描画で保存済みR2 PNGを確実に使う確認:
+
+- `GET /api/charts` に `progressImage.url` または `progressImageUrl` があるversionでは、DOMに `.progress-thumbnail.has-progress-image` が生成されること。
+- `GET /api/charts` に `progressImage.url` または `progressImageUrl` があるversionでは、DOMに `img.progress-thumbnail-image` が生成されること。
+- DevTools Consoleで `document.querySelectorAll(".progress-thumbnail.has-progress-image").length` が1以上になること。
+- DevTools Consoleで `document.querySelectorAll("img.progress-thumbnail-image").length` が1以上になること。
+- `img.progress-thumbnail-image` の `src` が本番Workerの `/api/progress-images/:versionId` 絶対URLになること。
+- `progressImage.url` が相対URLでも `API_BASE_URL` と結合されること。
+- `progressImage.url` があるversionでは、最初から `progressMap` 再描画を選ばず、まずR2 PNG用の `img` を作ること。
+- Chrome DevTools Networkで `progress-images` を検索したとき、`/api/progress-images/:versionId` のリクエストが出ること。
+- `/api/progress-images/:versionId` のStatusが `200` になること。
+- `/api/progress-images/:versionId` のTypeが `png` になること。
+- NetworkのInitiatorが `progress-thumbnail-list.js` になること。
+- `img.onerror` の場合だけ `progressMap` 再描画へfallbackすること。
+- `progressImage.url` がない古い投稿では、従来通り `progressMap` fallbackが使われること。
+- `branch-tree-list.js` のツリー表示後でも、R2 PNG優先表示が維持されること。
+- `blob:` URLは一覧サムネイルでは使われないこと。
+
 ## PROG-04D-FIX2 確認項目
 
 一覧サムネイルでR2保存済みPNGを確実に使う確認:
