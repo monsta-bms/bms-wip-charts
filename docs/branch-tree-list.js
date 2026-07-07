@@ -776,6 +776,7 @@
   function renderChartsAsTree(data) {
     baseRenderCharts(data);
     enhanceTreeDisplay(data);
+    window.scheduleProgressImageThumbnailMount?.(listElement);
   }
 
   try {
