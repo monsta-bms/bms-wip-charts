@@ -7,15 +7,20 @@
     densityHeight: 52,
     blockTop: 72,
     blockHeight: 26,
-    labelY: 112
+    labelY: 112,
+    blockGap: 1,
+    minUnpaintedZeroHeight: 3,
+    minPaintedZeroHeight: 4,
+    minDensityHeight: 6
   };
 
   const fallbackLayerColors = {
-    initial: "rgba(37, 111, 93, 0.44)",
-    parent: "rgba(37, 111, 93, 0.2)",
-    current: "rgba(37, 99, 235, 0.5)",
-    rejected: "rgba(122, 52, 24, 0.42)",
-    empty: "#edf2f5"
+    initial: "#2E8B57",
+    parent: "rgba(46, 139, 87, 0.32)",
+    current: "#4A90E2",
+    rejected: "#7A4A30",
+    empty: "#CFE3DC",
+    emptyRail: "#D8E8E2"
   };
 
   let currentPreviewUrl = "";
@@ -85,6 +90,14 @@
     }
 
     return Math.max(0, Number(layerIndex) - 1);
+  }
+
+  function getEmptyFillColor() {
+    return window.BmsProgressLayerColors?.PROGRESS_LAYER_COLORS?.empty?.fill || fallbackLayerColors.empty;
+  }
+
+  function getEmptyRailColor() {
+    return window.BmsProgressLayerColors?.PROGRESS_LAYER_COLORS?.empty?.stroke || fallbackLayerColors.emptyRail;
   }
 
   function getLayerFillColor(layer, layerIndex, layerCount, contextMode) {
@@ -195,6 +208,51 @@
     });
   }
 
+  function calculateDensityScale(densities) {
+    const values = densities
+      .map((item) => item.densityValue)
+      .filter((value) => Number.isFinite(value) && value > 0)
+      .sort((a, b) => a - b);
+
+    if (values.length === 0) {
+      return 1;
+    }
+
+    const percentileIndex = Math.min(values.length - 1, Math.max(0, Math.floor((values.length - 1) * 0.95)));
+    return Math.max(1, values[percentileIndex]);
+  }
+
+  function buildProgressImageLayout(blockCount, settings) {
+    const safeBlockCount = Math.max(1, blockCount);
+    const plotX = settings.paddingX;
+    const plotWidth = Math.max(1, settings.width - settings.paddingX * 2);
+    const requestedGap = Number.isFinite(Number(settings.blockGap)) ? Math.max(0, Number(settings.blockGap)) : 1;
+    const gap = safeBlockCount > 160 ? Math.min(0.5, requestedGap) : requestedGap;
+    const availableWidth = Math.max(1, plotWidth - Math.max(0, safeBlockCount - 1) * gap);
+    const blockWidth = Math.max(0.5, availableWidth / safeBlockCount);
+    const stride = blockWidth + gap;
+
+    return {
+      blockCount: safeBlockCount,
+      blockWidth,
+      gap,
+      plotWidth,
+      plotX,
+      xForBlock(index) {
+        return plotX + Math.max(0, index) * stride;
+      }
+    };
+  }
+
+  function getBarHeight(densityValue, densityScale, painted, settings) {
+    if (densityValue <= 0) {
+      return painted ? settings.minPaintedZeroHeight : settings.minUnpaintedZeroHeight;
+    }
+
+    const normalized = Math.min(1, Math.sqrt(densityValue / Math.max(1, densityScale)));
+    return Math.max(settings.minDensityHeight, normalized * settings.densityHeight);
+  }
+
   function drawRoundedRect(context, x, y, width, height, radius) {
     const safeRadius = Math.min(radius, width / 2, height / 2);
     context.beginPath();
@@ -222,13 +280,13 @@
       throw new Error("Canvas 2D context is not available.");
     }
 
-    const innerX = settings.paddingX;
-    const innerWidth = settings.width - settings.paddingX * 2;
     const blocks = model.blocks;
     const blockCount = blocks.length;
-    const slotWidth = innerWidth / blockCount;
+    const layout = buildProgressImageLayout(blockCount, settings);
     const densities = buildBlockDensities(blocks);
-    const maxDensity = Math.max(1, ...densities.map((item) => item.densityValue));
+    const densityScale = calculateDensityScale(densities);
+    const emptyFill = getEmptyFillColor();
+    const emptyRail = getEmptyRailColor();
 
     context.clearRect(0, 0, settings.width, settings.height);
     context.fillStyle = "#f8fafb";
@@ -240,35 +298,40 @@
     context.stroke();
 
     const densityBaseY = settings.densityTop + settings.densityHeight;
+    context.fillStyle = "#eef6f2";
+    context.fillRect(layout.plotX, settings.densityTop, layout.plotWidth, settings.densityHeight);
+
     context.strokeStyle = "#dce4ea";
     context.beginPath();
-    context.moveTo(innerX, densityBaseY + 0.5);
-    context.lineTo(innerX + innerWidth, densityBaseY + 0.5);
+    context.moveTo(layout.plotX, densityBaseY + 0.5);
+    context.lineTo(layout.plotX + layout.plotWidth, densityBaseY + 0.5);
     context.stroke();
 
-    context.fillStyle = "rgba(42, 128, 116, 0.5)";
     densities.forEach((item, index) => {
-      const x = innerX + index * slotWidth;
-      const barHeight = Math.max(item.densityValue > 0 ? 2 : 0, (item.densityValue / maxDensity) * settings.densityHeight);
-      context.fillRect(x, densityBaseY - barHeight, Math.max(1, Math.ceil(slotWidth)), barHeight);
+      const x = layout.xForBlock(index);
+      const painted = model.paintedIndexes.has(index);
+      const barHeight = getBarHeight(item.densityValue, densityScale, painted, settings);
+      context.fillStyle = model.blockColorByIndex.get(index) || emptyFill;
+      context.fillRect(x, densityBaseY - barHeight, layout.blockWidth, barHeight);
     });
 
-    blocks.forEach((block, index) => {
-      const x = innerX + index * slotWidth;
-      const width = Math.max(1, Math.ceil(slotWidth));
-      context.fillStyle = model.blockColorByIndex.get(block.index) || fallbackLayerColors.empty;
-      context.fillRect(x, settings.blockTop, width, settings.blockHeight);
-    });
-
-    context.strokeStyle = "rgba(91, 101, 114, 0.18)";
-    context.lineWidth = 1;
     blocks.forEach((_, index) => {
-      const x = innerX + index * slotWidth;
-      context.beginPath();
-      context.moveTo(x + 0.5, settings.blockTop);
-      context.lineTo(x + 0.5, settings.blockTop + settings.blockHeight);
-      context.stroke();
+      const x = layout.xForBlock(index);
+      context.fillStyle = model.blockColorByIndex.get(index) || emptyRail;
+      context.fillRect(x, settings.blockTop, layout.blockWidth, settings.blockHeight);
     });
+
+    if (layout.blockWidth >= 2.4) {
+      context.strokeStyle = "rgba(91, 101, 114, 0.14)";
+      context.lineWidth = 1;
+      blocks.forEach((_, index) => {
+        const x = layout.xForBlock(index);
+        context.beginPath();
+        context.moveTo(x + 0.5, settings.blockTop);
+        context.lineTo(x + 0.5, settings.blockTop + settings.blockHeight);
+        context.stroke();
+      });
+    }
 
     context.strokeStyle = "rgba(59, 68, 78, 0.82)";
     context.lineWidth = 1.5;
@@ -277,21 +340,21 @@
         return;
       }
 
-      const x = innerX + index * slotWidth;
+      const x = layout.xForBlock(index);
       context.beginPath();
-      context.moveTo(x + 0.5, settings.blockTop - 2);
+      context.moveTo(x + 0.5, settings.densityTop);
       context.lineTo(x + 0.5, settings.blockTop + settings.blockHeight + 2);
       context.stroke();
     });
 
     context.strokeStyle = "#d8e1e8";
     context.lineWidth = 1;
-    context.strokeRect(innerX + 0.5, settings.blockTop + 0.5, innerWidth - 1, settings.blockHeight - 1);
+    context.strokeRect(layout.plotX + 0.5, settings.blockTop + 0.5, layout.plotWidth - 1, settings.blockHeight - 1);
 
     context.fillStyle = "#1c5749";
     context.font = "700 12px system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
     context.textBaseline = "middle";
-    context.fillText(`progress ${model.progress}%`, innerX, settings.labelY);
+    context.fillText(`progress ${model.progress}%`, layout.plotX, settings.labelY);
 
     return canvas;
   }
