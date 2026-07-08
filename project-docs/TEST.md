@@ -43,6 +43,29 @@ https://monsta-bms.github.io/bms-wip-charts/
 - 版ラベルとfrom表示が省略されず読めること。
 - DL/追記投稿ボタンが壊れていないこと。
 
+## UI-LIST-THUMB-04 確認項目
+
+一覧のツリー線、進捗サムネイル整列、未着手領域の視認性を確認する:
+
+- ツリー線が以前より見やすくなっていること。
+- ツリー線が濃すぎて版ラベル、難易度、作者を邪魔していないこと。
+- ツリー線が版列内で完結し、展開ガターや操作列に干渉しないこと。
+- 上段密度バーと下段レールのX位置が一致していること。
+- 先頭block、中央block、末尾blockで上段と下段のズレがないこと。
+- block数が20、72、81、100以上でも上段と下段のズレがないこと。
+- 横幅が変わっても上段と下段のズレがないこと。
+- 未塗りblockが薄緑で視認できること。
+- 未塗り領域が連続していても背景に溶けないこと。
+- 未塗り0ノーツblockでも最低高さが表示されること。
+- 塗り済み0ノーツblockでも色付き最低高さが表示されること。
+- 低密度blockでも最低高さが表示されること。
+- 曲後半の未作成領域がサムネイル上で分かること。
+- 一覧表示と新規生成PNGで、未塗り色、最低高さ、上段/下段の位置関係が大きくズレないこと。
+- 既存R2 PNGは自動再生成されないこと。
+- 中間履歴行でもサムネイルが読めること。
+- サムネイル下の `32/81 blocks · 3 users` 表示が維持されること。
+- DL/追記投稿ボタンが壊れていないこと。
+
 ## PROG-04D-FIX5 確認項目
 
 一覧サムネイルでR2保存済みPNGがどこで止まっていないか確認する:
@@ -236,20 +259,22 @@ GET API:
 8. 投稿成功後、`GET /api/charts` のversionに `progressImage.url` が返ることを確認する。
 9. 一覧の進捗サムネイルが、progressMapがあるversionでは密度棒グラフとして表示されることを確認する。
 10. サムネイルの棒の高さが密度、棒の色が最後に塗ったlayer/投稿者を表していることを確認する。
-11. サムネイルにhoverし、色と投稿者/追記者の対応がtooltipで確認できることを確認する。
-12. サムネイル下が `32/81 blocks · 3 users` のような表示になり、進捗率は進捗列で確認できることを確認する。
-13. Consoleで `window.debugProgressThumbnails()` を実行し、`densityScaleSamples` が確認できることを確認する。
-14. `GET /api/charts` の `measureNotes` で `firstPlayableMeasure` / `lastPlayableMeasure` と `displayFirstMeasure` / `displayLastMeasure` が分かれていることを確認する。
-15. `progressImage.url` を開き、PNGが表示またはダウンロードされることを確認する。
-16. progressMapがない古い投稿では、保存済みR2 PNGまたは空表示へfallbackしても一覧が壊れないことを確認する。
-17. 一覧の `追記投稿` を押す。
-18. 追記モードで親layerと今回layerが進捗マップに表示されることを確認する。
-19. 今回追記分を塗る。
-20. `進捗画像を確認` を押し、親layerと今回layerの色がPNGで見分けられることを確認する。
-21. Networkタブで `POST /api/charts/:chartId/versions` のFormDataに `progressMap` と `progressImage` が含まれることを確認する。
-22. 追記成功後、`GET /api/charts` の新versionに `progressImage.url` が返ることを確認する。
-23. `GET /api/progress-images/:versionId` で追記versionのPNGが返ることを確認する。
-24. 一覧のprogressMap密度サムネイル、またはfallbackの保存済みR2 PNGサムネイルが表示されることを確認する。
+11. サムネイル上段の密度バーと下段レールの先頭、中央、末尾blockのX位置が揃っていることを確認する。
+12. 未塗り領域や0ノーツ区間が薄緑の最低高さとして見えることを確認する。
+13. サムネイルにhoverし、色と投稿者/追記者の対応がtooltipで確認できることを確認する。
+14. サムネイル下が `32/81 blocks · 3 users` のような表示になり、進捗率は進捗列で確認できることを確認する。
+15. Consoleで `window.debugProgressThumbnails()` を実行し、`densityScaleSamples` が確認できることを確認する。
+16. `GET /api/charts` の `measureNotes` で `firstPlayableMeasure` / `lastPlayableMeasure` と `displayFirstMeasure` / `displayLastMeasure` が分かれていることを確認する。
+17. `progressImage.url` を開き、PNGが表示またはダウンロードされることを確認する。
+18. progressMapがない古い投稿では、保存済みR2 PNGまたは空表示へfallbackしても一覧が壊れないことを確認する。
+19. 一覧の `追記投稿` を押す。
+20. 追記モードで親layerと今回layerが進捗マップに表示されることを確認する。
+21. 今回追記分を塗る。
+22. `進捗画像を確認` を押し、親layerと今回layerの色、未塗り領域、上段/下段の位置関係が一覧サムネイルと大きくズレないことを確認する。
+23. Networkタブで `POST /api/charts/:chartId/versions` のFormDataに `progressMap` と `progressImage` が含まれることを確認する。
+24. 追記成功後、`GET /api/charts` の新versionに `progressImage.url` が返ることを確認する。
+25. `GET /api/progress-images/:versionId` で追記versionのPNGが返ることを確認する。
+26. 一覧のprogressMap密度サムネイル、またはfallbackの保存済みR2 PNGサムネイルが表示されることを確認する。
 
 ## curl確認例
 
