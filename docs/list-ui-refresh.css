@@ -1,0 +1,280 @@
+/* List thumbnail and branch tree refresh. Loaded after the base styles. */
+
+.page-shell {
+  max-width: 1280px;
+}
+
+.version-list {
+  --version-tree-indent: 18px;
+  --tree-line-color: rgba(116, 128, 139, 0.46);
+  --tree-line-strong: rgba(31, 122, 92, 0.42);
+  --version-grid-columns: var(--group-gutter-width) minmax(176px, 1.22fr) 72px minmax(110px, 0.78fr) 76px minmax(250px, 1.65fr) minmax(150px, 1fr) 132px;
+}
+
+.version-list-header {
+  background: #fbfcfd;
+}
+
+.version-row.version-tree-row {
+  min-height: 82px;
+}
+
+.version-tree-cell {
+  overflow: visible;
+}
+
+.version-tree-tag {
+  gap: 8px;
+  padding-left: calc(var(--tree-depth, 0) * var(--version-tree-indent));
+}
+
+.tree-connector {
+  flex: 0 0 auto;
+  min-width: 24px;
+  position: relative;
+}
+
+.version-row.version-tree-row[data-depth="0"] .tree-connector {
+  height: 38px;
+  min-width: 28px;
+  padding-top: 0;
+}
+
+.version-row.version-tree-row[data-depth="0"] .tree-connector::before {
+  background: transparent;
+  border: 0;
+  border-left: 2px solid var(--primary-dark);
+  border-radius: 0;
+  bottom: 2px;
+  box-shadow: none;
+  content: "";
+  display: block;
+  height: auto;
+  left: 12px;
+  position: absolute;
+  top: 2px;
+  width: 0;
+}
+
+.version-row.version-tree-row[data-depth="0"] .tree-connector::after {
+  background: #ffffff;
+  border: 2px solid var(--primary-dark);
+  border-radius: 999px;
+  content: "";
+  height: 8px;
+  left: 17px;
+  position: absolute;
+  top: 15px;
+  width: 8px;
+}
+
+.version-row.version-tree-row[data-depth]:not([data-depth="0"]) .version-tree-cell::before,
+.version-row.version-tree-row[data-depth]:not([data-depth="0"]) .version-tree-cell::after {
+  opacity: 0.82;
+}
+
+.version-row.version-tree-row[data-depth]:not([data-depth="0"]) .version-tree-cell::before {
+  border-left: 1px dashed var(--tree-line-color);
+  bottom: -1px;
+  left: calc((var(--tree-depth, 0) * var(--version-tree-indent)) + 8px);
+  top: -1px;
+}
+
+.version-row.version-tree-row[data-depth]:not([data-depth="0"]) .version-tree-cell::after {
+  border-bottom: 1px dashed var(--tree-line-color);
+  border-bottom-left-radius: 12px;
+  border-left: 1px dashed var(--tree-line-color);
+  border-top: 0;
+  height: 18px;
+  left: calc((var(--tree-depth, 0) * var(--version-tree-indent)) + 8px);
+  top: 13px;
+  width: 18px;
+}
+
+.version-row.version-tree-row.is-intermediate-history .version-tree-cell::before,
+.version-row.version-tree-row.is-intermediate-history .version-tree-cell::after {
+  opacity: 0.52;
+}
+
+.version-main-label {
+  color: var(--primary-dark);
+  font-size: 1.08rem;
+  letter-spacing: 0;
+}
+
+.version-parent-line {
+  color: #536372;
+  font-size: 0.76rem;
+}
+
+.group-gutter-cell::before {
+  border-left-color: rgba(102, 114, 127, 0.36);
+}
+
+.group-toggle-button {
+  border-radius: 5px;
+  min-width: 32px;
+}
+
+.thumbnail-cell .progress-thumbnail,
+.progress-thumbnail-block .progress-thumbnail {
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+}
+
+.progress-thumbnail {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  width: 100%;
+}
+
+.progress-thumbnail.has-progress-map {
+  align-content: center;
+}
+
+.progress-thumbnail-graph {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  width: 100%;
+}
+
+.progress-thumbnail-density {
+  align-items: end;
+  background: linear-gradient(180deg, rgba(250, 252, 251, 0.95), rgba(241, 247, 244, 0.95));
+  border-left: 1px solid rgba(31, 122, 92, 0.28);
+  border-right: 1px solid rgba(31, 122, 92, 0.28);
+  display: grid;
+  gap: 1px;
+  grid-template-columns: repeat(var(--progress-thumbnail-cells), minmax(1px, 1fr));
+  height: 44px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 1px 1px 0;
+}
+
+.progress-thumbnail-density-bar {
+  align-self: end;
+  background: rgba(194, 218, 209, 0.42);
+  border-radius: 2px 2px 0 0;
+  height: var(--bar-height, 4%);
+  min-height: 2px;
+  min-width: 1px;
+  opacity: 0.78;
+}
+
+.progress-thumbnail-density-bar.is-painted {
+  background: var(--bar-fill, rgba(37, 111, 93, 0.58));
+  opacity: 0.98;
+}
+
+.progress-thumbnail-fill-strip {
+  background: #e7efec;
+  display: grid;
+  gap: 1px;
+  grid-template-columns: repeat(var(--progress-thumbnail-cells), minmax(1px, 1fr));
+  height: 7px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.progress-thumbnail-strip-cell {
+  background: #dfe8e5;
+  min-width: 1px;
+}
+
+.progress-thumbnail-strip-cell.is-painted {
+  background: var(--strip-fill, rgba(37, 111, 93, 0.58));
+}
+
+.progress-thumbnail-meta {
+  align-items: center;
+  color: #536372;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 7px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.15;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.progress-thumbnail-meta span:first-child {
+  color: var(--primary-dark);
+}
+
+.progress-thumbnail-value {
+  color: #536372;
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.progress-thumbnail-image-wrap {
+  height: 46px;
+  max-width: none;
+}
+
+@media (max-width: 960px) {
+  .version-list {
+    --version-tree-indent: 14px;
+    --version-grid-columns: var(--group-gutter-width) minmax(142px, 1.15fr) 58px minmax(82px, 0.7fr) 62px minmax(168px, 1.1fr) minmax(116px, 0.9fr) 112px;
+  }
+
+  .progress-thumbnail-density {
+    height: 38px;
+  }
+
+  .progress-thumbnail-meta {
+    gap: 5px;
+    font-size: 0.68rem;
+  }
+}
+
+@media (max-width: 760px) {
+  .version-row.version-tree-row {
+    min-height: 0;
+  }
+
+  .version-tree-tag {
+    padding-left: calc(var(--tree-depth, 0) * var(--version-tree-indent));
+  }
+
+  .version-row.version-tree-row[data-depth]:not([data-depth="0"]) .version-tree-cell::before {
+    left: calc((var(--tree-depth, 0) * var(--version-tree-indent)) + 6px);
+  }
+
+  .version-row.version-tree-row[data-depth]:not([data-depth="0"]) .version-tree-cell::after {
+    left: calc((var(--tree-depth, 0) * var(--version-tree-indent)) + 6px);
+    width: 14px;
+  }
+
+  .progress-thumbnail-density {
+    height: 42px;
+  }
+
+  .progress-thumbnail-meta {
+    flex-wrap: wrap;
+    row-gap: 3px;
+    white-space: normal;
+  }
+}
+
+@media (max-width: 640px) {
+  .page-shell {
+    max-width: 100%;
+  }
+
+  .version-list {
+    --version-tree-indent: 12px;
+  }
+
+  .tree-connector {
+    min-width: 18px;
+  }
+}
