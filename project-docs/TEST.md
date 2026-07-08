@@ -2,7 +2,7 @@
 
 ## 対象
 
-GitHub Pages の静的フロント画面、Worker API接続、初回投稿、追記投稿UI、進捗マップUI、進捗サムネイル、分岐ツリー一覧表示、完成到達後の中間version折り畳み/展開表示、進捗PNGのR2保存、一覧での保存済みR2 PNG優先サムネイル表示を確認する。
+GitHub Pages の静的フロント画面、Worker API接続、初回投稿、追記投稿UI、進捗マップUI、進捗サムネイル、分岐ツリー一覧表示、完成到達後の中間version折り畳み/展開表示、進捗PNGのR2保存、一覧でのprogressMapベース密度サムネイル表示とprogressImage fallback表示を確認する。
 
 本番Worker URL:
 
@@ -15,6 +15,33 @@ GitHub Pages URL:
 ```text
 https://monsta-bms.github.io/bms-wip-charts/
 ```
+
+## UI-LIST-THUMB-03 確認項目
+
+一覧用進捗サムネイルの視認性、凡例、tooltip、情報量を確認する:
+
+- サムネイルで棒の高さがノーツ密度を表すこと。
+- サムネイルで棒の色が、そのblockを最後に塗ったlayer/投稿者を表すこと。
+- 密度は色の濃淡ではなく、高さで表現されること。
+- 未着手blockが薄い緑/ミントで見えること。
+- 0ノーツblockでも最低高さが表示されること。
+- 塗り済み0ノーツblockは未着手0ノーツblockより見分けやすいこと。
+- 複数投稿者のlayerが緑、青、紫、橙、赤系の色で区別できること。
+- サムネイルhoverで、進捗、作成済みblock数、参加者数が確認できること。
+- サムネイルhoverで、色と投稿者/追記者の対応が確認できること。
+- `progressMap.layers[].versionId` と同じchart内のversion authorが対応付けられること。
+- authorが引けないlayerでは `初回` / `追記1` / `追記2` / `layer n` などのfallback表示になること。
+- サムネイル下の表示が `32/81 blocks · 3 users` のように整理されていること。
+- サムネイル下に `progress 40%` のような進捗率重複表示が出ないこと。
+- 進捗率は進捗列のチップで分かること。
+- densityScaleが現在読み込んでいる一覧内で共通になっていること。
+- 極端な高密度譜面に引っ張られすぎないよう、95パーセンタイル相当のスケールになること。
+- 密度の低い譜面と高い譜面を見比べたとき、棒の高さ差が出ること。
+- `window.debugProgressThumbnails()` で `densityScaleSamples` が確認できること。
+- progressMapがない投稿でも一覧が壊れないこと。
+- 中間履歴行でもサムネイル、作者、難易度、進捗が読めること。
+- 版ラベルとfrom表示が省略されず読めること。
+- DL/追記投稿ボタンが壊れていないこと。
 
 ## PROG-04D-FIX5 確認項目
 
@@ -207,23 +234,22 @@ GET API:
 6. `進捗画像を確認` を押し、PNGプレビューが進捗マップと同じ終端まで表示されることを確認する。
 7. Networkタブを開き、投稿時の `POST /api/charts` のFormDataに `progressMap` と `progressImage` が含まれることを確認する。
 8. 投稿成功後、`GET /api/charts` のversionに `progressImage.url` が返ることを確認する。
-9. 一覧の進捗サムネイルが `progressImage.url` のPNG画像として表示されることを確認する。
-10. Networkタブで `/api/progress-images/:versionId` が取得されていることを確認する。
-11. Elementsタブで一覧サムネイルに `img.progress-thumbnail-image` が挿入され、`src` が本番Workerの絶対URLになっていることを確認する。
-12. Consoleで `window.debugProgressThumbnails()` を実行し、`hasProgressImageCount` と `imageElementCount` が1以上であることを確認する。
-13. Consoleで `[progress-thumbnail-image]` のdebug出力に最終 `src` が出ることを確認する。
-14. Networkタブで、一覧サムネイルのPNGが `blob:` ではなく `/api/progress-images/:versionId` から取得されていることを確認する。
-15. `GET /api/charts` の `measureNotes` で `firstPlayableMeasure` / `lastPlayableMeasure` と `displayFirstMeasure` / `displayLastMeasure` が分かれていることを確認する。
-16. `progressImage.url` を開き、PNGが表示またはダウンロードされることを確認する。
-17. 画像URLを一時的にブロックする、またはテストデータで存在しないURLにして、progressMap簡易サムネイルへfallbackすることを確認する。
-18. 一覧の `追記投稿` を押す。
-19. 追記モードで親layerと今回layerが進捗マップに表示されることを確認する。
-20. 今回追記分を塗る。
-21. `進捗画像を確認` を押し、親layerと今回layerの色がPNGで見分けられることを確認する。
-22. Networkタブで `POST /api/charts/:chartId/versions` のFormDataに `progressMap` と `progressImage` が含まれることを確認する。
-23. 追記成功後、`GET /api/charts` の新versionに `progressImage.url` が返ることを確認する。
-24. `GET /api/progress-images/:versionId` で追記versionのPNGが返ることを確認する。
-25. 一覧の保存済みR2 PNGサムネイル、またはfallbackのprogressMapサムネイルが表示されることを確認する。
+9. 一覧の進捗サムネイルが、progressMapがあるversionでは密度棒グラフとして表示されることを確認する。
+10. サムネイルの棒の高さが密度、棒の色が最後に塗ったlayer/投稿者を表していることを確認する。
+11. サムネイルにhoverし、色と投稿者/追記者の対応がtooltipで確認できることを確認する。
+12. サムネイル下が `32/81 blocks · 3 users` のような表示になり、進捗率は進捗列で確認できることを確認する。
+13. Consoleで `window.debugProgressThumbnails()` を実行し、`densityScaleSamples` が確認できることを確認する。
+14. `GET /api/charts` の `measureNotes` で `firstPlayableMeasure` / `lastPlayableMeasure` と `displayFirstMeasure` / `displayLastMeasure` が分かれていることを確認する。
+15. `progressImage.url` を開き、PNGが表示またはダウンロードされることを確認する。
+16. progressMapがない古い投稿では、保存済みR2 PNGまたは空表示へfallbackしても一覧が壊れないことを確認する。
+17. 一覧の `追記投稿` を押す。
+18. 追記モードで親layerと今回layerが進捗マップに表示されることを確認する。
+19. 今回追記分を塗る。
+20. `進捗画像を確認` を押し、親layerと今回layerの色がPNGで見分けられることを確認する。
+21. Networkタブで `POST /api/charts/:chartId/versions` のFormDataに `progressMap` と `progressImage` が含まれることを確認する。
+22. 追記成功後、`GET /api/charts` の新versionに `progressImage.url` が返ることを確認する。
+23. `GET /api/progress-images/:versionId` で追記versionのPNGが返ることを確認する。
+24. 一覧のprogressMap密度サムネイル、またはfallbackの保存済みR2 PNGサムネイルが表示されることを確認する。
 
 ## curl確認例
 
@@ -278,4 +304,4 @@ python -m http.server 8000
 
 同じ譜面ファイルを再投稿すると `DUPLICATE_FILE` になる。再テスト時はファイル内容を少し変更するか、テスト用D1/R2を初期化する。
 
-PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNGを優先し、画像がない・読めない場合に `progressMap` からの再描画へfallbackする。
+PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNGを優先し、画像がない・読めない場合に `progressMap` からの再描画へfallbackする。UI-LIST-THUMB-03以降は、一覧比較性を優先し、有効な `progressMap` があるversionではprogressMapベースの密度サムネイルを優先する。保存済みR2 PNGはprogressMapがない、または再描画できない場合のfallbackとして扱う。
