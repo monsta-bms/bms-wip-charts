@@ -1,31 +1,31 @@
 (() => {
   const PROGRESS_LAYER_COLORS = {
     initial: {
-      stroke: "#1f7a5c",
-      fill: "rgba(37, 111, 93, 0.44)"
+      stroke: "#2E8B57",
+      fill: "#2E8B57"
     },
     parent: {
-      stroke: "#1f7a5c",
-      fill: "rgba(37, 111, 93, 0.2)"
+      stroke: "#2E8B57",
+      fill: "rgba(46, 139, 87, 0.32)"
     },
     followups: [
-      { stroke: "#2563eb", fill: "rgba(37, 99, 235, 0.5)" },
-      { stroke: "#7c3aed", fill: "rgba(124, 58, 237, 0.46)" },
-      { stroke: "#dc6b19", fill: "rgba(220, 107, 25, 0.46)" },
-      { stroke: "#0891b2", fill: "rgba(8, 145, 178, 0.46)" },
-      { stroke: "#be123c", fill: "rgba(190, 18, 60, 0.42)" }
+      { stroke: "#4A90E2", fill: "#4A90E2" },
+      { stroke: "#8B6BD6", fill: "#8B6BD6" },
+      { stroke: "#E39D3C", fill: "#E39D3C" },
+      { stroke: "#D96C6C", fill: "#D96C6C" },
+      { stroke: "#2BA7A0", fill: "#2BA7A0" }
     ],
     completion: {
-      stroke: "#15803d",
-      fill: "rgba(21, 128, 61, 0.5)"
+      stroke: "#2E8B57",
+      fill: "#2E8B57"
     },
     rejected: {
-      stroke: "#7a3418",
-      fill: "rgba(122, 52, 24, 0.42)"
+      stroke: "#7A4A30",
+      fill: "#7A4A30"
     },
     empty: {
-      stroke: "#d8e1e8",
-      fill: "#edf2f5"
+      stroke: "#CFE1DA",
+      fill: "#D9E8E2"
     }
   };
 
@@ -38,7 +38,7 @@
   function isFollowupLayer(layer) {
     const kind = String(layer?.kind || "").toLowerCase();
     const color = String(layer?.color || "").toLowerCase();
-    return kind === "followup" || color === "#2563eb";
+    return kind === "followup" || color === "#2563eb" || color === "#4a90e2";
   }
 
   function getFollowupIndex(layer, index, context) {
