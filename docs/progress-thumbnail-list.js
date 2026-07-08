@@ -6,8 +6,9 @@
   let progressThumbnailBridgeInstalled = false;
   let progressImageGenerationWarnCount = 0;
   const maxProgressImageGenerationWarnings = 5;
-  const emptyBarFill = "rgba(194, 218, 209, 0.42)";
-  const emptyStripFill = "#dfe8e5";
+  const emptyBarFill = "#D9E8E2";
+  const emptyStripFill = "#CFE1DA";
+  const colorLabels = ["青", "紫", "橙", "赤", "水色"];
 
   function html(value) {
     if (typeof escapeHtml === "function") {
@@ -331,11 +332,11 @@
 
   function resolveLayerFill(layer, index, context) {
     const helpers = window.BmsProgressLayerColors || null;
-    const fallback = layer?.color || "rgba(37, 111, 93, 0.58)";
+    const fallback = layer?.color || "#2E8B57";
     if (helpers?.getLayerFillColor) {
       return sanitizeCssColor(helpers.getLayerFillColor(layer, index, context), fallback);
     }
-    return sanitizeCssColor(fallback, "rgba(37, 111, 93, 0.58)");
+    return sanitizeCssColor(fallback, "#2E8B57");
   }
 
   function getBlockDensityValue(block) {
@@ -349,7 +350,95 @@
     return Math.max(0, playNotes);
   }
 
-  function normalizeProgressThumbnail(version) {
+  function getLayerColorLabel(layer, index) {
+    const kind = String(layer?.kind || "").toLowerCase();
+    if (kind === "initial" || kind === "rejected_auto_fill" || index === 0) {
+      return "緑";
+    }
+    if (kind === "completion_fill") {
+      return "緑";
+    }
+    return colorLabels[Math.max(0, index - 1) % colorLabels.length];
+  }
+
+  function getLayerContributorLabel(layer, index, context) {
+    const versionId = String(layer?.versionId || layer?.version_id || "").trim();
+    const author = versionId && context?.authorByVersionId?.get(versionId);
+    if (author) {
+      return author;
+    }
+
+    const kind = String(layer?.kind || "").toLowerCase();
+    if (versionId === "pending") {
+      return "今回追記";
+    }
+    if (kind === "initial" || kind === "rejected_auto_fill" || index === 0) {
+      return "初回";
+    }
+    if (kind === "completion_fill") {
+      return "完成補完";
+    }
+    if (kind === "followup") {
+      return `追記${Math.max(1, index)}`;
+    }
+    return `layer ${index + 1}`;
+  }
+
+  function collectDensityValuesFromProgressMap(progressMap) {
+    if (!progressMap || !Array.isArray(progressMap.blocks)) {
+      return [];
+    }
+
+    return progressMap.blocks
+      .map(getBlockDensityValue)
+      .filter((value) => Number.isFinite(value) && value > 0);
+  }
+
+  function calculateDensityScale(values) {
+    const positiveValues = values.filter((value) => Number.isFinite(value) && value > 0).sort((a, b) => a - b);
+    if (positiveValues.length === 0) {
+      return null;
+    }
+
+    const percentileIndex = Math.min(positiveValues.length - 1, Math.max(0, Math.floor((positiveValues.length - 1) * 0.95)));
+    return Math.max(1, positiveValues[percentileIndex]);
+  }
+
+  function calculateListDensityScale(data) {
+    const charts = Array.isArray(data?.charts) ? data.charts : [];
+    const values = [];
+
+    for (const entry of charts) {
+      const versions = Array.isArray(entry?.versions) ? entry.versions : [];
+      for (const version of versions) {
+        const progressMap = parseProgressMap(version?.progressMap, getVersionId(version) || "unknown");
+        values.push(...collectDensityValuesFromProgressMap(progressMap));
+      }
+    }
+
+    return calculateDensityScale(values);
+  }
+
+  function buildAuthorByVersionId(versions) {
+    const authorByVersionId = new Map();
+    for (const version of versions || []) {
+      const versionId = getVersionId(version);
+      const author = String(version?.author || version?.user || "").trim();
+      if (versionId && author) {
+        authorByVersionId.set(versionId, author);
+      }
+    }
+    return authorByVersionId;
+  }
+
+  function buildThumbnailContext(versions, densityScale) {
+    return {
+      authorByVersionId: buildAuthorByVersionId(versions),
+      densityScale
+    };
+  }
+
+  function normalizeProgressThumbnail(version, context = {}) {
     const versionId = getVersionId(version) || "unknown";
     const progressMap = parseProgressMap(version?.progressMap, versionId);
     if (!progressMap) {
@@ -378,11 +467,13 @@
       densityValue: getBlockDensityValue(block),
       fill: emptyBarFill,
       stripFill: emptyStripFill,
+      contributorLabel: "未着手",
+      colorLabel: "未着手",
       layerIndex: null,
       painted: false
     }));
     const paintedIndexes = new Set();
-    const touchedLayers = new Set();
+    const touchedLayers = new Map();
 
     for (const [layerIndex, layer] of progressMap.layers.entries()) {
       if (!layer || !Array.isArray(layer.ranges)) {
@@ -390,6 +481,8 @@
         continue;
       }
 
+      const colorLabel = getLayerColorLabel(layer, layerIndex);
+      const contributorLabel = getLayerContributorLabel(layer, layerIndex, context);
       const fill = resolveLayerFill(layer, layerIndex, { versionId, role: layer?.kind || "list" });
       let layerTouched = false;
 
@@ -420,6 +513,8 @@
             ...blockStates[index],
             fill,
             stripFill: fill,
+            contributorLabel,
+            colorLabel,
             layerIndex,
             painted: true
           };
@@ -427,7 +522,12 @@
       }
 
       if (layerTouched) {
-        touchedLayers.add(layerIndex);
+        touchedLayers.set(layerIndex, {
+          colorLabel,
+          contributorLabel,
+          fill,
+          layerIndex
+        });
       }
     }
 
@@ -435,16 +535,23 @@
     const progress = Number.isFinite(Number(progressMap.progress))
       ? Number(progressMap.progress)
       : calculatedProgress;
-    const maxDensity = Math.max(1, ...blockStates.map((state) => state.densityValue));
+    const localMaxDensity = Math.max(1, ...blockStates.map((state) => state.densityValue));
+    const densityScale = Number.isFinite(Number(context?.densityScale)) && Number(context.densityScale) > 0
+      ? Number(context.densityScale)
+      : localMaxDensity;
+    const contributorSet = new Set([...touchedLayers.values()].map((item) => item.contributorLabel));
 
     return {
       totalBlocks,
       blockStates,
       paintedIndexes,
       paintedCount: paintedIndexes.size,
-      userCount: Math.max(1, touchedLayers.size),
+      unpaintedCount: Math.max(0, totalBlocks - paintedIndexes.size),
+      userCount: Math.max(1, contributorSet.size),
+      legendEntries: [...touchedLayers.values()],
       progress,
-      maxDensity
+      localMaxDensity,
+      densityScale
     };
   }
 
@@ -472,6 +579,8 @@
     let painted = false;
     let fill = emptyBarFill;
     let stripFill = emptyStripFill;
+    let contributorLabel = "未着手";
+    let colorLabel = "未着手";
 
     for (let index = safeStart; index <= safeEnd; index += 1) {
       const state = model.blockStates[index];
@@ -481,15 +590,21 @@
         painted = true;
         fill = state.fill || fill;
         stripFill = state.stripFill || stripFill;
+        contributorLabel = state.contributorLabel || contributorLabel;
+        colorLabel = state.colorLabel || colorLabel;
       }
     }
 
     const densityValue = densityCount > 0 ? densityTotal / densityCount : 0;
+    const scale = Math.max(1, model.densityScale || model.localMaxDensity || 1);
+    const normalized = densityValue > 0 ? Math.min(1, Math.sqrt(densityValue / scale)) : 0;
     const height = densityValue > 0
-      ? Math.max(12, Math.min(100, Math.round((densityValue / model.maxDensity) * 100)))
-      : 4;
+      ? Math.max(14, Math.min(100, Math.round(normalized * 100)))
+      : painted ? 10 : 6;
 
     return {
+      colorLabel,
+      contributorLabel,
       densityValue,
       fill,
       height,
@@ -498,13 +613,32 @@
     };
   }
 
+  function buildTooltip(model, progress) {
+    const lines = [
+      `進捗: ${progress}%`,
+      `作成済み: ${model.paintedCount}/${model.totalBlocks} blocks`,
+      `参加者: ${model.userCount} users`
+    ];
+
+    if (model.legendEntries.length > 0) {
+      lines.push("");
+      for (const entry of model.legendEntries) {
+        lines.push(`${entry.colorLabel}: ${entry.contributorLabel}`);
+      }
+    }
+
+    lines.push(`未着手: ${model.unpaintedCount} blocks`);
+    return lines.join("\n");
+  }
+
   function renderProgressMapThumbnailGraph(model, progress) {
     const cellCount = Math.max(1, Math.min(model.totalBlocks, thumbnailMaxCells));
     const summaries = Array.from({ length: cellCount }, (_, cellIndex) => summarizeCell(model, cellIndex, cellCount));
     const bars = summaries.map((summary) => `
       <span
-        class="progress-thumbnail-density-bar${summary.painted ? " is-painted" : ""}"
+        class="progress-thumbnail-density-bar${summary.painted ? " is-painted" : ""}${summary.densityValue === 0 ? " is-zero-density" : ""}"
         style="--bar-height: ${summary.height}%; --bar-fill: ${html(summary.fill)};"
+        title="${html(`${summary.colorLabel}: ${summary.contributorLabel}`)}"
         aria-hidden="true"
       ></span>
     `).join("");
@@ -523,10 +657,8 @@
         <div class="progress-thumbnail-fill-strip" aria-hidden="true">${strip}</div>
       </div>
       <div class="progress-thumbnail-meta">
-        <span>progress ${html(progress)}%</span>
-        <span aria-hidden="true">|</span>
         <span>${html(model.paintedCount)}/${html(model.totalBlocks)} blocks</span>
-        <span aria-hidden="true">|</span>
+        <span aria-hidden="true">·</span>
         <span>${html(userLabel)}</span>
       </div>
     `;
@@ -536,11 +668,11 @@
     return renderProgressMapThumbnailGraph(model, model.progress);
   }
 
-  function renderProgressThumbnail(version) {
+  function renderProgressThumbnail(version, context = {}) {
     const versionId = getVersionId(version) || "unknown";
     const rawImageUrl = getRawProgressImageUrl(version);
     const imageUrl = getProgressImageUrl(version);
-    const model = normalizeProgressThumbnail(version);
+    const model = normalizeProgressThumbnail(version, context);
     const progress = getVersionProgress(version, model);
 
     if (rawImageUrl && !imageUrl) {
@@ -548,8 +680,9 @@
     }
 
     if (model) {
+      const tooltip = buildTooltip(model, progress);
       return `
-        <div class="progress-thumbnail has-progress-map" aria-label="progress ${html(progress)}%" data-version-id="${html(versionId)}"${imageUrl ? ` data-progress-image-src="${html(imageUrl)}"` : ""}>
+        <div class="progress-thumbnail has-progress-map" aria-label="${html(tooltip)}" title="${html(tooltip)}" data-version-id="${html(versionId)}" data-density-scale="${html(model.densityScale)}"${imageUrl ? ` data-progress-image-src="${html(imageUrl)}"` : ""}>
           ${renderProgressMapThumbnailGraph(model, progress)}
         </div>
       `;
@@ -697,10 +830,12 @@
       return;
     }
 
+    const densityScale = calculateListDensityScale(data);
     const chartGroups = Array.from(root.querySelectorAll(".chart-group"));
     charts.forEach((entry, chartIndex) => {
       const group = chartGroups[chartIndex];
       const versions = Array.isArray(entry?.versions) ? entry.versions : [];
+      const context = buildThumbnailContext(versions, densityScale);
       const list = group?.querySelector(".version-list");
       const rows = Array.from(list?.querySelectorAll(":scope > .version-row") || []);
       if (!group || !list || versions.length === 0 || rows.length === 0) {
@@ -721,7 +856,7 @@
         }
 
         const rawImageUrl = getRawProgressImageUrl(version);
-        const thumbnail = renderProgressThumbnail(version);
+        const thumbnail = renderProgressThumbnail(version, context);
         if (thumbnail) {
           thumbnailCell.classList.remove("is-empty");
           thumbnailCell.innerHTML = thumbnail;
@@ -776,14 +911,16 @@
       return;
     }
 
+    const densityScale = calculateListDensityScale(data);
     listElement.innerHTML = charts.map((entry) => {
       const song = entry.song || {};
       const chart = entry.chart || {};
       const versions = Array.isArray(entry.versions) ? entry.versions : [];
+      const context = buildThumbnailContext(versions, densityScale);
       const rows = versions.map((version) => {
         const difficulty = version.difficulty || "未入力";
         const progress = Number.isFinite(Number(version.progress)) ? Number(version.progress) : 0;
-        const thumbnail = renderProgressThumbnail(version);
+        const thumbnail = renderProgressThumbnail(version, context);
         const downloadHref = downloadUrl(version.file?.downloadUrl);
         const rejectedBadge = version.isRejected ? `<span class="rejected-badge">没譜面</span>` : "";
         const downloadControl = downloadHref
@@ -875,6 +1012,7 @@
     const imageThumbnails = Array.from(scope.querySelectorAll(".progress-thumbnail.has-progress-image"));
     const images = Array.from(scope.querySelectorAll("img.progress-thumbnail-image"));
     const sourceNodes = Array.from(scope.querySelectorAll("[data-progress-image-src]"));
+    const densityScaleSamples = progressThumbnails.slice(0, 10).map((node) => node.dataset.densityScale || "");
     const summary = {
       progressThumbnailCount: progressThumbnails.length,
       hasProgressMapCount: mapThumbnails.length,
@@ -882,6 +1020,7 @@
       hasProgressImageCount: imageThumbnails.length,
       imageElementCount: images.length,
       dataProgressImageSrcCount: sourceNodes.length,
+      densityScaleSamples,
       hasScheduleProgressImageThumbnailMount: typeof window.scheduleProgressImageThumbnailMount === "function",
       hasRenderProgressThumbnail: typeof window.renderProgressThumbnail === "function"
     };
