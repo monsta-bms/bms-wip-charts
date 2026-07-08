@@ -6,6 +6,8 @@
   let progressThumbnailBridgeInstalled = false;
   let progressImageGenerationWarnCount = 0;
   const maxProgressImageGenerationWarnings = 5;
+  const emptyBarFill = "rgba(194, 218, 209, 0.42)";
+  const emptyStripFill = "#dfe8e5";
 
   function html(value) {
     if (typeof escapeHtml === "function") {
@@ -313,46 +315,42 @@
     return null;
   }
 
-  function collectPaintedIndexes(progressMap, totalBlocks, versionId) {
-    const paintedIndexes = new Set();
-
-    for (const [layerIndex, layer] of progressMap.layers.entries()) {
-      if (!layer || !Array.isArray(layer.ranges)) {
-        warnProgressThumbnail(versionId, `layers[${layerIndex}].ranges is missing.`);
-        continue;
-      }
-
-      for (const [rangeIndex, range] of layer.ranges.entries()) {
-        if (!Array.isArray(range) || range.length !== 2) {
-          warnProgressThumbnail(versionId, `layers[${layerIndex}].ranges[${rangeIndex}] is invalid.`);
-          continue;
-        }
-
-        const start = Number(range[0]);
-        const end = Number(range[1]);
-        if (!Number.isInteger(start) || !Number.isInteger(end) || start > end) {
-          warnProgressThumbnail(versionId, `layers[${layerIndex}].ranges[${rangeIndex}] is out of shape.`);
-          continue;
-        }
-
-        const safeStart = Math.max(0, start);
-        const safeEnd = Math.min(totalBlocks - 1, end);
-        if (safeStart > safeEnd) {
-          warnProgressThumbnail(versionId, `layers[${layerIndex}].ranges[${rangeIndex}] is outside block range.`);
-          continue;
-        }
-
-        for (let index = safeStart; index <= safeEnd; index += 1) {
-          paintedIndexes.add(index);
-        }
-      }
+  function sanitizeCssColor(value, fallback) {
+    const color = String(value || "").trim();
+    if (/^#[0-9a-f]{3,8}$/i.test(color)) {
+      return color;
     }
+    if (/^rgba?\([0-9\s.,%+-]+\)$/i.test(color)) {
+      return color;
+    }
+    if (/^hsla?\([0-9\s.,%+-]+\)$/i.test(color)) {
+      return color;
+    }
+    return fallback;
+  }
 
-    return paintedIndexes;
+  function resolveLayerFill(layer, index, context) {
+    const helpers = window.BmsProgressLayerColors || null;
+    const fallback = layer?.color || "rgba(37, 111, 93, 0.58)";
+    if (helpers?.getLayerFillColor) {
+      return sanitizeCssColor(helpers.getLayerFillColor(layer, index, context), fallback);
+    }
+    return sanitizeCssColor(fallback, "rgba(37, 111, 93, 0.58)");
+  }
+
+  function getBlockDensityValue(block) {
+    const playNotes = Number(block?.playNotes ?? block?.play_notes ?? block?.notes ?? block?.noteCount ?? 0);
+    const start = Number(block?.startTimeSec ?? block?.start_time_sec ?? block?.startSec ?? 0);
+    const end = Number(block?.endTimeSec ?? block?.end_time_sec ?? block?.endSec ?? 0);
+    const duration = end > start ? end - start : 0;
+    if (duration > 0) {
+      return Math.max(0, playNotes / duration);
+    }
+    return Math.max(0, playNotes);
   }
 
   function normalizeProgressThumbnail(version) {
-    const versionId = version?.id || "unknown";
+    const versionId = getVersionId(version) || "unknown";
     const progressMap = parseProgressMap(version?.progressMap, versionId);
     if (!progressMap) {
       return null;
@@ -374,16 +372,79 @@
       return null;
     }
 
-    const paintedIndexes = collectPaintedIndexes(progressMap, totalBlocks, versionId);
+    const blockStates = progressMap.blocks.map((block, index) => ({
+      index,
+      block,
+      densityValue: getBlockDensityValue(block),
+      fill: emptyBarFill,
+      stripFill: emptyStripFill,
+      layerIndex: null,
+      painted: false
+    }));
+    const paintedIndexes = new Set();
+    const touchedLayers = new Set();
+
+    for (const [layerIndex, layer] of progressMap.layers.entries()) {
+      if (!layer || !Array.isArray(layer.ranges)) {
+        warnProgressThumbnail(versionId, `layers[${layerIndex}].ranges is missing.`);
+        continue;
+      }
+
+      const fill = resolveLayerFill(layer, layerIndex, { versionId, role: layer?.kind || "list" });
+      let layerTouched = false;
+
+      for (const [rangeIndex, range] of layer.ranges.entries()) {
+        if (!Array.isArray(range) || range.length !== 2) {
+          warnProgressThumbnail(versionId, `layers[${layerIndex}].ranges[${rangeIndex}] is invalid.`);
+          continue;
+        }
+
+        const start = Number(range[0]);
+        const end = Number(range[1]);
+        if (!Number.isInteger(start) || !Number.isInteger(end) || start > end) {
+          warnProgressThumbnail(versionId, `layers[${layerIndex}].ranges[${rangeIndex}] is out of shape.`);
+          continue;
+        }
+
+        const safeStart = Math.max(0, start);
+        const safeEnd = Math.min(totalBlocks - 1, end);
+        if (safeStart > safeEnd) {
+          warnProgressThumbnail(versionId, `layers[${layerIndex}].ranges[${rangeIndex}] is outside block range.`);
+          continue;
+        }
+
+        layerTouched = true;
+        for (let index = safeStart; index <= safeEnd; index += 1) {
+          paintedIndexes.add(index);
+          blockStates[index] = {
+            ...blockStates[index],
+            fill,
+            stripFill: fill,
+            layerIndex,
+            painted: true
+          };
+        }
+      }
+
+      if (layerTouched) {
+        touchedLayers.add(layerIndex);
+      }
+    }
+
     const calculatedProgress = Math.round((paintedIndexes.size / totalBlocks) * 100);
     const progress = Number.isFinite(Number(progressMap.progress))
       ? Number(progressMap.progress)
       : calculatedProgress;
+    const maxDensity = Math.max(1, ...blockStates.map((state) => state.densityValue));
 
     return {
       totalBlocks,
+      blockStates,
       paintedIndexes,
-      progress
+      paintedCount: paintedIndexes.size,
+      userCount: Math.max(1, touchedLayers.size),
+      progress,
+      maxDensity
     };
   }
 
@@ -400,62 +461,111 @@
     return 0;
   }
 
-  function isCellPainted(model, cellIndex, cellCount) {
+  function summarizeCell(model, cellIndex, cellCount) {
     const startIndex = Math.floor((cellIndex * model.totalBlocks) / cellCount);
     const nextStart = Math.floor(((cellIndex + 1) * model.totalBlocks) / cellCount);
     const endIndex = Math.max(startIndex, nextStart - 1);
+    const safeStart = Math.min(model.totalBlocks - 1, startIndex);
+    const safeEnd = Math.min(model.totalBlocks - 1, endIndex);
+    let densityTotal = 0;
+    let densityCount = 0;
+    let painted = false;
+    let fill = emptyBarFill;
+    let stripFill = emptyStripFill;
 
-    for (let index = startIndex; index <= endIndex; index += 1) {
-      if (model.paintedIndexes.has(index)) {
-        return true;
+    for (let index = safeStart; index <= safeEnd; index += 1) {
+      const state = model.blockStates[index];
+      densityTotal += state?.densityValue || 0;
+      densityCount += 1;
+      if (state?.painted) {
+        painted = true;
+        fill = state.fill || fill;
+        stripFill = state.stripFill || stripFill;
       }
     }
 
-    return false;
+    const densityValue = densityCount > 0 ? densityTotal / densityCount : 0;
+    const height = densityValue > 0
+      ? Math.max(12, Math.min(100, Math.round((densityValue / model.maxDensity) * 100)))
+      : 4;
+
+    return {
+      densityValue,
+      fill,
+      height,
+      painted,
+      stripFill
+    };
+  }
+
+  function renderProgressMapThumbnailGraph(model, progress) {
+    const cellCount = Math.max(1, Math.min(model.totalBlocks, thumbnailMaxCells));
+    const summaries = Array.from({ length: cellCount }, (_, cellIndex) => summarizeCell(model, cellIndex, cellCount));
+    const bars = summaries.map((summary) => `
+      <span
+        class="progress-thumbnail-density-bar${summary.painted ? " is-painted" : ""}"
+        style="--bar-height: ${summary.height}%; --bar-fill: ${html(summary.fill)};"
+        aria-hidden="true"
+      ></span>
+    `).join("");
+    const strip = summaries.map((summary) => `
+      <span
+        class="progress-thumbnail-strip-cell${summary.painted ? " is-painted" : ""}"
+        style="--strip-fill: ${html(summary.stripFill)};"
+        aria-hidden="true"
+      ></span>
+    `).join("");
+    const userLabel = model.userCount === 1 ? "1 user" : `${model.userCount} users`;
+
+    return `
+      <div class="progress-thumbnail-graph" style="--progress-thumbnail-cells: ${cellCount};">
+        <div class="progress-thumbnail-density" aria-hidden="true">${bars}</div>
+        <div class="progress-thumbnail-fill-strip" aria-hidden="true">${strip}</div>
+      </div>
+      <div class="progress-thumbnail-meta">
+        <span>progress ${html(progress)}%</span>
+        <span aria-hidden="true">|</span>
+        <span>${html(model.paintedCount)}/${html(model.totalBlocks)} blocks</span>
+        <span aria-hidden="true">|</span>
+        <span>${html(userLabel)}</span>
+      </div>
+    `;
   }
 
   function renderProgressMapThumbnailBar(model) {
-    const cellCount = Math.max(1, Math.min(model.totalBlocks, thumbnailMaxCells));
-    const cells = Array.from({ length: cellCount }, (_, cellIndex) => {
-      const painted = isCellPainted(model, cellIndex, cellCount);
-      return `<span class="progress-thumbnail-cell${painted ? " is-painted" : ""}" aria-hidden="true"></span>`;
-    }).join("");
-
-    return `<div class="progress-thumbnail-bar" style="--progress-thumbnail-cells: ${cellCount};">${cells}</div>`;
+    return renderProgressMapThumbnailGraph(model, model.progress);
   }
 
   function renderProgressThumbnail(version) {
-    const versionId = version?.id || version?.versionId || "unknown";
+    const versionId = getVersionId(version) || "unknown";
     const rawImageUrl = getRawProgressImageUrl(version);
     const imageUrl = getProgressImageUrl(version);
     const model = normalizeProgressThumbnail(version);
     const progress = getVersionProgress(version, model);
-    const fallbackBar = model ? renderProgressMapThumbnailBar(model) : "";
 
     if (rawImageUrl && !imageUrl) {
       warnProgressThumbnail(versionId, "progressImage.url exists but could not be resolved; falling back to progressMap thumbnail.");
+    }
+
+    if (model) {
+      return `
+        <div class="progress-thumbnail has-progress-map" aria-label="progress ${html(progress)}%" data-version-id="${html(versionId)}"${imageUrl ? ` data-progress-image-src="${html(imageUrl)}"` : ""}>
+          ${renderProgressMapThumbnailGraph(model, progress)}
+        </div>
+      `;
     }
 
     if (imageUrl) {
       return `
         <div class="progress-thumbnail has-progress-image" aria-label="progress ${html(progress)}%" data-version-id="${html(versionId)}" data-progress-image-src="${html(imageUrl)}">
           <div class="progress-thumbnail-image-wrap"></div>
-          <div class="progress-thumbnail-fallback" hidden>${fallbackBar}</div>
+          <div class="progress-thumbnail-fallback" hidden></div>
           <span class="progress-thumbnail-value">progress ${html(progress)}%</span>
         </div>
       `;
     }
 
-    if (!model) {
-      return "";
-    }
-
-    return `
-      <div class="progress-thumbnail" aria-label="progress ${html(model.progress)}%" data-version-id="${html(versionId)}">
-        ${fallbackBar}
-        <span class="progress-thumbnail-value">progress ${html(model.progress)}%</span>
-      </div>
-    `;
+    return "";
   }
 
   function fallbackProgressImage(image) {
@@ -620,8 +730,8 @@
           thumbnailCell.innerHTML = "";
         }
 
-        if (rawImageUrl && !thumbnailCell.querySelector(".progress-thumbnail.has-progress-image")) {
-          warnProgressImageNotGenerated(version, "renderProgressThumbnail did not return has-progress-image markup.");
+        if (rawImageUrl && !thumbnailCell.querySelector(".progress-thumbnail.has-progress-image, .progress-thumbnail.has-progress-map")) {
+          warnProgressImageNotGenerated(version, "renderProgressThumbnail did not return progress image or progress map markup.");
         }
       });
     });
@@ -760,11 +870,15 @@
   function debugProgressThumbnails(root = listElement || document) {
     const scope = root || document;
     const progressThumbnails = Array.from(scope.querySelectorAll(".progress-thumbnail"));
+    const mapThumbnails = Array.from(scope.querySelectorAll(".progress-thumbnail.has-progress-map"));
+    const graphThumbnails = Array.from(scope.querySelectorAll(".progress-thumbnail-graph"));
     const imageThumbnails = Array.from(scope.querySelectorAll(".progress-thumbnail.has-progress-image"));
     const images = Array.from(scope.querySelectorAll("img.progress-thumbnail-image"));
     const sourceNodes = Array.from(scope.querySelectorAll("[data-progress-image-src]"));
     const summary = {
       progressThumbnailCount: progressThumbnails.length,
+      hasProgressMapCount: mapThumbnails.length,
+      progressGraphCount: graphThumbnails.length,
       hasProgressImageCount: imageThumbnails.length,
       imageElementCount: images.length,
       dataProgressImageSrcCount: sourceNodes.length,
