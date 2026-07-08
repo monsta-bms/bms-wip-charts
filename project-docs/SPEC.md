@@ -29,7 +29,7 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。�
 - 初回投稿時と追記投稿時の `progress_map_json` 保存
 - フロント側での進捗PNG生成、FormData添付、R2保存
 - `versions.progress_image_*` metadata保存
-- 一覧側の保存済み `progressImage.url` 優先サムネイル表示と `progressMap` fallback表示
+- 一覧側の `progressMap` ベース密度サムネイル表示と `progressImage.url` fallback表示
 - 分岐version管理、`branch_path` 生成、完成到達時の親version DL不可化
 - `versions.file_deleted_at` / `versions.file_delete_reason` の自動削除準備カラム
 
@@ -283,14 +283,48 @@ DB保存:
 
 `GET /api/charts` は進捗画像が保存済みの場合に `progressImage` objectを返す。`GET /api/progress-images/:versionId` はR2からPNG本体を返す。
 
-一覧サムネイルは以下の優先順位で表示する。
+### 一覧サムネイル
 
-1. `version.progressImage.url` がある場合は、`img` で保存済みR2 PNGを表示する。
-2. `progressImage.url` がない場合は、従来通り `progressMap` から簡易サムネイルをブラウザ側で再描画する。
-3. R2 PNGの読み込みに失敗した場合も、同じversionの `progressMap` から再描画したサムネイルへfallbackする。
+一覧サムネイルは、表示中の一覧で比較しやすいように `progressMap` からブラウザ側で再描画する。
+
+表示優先順位:
+
+1. `version.progressMap` が有効な場合は、`progressMap.blocks` と `progressMap.layers` から一覧専用サムネイルを生成する。
+2. `progressMap` がない、または不正な場合に限り、`version.progressImage.url` があれば保存済みR2 PNGを `img` fallbackとして表示する。
+3. R2 PNGの読み込みに失敗した場合も、同じversionの `progressMap` が使えるなら再描画サムネイルへfallbackする。
 4. `progressImage.url` も `progressMap` もない場合は、サムネイルなしの控えめな空表示にする。
 
-`progressImage.url` は `/api/progress-images/:versionId` のような相対URLで返るため、GitHub Pages側では `API_BASE_URL` と結合して表示する。MVPではcache bustingは行わない。将来、同じversionIdの画像を再生成する場合はquery付与などを検討する。
+一覧専用サムネイルでは以下の意味に固定する。
+
+- 棒の高さ = ノーツ密度。
+- 棒の色 = そのblockを最後に塗ったlayer/投稿者。
+- 未着手 = 薄い緑または薄いミント。
+- 初回投稿layer = 緑系。
+- 追記layer 1 = 青系。
+- 追記layer 2 = 紫系。
+- 追記layer 3 = 橙系。
+- 追記layer 4 = 赤系。
+- 以降の追記layerはパレットを循環する。
+
+密度は色の濃淡ではなく棒の高さで表す。低密度区間や0ノーツ区間も存在が分かるよう、未着手0ノーツblockはごく低い薄色バー、塗り済み0ノーツblockは少し高い色付きバーとして描画する。
+
+サムネイル下の補助表示は進捗率を繰り返さず、`32/81 blocks · 3 users` のように作成済みblock数と参加者数を表示する。進捗率は一覧の進捗列チップで表示する。
+
+hover tooltipでは以下を確認できるようにする。
+
+- 進捗率
+- 作成済みblock数 / 総block数
+- 参加者数
+- 色と投稿者/追記者の対応
+- 未着手block数
+
+色と投稿者の対応は、同じchart内の `versions` から `progressMap.layers[].versionId` と `version.id` を照合し、`version.author` を使う。authorが引けない場合は `初回`, `追記1`, `追記2`, `layer n` などにfallbackする。
+
+密度スケールは、現在読み込んでいる一覧内の全 `progressMap.blocks` から正の密度値を集め、95パーセンタイル相当を共通 `densityScale` として使う。高さ計算は `sqrt(density / densityScale)` を基本とし、極端な高密度譜面だけ頭打ちにする。`blockDurationSec` が取れない場合は `playNotes` のみを密度値として扱う。将来はサイト全体または難易度帯別の固定スケールを検討する。
+
+MVPではサムネイルクリックによる拡大表示は実装しない。将来、`progressImage.url` またはCanvas再描画結果をモーダルで拡大表示し、layer凡例や詳細ブロック情報を確認できる導線を検討する。
+
+`progressImage.url` は `/api/progress-images/:versionId` のような相対URLで返るため、R2 PNG fallback時はGitHub Pages側で `API_BASE_URL` と結合して表示する。MVPではcache bustingは行わない。将来、同じversionIdの画像を再生成する場合はquery付与などを検討する。
 
 ## 分岐version管理
 
@@ -337,8 +371,8 @@ DB保存:
 - 想定難易度
 - 差分作者
 - 進捗度
-- `progressImage.url` がある場合は保存済みR2 PNGの進捗サムネイル
-- `progressImage.url` がない、または読み込みに失敗した場合は `progressMap` から再描画した簡易進捗サムネイル
+- `progressMap` がある場合は、一覧内共通densityScaleを使った密度・担当layer色つき進捗サムネイル
+- `progressMap` がない、または再描画できない場合は `progressImage.url` の保存済みR2 PNG fallback
 - コメントの短い表示
 - DLボタンまたはDL不可ボタン
 - 追記投稿ボタン
