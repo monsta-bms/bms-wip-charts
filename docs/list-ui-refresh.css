@@ -8,7 +8,7 @@
   --version-tree-indent: 18px;
   --tree-line-color: rgba(116, 128, 139, 0.46);
   --tree-line-strong: rgba(31, 122, 92, 0.42);
-  --version-grid-columns: var(--group-gutter-width) minmax(176px, 1.22fr) 72px minmax(110px, 0.78fr) 76px minmax(250px, 1.65fr) minmax(150px, 1fr) 132px;
+  --version-grid-columns: var(--group-gutter-width) minmax(190px, 1.28fr) 72px minmax(110px, 0.78fr) 76px minmax(260px, 1.68fr) minmax(146px, 0.96fr) 132px;
 }
 
 .version-list-header {
@@ -100,11 +100,17 @@
   color: var(--primary-dark);
   font-size: 1.08rem;
   letter-spacing: 0;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
 }
 
 .version-parent-line {
   color: #536372;
   font-size: 0.76rem;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
 }
 
 .group-gutter-cell::before {
@@ -116,6 +122,15 @@
   min-width: 32px;
 }
 
+.version-row.version-tree-row.is-intermediate-history {
+  color: #5f6b76;
+  opacity: 0.9;
+}
+
+.version-row.version-tree-row.is-intermediate-history .thumbnail-cell {
+  opacity: 0.96;
+}
+
 .thumbnail-cell .progress-thumbnail,
 .progress-thumbnail-block .progress-thumbnail {
   max-width: 100%;
@@ -124,6 +139,7 @@
 }
 
 .progress-thumbnail {
+  cursor: help;
   display: grid;
   gap: 5px;
   min-width: 0;
@@ -143,13 +159,13 @@
 
 .progress-thumbnail-density {
   align-items: end;
-  background: linear-gradient(180deg, rgba(250, 252, 251, 0.95), rgba(241, 247, 244, 0.95));
-  border-left: 1px solid rgba(31, 122, 92, 0.28);
-  border-right: 1px solid rgba(31, 122, 92, 0.28);
+  background: linear-gradient(180deg, #fbfdfc, #eef6f2);
+  border-left: 1px solid rgba(31, 122, 92, 0.3);
+  border-right: 1px solid rgba(31, 122, 92, 0.3);
   display: grid;
   gap: 1px;
   grid-template-columns: repeat(var(--progress-thumbnail-cells), minmax(1px, 1fr));
-  height: 44px;
+  height: 46px;
   min-width: 0;
   overflow: hidden;
   padding: 1px 1px 0;
@@ -157,21 +173,25 @@
 
 .progress-thumbnail-density-bar {
   align-self: end;
-  background: rgba(194, 218, 209, 0.42);
+  background: #D9E8E2;
   border-radius: 2px 2px 0 0;
-  height: var(--bar-height, 4%);
+  height: var(--bar-height, 6%);
   min-height: 2px;
   min-width: 1px;
-  opacity: 0.78;
+  opacity: 1;
 }
 
 .progress-thumbnail-density-bar.is-painted {
-  background: var(--bar-fill, rgba(37, 111, 93, 0.58));
+  background: var(--bar-fill, #2E8B57);
   opacity: 0.98;
 }
 
+.progress-thumbnail-density-bar.is-zero-density {
+  filter: saturate(0.92);
+}
+
 .progress-thumbnail-fill-strip {
-  background: #e7efec;
+  background: #d9e8e2;
   display: grid;
   gap: 1px;
   grid-template-columns: repeat(var(--progress-thumbnail-cells), minmax(1px, 1fr));
@@ -181,12 +201,12 @@
 }
 
 .progress-thumbnail-strip-cell {
-  background: #dfe8e5;
+  background: #cfe1da;
   min-width: 1px;
 }
 
 .progress-thumbnail-strip-cell.is-painted {
-  background: var(--strip-fill, rgba(37, 111, 93, 0.58));
+  background: var(--strip-fill, #2E8B57);
 }
 
 .progress-thumbnail-meta {
@@ -223,11 +243,11 @@
 @media (max-width: 960px) {
   .version-list {
     --version-tree-indent: 14px;
-    --version-grid-columns: var(--group-gutter-width) minmax(142px, 1.15fr) 58px minmax(82px, 0.7fr) 62px minmax(168px, 1.1fr) minmax(116px, 0.9fr) 112px;
+    --version-grid-columns: var(--group-gutter-width) minmax(154px, 1.18fr) 58px minmax(82px, 0.7fr) 62px minmax(174px, 1.14fr) minmax(110px, 0.86fr) 112px;
   }
 
   .progress-thumbnail-density {
-    height: 38px;
+    height: 40px;
   }
 
   .progress-thumbnail-meta {
