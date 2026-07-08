@@ -24,8 +24,8 @@
       fill: "#7A4A30"
     },
     empty: {
-      stroke: "#CFE1DA",
-      fill: "#D9E8E2"
+      stroke: "#D8E8E2",
+      fill: "#CFE3DC"
     }
   };
 
@@ -117,6 +117,7 @@
     root.style.setProperty("--progress-fill-current", getFollowupColor(0).fill);
     root.style.setProperty("--progress-fill-rejected", PROGRESS_LAYER_COLORS.rejected.fill);
     root.style.setProperty("--progress-fill-empty", PROGRESS_LAYER_COLORS.empty.fill);
+    root.style.setProperty("--progress-stroke-empty", PROGRESS_LAYER_COLORS.empty.stroke);
   }
 
   window.BmsProgressLayerColors = {
