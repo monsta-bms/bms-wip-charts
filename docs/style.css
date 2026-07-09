@@ -99,8 +99,9 @@ a:focus-visible {
 
 .page-shell {
   margin: 0 auto;
-  max-width: 1120px;
+  max-width: 1440px;
   padding: 24px;
+  width: min(96vw, 1440px);
 }
 
 .site-header {
@@ -924,7 +925,9 @@ textarea[aria-invalid="true"] {
 
 @media (max-width: 640px) {
   .page-shell {
+    max-width: 100%;
     padding: 16px;
+    width: 100%;
   }
 
   .site-header,
