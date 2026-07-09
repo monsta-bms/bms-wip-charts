@@ -224,11 +224,21 @@
   const buildEdgePath = (parent, child) => {
     const childIsBelow = child.anchorY >= parent.anchorY;
     const direction = childIsBelow ? 1 : -1;
+    const sameRow = Math.abs(child.anchorY - parent.anchorY) <= 1;
+    if (sameRow) {
+      const horizontalStartX = parent.nodeX + TREE_NODE_RADIUS + 1;
+      const horizontalEndX = child.nodeX - TREE_NODE_RADIUS - 1;
+      if (horizontalEndX > horizontalStartX) {
+        return `M ${horizontalStartX} ${parent.anchorY} L ${horizontalEndX} ${child.anchorY}`;
+      }
+      return `M ${parent.nodeX} ${parent.anchorY} L ${child.nodeX} ${child.anchorY}`;
+    }
+
     const startY = parent.anchorY + (direction * TREE_NODE_RADIUS);
     const endY = child.anchorY;
     const startX = parent.nodeX;
     const endX = child.nodeX - TREE_NODE_RADIUS - 1;
-    const sameColumn = Math.abs(endX - startX) <= 4;
+    const sameColumn = Math.abs(child.nodeX - startX) <= 1 || Math.abs(endX - startX) <= (TREE_NODE_RADIUS + 2);
 
     if (sameColumn) {
       const stopY = endY - (direction * TREE_NODE_RADIUS);
