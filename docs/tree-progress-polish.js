@@ -184,9 +184,10 @@
 
   const mount = () => {
     const chartList = document.querySelector(CHART_LIST_SELECTOR);
-    if (!chartList || chartList.dataset.treeProgressPolishMounted === "true") {
+    if (!chartList) {
       return;
     }
+
     chartList.dataset.treeProgressPolishMounted = "true";
     const observer = new MutationObserver(scheduleRefresh);
     observer.observe(chartList, { childList: true, subtree: true });
@@ -195,7 +196,20 @@
         window.setTimeout(scheduleRefresh, 0);
       }
     });
+
     scheduleRefresh();
+    window.setTimeout(scheduleRefresh, 50);
+    window.setTimeout(scheduleRefresh, 250);
+    window.setTimeout(scheduleRefresh, 1000);
+
+    let attempt = 0;
+    const interval = window.setInterval(() => {
+      attempt += 1;
+      scheduleRefresh();
+      if (attempt >= 12) {
+        window.clearInterval(interval);
+      }
+    }, 500);
   };
 
   window.refreshPolishedTreeConnectors = refreshPolishedTreeConnectors;
