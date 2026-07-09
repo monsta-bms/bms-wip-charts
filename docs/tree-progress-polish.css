@@ -1,0 +1,244 @@
+/* UI-TREE-PROGRESS-POLISH-03: tree readability, thumbnail separation, and compact form density. */
+.submit-panel {
+  margin-bottom: 22px;
+  padding: 16px 18px;
+}
+
+.submit-panel .section-heading {
+  margin-bottom: 12px;
+}
+
+.submit-panel .required-note {
+  margin: -2px 0 10px;
+}
+
+.submit-panel .form-sections {
+  gap: 12px;
+}
+
+.submit-panel .form-section {
+  padding-top: 12px;
+}
+
+.submit-panel .form-section-title {
+  margin-bottom: 8px;
+}
+
+.submit-panel .section-fields,
+.submit-panel .management-column {
+  gap: 10px;
+}
+
+.submit-panel .two-column-fields,
+.submit-panel .management-grid {
+  gap: 12px 14px;
+}
+
+.submit-panel .field {
+  gap: 4px;
+}
+
+.submit-panel .field-help {
+  line-height: 1.35;
+}
+
+.submit-panel .difficulty-picker {
+  gap: 9px;
+  padding: 10px;
+}
+
+.submit-panel .difficulty-tabs {
+  gap: 6px;
+}
+
+.submit-panel button.difficulty-tab {
+  min-height: 34px;
+}
+
+.submit-panel .difficulty-choice-area {
+  height: 88px;
+}
+
+.submit-panel .difficulty-chips {
+  gap: 5px;
+}
+
+.submit-panel button.difficulty-chip {
+  min-height: 27px;
+}
+
+.submit-panel .difficulty-preview {
+  min-height: 34px;
+  padding: 4px 10px;
+}
+
+.submit-panel .progress-map-field {
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.submit-panel .progress-map {
+  gap: 6px;
+  padding: 8px;
+}
+
+.submit-panel .comment-section textarea {
+  min-height: 92px;
+}
+
+.version-list {
+  --tree-line-color: #7e8f9c;
+  --tree-line-muted: #a3b0bc;
+  --tree-line-strong: #657989;
+}
+
+.group-gutter-cell {
+  justify-content: flex-start;
+  padding-left: 4px;
+}
+
+.group-gutter-cell::before {
+  border-left-color: rgba(31, 122, 92, 0.34);
+  left: 8px;
+}
+
+.version-row.has-intermediate-group-control .group-gutter-cell::before,
+.version-row.is-intermediate-history .group-gutter-cell::before {
+  opacity: 0.55;
+}
+
+.version-row.has-intermediate-group-control:not(.is-group-expanded) .group-gutter-cell::before {
+  bottom: 50%;
+}
+
+.version-row.has-intermediate-group-control .group-gutter-cell::after {
+  border-top-color: rgba(31, 122, 92, 0.28);
+  left: 8px;
+  right: 8px;
+}
+
+.group-toggle-button {
+  box-shadow: 0 0 0 3px #fff;
+  margin-left: 12px;
+  min-width: 29px;
+  position: relative;
+  z-index: 2;
+}
+
+.version-row.is-completed.has-intermediate-group-control .group-toggle-button {
+  box-shadow: 0 0 0 3px #edf9f3;
+}
+
+.tree-connector-svg {
+  align-items: center;
+  align-self: stretch;
+  display: block;
+  flex: 0 0 var(--tree-zone-width);
+  height: 50px;
+  min-width: var(--tree-zone-width);
+  overflow: visible;
+  padding-top: 0 !important;
+  position: relative;
+  width: var(--tree-zone-width);
+}
+
+.tree-connector-svg.tree-connector-root.continues-below::before,
+.tree-connector-svg .tree-root-mark,
+.tree-connector-svg .tree-connector-slot {
+  display: none !important;
+}
+
+.tree-connector-canvas {
+  display: block;
+  height: 100%;
+  overflow: visible;
+  width: 100%;
+}
+
+.tree-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.15px;
+  vector-effect: non-scaling-stroke;
+}
+
+.tree-line-current {
+  stroke: var(--tree-line-color);
+  stroke-dasharray: 2.4 3.2;
+}
+
+.tree-line-ancestor {
+  opacity: 0.92;
+  stroke: var(--tree-line-muted);
+  stroke-dasharray: 2.2 3.4;
+}
+
+.tree-line-elbow {
+  stroke: var(--tree-line-strong);
+}
+
+.tree-node-dot {
+  fill: #fff;
+  stroke: var(--primary-dark);
+  stroke-width: 1.7px;
+  vector-effect: non-scaling-stroke;
+}
+
+.tree-node-root {
+  stroke: var(--primary-dark);
+}
+
+.version-tree-tag {
+  gap: 10px;
+}
+
+.version-tree-label {
+  min-width: 0;
+}
+
+.progress-thumbnail-graph {
+  gap: 7px;
+  padding: 3px 0 2px;
+}
+
+.progress-thumbnail-density {
+  height: 32px;
+}
+
+.progress-thumbnail-density-strip {
+  min-height: 2px;
+}
+
+.progress-thumbnail-fill-strip {
+  background: #dceae5;
+  box-shadow: inset 0 0 0 1px rgba(31, 122, 92, 0.08);
+  height: 7px;
+}
+
+.progress-thumbnail-fill-segment {
+  min-height: 7px;
+}
+
+.version-row.is-intermediate-history {
+  color: #4f5f6e;
+}
+
+.version-row.is-intermediate-history .progress-thumbnail {
+  opacity: 0.92;
+}
+
+@media (max-width: 760px) {
+  .submit-panel {
+    padding: 14px;
+  }
+
+  .submit-panel .difficulty-choice-area {
+    height: auto;
+    min-height: 88px;
+  }
+
+  .group-toggle-button {
+    margin-left: 8px;
+  }
+}
