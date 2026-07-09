@@ -4,10 +4,10 @@
     height: 120,
     paddingX: 14,
     densityTop: 10,
-    densityHeight: 52,
-    blockTop: 72,
-    blockHeight: 26,
-    labelY: 112,
+    densityHeight: 48,
+    blockTop: 68,
+    blockHeight: 8,
+    labelY: 106,
     blockGap: 1,
     minUnpaintedZeroHeight: 3,
     minPaintedZeroHeight: 4,
@@ -315,6 +315,10 @@
       context.fillRect(x, densityBaseY - barHeight, layout.blockWidth, barHeight);
     });
 
+    context.fillStyle = emptyRail;
+    drawRoundedRect(context, layout.plotX, settings.blockTop, layout.plotWidth, settings.blockHeight, settings.blockHeight / 2);
+    context.fill();
+
     blocks.forEach((_, index) => {
       const x = layout.xForBlock(index);
       context.fillStyle = model.blockColorByIndex.get(index) || emptyRail;
@@ -322,7 +326,7 @@
     });
 
     if (layout.blockWidth >= 2.4) {
-      context.strokeStyle = "rgba(91, 101, 114, 0.14)";
+      context.strokeStyle = "rgba(91, 101, 114, 0.12)";
       context.lineWidth = 1;
       blocks.forEach((_, index) => {
         const x = layout.xForBlock(index);
@@ -333,8 +337,8 @@
       });
     }
 
-    context.strokeStyle = "rgba(59, 68, 78, 0.82)";
-    context.lineWidth = 1.5;
+    context.strokeStyle = "rgba(59, 68, 78, 0.78)";
+    context.lineWidth = 1.3;
     blocks.forEach((_, index) => {
       if (index % 8 !== 0) {
         return;
