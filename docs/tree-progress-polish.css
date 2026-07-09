@@ -167,6 +167,7 @@
   width: var(--tree-zone-width);
 }
 
+.tree-connector-svg::before,
 .tree-connector-svg.tree-connector-root.continues-below::before,
 .tree-connector-svg .tree-root-mark,
 .tree-connector-svg .tree-connector-slot {
