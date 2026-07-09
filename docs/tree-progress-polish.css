@@ -1,111 +1,117 @@
-/* UI-TREE-PROGRESS-POLISH-04: tree readability, thumbnail separation, and compact form density. */
+/* UI-TREE-PROGRESS-POLISH-05: tree readability, thumbnail separation, and compact form density. */
 .submit-panel {
-  margin-bottom: 22px;
-  padding: 16px 18px;
+  margin-bottom: 18px;
+  padding: 14px 16px;
 }
 
 .submit-panel .section-heading {
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .submit-panel .required-note {
-  margin: -2px 0 10px;
+  margin: -2px 0 8px;
 }
 
 .submit-panel .form-sections {
-  gap: 12px;
+  gap: 10px;
 }
 
 .submit-panel .form-section {
-  padding-top: 12px;
+  padding-top: 10px;
 }
 
 .submit-panel .form-section-title {
-  margin-bottom: 8px;
+  margin-bottom: 7px;
 }
 
 .submit-panel .section-fields,
 .submit-panel .management-column {
-  gap: 10px;
+  gap: 9px;
 }
 
 .submit-panel .two-column-fields,
 .submit-panel .management-grid {
-  gap: 12px 14px;
+  gap: 10px 12px;
 }
 
 .submit-panel .field {
-  gap: 4px;
+  gap: 3px;
 }
 
 .submit-panel .field-help {
-  line-height: 1.35;
+  line-height: 1.32;
+}
+
+.submit-panel input[type="file"] {
+  min-height: 36px;
+  padding: 7px 10px;
 }
 
 .submit-panel .difficulty-picker {
-  gap: 9px;
-  padding: 10px;
+  gap: 8px;
+  padding: 9px;
 }
 
 .submit-panel .difficulty-tabs {
-  gap: 6px;
-}
-
-.submit-panel button.difficulty-tab {
-  min-height: 34px;
-}
-
-.submit-panel .difficulty-choice-area {
-  height: 88px;
-}
-
-.submit-panel .difficulty-chips {
   gap: 5px;
 }
 
+.submit-panel button.difficulty-tab {
+  min-height: 32px;
+}
+
+.submit-panel .difficulty-choice-area {
+  height: 82px;
+}
+
+.submit-panel .difficulty-chips {
+  gap: 4px;
+}
+
 .submit-panel button.difficulty-chip {
-  min-height: 27px;
+  min-height: 26px;
 }
 
 .submit-panel .difficulty-preview {
-  min-height: 34px;
-  padding: 4px 10px;
+  min-height: 31px;
+  padding: 3px 9px;
 }
 
 .submit-panel .progress-map-field {
-  gap: 6px;
-  margin-bottom: 12px;
+  gap: 5px;
+  margin-bottom: 10px;
 }
 
 .submit-panel .progress-map {
-  gap: 6px;
-  padding: 8px;
+  gap: 5px;
+  padding: 7px;
 }
 
 .submit-panel .comment-section textarea {
-  min-height: 92px;
+  min-height: 84px;
 }
 
 .version-list {
-  --tree-line-color: #7e8f9c;
-  --tree-line-muted: #a3b0bc;
-  --tree-line-strong: #657989;
+  --group-gutter-width: 52px;
+  --tree-line-color: #788a98;
+  --tree-line-muted: #9daab6;
+  --tree-line-strong: #607586;
   --version-grid-columns: var(--group-gutter-width) minmax(190px, 1.05fr) 64px minmax(100px, 0.72fr) 70px minmax(260px, 1.3fr) minmax(170px, 1fr) 124px;
 }
 
 .group-gutter-cell {
   justify-content: flex-start;
-  padding-left: 4px;
+  padding-left: 0;
 }
 
 .group-gutter-cell::before {
-  border-left-color: rgba(31, 122, 92, 0.34);
-  left: 8px;
+  border-left-color: rgba(31, 122, 92, 0.30);
+  left: 6px;
 }
 
 .version-row.has-intermediate-group-control .group-gutter-cell::before,
 .version-row.is-intermediate-history .group-gutter-cell::before {
-  opacity: 0.55;
+  opacity: 0.50;
 }
 
 .version-row.has-intermediate-group-control:not(.is-group-expanded) .group-gutter-cell::before {
@@ -113,21 +119,21 @@
 }
 
 .version-row.has-intermediate-group-control .group-gutter-cell::after {
-  border-top-color: rgba(31, 122, 92, 0.28);
-  left: 8px;
-  right: 8px;
+  border-top-color: rgba(31, 122, 92, 0.24);
+  left: 6px;
+  right: 4px;
 }
 
 .group-toggle-button {
-  box-shadow: 0 0 0 3px #fff;
-  margin-left: 12px;
-  min-width: 29px;
+  box-shadow: 0 0 0 4px #fff;
+  margin-left: 18px;
+  min-width: 30px;
   position: relative;
   z-index: 2;
 }
 
 .version-row.is-completed.has-intermediate-group-control .group-toggle-button {
-  box-shadow: 0 0 0 3px #edf9f3;
+  box-shadow: 0 0 0 4px #edf9f3;
 }
 
 .tree-connector-svg {
@@ -160,7 +166,7 @@
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 1.15px;
+  stroke-width: 1.2px;
   vector-effect: non-scaling-stroke;
 }
 
@@ -170,7 +176,7 @@
 }
 
 .tree-line-ancestor {
-  opacity: 0.92;
+  opacity: 0.94;
   stroke: var(--tree-line-muted);
   stroke-dasharray: 2.2 3.4;
 }
@@ -179,32 +185,47 @@
   stroke: var(--tree-line-strong);
 }
 
+.tree-line-compressed {
+  opacity: 0.82;
+  stroke: #86a79b;
+  stroke-dasharray: 1.2 4.2;
+}
+
 .tree-node-dot {
   fill: #fff;
   stroke: var(--primary-dark);
-  stroke-width: 1.7px;
+  stroke-width: 1.75px;
   vector-effect: non-scaling-stroke;
 }
 
 .tree-node-root {
+  fill: #fff;
   stroke: var(--primary-dark);
 }
 
-.version-tree-tag {
-  gap: 10px;
+.tree-node-compressed {
+  fill: #eef7f3;
+  stroke: #6f9b8b;
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
 }
 
-.version-tree-label {
+.version-tree-tag {
+  gap: 4px;
+}
+
+.version-tree-label,
+.version-label-stack {
   min-width: 0;
 }
 
 .progress-thumbnail-graph {
-  gap: 7px;
-  padding: 3px 0 2px;
+  gap: 11px;
+  padding: 2px 0 3px;
 }
 
 .progress-thumbnail-density {
-  height: 32px;
+  height: 30px;
 }
 
 .progress-thumbnail-density-strip {
@@ -213,12 +234,13 @@
 
 .progress-thumbnail-fill-strip {
   background: #dceae5;
-  box-shadow: inset 0 0 0 1px rgba(31, 122, 92, 0.08);
-  height: 7px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgba(31, 122, 92, 0.10);
+  height: 8px;
 }
 
 .progress-thumbnail-fill-segment {
-  min-height: 7px;
+  min-height: 8px;
 }
 
 .version-row.is-intermediate-history {
@@ -226,20 +248,20 @@
 }
 
 .version-row.is-intermediate-history .progress-thumbnail {
-  opacity: 0.92;
+  opacity: 0.94;
 }
 
 @media (max-width: 760px) {
   .submit-panel {
-    padding: 14px;
+    padding: 13px;
   }
 
   .submit-panel .difficulty-choice-area {
     height: auto;
-    min-height: 88px;
+    min-height: 82px;
   }
 
   .group-toggle-button {
-    margin-left: 8px;
+    margin-left: 10px;
   }
 }
