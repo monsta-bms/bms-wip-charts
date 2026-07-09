@@ -101,9 +101,9 @@
 .version-list {
   --group-gutter-width: 44px;
   --tree-zone-width: 94px;
-  --tree-line-color: #748798;
-  --tree-line-muted: #9aa8b5;
-  --tree-line-strong: #5f7486;
+  --tree-line-color: #718796;
+  --tree-line-muted: #9cadb8;
+  --tree-line-strong: #607887;
   --version-grid-columns: var(--group-gutter-width) minmax(216px, 1.08fr) 64px minmax(100px, 0.72fr) 70px minmax(270px, 1.32fr) minmax(178px, 1fr) 124px;
   position: relative;
 }
@@ -180,18 +180,34 @@
   vector-effect: non-scaling-stroke;
 }
 
+.tree-overlay-line-edge {
+  opacity: 0.94;
+  stroke: var(--tree-line-color);
+}
+
+.tree-overlay-line-label {
+  opacity: 0.9;
+  stroke: var(--tree-line-strong);
+}
+
+.tree-overlay-line-omitted-edge {
+  opacity: 0.9;
+  stroke: #77988f;
+  stroke-dasharray: 2.2 3.4;
+}
+
 .tree-overlay-line-current {
-  stroke: #6f8494;
+  stroke: var(--tree-line-color);
 }
 
 .tree-overlay-line-ancestor {
   opacity: 0.92;
-  stroke: #9cadb8;
+  stroke: var(--tree-line-muted);
   stroke-dasharray: 2.2 3.6;
 }
 
 .tree-overlay-line-elbow {
-  stroke: #637989;
+  stroke: var(--tree-line-strong);
 }
 
 .tree-overlay-line-omitted {
@@ -233,6 +249,11 @@
   transform: translate(-50%, -50%);
   transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
   z-index: 8;
+}
+
+.tree-omission-button.is-expanded {
+  min-width: 24px;
+  padding-inline: 6px;
 }
 
 .tree-omission-button:hover,
