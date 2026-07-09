@@ -223,22 +223,32 @@
 
   const buildEdgePath = (parent, child) => {
     const childIsBelow = child.anchorY >= parent.anchorY;
-    const startY = parent.anchorY + (childIsBelow ? TREE_NODE_RADIUS : -TREE_NODE_RADIUS);
+    const direction = childIsBelow ? 1 : -1;
+    const startY = parent.anchorY + (direction * TREE_NODE_RADIUS);
     const endY = child.anchorY;
     const startX = parent.nodeX;
     const endX = child.nodeX - TREE_NODE_RADIUS - 1;
-    const deltaY = endY - startY;
-    const elbowX = Math.min(endX, startX + Math.max(10, Math.min(18, Math.abs(endX - startX) * 0.55)));
+    const sameColumn = Math.abs(endX - startX) <= 4;
 
-    if (Math.abs(deltaY) < 1) {
-      return `M ${startX + TREE_NODE_RADIUS + 1} ${parent.anchorY} C ${startX + 12} ${parent.anchorY}, ${Math.max(startX + 12, endX - 14)} ${endY}, ${endX} ${endY}`;
+    if (sameColumn) {
+      const stopY = endY - (direction * TREE_NODE_RADIUS);
+      return `M ${startX} ${startY} L ${startX} ${stopY}`;
     }
 
-    return [
+    const cornerRadius = Math.max(6, Math.min(12, Math.abs(endX - startX) * 0.55));
+    const trunkEndY = endY - (direction * cornerRadius);
+    const cornerEndX = Math.min(endX, startX + cornerRadius);
+    const parts = [
       `M ${startX} ${startY}`,
-      `C ${startX} ${startY + (deltaY * 0.55)}, ${startX} ${endY}, ${elbowX} ${endY}`,
-      `C ${elbowX + 4} ${endY}, ${Math.max(elbowX + 4, endX - 10)} ${endY}, ${endX} ${endY}`
-    ].join(" ");
+      `L ${startX} ${trunkEndY}`,
+      `Q ${startX} ${endY} ${cornerEndX} ${endY}`
+    ];
+
+    if (endX > cornerEndX + 0.5) {
+      parts.push(`L ${endX} ${endY}`);
+    }
+
+    return parts.join(" ");
   };
 
   const drawEdges = (svg, edges) => {
@@ -263,7 +273,7 @@
       if (endX <= startX) {
         return;
       }
-      const d = `M ${startX} ${node.anchorY} C ${startX + 6} ${node.anchorY}, ${endX - 8} ${node.anchorY}, ${endX} ${node.anchorY}`;
+      const d = `M ${startX} ${node.anchorY} L ${endX} ${node.anchorY}`;
       appendPath(svg, "tree-overlay-line tree-overlay-line-label", d);
     });
   };
