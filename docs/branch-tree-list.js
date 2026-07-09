@@ -237,6 +237,103 @@
     return childrenByKey;
   }
 
+  function getBranchSegments(branchPath) {
+    const parts = String(branchPath || "root").split("/").filter(Boolean);
+    return parts[0] === "root" ? parts.slice(1) : parts;
+  }
+
+  function getBranchDepth(branchPath) {
+    return getBranchSegments(branchPath).length;
+  }
+
+  function getBranchPathAtDepth(branchPath, depth) {
+    if (depth <= 0) {
+      return "root";
+    }
+
+    const segments = getBranchSegments(branchPath).slice(0, depth);
+    return ["root", ...segments].join("/");
+  }
+
+  function isDescendantBranchPath(branchPath, ancestorPath) {
+    const normalizedPath = getBranchPathAtDepth(branchPath, getBranchDepth(branchPath));
+    const normalizedAncestor = getBranchPathAtDepth(ancestorPath, getBranchDepth(ancestorPath));
+    if (normalizedAncestor === "root") {
+      return normalizedPath !== "root" && normalizedPath.startsWith("root/");
+    }
+
+    return normalizedPath.startsWith(`${normalizedAncestor}/`);
+  }
+
+  function hasLaterSiblingAtDepth(visibleRows, rowIndex, branchPath, depth) {
+    if (depth <= 0) {
+      return false;
+    }
+
+    const parentPath = getBranchPathAtDepth(branchPath, depth - 1);
+    const currentPath = getBranchPathAtDepth(branchPath, depth);
+    return visibleRows.slice(rowIndex + 1).some((rowInfo) => {
+      if (rowInfo.depth < depth) {
+        return false;
+      }
+
+      return getBranchPathAtDepth(rowInfo.branchPath, depth - 1) === parentPath &&
+        getBranchPathAtDepth(rowInfo.branchPath, depth) !== currentPath;
+    });
+  }
+
+  function hasLaterDescendant(visibleRows, rowIndex, branchPath) {
+    return visibleRows.slice(rowIndex + 1).some((rowInfo) => isDescendantBranchPath(rowInfo.branchPath, branchPath));
+  }
+
+  function renderTreeConnector(depth) {
+    if (depth <= 0) {
+      return `<span class="tree-connector tree-connector-root" aria-hidden="true"><span class="tree-root-mark"></span></span>`;
+    }
+
+    const slots = Array.from({ length: depth }, (_, index) => `
+      <span class="tree-connector-slot" data-tree-level="${index + 1}"></span>
+    `).join("");
+    return `<span class="tree-connector tree-connector-grid" style="--connector-depth: ${depth};" aria-hidden="true">${slots}</span>`;
+  }
+
+  function applyVisibleTreeConnectors(list) {
+    if (!list) {
+      return;
+    }
+
+    const visibleRows = Array.from(list.querySelectorAll(":scope > .version-row.version-tree-row"))
+      .filter((row) => !row.hidden && !row.hasAttribute("hidden"))
+      .map((row) => {
+        const branchPath = row.dataset.branchPath || "root";
+        const depth = Number.isFinite(Number(row.dataset.depth))
+          ? Number(row.dataset.depth)
+          : getBranchDepth(branchPath);
+        return { row, branchPath, depth };
+      });
+
+    visibleRows.forEach((rowInfo, rowIndex) => {
+      const connector = rowInfo.row.querySelector(".tree-connector");
+      if (!connector) {
+        return;
+      }
+
+      const currentContinues = hasLaterDescendant(visibleRows, rowIndex, rowInfo.branchPath) ||
+        hasLaterSiblingAtDepth(visibleRows, rowIndex, rowInfo.branchPath, rowInfo.depth);
+      connector.classList.toggle("continues-below", currentContinues);
+
+      const slots = Array.from(connector.querySelectorAll(".tree-connector-slot"));
+      slots.forEach((slot, index) => {
+        const level = index + 1;
+        const isCurrent = level === rowInfo.depth;
+        slot.classList.toggle("is-current-branch", isCurrent);
+        slot.classList.toggle("has-ancestor-line", !isCurrent && hasLaterSiblingAtDepth(visibleRows, rowIndex, rowInfo.branchPath, level));
+        slot.classList.toggle("continues-below", isCurrent && currentContinues);
+        slot.classList.toggle("is-terminal", isCurrent && !currentContinues);
+      });
+    });
+  }
+
   function isCompleted(version, progress) {
     return version?.completed === true || Number(progress) === 100;
   }
@@ -527,6 +624,7 @@
     row.classList.toggle("is-intermediate-history", supersededIntermediate);
     row.dataset.depth = String(node.depth);
     row.dataset.branchPath = branchPath;
+    row.dataset.parentBranchPath = node.parent ? getBranchPath(node.parent) : "";
     row.style.setProperty("--tree-depth", String(node.depth));
 
     if (options.collapsedGroupId) {
@@ -544,7 +642,7 @@
       tag.style.setProperty("--tree-depth", String(node.depth));
       tag.title = titleText;
       tag.innerHTML = `
-        <span class="tree-connector" aria-hidden="true"></span>
+        ${renderTreeConnector(node.depth)}
         <span class="version-label-stack">
           <span class="version-title-line">
             <span class="version-main-label">${html(displayVersionLabel)}</span>
@@ -616,6 +714,8 @@
       button.textContent = expanded ? `−${count}` : `+${count}`;
       button.closest(".version-row")?.classList.toggle("is-group-expanded", expanded);
     });
+
+    applyVisibleTreeConnectors(list);
   }
 
   function getChartId(entry) {
@@ -769,6 +869,7 @@
         list.innerHTML = "";
         list.appendChild(createVersionListHeader());
         list.appendChild(fragment);
+        applyVisibleTreeConnectors(list);
       }
     });
   }
