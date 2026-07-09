@@ -5,9 +5,7 @@
   const TREE_ROOT_X = 18;
   const TREE_INDENT = 16;
   const TREE_NODE_RADIUS = 3.8;
-  const TREE_LABEL_GAP = 12;
-  const TREE_TOP_PADDING = 2;
-  const TREE_BOTTOM_PADDING = 2;
+  const TREE_LABEL_GAP = 8;
   const MAX_WARNINGS = 5;
   let warningCount = 0;
 
@@ -15,37 +13,14 @@
 
   const getDepthFromBranchPath = (branchPath) => Math.max(0, splitBranchPath(branchPath).length - 1);
 
-  const isDescendantBranchPath = (branchPath, ancestorBranchPath) => {
-    const current = splitBranchPath(branchPath);
-    const ancestor = splitBranchPath(ancestorBranchPath);
-    return current.length > ancestor.length && ancestor.every((segment, index) => current[index] === segment);
-  };
-
   const branchPathAtDepth = (branchPath, depth) => {
     const segments = splitBranchPath(branchPath);
-    return segments.slice(0, Math.min(segments.length, depth + 1)).join("/");
+    return segments.slice(0, Math.min(segments.length, depth + 1)).join("/") || "root";
   };
 
-  const hasLaterVisibleInAncestor = (visibleRows, rowIndex, branchPath, ancestorDepth) => {
-    if (ancestorDepth <= 0) {
-      return false;
-    }
-
-    const ancestorPath = branchPathAtDepth(branchPath, ancestorDepth);
-    const currentChildPath = branchPathAtDepth(branchPath, ancestorDepth + 1);
-    return visibleRows.slice(rowIndex + 1).some((rowInfo) => {
-      if (rowInfo.depth < ancestorDepth) {
-        return false;
-      }
-      if (branchPathAtDepth(rowInfo.branchPath, ancestorDepth) !== ancestorPath) {
-        return false;
-      }
-      return branchPathAtDepth(rowInfo.branchPath, ancestorDepth + 1) !== currentChildPath;
-    });
-  };
-
-  const hasLaterDescendant = (visibleRows, rowIndex, branchPath) => {
-    return visibleRows.slice(rowIndex + 1).some((rowInfo) => isDescendantBranchPath(rowInfo.branchPath, branchPath));
+  const getParentBranchPath = (branchPath) => {
+    const depth = getDepthFromBranchPath(branchPath);
+    return depth <= 0 ? "" : branchPathAtDepth(branchPath, depth - 1);
   };
 
   const getNodeXInTreeZone = (depth) => {
@@ -144,100 +119,202 @@
         const cellRect = cell?.getBoundingClientRect?.() || rowRect;
         const labelRect = label?.getBoundingClientRect?.() || cellRect;
         const anchorY = Math.round(labelRect.top - listRect.top + (labelRect.height / 2));
-        const rowTop = Math.round(rowRect.top - listRect.top);
-        const rowBottom = Math.round(rowRect.bottom - listRect.top);
         const cellLeft = Math.round(cellRect.left - listRect.left);
         const treeOriginX = cellLeft;
         const nodeX = Math.round(treeOriginX + getNodeXInTreeZone(depth));
-        const labelStartX = Math.round(treeOriginX + TREE_ZONE_WIDTH + TREE_LABEL_GAP);
+        const labelStartX = Math.round(labelRect.left - listRect.left);
+        const groupControl = getCollapsedGroupControl(row);
         return {
+          key: branchPath,
+          type: "row",
           row,
           branchPath,
+          parentKey: depth <= 0 ? "" : getParentBranchPath(branchPath),
           depth,
-          rowTop,
-          rowBottom,
           anchorY,
           treeOriginX,
           nodeX,
           labelStartX,
-          groupControl: getCollapsedGroupControl(row)
+          groupControl
         };
       });
   };
 
-  const drawAncestorLines = (svg, rows) => {
-    rows.forEach((rowInfo, rowIndex) => {
-      for (let level = 1; level < rowInfo.depth; level += 1) {
-        if (!hasLaterVisibleInAncestor(rows, rowIndex, rowInfo.branchPath, level)) {
-          continue;
-        }
-        const x = rowInfo.treeOriginX + getNodeXInTreeZone(level);
-        appendPath(svg, "tree-overlay-line tree-overlay-line-ancestor", `M ${x} ${rowInfo.rowTop + TREE_TOP_PADDING} V ${rowInfo.rowBottom - TREE_BOTTOM_PADDING}`);
+  const findNearestVisibleAncestor = (node, nodeByBranchPath) => {
+    for (let depth = node.depth - 1; depth >= 0; depth -= 1) {
+      const ancestorPath = branchPathAtDepth(node.branchPath, depth);
+      if (nodeByBranchPath.has(ancestorPath)) {
+        return nodeByBranchPath.get(ancestorPath);
       }
+    }
+    return null;
+  };
+
+  const createOmittedNode = (targetNode) => {
+    const group = targetNode.groupControl;
+    if (!group || group.expanded) {
+      return null;
+    }
+
+    const targetDepth = targetNode.depth;
+    const visibleAncestorDepth = Math.max(0, targetDepth - group.count - 1);
+    const omittedDepth = Math.min(targetDepth - 1, visibleAncestorDepth + 1);
+    const omittedPath = branchPathAtDepth(targetNode.branchPath, omittedDepth);
+    const parentPath = branchPathAtDepth(targetNode.branchPath, visibleAncestorDepth);
+    const nodeX = Math.round(targetNode.treeOriginX + getNodeXInTreeZone(omittedDepth));
+
+    return {
+      key: `omitted:${group.groupId}`,
+      type: "omitted",
+      branchPath: omittedPath,
+      parentKey: parentPath,
+      depth: omittedDepth,
+      anchorY: targetNode.anchorY,
+      treeOriginX: targetNode.treeOriginX,
+      nodeX,
+      labelStartX: targetNode.labelStartX,
+      count: group.count,
+      groupId: group.groupId,
+      targetKey: targetNode.key
+    };
+  };
+
+  const buildVisibleTreeGraph = (list) => {
+    const rows = collectVisibleRows(list);
+    const nodes = [...rows];
+    const omittedNodes = [];
+    const nodeByKey = new Map();
+    const nodeByBranchPath = new Map();
+
+    rows.forEach((node) => {
+      nodeByKey.set(node.key, node);
+      nodeByBranchPath.set(node.branchPath, node);
+    });
+
+    rows.forEach((node) => {
+      const omittedNode = createOmittedNode(node);
+      if (!omittedNode) {
+        return;
+      }
+      omittedNodes.push(omittedNode);
+      nodes.push(omittedNode);
+      nodeByKey.set(omittedNode.key, omittedNode);
+      node.parentKey = omittedNode.key;
+    });
+
+    const edges = [];
+    nodes.forEach((node) => {
+      if (!node.parentKey) {
+        return;
+      }
+      const parent = nodeByKey.get(node.parentKey) || nodeByBranchPath.get(node.parentKey) || findNearestVisibleAncestor(node, nodeByBranchPath);
+      if (!parent || parent.key === node.key) {
+        return;
+      }
+      edges.push({
+        parent,
+        child: node,
+        omitted: parent.type === "omitted" || node.type === "omitted"
+      });
+    });
+
+    return { rows, nodes, omittedNodes, edges };
+  };
+
+  const buildEdgePath = (parent, child) => {
+    const childIsBelow = child.anchorY >= parent.anchorY;
+    const startY = parent.anchorY + (childIsBelow ? TREE_NODE_RADIUS : -TREE_NODE_RADIUS);
+    const endY = child.anchorY;
+    const startX = parent.nodeX;
+    const endX = child.nodeX - TREE_NODE_RADIUS - 1;
+    const deltaY = endY - startY;
+    const elbowX = Math.min(endX, startX + Math.max(10, Math.min(18, Math.abs(endX - startX) * 0.55)));
+
+    if (Math.abs(deltaY) < 1) {
+      return `M ${startX + TREE_NODE_RADIUS + 1} ${parent.anchorY} C ${startX + 12} ${parent.anchorY}, ${Math.max(startX + 12, endX - 14)} ${endY}, ${endX} ${endY}`;
+    }
+
+    return [
+      `M ${startX} ${startY}`,
+      `C ${startX} ${startY + (deltaY * 0.55)}, ${startX} ${endY}, ${elbowX} ${endY}`,
+      `C ${elbowX + 4} ${endY}, ${Math.max(elbowX + 4, endX - 10)} ${endY}, ${endX} ${endY}`
+    ].join(" ");
+  };
+
+  const drawEdges = (svg, edges) => {
+    edges
+      .slice()
+      .sort((a, b) => a.child.anchorY - b.child.anchorY)
+      .forEach((edge) => {
+        const className = edge.omitted
+          ? "tree-overlay-line tree-overlay-line-edge tree-overlay-line-omitted-edge"
+          : "tree-overlay-line tree-overlay-line-edge";
+        appendPath(svg, className, buildEdgePath(edge.parent, edge.child));
+      });
+  };
+
+  const drawLabelLinks = (svg, nodes) => {
+    nodes.forEach((node) => {
+      if (node.type !== "row") {
+        return;
+      }
+      const startX = node.nodeX + TREE_NODE_RADIUS + 1;
+      const endX = Math.max(startX + 6, node.labelStartX - TREE_LABEL_GAP);
+      if (endX <= startX) {
+        return;
+      }
+      const d = `M ${startX} ${node.anchorY} C ${startX + 6} ${node.anchorY}, ${endX - 8} ${node.anchorY}, ${endX} ${node.anchorY}`;
+      appendPath(svg, "tree-overlay-line tree-overlay-line-label", d);
     });
   };
 
-  const drawNodeConnector = (svg, rows, rowInfo, rowIndex) => {
-    const continuesToDescendant = hasLaterDescendant(rows, rowIndex, rowInfo.branchPath);
-    const y = rowInfo.anchorY;
-    const x = rowInfo.nodeX;
-    const top = rowInfo.rowTop + TREE_TOP_PADDING;
-    const bottom = rowInfo.rowBottom - TREE_BOTTOM_PADDING;
-    const labelX = Math.max(rowInfo.labelStartX - 8, x + 12);
-    const hasCollapsedGroup = Boolean(rowInfo.groupControl && !rowInfo.groupControl.expanded && rowInfo.groupControl.count > 0);
-
-    if (rowInfo.depth <= 0) {
-      if (continuesToDescendant) {
-        appendPath(svg, "tree-overlay-line tree-overlay-line-current", `M ${x} ${y + TREE_NODE_RADIUS + 2} V ${bottom}`);
+  const drawNodes = (svg, nodes) => {
+    nodes.forEach((node) => {
+      if (node.type !== "row") {
+        return;
       }
-      appendCircle(svg, "tree-overlay-node tree-overlay-node-root", x, y, TREE_NODE_RADIUS);
-      return;
-    }
-
-    if (!hasCollapsedGroup) {
-      appendPath(svg, "tree-overlay-line tree-overlay-line-current", `M ${x} ${top} V ${Math.max(top, y - 9)}`);
-      appendPath(svg, "tree-overlay-line tree-overlay-line-current tree-overlay-line-elbow", `M ${x} ${Math.max(top, y - 9)} C ${x} ${y - 2}, ${x + 5} ${y}, ${x + 12} ${y} H ${labelX}`);
-    }
-
-    if (hasCollapsedGroup) {
-      const markerDepth = Math.max(1, rowInfo.depth - rowInfo.groupControl.count);
-      const markerX = rowInfo.treeOriginX + getNodeXInTreeZone(markerDepth);
-      appendPath(svg, "tree-overlay-line tree-overlay-line-current tree-overlay-line-omitted", `M ${markerX + 16} ${y} C ${markerX + 26} ${y}, ${x - 14} ${y}, ${x - 5} ${y}`);
-    }
-
-    if (continuesToDescendant) {
-      appendPath(svg, "tree-overlay-line tree-overlay-line-current", `M ${x} ${y + TREE_NODE_RADIUS + 2} V ${bottom}`);
-    }
-
-    appendCircle(svg, "tree-overlay-node", x, y, TREE_NODE_RADIUS);
+      appendCircle(
+        svg,
+        node.depth <= 0 ? "tree-overlay-node tree-overlay-node-root" : "tree-overlay-node",
+        node.nodeX,
+        node.anchorY,
+        TREE_NODE_RADIUS
+      );
+    });
   };
 
-  const createOmittedButton = (list, controls, rowInfo) => {
-    const group = rowInfo.groupControl;
-    if (!group) {
+  const addOmittedButton = (controls, node, expanded = false) => {
+    const actionText = expanded ? "隠す" : "表示";
+    const label = `中間履歴 ${node.count}件を${actionText}`;
+    const button = document.createElement("button");
+    button.className = `intermediate-toggle-button tree-omission-button${expanded ? " is-expanded" : ""}`;
+    button.type = "button";
+    button.dataset.collapsedGroupId = node.groupId;
+    button.dataset.count = String(node.count);
+    button.setAttribute("aria-expanded", expanded ? "true" : "false");
+    button.setAttribute("aria-label", label);
+    button.title = label;
+    button.textContent = expanded ? "−" : `…${node.count}`;
+    button.style.left = `${Math.round(node.nodeX)}px`;
+    button.style.top = `${Math.round(node.anchorY)}px`;
+    controls.appendChild(button);
+  };
+
+  const addExpandedGroupButton = (controls, rowNode) => {
+    const group = rowNode.groupControl;
+    if (!group || !group.expanded) {
       return;
     }
 
-    const markerDepth = Math.max(1, rowInfo.depth - group.count);
-    const markerX = rowInfo.treeOriginX + getNodeXInTreeZone(markerDepth);
-    const actionText = group.expanded ? "隠す" : "表示";
-    const label = `中間履歴 ${group.count}件を${actionText}`;
-    const button = document.createElement("button");
-    button.className = "intermediate-toggle-button tree-omission-button";
-    button.type = "button";
-    button.dataset.collapsedGroupId = group.groupId;
-    button.dataset.count = String(group.count);
-    button.setAttribute("aria-expanded", group.expanded ? "true" : "false");
-    button.setAttribute("aria-label", label);
-    button.title = label;
-    button.textContent = group.expanded ? "−" : `…${group.count}`;
-    button.style.left = `${Math.round(markerX)}px`;
-    button.style.top = `${Math.round(rowInfo.anchorY)}px`;
-    controls.appendChild(button);
-
-    if (!list.contains(button)) {
-      warnOnce("[branch-tree-overlay] omitted marker was not inserted into the version list", { groupId: group.groupId });
-    }
+    const targetDepth = rowNode.depth;
+    const visibleAncestorDepth = Math.max(0, targetDepth - group.count - 1);
+    const markerDepth = Math.min(targetDepth - 1, visibleAncestorDepth + 1);
+    addOmittedButton(controls, {
+      count: group.count,
+      groupId: group.groupId,
+      nodeX: Math.round(rowNode.treeOriginX + getNodeXInTreeZone(markerDepth)),
+      anchorY: rowNode.anchorY
+    }, true);
   };
 
   const renderTreeOverlay = (list) => {
@@ -246,7 +323,7 @@
     }
 
     const { svg, controls } = ensureOverlay(list);
-    const rows = collectVisibleRows(list);
+    const graph = buildVisibleTreeGraph(list);
     const width = Math.ceil(Math.max(list.scrollWidth, list.getBoundingClientRect().width));
     const height = Math.ceil(Math.max(list.scrollHeight, list.getBoundingClientRect().height));
 
@@ -260,15 +337,19 @@
     svg.replaceChildren();
     controls.replaceChildren();
 
-    if (rows.length === 0) {
+    if (graph.rows.length === 0) {
       return;
     }
 
-    drawAncestorLines(svg, rows);
-    rows.forEach((rowInfo, rowIndex) => {
-      drawNodeConnector(svg, rows, rowInfo, rowIndex);
-      createOmittedButton(list, controls, rowInfo);
-    });
+    drawEdges(svg, graph.edges);
+    drawLabelLinks(svg, graph.nodes);
+    drawNodes(svg, graph.nodes);
+    graph.omittedNodes.forEach((node) => addOmittedButton(controls, node, false));
+    graph.rows.forEach((node) => addExpandedGroupButton(controls, node));
+
+    if (graph.omittedNodes.some((node) => !list.contains(controls.querySelector(`[data-collapsed-group-id="${CSS.escape(node.groupId)}"]`)))) {
+      warnOnce("[branch-tree-overlay] omitted marker was not inserted into the version list");
+    }
   };
 
   const refreshBranchTreeOverlays = (root = document) => {
