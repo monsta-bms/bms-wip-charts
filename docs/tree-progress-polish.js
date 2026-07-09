@@ -1,12 +1,12 @@
 (() => {
   const CHART_LIST_SELECTOR = "#chartList";
-  const TREE_WIDTH = 68;
+  const TREE_WIDTH = 78;
   const TREE_HEIGHT = 50;
   const TREE_ROOT_X = 18;
   const TREE_INDENT = 16;
   const TREE_NODE_Y = 25;
   const TREE_NODE_RADIUS = 4;
-  const TREE_LINE_END_X = TREE_WIDTH + 4;
+  const TREE_LINE_END_X = TREE_WIDTH;
 
   const splitBranchPath = (branchPath) => String(branchPath || "root").split("/").filter(Boolean);
   const getDepthFromBranchPath = (branchPath) => Math.max(0, splitBranchPath(branchPath).length - 1);
@@ -48,7 +48,7 @@
     if (depth <= 0) {
       return TREE_ROOT_X;
     }
-    return Math.min(TREE_WIDTH - 10, TREE_ROOT_X + ((depth - 1) * TREE_INDENT));
+    return Math.min(TREE_WIDTH - 12, TREE_ROOT_X + ((depth - 1) * TREE_INDENT));
   };
 
   const buildPath = (className, d) => `<path class="${className}" d="${d}"></path>`;
@@ -72,7 +72,7 @@
       const depth = rowInfo.depth - offset;
       const x = getNodeX(depth);
       paths.push(buildPath("tree-line tree-line-compressed", `M ${x} 7 V ${TREE_HEIGHT - 7}`));
-      circles.push(buildCircle("tree-node-compressed", x, TREE_NODE_Y, 2.3));
+      circles.push(buildCircle("tree-node-compressed", x, TREE_NODE_Y, 2.4));
     }
     return { paths, circles };
   };
@@ -118,7 +118,7 @@
 
     paths.push(buildPath(
       "tree-line tree-line-current tree-line-elbow",
-      `M ${nodeX} 0 V ${nodeY - 8} Q ${nodeX} ${nodeY} ${nodeX + 8} ${nodeY} H ${TREE_LINE_END_X}`,
+      `M ${nodeX} 0 V ${nodeY - 9} Q ${nodeX} ${nodeY} ${nodeX + 9} ${nodeY} H ${TREE_LINE_END_X}`,
     ));
 
     if (currentContinues) {
@@ -173,13 +173,18 @@
 
   let scheduledFrame = 0;
   const scheduleRefresh = () => {
-    if (scheduledFrame) {
+    if (scheduledFrame && typeof window.cancelAnimationFrame === "function") {
       window.cancelAnimationFrame(scheduledFrame);
     }
-    scheduledFrame = window.requestAnimationFrame(() => {
+    const run = () => {
       scheduledFrame = 0;
       refreshPolishedTreeConnectors(document);
-    });
+    };
+    if (typeof window.requestAnimationFrame === "function") {
+      scheduledFrame = window.requestAnimationFrame(run);
+      return;
+    }
+    window.setTimeout(run, 0);
   };
 
   const mount = () => {
@@ -190,10 +195,11 @@
 
     chartList.dataset.treeProgressPolishMounted = "true";
     const observer = new MutationObserver(scheduleRefresh);
-    observer.observe(chartList, { childList: true, subtree: true });
+    observer.observe(chartList, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden", "class", "data-depth", "data-branch-path"] });
     chartList.addEventListener("click", (event) => {
       if (event.target.closest(".intermediate-toggle-button")) {
         window.setTimeout(scheduleRefresh, 0);
+        window.setTimeout(scheduleRefresh, 80);
       }
     });
 
@@ -201,12 +207,19 @@
     window.setTimeout(scheduleRefresh, 50);
     window.setTimeout(scheduleRefresh, 250);
     window.setTimeout(scheduleRefresh, 1000);
+    window.addEventListener("load", scheduleRefresh, { once: true });
+    window.addEventListener("pageshow", scheduleRefresh);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        scheduleRefresh();
+      }
+    });
 
     let attempt = 0;
     const interval = window.setInterval(() => {
       attempt += 1;
       scheduleRefresh();
-      if (attempt >= 12) {
+      if (attempt >= 20) {
         window.clearInterval(interval);
       }
     }, 500);
