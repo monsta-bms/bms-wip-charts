@@ -1,14 +1,17 @@
 /* List thumbnail and branch tree refresh. Loaded after the base styles. */
 
 .page-shell {
-  max-width: 1280px;
+  max-width: 1440px;
+  width: min(96vw, 1440px);
 }
 
 .version-list {
-  --version-tree-indent: 18px;
-  --tree-line-color: rgba(82, 99, 108, 0.66);
-  --tree-line-strong: rgba(31, 122, 92, 0.56);
-  --version-grid-columns: var(--group-gutter-width) minmax(190px, 1.28fr) 72px minmax(110px, 0.78fr) 76px minmax(260px, 1.68fr) minmax(146px, 0.96fr) 132px;
+  --version-tree-indent: 16px;
+  --tree-line-color: #93a2af;
+  --tree-line-muted: #b3bec8;
+  --tree-line-strong: #7f8f9d;
+  --tree-elbow-y: 23px;
+  --version-grid-columns: var(--group-gutter-width) minmax(196px, 1.12fr) 76px minmax(120px, 0.76fr) 78px minmax(300px, 1.55fr) minmax(240px, 1.35fr) 136px;
 }
 
 .version-list-header {
@@ -23,81 +26,124 @@
   overflow: visible;
 }
 
+.version-row.version-tree-row[data-depth]:not([data-depth="0"]) .version-tree-cell::before,
+.version-row.version-tree-row[data-depth]:not([data-depth="0"]) .version-tree-cell::after {
+  display: none;
+}
+
 .version-tree-tag {
+  align-items: stretch;
   gap: 8px;
-  padding-left: calc(var(--tree-depth, 0) * var(--version-tree-indent));
+  min-height: 48px;
+  padding-left: 0;
 }
 
 .tree-connector {
+  align-self: stretch;
   flex: 0 0 auto;
-  min-width: 24px;
+  min-width: 28px;
   position: relative;
 }
 
-.version-row.version-tree-row[data-depth="0"] .tree-connector {
-  height: 38px;
-  min-width: 28px;
-  padding-top: 0;
+.tree-connector-root {
+  height: 48px;
+  width: 28px;
 }
 
-.version-row.version-tree-row[data-depth="0"] .tree-connector::before {
-  background: transparent;
-  border: 0;
-  border-left: 2px solid var(--primary-dark);
-  border-radius: 0;
-  bottom: 2px;
-  box-shadow: none;
+.tree-connector-root.continues-below::before {
+  border-left: 1px solid var(--tree-line-strong);
+  bottom: -18px;
   content: "";
-  display: block;
-  height: auto;
   left: 12px;
+  opacity: 0.86;
   position: absolute;
-  top: 2px;
-  width: 0;
+  top: 4px;
+  transform: translateX(-0.5px);
 }
 
-.version-row.version-tree-row[data-depth="0"] .tree-connector::after {
+.tree-root-mark {
   background: #ffffff;
   border: 2px solid var(--primary-dark);
   border-radius: 999px;
-  content: "";
-  height: 8px;
+  height: 9px;
   left: 17px;
   position: absolute;
-  top: 15px;
-  width: 8px;
+  top: 18px;
+  width: 9px;
+  z-index: 1;
 }
 
-.version-row.version-tree-row[data-depth]:not([data-depth="0"]) .version-tree-cell::before,
-.version-row.version-tree-row[data-depth]:not([data-depth="0"]) .version-tree-cell::after {
-  opacity: 0.96;
+.tree-root-mark::before {
+  border-top: 1px solid var(--primary-dark);
+  content: "";
+  left: -11px;
+  position: absolute;
+  top: 3px;
+  width: 10px;
 }
 
-.version-row.version-tree-row[data-depth]:not([data-depth="0"]) .version-tree-cell::before {
+.tree-connector-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--connector-depth), var(--version-tree-indent));
+  min-width: calc(var(--connector-depth) * var(--version-tree-indent));
+  width: calc(var(--connector-depth) * var(--version-tree-indent));
+}
+
+.tree-connector-slot {
+  min-width: var(--version-tree-indent);
+  position: relative;
+}
+
+.tree-connector-slot::before,
+.tree-connector-slot::after {
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.tree-connector-slot::before {
+  border-left: 1px dashed var(--tree-line-muted);
+  bottom: -18px;
+  left: 50%;
+  top: -18px;
+  transform: translateX(-0.5px);
+}
+
+.tree-connector-slot.has-ancestor-line::before {
+  opacity: 0.9;
+}
+
+.tree-connector-slot.is-current-branch::before {
   border-left: 1px dashed var(--tree-line-color);
-  bottom: -1px;
-  left: calc((var(--tree-depth, 0) * var(--version-tree-indent)) + 8px);
-  top: -1px;
+  bottom: calc(100% - var(--tree-elbow-y));
+  opacity: 0.95;
 }
 
-.version-row.version-tree-row[data-depth]:not([data-depth="0"]) .version-tree-cell::after {
+.tree-connector-slot.is-current-branch.continues-below::before {
+  bottom: -18px;
+}
+
+.tree-connector-slot.is-current-branch::after {
   border-bottom: 1px dashed var(--tree-line-color);
-  border-bottom-left-radius: 12px;
+  border-bottom-left-radius: 11px;
   border-left: 1px dashed var(--tree-line-color);
-  border-top: 0;
-  height: 18px;
-  left: calc((var(--tree-depth, 0) * var(--version-tree-indent)) + 8px);
-  top: 13px;
-  width: 18px;
+  height: 11px;
+  left: 50%;
+  opacity: 0.95;
+  top: calc(var(--tree-elbow-y) - 11px);
+  width: calc(var(--version-tree-indent) + 5px);
 }
 
-.version-row.version-tree-row:hover[data-depth]:not([data-depth="0"]) .version-tree-cell::before,
-.version-row.version-tree-row:hover[data-depth]:not([data-depth="0"]) .version-tree-cell::after {
+.version-row.version-tree-row:hover .tree-connector-slot.has-ancestor-line::before,
+.version-row.version-tree-row:hover .tree-connector-slot.is-current-branch::before,
+.version-row.version-tree-row:hover .tree-connector-slot.is-current-branch::after {
   border-color: var(--tree-line-strong);
+  opacity: 1;
 }
 
-.version-row.version-tree-row.is-intermediate-history .version-tree-cell::before,
-.version-row.version-tree-row.is-intermediate-history .version-tree-cell::after {
+.version-row.version-tree-row.is-intermediate-history .tree-connector-slot::before,
+.version-row.version-tree-row.is-intermediate-history .tree-connector-slot::after {
   opacity: 0.72;
 }
 
@@ -158,14 +204,14 @@
 .progress-thumbnail-graph {
   --progress-thumbnail-cell-gap: 1px;
   --progress-thumbnail-plot-padding-x: 1px;
-  background: linear-gradient(180deg, #fbfdfc, #eef6f2);
-  border-left: 1px solid rgba(31, 122, 92, 0.32);
-  border-right: 1px solid rgba(31, 122, 92, 0.32);
+  background: #f7fbfa;
+  border-left: 1px solid rgba(31, 122, 92, 0.3);
+  border-right: 1px solid rgba(31, 122, 92, 0.3);
   display: grid;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
   overflow: hidden;
-  padding: 1px var(--progress-thumbnail-plot-padding-x) 0;
+  padding: 2px var(--progress-thumbnail-plot-padding-x) 1px;
   width: 100%;
 }
 
@@ -180,8 +226,9 @@
 
 .progress-thumbnail-density {
   align-items: end;
-  background: transparent;
-  height: 46px;
+  background: linear-gradient(180deg, #fbfdfc, #edf6f2);
+  border-bottom: 1px solid rgba(31, 122, 92, 0.12);
+  height: 34px;
 }
 
 .progress-thumbnail-density-bar {
@@ -205,12 +252,14 @@
 }
 
 .progress-thumbnail-fill-strip {
-  background: transparent;
-  height: 7px;
+  background: #D8E8E2;
+  border-radius: 999px;
+  height: 6px;
 }
 
 .progress-thumbnail-strip-cell {
   background: #D8E8E2;
+  border-radius: 2px;
   min-width: 1px;
 }
 
@@ -249,14 +298,20 @@
   max-width: none;
 }
 
+@media (max-width: 1100px) {
+  .version-list {
+    --version-grid-columns: var(--group-gutter-width) minmax(172px, 1.08fr) 64px minmax(94px, 0.72fr) 68px minmax(228px, 1.34fr) minmax(156px, 1fr) 124px;
+  }
+}
+
 @media (max-width: 960px) {
   .version-list {
     --version-tree-indent: 14px;
-    --version-grid-columns: var(--group-gutter-width) minmax(154px, 1.18fr) 58px minmax(82px, 0.7fr) 62px minmax(174px, 1.14fr) minmax(110px, 0.86fr) 112px;
+    --version-grid-columns: var(--group-gutter-width) minmax(154px, 1.14fr) 58px minmax(82px, 0.7fr) 62px minmax(188px, 1.16fr) minmax(120px, 0.92fr) 112px;
   }
 
   .progress-thumbnail-density {
-    height: 40px;
+    height: 32px;
   }
 
   .progress-thumbnail-meta {
@@ -271,20 +326,20 @@
   }
 
   .version-tree-tag {
-    padding-left: calc(var(--tree-depth, 0) * var(--version-tree-indent));
+    padding-left: 0;
   }
 
-  .version-row.version-tree-row[data-depth]:not([data-depth="0"]) .version-tree-cell::before {
-    left: calc((var(--tree-depth, 0) * var(--version-tree-indent)) + 6px);
+  .tree-connector-slot::before {
+    bottom: -12px;
+    top: -12px;
   }
 
-  .version-row.version-tree-row[data-depth]:not([data-depth="0"]) .version-tree-cell::after {
-    left: calc((var(--tree-depth, 0) * var(--version-tree-indent)) + 6px);
-    width: 14px;
+  .tree-connector-slot.is-current-branch.continues-below::before {
+    bottom: -12px;
   }
 
   .progress-thumbnail-density {
-    height: 42px;
+    height: 32px;
   }
 
   .progress-thumbnail-meta {
@@ -297,6 +352,7 @@
 @media (max-width: 640px) {
   .page-shell {
     max-width: 100%;
+    width: 100%;
   }
 
   .version-list {
@@ -304,6 +360,6 @@
   }
 
   .tree-connector {
-    min-width: 18px;
+    min-width: 20px;
   }
 }
