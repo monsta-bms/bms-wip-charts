@@ -1,4 +1,4 @@
-/* UI-TREE-PROGRESS-POLISH-03: tree readability, thumbnail separation, and compact form density. */
+/* UI-TREE-PROGRESS-POLISH-04: tree readability, thumbnail separation, and compact form density. */
 .submit-panel {
   margin-bottom: 22px;
   padding: 16px 18px;
@@ -90,6 +90,7 @@
   --tree-line-color: #7e8f9c;
   --tree-line-muted: #a3b0bc;
   --tree-line-strong: #657989;
+  --version-grid-columns: var(--group-gutter-width) minmax(190px, 1.05fr) 64px minmax(100px, 0.72fr) 70px minmax(260px, 1.3fr) minmax(170px, 1fr) 124px;
 }
 
 .group-gutter-cell {
