@@ -6,8 +6,8 @@
   let progressThumbnailBridgeInstalled = false;
   let progressImageGenerationWarnCount = 0;
   const maxProgressImageGenerationWarnings = 5;
-  const emptyBarFill = "#D9E8E2";
-  const emptyStripFill = "#CFE1DA";
+  const emptyBarFill = "#CFE3DC";
+  const emptyStripFill = "#D8E8E2";
   const colorLabels = ["青", "紫", "橙", "赤", "水色"];
 
   function html(value) {
