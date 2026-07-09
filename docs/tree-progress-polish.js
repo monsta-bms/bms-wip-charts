@@ -21,16 +21,21 @@
     return segments.slice(0, Math.min(segments.length, depth + 1)).join("/");
   };
 
-  const hasLaterSiblingAtDepth = (visibleRows, rowIndex, branchPath, depth) => {
-    const ancestorAtDepth = branchPathAtDepth(branchPath, depth);
+  const hasLaterVisibleInAncestor = (visibleRows, rowIndex, branchPath, ancestorDepth) => {
+    if (ancestorDepth <= 0) {
+      return false;
+    }
+
+    const ancestorPath = branchPathAtDepth(branchPath, ancestorDepth);
+    const currentChildPath = branchPathAtDepth(branchPath, ancestorDepth + 1);
     return visibleRows.slice(rowIndex + 1).some((rowInfo) => {
-      if (rowInfo.depth < depth) {
+      if (rowInfo.depth < ancestorDepth) {
         return false;
       }
-      if (rowInfo.depth === depth) {
-        return branchPathAtDepth(rowInfo.branchPath, depth) !== ancestorAtDepth;
+      if (branchPathAtDepth(rowInfo.branchPath, ancestorDepth) !== ancestorPath) {
+        return false;
       }
-      return branchPathAtDepth(rowInfo.branchPath, depth) !== ancestorAtDepth;
+      return branchPathAtDepth(rowInfo.branchPath, ancestorDepth + 1) !== currentChildPath;
     });
   };
 
@@ -71,7 +76,7 @@
     }
 
     for (let level = 1; level < depth; level += 1) {
-      if (hasLaterSiblingAtDepth(visibleRows, rowIndex, rowInfo.branchPath, level)) {
+      if (hasLaterVisibleInAncestor(visibleRows, rowIndex, rowInfo.branchPath, level)) {
         const ancestorX = getNodeX(level);
         paths.push(buildPath(
           "tree-line tree-line-ancestor",
