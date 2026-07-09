@@ -1,14 +1,18 @@
 (() => {
   const CHART_LIST_SELECTOR = "#chartList";
-  const TREE_WIDTH = 78;
-  const TREE_HEIGHT = 50;
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const TREE_ZONE_WIDTH = 94;
   const TREE_ROOT_X = 18;
   const TREE_INDENT = 16;
-  const TREE_NODE_Y = 25;
-  const TREE_NODE_RADIUS = 4;
-  const TREE_LINE_END_X = TREE_WIDTH;
+  const TREE_NODE_RADIUS = 3.8;
+  const TREE_LABEL_GAP = 12;
+  const TREE_TOP_PADDING = 2;
+  const TREE_BOTTOM_PADDING = 2;
+  const MAX_WARNINGS = 5;
+  let warningCount = 0;
 
   const splitBranchPath = (branchPath) => String(branchPath || "root").split("/").filter(Boolean);
+
   const getDepthFromBranchPath = (branchPath) => Math.max(0, splitBranchPath(branchPath).length - 1);
 
   const isDescendantBranchPath = (branchPath, ancestorBranchPath) => {
@@ -44,131 +48,232 @@
     return visibleRows.slice(rowIndex + 1).some((rowInfo) => isDescendantBranchPath(rowInfo.branchPath, branchPath));
   };
 
-  const getNodeX = (depth) => {
+  const getNodeXInTreeZone = (depth) => {
     if (depth <= 0) {
       return TREE_ROOT_X;
     }
-    return Math.min(TREE_WIDTH - 12, TREE_ROOT_X + ((depth - 1) * TREE_INDENT));
+    return Math.min(TREE_ZONE_WIDTH - 18, TREE_ROOT_X + ((depth - 1) * TREE_INDENT));
   };
 
-  const buildPath = (className, d) => `<path class="${className}" d="${d}"></path>`;
-  const buildCircle = (className, cx, cy, r) => `<circle class="${className}" cx="${cx}" cy="${cy}" r="${r}"></circle>`;
-
-  const getCollapsedCount = (row) => {
-    const button = row.querySelector(".intermediate-toggle-button");
-    const count = Number(button?.dataset.count || row.dataset.intermediateGroupCount || 0);
-    return Number.isFinite(count) ? count : 0;
+  const warnOnce = (message, details) => {
+    if (warningCount >= MAX_WARNINGS) {
+      return;
+    }
+    warningCount += 1;
+    console.warn(message, details || "");
   };
 
-  const buildCompressedHistoryMarkers = (rowInfo, hiddenCount) => {
-    if (hiddenCount <= 0 || rowInfo.depth <= 1) {
-      return { paths: [], circles: [] };
-    }
-
-    const maxHiddenDepths = Math.min(hiddenCount, rowInfo.depth - 1);
-    const paths = [];
-    const circles = [];
-    for (let offset = maxHiddenDepths; offset >= 1; offset -= 1) {
-      const depth = rowInfo.depth - offset;
-      const x = getNodeX(depth);
-      paths.push(buildPath("tree-line tree-line-compressed", `M ${x} 7 V ${TREE_HEIGHT - 7}`));
-      circles.push(buildCircle("tree-node-compressed", x, TREE_NODE_Y, 2.4));
-    }
-    return { paths, circles };
+  const createSvgElement = (name, attributes = {}) => {
+    const element = document.createElementNS(SVG_NS, name);
+    Object.entries(attributes).forEach(([key, value]) => {
+      element.setAttribute(key, String(value));
+    });
+    return element;
   };
 
-  const buildConnectorSvg = (rowInfo, rowIndex, visibleRows) => {
-    const depth = Math.max(0, rowInfo.depth);
-    const nodeX = getNodeX(depth);
-    const nodeY = TREE_NODE_Y;
-    const paths = [];
-    const circles = [];
-    const currentContinues = hasLaterDescendant(visibleRows, rowIndex, rowInfo.branchPath);
-    const collapsedCount = getCollapsedCount(rowInfo.row);
-    const compressed = buildCompressedHistoryMarkers(rowInfo, collapsedCount);
+  const appendPath = (svg, className, d) => {
+    const path = createSvgElement("path", { class: className, d });
+    svg.appendChild(path);
+    return path;
+  };
 
-    if (depth <= 0) {
-      if (currentContinues) {
-        paths.push(buildPath(
-          "tree-line tree-line-current tree-line-below",
-          `M ${nodeX} ${nodeY + TREE_NODE_RADIUS + 2} V ${TREE_HEIGHT}`,
-        ));
-      }
-      circles.push(buildCircle("tree-node-dot tree-node-root", nodeX, nodeY, TREE_NODE_RADIUS));
-      return `
-        <svg class="tree-connector-canvas" viewBox="0 0 ${TREE_WIDTH} ${TREE_HEIGHT}" preserveAspectRatio="none" focusable="false" aria-hidden="true">
-          ${paths.join("")}
-          ${circles.join("")}
-        </svg>
-      `;
+  const appendCircle = (svg, className, cx, cy, r) => {
+    const circle = createSvgElement("circle", { class: className, cx, cy, r });
+    svg.appendChild(circle);
+    return circle;
+  };
+
+  const ensureOverlay = (list) => {
+    let svg = list.querySelector(":scope > .version-tree-overlay");
+    if (!svg) {
+      svg = createSvgElement("svg", {
+        class: "version-tree-overlay",
+        focusable: "false",
+        "aria-hidden": "true"
+      });
+      list.prepend(svg);
     }
 
-    for (let level = 1; level < depth; level += 1) {
-      if (hasLaterVisibleInAncestor(visibleRows, rowIndex, rowInfo.branchPath, level)) {
-        const ancestorX = getNodeX(level);
-        paths.push(buildPath(
-          "tree-line tree-line-ancestor",
-          `M ${ancestorX} 0 V ${TREE_HEIGHT}`,
-        ));
-      }
+    let controls = list.querySelector(":scope > .version-tree-overlay-controls");
+    if (!controls) {
+      controls = document.createElement("div");
+      controls.className = "version-tree-overlay-controls";
+      list.appendChild(controls);
     }
 
-    paths.push(...compressed.paths);
-    circles.push(...compressed.circles);
+    return { svg, controls };
+  };
 
-    paths.push(buildPath(
-      "tree-line tree-line-current tree-line-elbow",
-      `M ${nodeX} 0 V ${nodeY - 9} Q ${nodeX} ${nodeY} ${nodeX + 9} ${nodeY} H ${TREE_LINE_END_X}`,
-    ));
+  const isVisibleRow = (row) => {
+    if (!row || row.hidden || row.hasAttribute("hidden")) {
+      return false;
+    }
+    return row.offsetParent !== null || row.getClientRects().length > 0;
+  };
 
-    if (currentContinues) {
-      paths.push(buildPath(
-        "tree-line tree-line-current tree-line-below",
-        `M ${nodeX} ${nodeY + TREE_NODE_RADIUS + 2} V ${TREE_HEIGHT}`,
-      ));
+  const getCollapsedGroupControl = (row) => {
+    const sourceButton = row.querySelector(".intermediate-toggle-button");
+    if (!sourceButton) {
+      return null;
     }
 
-    circles.push(buildCircle("tree-node-dot", nodeX, nodeY, TREE_NODE_RADIUS));
+    const groupId = sourceButton.dataset.collapsedGroupId || "";
+    const count = Number(sourceButton.dataset.count || row.dataset.intermediateGroupCount || 0);
+    if (!groupId || !Number.isFinite(count) || count <= 0) {
+      return null;
+    }
 
-    return `
-      <svg class="tree-connector-canvas" viewBox="0 0 ${TREE_WIDTH} ${TREE_HEIGHT}" preserveAspectRatio="none" focusable="false" aria-hidden="true">
-        ${paths.join("")}
-        ${circles.join("")}
-      </svg>
-    `;
+    return {
+      groupId,
+      count,
+      expanded: sourceButton.getAttribute("aria-expanded") === "true" || row.classList.contains("is-group-expanded")
+    };
   };
 
   const collectVisibleRows = (list) => {
-    return Array.from(list.querySelectorAll(".version-row.version-tree-row"))
-      .filter((row) => row.offsetParent !== null)
+    const listRect = list.getBoundingClientRect();
+    return Array.from(list.querySelectorAll(":scope > .version-row.version-tree-row"))
+      .filter(isVisibleRow)
       .map((row) => {
         const branchPath = row.dataset.branchPath || "root";
-        const depth = Number(row.dataset.depth || getDepthFromBranchPath(branchPath));
-        return { row, branchPath, depth: Number.isFinite(depth) ? depth : 0 };
+        const depthValue = Number(row.dataset.depth || getDepthFromBranchPath(branchPath));
+        const depth = Number.isFinite(depthValue) ? Math.max(0, depthValue) : 0;
+        const cell = row.querySelector(":scope > .version-tree-cell") || row.querySelector(":scope > .version-tag");
+        const label = row.querySelector(".version-label-stack") || row.querySelector(".version-main-label") || cell;
+        const rowRect = row.getBoundingClientRect();
+        const cellRect = cell?.getBoundingClientRect?.() || rowRect;
+        const labelRect = label?.getBoundingClientRect?.() || cellRect;
+        const anchorY = Math.round(labelRect.top - listRect.top + (labelRect.height / 2));
+        const rowTop = Math.round(rowRect.top - listRect.top);
+        const rowBottom = Math.round(rowRect.bottom - listRect.top);
+        const cellLeft = Math.round(cellRect.left - listRect.left);
+        const treeOriginX = cellLeft;
+        const nodeX = Math.round(treeOriginX + getNodeXInTreeZone(depth));
+        const labelStartX = Math.round(treeOriginX + TREE_ZONE_WIDTH + TREE_LABEL_GAP);
+        return {
+          row,
+          branchPath,
+          depth,
+          rowTop,
+          rowBottom,
+          anchorY,
+          treeOriginX,
+          nodeX,
+          labelStartX,
+          groupControl: getCollapsedGroupControl(row)
+        };
       });
   };
 
-  const refreshPolishedTreeConnectors = (root = document) => {
-    const lists = root.querySelectorAll?.(".version-list") || [];
-    lists.forEach((list) => {
-      const visibleRows = collectVisibleRows(list);
-      visibleRows.forEach((rowInfo, rowIndex) => {
-        const connector = rowInfo.row.querySelector(".tree-connector");
-        if (!connector) {
-          return;
+  const drawAncestorLines = (svg, rows) => {
+    rows.forEach((rowInfo, rowIndex) => {
+      for (let level = 1; level < rowInfo.depth; level += 1) {
+        if (!hasLaterVisibleInAncestor(rows, rowIndex, rowInfo.branchPath, level)) {
+          continue;
         }
-        const currentContinues = hasLaterDescendant(visibleRows, rowIndex, rowInfo.branchPath);
-        connector.classList.add("tree-connector-svg");
-        connector.classList.toggle("tree-connector-root", rowInfo.depth <= 0);
-        connector.classList.toggle("tree-connector-grid", rowInfo.depth > 0);
-        connector.classList.toggle("continues-below", currentContinues);
-        connector.classList.toggle("is-terminal", rowInfo.depth > 0 && !currentContinues);
-        const svg = buildConnectorSvg(rowInfo, rowIndex, visibleRows);
-        if (connector.innerHTML !== svg) {
-          connector.innerHTML = svg;
-        }
-      });
+        const x = rowInfo.treeOriginX + getNodeXInTreeZone(level);
+        appendPath(svg, "tree-overlay-line tree-overlay-line-ancestor", `M ${x} ${rowInfo.rowTop + TREE_TOP_PADDING} V ${rowInfo.rowBottom - TREE_BOTTOM_PADDING}`);
+      }
     });
+  };
+
+  const drawNodeConnector = (svg, rows, rowInfo, rowIndex) => {
+    const continuesToDescendant = hasLaterDescendant(rows, rowIndex, rowInfo.branchPath);
+    const y = rowInfo.anchorY;
+    const x = rowInfo.nodeX;
+    const top = rowInfo.rowTop + TREE_TOP_PADDING;
+    const bottom = rowInfo.rowBottom - TREE_BOTTOM_PADDING;
+    const labelX = Math.max(rowInfo.labelStartX - 8, x + 12);
+    const hasCollapsedGroup = Boolean(rowInfo.groupControl && !rowInfo.groupControl.expanded && rowInfo.groupControl.count > 0);
+
+    if (rowInfo.depth <= 0) {
+      if (continuesToDescendant) {
+        appendPath(svg, "tree-overlay-line tree-overlay-line-current", `M ${x} ${y + TREE_NODE_RADIUS + 2} V ${bottom}`);
+      }
+      appendCircle(svg, "tree-overlay-node tree-overlay-node-root", x, y, TREE_NODE_RADIUS);
+      return;
+    }
+
+    if (!hasCollapsedGroup) {
+      appendPath(svg, "tree-overlay-line tree-overlay-line-current", `M ${x} ${top} V ${Math.max(top, y - 9)}`);
+      appendPath(svg, "tree-overlay-line tree-overlay-line-current tree-overlay-line-elbow", `M ${x} ${Math.max(top, y - 9)} C ${x} ${y - 2}, ${x + 5} ${y}, ${x + 12} ${y} H ${labelX}`);
+    }
+
+    if (hasCollapsedGroup) {
+      const markerDepth = Math.max(1, rowInfo.depth - rowInfo.groupControl.count);
+      const markerX = rowInfo.treeOriginX + getNodeXInTreeZone(markerDepth);
+      appendPath(svg, "tree-overlay-line tree-overlay-line-current tree-overlay-line-omitted", `M ${markerX + 16} ${y} C ${markerX + 26} ${y}, ${x - 14} ${y}, ${x - 5} ${y}`);
+    }
+
+    if (continuesToDescendant) {
+      appendPath(svg, "tree-overlay-line tree-overlay-line-current", `M ${x} ${y + TREE_NODE_RADIUS + 2} V ${bottom}`);
+    }
+
+    appendCircle(svg, "tree-overlay-node", x, y, TREE_NODE_RADIUS);
+  };
+
+  const createOmittedButton = (list, controls, rowInfo) => {
+    const group = rowInfo.groupControl;
+    if (!group) {
+      return;
+    }
+
+    const markerDepth = Math.max(1, rowInfo.depth - group.count);
+    const markerX = rowInfo.treeOriginX + getNodeXInTreeZone(markerDepth);
+    const actionText = group.expanded ? "隠す" : "表示";
+    const label = `中間履歴 ${group.count}件を${actionText}`;
+    const button = document.createElement("button");
+    button.className = "intermediate-toggle-button tree-omission-button";
+    button.type = "button";
+    button.dataset.collapsedGroupId = group.groupId;
+    button.dataset.count = String(group.count);
+    button.setAttribute("aria-expanded", group.expanded ? "true" : "false");
+    button.setAttribute("aria-label", label);
+    button.title = label;
+    button.textContent = group.expanded ? "−" : `…${group.count}`;
+    button.style.left = `${Math.round(markerX)}px`;
+    button.style.top = `${Math.round(rowInfo.anchorY)}px`;
+    controls.appendChild(button);
+
+    if (!list.contains(button)) {
+      warnOnce("[branch-tree-overlay] omitted marker was not inserted into the version list", { groupId: group.groupId });
+    }
+  };
+
+  const renderTreeOverlay = (list) => {
+    if (!list) {
+      return;
+    }
+
+    const { svg, controls } = ensureOverlay(list);
+    const rows = collectVisibleRows(list);
+    const width = Math.ceil(Math.max(list.scrollWidth, list.getBoundingClientRect().width));
+    const height = Math.ceil(Math.max(list.scrollHeight, list.getBoundingClientRect().height));
+
+    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    svg.setAttribute("width", String(width));
+    svg.setAttribute("height", String(height));
+    svg.style.width = `${width}px`;
+    svg.style.height = `${height}px`;
+    controls.style.width = `${width}px`;
+    controls.style.height = `${height}px`;
+    svg.replaceChildren();
+    controls.replaceChildren();
+
+    if (rows.length === 0) {
+      return;
+    }
+
+    drawAncestorLines(svg, rows);
+    rows.forEach((rowInfo, rowIndex) => {
+      drawNodeConnector(svg, rows, rowInfo, rowIndex);
+      createOmittedButton(list, controls, rowInfo);
+    });
+  };
+
+  const refreshBranchTreeOverlays = (root = document) => {
+    const lists = root.querySelectorAll?.(".version-list") || [];
+    lists.forEach(renderTreeOverlay);
   };
 
   let scheduledFrame = 0;
@@ -178,13 +283,20 @@
     }
     const run = () => {
       scheduledFrame = 0;
-      refreshPolishedTreeConnectors(document);
+      refreshBranchTreeOverlays(document);
     };
     if (typeof window.requestAnimationFrame === "function") {
       scheduledFrame = window.requestAnimationFrame(run);
       return;
     }
     window.setTimeout(run, 0);
+  };
+
+  const shouldIgnoreMutations = (mutations) => {
+    return mutations.length > 0 && mutations.every((mutation) => {
+      const target = mutation.target;
+      return target?.closest?.(".version-tree-overlay, .version-tree-overlay-controls");
+    });
   };
 
   const mount = () => {
@@ -194,8 +306,19 @@
     }
 
     chartList.dataset.treeProgressPolishMounted = "true";
-    const observer = new MutationObserver(scheduleRefresh);
-    observer.observe(chartList, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden", "class", "data-depth", "data-branch-path"] });
+    const observer = new MutationObserver((mutations) => {
+      if (shouldIgnoreMutations(mutations)) {
+        return;
+      }
+      scheduleRefresh();
+    });
+    observer.observe(chartList, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["hidden", "class", "data-depth", "data-branch-path", "data-intermediate-group-count"]
+    });
+
     chartList.addEventListener("click", (event) => {
       if (event.target.closest(".intermediate-toggle-button")) {
         window.setTimeout(scheduleRefresh, 0);
@@ -207,6 +330,7 @@
     window.setTimeout(scheduleRefresh, 50);
     window.setTimeout(scheduleRefresh, 250);
     window.setTimeout(scheduleRefresh, 1000);
+    window.addEventListener("resize", scheduleRefresh);
     window.addEventListener("load", scheduleRefresh, { once: true });
     window.addEventListener("pageshow", scheduleRefresh);
     document.addEventListener("visibilitychange", () => {
@@ -214,18 +338,12 @@
         scheduleRefresh();
       }
     });
-
-    let attempt = 0;
-    const interval = window.setInterval(() => {
-      attempt += 1;
-      scheduleRefresh();
-      if (attempt >= 20) {
-        window.clearInterval(interval);
-      }
-    }, 500);
   };
 
-  window.refreshPolishedTreeConnectors = refreshPolishedTreeConnectors;
+  window.renderBranchTreeOverlay = renderTreeOverlay;
+  window.refreshBranchTreeOverlays = refreshBranchTreeOverlays;
+  window.refreshPolishedTreeConnectors = refreshBranchTreeOverlays;
+  window.scheduleBranchTreeOverlayRefresh = scheduleRefresh;
   window.schedulePolishedTreeConnectors = scheduleRefresh;
 
   if (document.readyState === "loading") {
