@@ -6,6 +6,7 @@
   const TREE_INDENT = 16;
   const TREE_NODE_Y = 25;
   const TREE_NODE_RADIUS = 4;
+  const TREE_LINE_END_X = TREE_WIDTH + 4;
 
   const splitBranchPath = (branchPath) => String(branchPath || "root").split("/").filter(Boolean);
   const getDepthFromBranchPath = (branchPath) => Math.max(0, splitBranchPath(branchPath).length - 1);
@@ -51,14 +52,40 @@
   };
 
   const buildPath = (className, d) => `<path class="${className}" d="${d}"></path>`;
+  const buildCircle = (className, cx, cy, r) => `<circle class="${className}" cx="${cx}" cy="${cy}" r="${r}"></circle>`;
+
+  const getCollapsedCount = (row) => {
+    const button = row.querySelector(".intermediate-toggle-button");
+    const count = Number(button?.dataset.count || row.dataset.intermediateGroupCount || 0);
+    return Number.isFinite(count) ? count : 0;
+  };
+
+  const buildCompressedHistoryMarkers = (rowInfo, hiddenCount) => {
+    if (hiddenCount <= 0 || rowInfo.depth <= 1) {
+      return { paths: [], circles: [] };
+    }
+
+    const maxHiddenDepths = Math.min(hiddenCount, rowInfo.depth - 1);
+    const paths = [];
+    const circles = [];
+    for (let offset = maxHiddenDepths; offset >= 1; offset -= 1) {
+      const depth = rowInfo.depth - offset;
+      const x = getNodeX(depth);
+      paths.push(buildPath("tree-line tree-line-compressed", `M ${x} 7 V ${TREE_HEIGHT - 7}`));
+      circles.push(buildCircle("tree-node-compressed", x, TREE_NODE_Y, 2.3));
+    }
+    return { paths, circles };
+  };
 
   const buildConnectorSvg = (rowInfo, rowIndex, visibleRows) => {
     const depth = Math.max(0, rowInfo.depth);
     const nodeX = getNodeX(depth);
     const nodeY = TREE_NODE_Y;
-    const lineEndX = TREE_WIDTH - 2;
     const paths = [];
+    const circles = [];
     const currentContinues = hasLaterDescendant(visibleRows, rowIndex, rowInfo.branchPath);
+    const collapsedCount = getCollapsedCount(rowInfo.row);
+    const compressed = buildCompressedHistoryMarkers(rowInfo, collapsedCount);
 
     if (depth <= 0) {
       if (currentContinues) {
@@ -67,10 +94,11 @@
           `M ${nodeX} ${nodeY + TREE_NODE_RADIUS + 2} V ${TREE_HEIGHT}`,
         ));
       }
+      circles.push(buildCircle("tree-node-dot tree-node-root", nodeX, nodeY, TREE_NODE_RADIUS));
       return `
         <svg class="tree-connector-canvas" viewBox="0 0 ${TREE_WIDTH} ${TREE_HEIGHT}" preserveAspectRatio="none" focusable="false" aria-hidden="true">
           ${paths.join("")}
-          <circle class="tree-node-dot tree-node-root" cx="${nodeX}" cy="${nodeY}" r="${TREE_NODE_RADIUS}"></circle>
+          ${circles.join("")}
         </svg>
       `;
     }
@@ -85,9 +113,12 @@
       }
     }
 
+    paths.push(...compressed.paths);
+    circles.push(...compressed.circles);
+
     paths.push(buildPath(
       "tree-line tree-line-current tree-line-elbow",
-      `M ${nodeX} 0 V ${nodeY - 8} Q ${nodeX} ${nodeY} ${nodeX + 8} ${nodeY} H ${lineEndX}`,
+      `M ${nodeX} 0 V ${nodeY - 8} Q ${nodeX} ${nodeY} ${nodeX + 8} ${nodeY} H ${TREE_LINE_END_X}`,
     ));
 
     if (currentContinues) {
@@ -97,10 +128,12 @@
       ));
     }
 
+    circles.push(buildCircle("tree-node-dot", nodeX, nodeY, TREE_NODE_RADIUS));
+
     return `
       <svg class="tree-connector-canvas" viewBox="0 0 ${TREE_WIDTH} ${TREE_HEIGHT}" preserveAspectRatio="none" focusable="false" aria-hidden="true">
         ${paths.join("")}
-        <circle class="tree-node-dot" cx="${nodeX}" cy="${nodeY}" r="${TREE_NODE_RADIUS}"></circle>
+        ${circles.join("")}
       </svg>
     `;
   };
@@ -130,7 +163,10 @@
         connector.classList.toggle("tree-connector-grid", rowInfo.depth > 0);
         connector.classList.toggle("continues-below", currentContinues);
         connector.classList.toggle("is-terminal", rowInfo.depth > 0 && !currentContinues);
-        connector.innerHTML = buildConnectorSvg(rowInfo, rowIndex, visibleRows);
+        const svg = buildConnectorSvg(rowInfo, rowIndex, visibleRows);
+        if (connector.innerHTML !== svg) {
+          connector.innerHTML = svg;
+        }
       });
     });
   };
