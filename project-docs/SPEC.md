@@ -32,6 +32,7 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。�
 - 一覧側の `progressMap` ベース密度サムネイル表示と `progressImage.url` fallback表示
 - 分岐version管理、`branch_path` 生成、完成到達時の親version DL不可化
 - `versions.file_deleted_at` / `versions.file_delete_reason` の自動削除準備カラム
+- versionId単位のブラウザ内お気に入り★とお気に入りのみ表示
 
 未実装:
 
@@ -45,7 +46,6 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。�
 - Cron Trigger
 - R2自動削除本体
 - Turnstile
-- お気に入り★
 - 本格的な譜面ミニビュー
 
 ## 画面仕様
@@ -380,6 +380,32 @@ MVPではサムネイルクリックによる拡大表示は実装しない。�
 - コメントの短い表示
 - DLボタンまたはDL不可ボタン
 - 追記投稿ボタン
+
+### お気に入り★
+
+投稿一覧の各version行では、版ラベル右側にお気に入り用の★buttonを表示する。
+
+仕様:
+
+- お気に入りの単位は `versionId` とする。
+- お気に入り状態はサーバーには保存せず、ブラウザごとの `localStorage` に保存する。
+- localStorage keyは `bms-wip-charts:favorites:v1` とする。
+- 保存形式はversionIdをkeyにしたmap形式とし、判定はversionIdの存在で行う。
+- `chartId`, `songTitle`, `chartName`, `versionLabel`, `branchPath`, `favoritedAt` は表示補助用snapshotとして保存してよい。
+- localStorageが壊れている、またはJSON parseに失敗した場合は空扱いにし、一覧全体を壊さない。
+- APIレスポンスに存在しないfavoriteはMVPでは表示上無視し、自動削除しない。
+- `completed`, `downloadBlocked`, `collapsedByCompletion`, `isRejected` のversionもお気に入り可とする。
+- `isHidden=true` のversionは一覧に表示されないため、お気に入りUIも表示しない。
+
+お気に入りのみトグル:
+
+- 投稿一覧上部に `★ お気に入りのみ` トグルを表示する。
+- OFF時は通常一覧を表示する。
+- ON時は、お気に入りversionとその祖先versionだけを表示する。
+- お気に入りversionを含むchartだけを表示し、祖先を残すことでツリー文脈を維持する。
+- 中間履歴内のversionがお気に入りの場合、フィルタON時はそのversionが見えるようにし、通常表示時の中間履歴折り畳み挙動は維持する。
+- 将来検索を追加する場合は、検索キーワード一致 AND お気に入り関連行の条件で絞り込むことを検討する。
+- 将来アカウント機能ができた場合は、サーバー保存や端末間同期を検討する。
 
 ## 自動削除準備
 
