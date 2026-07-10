@@ -259,6 +259,7 @@
       copy.collapsed_by_version_id = "";
       copy.downloadBlockReason = "favorite_filter_context";
       copy.download_block_reason = "favorite_filter_context";
+      copy.favoriteFilterIntermediate = true;
     }
     return copy;
   }
@@ -339,6 +340,22 @@
     return button;
   }
 
+  function lockFavoriteContextAppend(row) {
+    const actions = row.querySelector(".version-actions");
+    const appendButton = actions?.querySelector(".append-version-button, button.secondary:not(.intermediate-toggle-button)");
+    if (!appendButton || appendButton.classList.contains("append-disabled-intermediate")) {
+      return;
+    }
+
+    const locked = document.createElement("button");
+    locked.className = "secondary append-disabled-intermediate";
+    locked.type = "button";
+    locked.disabled = true;
+    locked.title = "完成版に置き換え済みの中間履歴のため追記できません";
+    locked.textContent = "追記不可";
+    appendButton.replaceWith(locked);
+  }
+
   function versionMapByLabel(versions) {
     const map = new Map();
     versions.forEach((version) => {
@@ -391,6 +408,11 @@
         button.dataset.branchPath = getBranchPath(version);
         button.dataset.displayVersion = getDisplayVersion(version);
         setButtonState(button, hasFavorite(favorites, versionId));
+
+        if (version.favoriteFilterIntermediate) {
+          row.classList.add("is-intermediate-history");
+          lockFavoriteContextAppend(row);
+        }
       });
     });
   }
