@@ -16,6 +16,33 @@ GitHub Pages URL:
 https://monsta-bms.github.io/bms-wip-charts/
 ```
 
+## FAV-01 確認項目
+
+投稿一覧version行のお気に入り★機能を確認する:
+
+- version行にお気に入り★buttonが表示されること。
+- ★buttonが版ラベル右側に表示され、DL/追記投稿の操作列に混ざらないこと。
+- 未登録状態は薄い星で表示されること。
+- クリックで黄色い★になること。
+- 再クリックでお気に入り解除されること。
+- ページ再読み込み後もお気に入り状態が維持されること。
+- localStorage key `bms-wip-charts:favorites:v1` にversionId単位のmap形式で保存されること。
+- localStorageの保存値に `versionId`, `chartId`, `songTitle`, `chartName`, `versionLabel`, `branchPath`, `favoritedAt` がsnapshotとして入ること。
+- localStorageが壊れていても一覧全体が壊れないこと。
+- お気に入りのみトグルONで favorite version と祖先versionだけが表示されること。
+- お気に入りversionを含むchartだけが表示されること。
+- お気に入りのみトグルOFFで通常一覧に戻ること。
+- 中間履歴内のお気に入りversionがフィルタON時に見えること。
+- フィルタOFF時の中間履歴折り畳み挙動が壊れていないこと。
+- DL不可versionもお気に入りできること。
+- 完成versionもお気に入りできること。
+- isRejected=true のversionもお気に入りでき、追記不可表示など既存状態は維持されること。
+- ★buttonがDL/追記投稿ボタンと干渉しないこと。
+- 難易度★とお気に入り★が色、位置、サイズで視覚的に区別できること。
+- ツリー表示が崩れないこと。
+- 進捗サムネイルが崩れないこと。
+- スマホ幅で大きく崩れず、★buttonとお気に入りのみトグルが押せること。
+
 ## UI-LIST-THUMB-03 確認項目
 
 一覧用進捗サムネイルの視認性、凡例、tooltip、情報量を確認する:
