@@ -2,6 +2,7 @@ import { handleAdminRoute } from "./routes/admin";
 import { handleChartVersionsRoute } from "./routes/chartVersions";
 import { handleChartsRoute } from "./routes/charts";
 import { handleFileRoute } from "./routes/files";
+import { handleVersionLifecycleRoute } from "./routes/versionLifecycle";
 import {
   addProgressImagesToChartsResponse,
   attachProgressImageAfterPostSuccess,
@@ -98,6 +99,16 @@ async function routeRequest(request: Request, env: Env): Promise<Response> {
     }
 
     return response;
+  }
+
+  const versionLifecycleMatch = path.match(/^\/api\/versions\/([^/]+)\/(withdraw|delete-request)$/);
+  if (versionLifecycleMatch) {
+    return handleVersionLifecycleRoute(
+      request,
+      env,
+      decodeURIComponent(versionLifecycleMatch[1]),
+      versionLifecycleMatch[2] as "withdraw" | "delete-request"
+    );
   }
 
   const progressImageMatch = path.match(/^\/api\/progress-images\/([^/]+)$/);
