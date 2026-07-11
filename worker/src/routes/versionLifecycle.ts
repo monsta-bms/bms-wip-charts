@@ -23,6 +23,8 @@ type VersionLifecycleRow = {
 type LifecycleSnapshot = {
   within24Hours: boolean;
   hasDescendants: boolean;
+  visibleChildVersionCount: number;
+  totalChildVersionCount: number;
 };
 
 type LifecycleOutcome = "immediate_hidden" | "download_blocked" | "delete_requested";
@@ -36,6 +38,8 @@ type LifecycleContext = {
   fileSha256?: string | null;
   within24Hours?: boolean;
   hasDescendants?: boolean;
+  visibleChildVersionCount?: number;
+  totalChildVersionCount?: number;
   reasonLength?: number;
   hasReason?: boolean;
 };
@@ -130,6 +134,8 @@ async function failLifecycle(
         `chartId=${context.chartId ?? "unknown"}`,
         `within24Hours=${context.within24Hours ?? "unknown"}`,
         `hasDescendants=${context.hasDescendants ?? "unknown"}`,
+        `visibleChildVersionCount=${context.visibleChildVersionCount ?? "unknown"}`,
+        `totalChildVersionCount=${context.totalChildVersionCount ?? "unknown"}`,
         `hasReason=${context.hasReason ?? false}`,
         `reasonLength=${context.reasonLength ?? 0}`,
         `detail=${failure.detail}`
@@ -278,25 +284,41 @@ async function readLifecycleSnapshot(env: Env, versionId: string): Promise<Lifec
         WHEN created_at >= datetime('now', '-24 hours') THEN 1
         ELSE 0
       END AS within_24_hours,
-      EXISTS (
-        SELECT 1
+      (
+        SELECT COUNT(*)
         FROM versions AS children
         WHERE children.parent_version_id = versions.id
-      ) AS has_descendants
+      ) AS total_child_version_count,
+      (
+        SELECT COUNT(*)
+        FROM versions AS children
+        WHERE children.parent_version_id = versions.id
+          AND COALESCE(children.is_hidden, 0) = 0
+      ) AS visible_child_version_count
     FROM versions
     WHERE id = ?
     LIMIT 1
-  `).bind(versionId).first<{ within_24_hours: number; has_descendants: number }>();
+  `).bind(versionId).first<{
+    within_24_hours: number;
+    total_child_version_count: number;
+    visible_child_version_count: number;
+  }>();
+
+  const visibleChildVersionCount = Number(row?.visible_child_version_count ?? 0);
 
   return {
     within24Hours: Number(row?.within_24_hours ?? 0) === 1,
-    hasDescendants: Number(row?.has_descendants ?? 0) === 1
+    hasDescendants: visibleChildVersionCount > 0,
+    visibleChildVersionCount,
+    totalChildVersionCount: Number(row?.total_child_version_count ?? 0)
   };
 }
 
 function applySnapshotToContext(context: LifecycleContext, snapshot: LifecycleSnapshot): void {
   context.within24Hours = snapshot.within24Hours;
   context.hasDescendants = snapshot.hasDescendants;
+  context.visibleChildVersionCount = snapshot.visibleChildVersionCount;
+  context.totalChildVersionCount = snapshot.totalChildVersionCount;
 }
 
 async function writeAcceptedLifecycleLog(
@@ -317,6 +339,8 @@ async function writeAcceptedLifecycleLog(
         `outcome=${outcome}`,
         `within24Hours=${context.within24Hours ?? false}`,
         `hasDescendants=${context.hasDescendants ?? false}`,
+        `visibleChildVersionCount=${context.visibleChildVersionCount ?? 0}`,
+        `totalChildVersionCount=${context.totalChildVersionCount ?? 0}`,
         `versionId=${version.id}`,
         `chartId=${version.chart_id}`,
         `hasReason=${context.hasReason ?? false}`,
@@ -366,6 +390,7 @@ async function tryImmediateHide(
         SELECT 1
         FROM versions AS children
         WHERE children.parent_version_id = versions.id
+          AND COALESCE(children.is_hidden, 0) = 0
       )
   `).bind(hiddenReason, fallbackDownloadReason, versionId).run();
 
@@ -390,6 +415,7 @@ async function restoreVisibilityAfterChildRace(
         SELECT 1
         FROM versions AS children
         WHERE children.parent_version_id = versions.id
+          AND COALESCE(children.is_hidden, 0) = 0
       )
   `).bind(versionId, hiddenReason).run();
 }
@@ -409,6 +435,8 @@ function lifecycleSuccessResponse(
     outcome,
     within24Hours: snapshot.within24Hours,
     hasDescendants: snapshot.hasDescendants,
+    visibleChildVersionCount: snapshot.visibleChildVersionCount,
+    totalChildVersionCount: snapshot.totalChildVersionCount,
     effectiveAt: new Date().toISOString()
   });
 }

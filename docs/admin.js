@@ -126,6 +126,12 @@
 
   function buildRequestRow(item) {
     const row = createElement("article", "admin-request-row");
+    const visibleChildVersionCount = Number(
+      item.visibleChildVersionCount ?? item.childVersionCount ?? 0
+    );
+    const totalChildVersionCount = Number(
+      item.totalChildVersionCount ?? visibleChildVersionCount
+    );
     if (!item.canApprove) {
       row.classList.add("is-blocked");
     }
@@ -148,7 +154,12 @@
 
     const stateCell = createElement("div", "admin-cell");
     const stateList = createElement("p", "admin-state-list");
-    addState(stateList, `直接子 ${item.childVersionCount}`, item.childVersionCount > 0 ? "is-warning" : "");
+    addState(
+      stateList,
+      `公開中の子 ${visibleChildVersionCount}`,
+      visibleChildVersionCount > 0 ? "is-warning" : ""
+    );
+    addState(stateList, `履歴上の子 ${totalChildVersionCount}`);
     if (item.isHidden) {
       addState(stateList, "非表示済み", "is-hidden");
     }
@@ -235,7 +246,13 @@
     decisionSong.textContent = item.songTitle;
     decisionChart.textContent = item.chartName;
     decisionVersion.textContent = `${item.versionLabel} / ${item.versionId}`;
-    decisionChildren.textContent = `${item.childVersionCount}件`;
+    const visibleChildVersionCount = Number(
+      item.visibleChildVersionCount ?? item.childVersionCount ?? 0
+    );
+    const totalChildVersionCount = Number(
+      item.totalChildVersionCount ?? visibleChildVersionCount
+    );
+    decisionChildren.textContent = `公開中 ${visibleChildVersionCount}件 / 履歴上 ${totalChildVersionCount}件`;
     decisionNote.value = "";
     decisionNote.required = decision === "reject";
     decisionHint.textContent = decision === "approve"

@@ -80,6 +80,8 @@ type VersionRow = {
   download_blocked_at: string | null;
   within_24_hours: number;
   has_child_versions: number;
+  visible_child_version_count: number;
+  total_child_version_count: number;
 };
 
 type ExistingSongRow = {
@@ -394,6 +396,9 @@ function buildVersion(row: VersionRow) {
     within24Hours: toBoolean(row.within_24_hours),
     hasChildVersions: toBoolean(row.has_child_versions),
     hasDescendants: toBoolean(row.has_child_versions),
+    childVersionCount: Number(row.visible_child_version_count),
+    visibleChildVersionCount: Number(row.visible_child_version_count),
+    totalChildVersionCount: Number(row.total_child_version_count),
     updatedAt: row.updated_at
   };
 }
@@ -612,7 +617,19 @@ async function selectVisibleVersionRows(env: Env, chartIds: string[]): Promise<V
         SELECT 1
         FROM versions AS child_versions
         WHERE child_versions.parent_version_id = versions.id
-      ) AS has_child_versions
+          AND COALESCE(child_versions.is_hidden, 0) = 0
+      ) AS has_child_versions,
+      (
+        SELECT COUNT(*)
+        FROM versions AS child_versions
+        WHERE child_versions.parent_version_id = versions.id
+          AND COALESCE(child_versions.is_hidden, 0) = 0
+      ) AS visible_child_version_count,
+      (
+        SELECT COUNT(*)
+        FROM versions AS child_versions
+        WHERE child_versions.parent_version_id = versions.id
+      ) AS total_child_version_count
     FROM versions
     WHERE versions.is_hidden = 0
       AND versions.chart_id IN (${placeholders})

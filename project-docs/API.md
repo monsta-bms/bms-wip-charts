@@ -173,7 +173,9 @@ versionレスポンスには以下を含める。
 - `downloadBlocked`, `downloadBlockReason`, `downloadBlockedAt`
 - `createdAt`: version投稿日時。D1のUTC時刻を返す。
 - `within24Hours`: 一覧表示用の参考判定。最終判定は管理API実行時に再計算する。
-- `hasChildVersions`, `hasDescendants`: 直接子versionが1件以上あるか。非表示versionも判定対象に含む。
+- `hasChildVersions`, `hasDescendants`: 公開中の直接子versionが1件以上あるか。`is_hidden=1`の子は除外する。
+- `childVersionCount`, `visibleChildVersionCount`: 公開中の直接子version数。既存`childVersionCount`もこの意味とする。
+- `totalChildVersionCount`: DB上の全直接子version数。`is_hidden=1`も含む。
 
 `progressImage` 例:
 
@@ -398,14 +400,16 @@ request body:
   "outcome": "download_blocked",
   "within24Hours": false,
   "hasDescendants": true,
+  "visibleChildVersionCount": 1,
+  "totalChildVersionCount": 2,
   "effectiveAt": "2026-07-11T00:00:00.000Z"
 }
 ```
 
 `outcome`:
 
-- `immediate_hidden`: API実行時点で投稿から24時間以内かつ直接子なし。`is_hidden=1`, `hidden_reason='canceled_within_24h'`, `hidden_at`, `withdrawn_at`, `download_blocked=1`を設定する。
-- `download_blocked`: 直接子がある、または24時間経過済み。`withdrawn_at`, `download_blocked=1`, `download_blocked_at`を設定し、未ブロック時だけ理由を`withdrawn`にする。
+- `immediate_hidden`: API実行時点で投稿から24時間以内かつ公開中の直接子なし。`is_hidden=1`, `hidden_reason='canceled_within_24h'`, `hidden_at`, `withdrawn_at`, `download_blocked=1`を設定する。
+- `download_blocked`: 公開中の直接子がある、または24時間経過済み。`withdrawn_at`, `download_blocked=1`, `download_blocked_at`を設定し、未ブロック時だけ理由を`withdrawn`にする。
 - いずれもD1行、R2譜面ファイル、progressImageは削除しない。
 - `download_blocked`は追記拒否条件ではなく、非表示でなければ追記可能。
 
@@ -432,14 +436,16 @@ request body:
   "outcome": "delete_requested",
   "within24Hours": false,
   "hasDescendants": true,
+  "visibleChildVersionCount": 1,
+  "totalChildVersionCount": 2,
   "effectiveAt": "2026-07-11T00:00:00.000Z"
 }
 ```
 
 `outcome`:
 
-- `immediate_hidden`: API実行時点で投稿から24時間以内かつ直接子なし。`is_hidden=1`, `hidden_reason='deleted_within_24h'`, `hidden_at`, `download_blocked=1`を設定し、pending申請は作らない。
-- `delete_requested`: 直接子がある、または24時間経過済み。`delete_requests`へ`status='pending'`を追加し、`versions.delete_requested_at`, `download_blocked=1`, `download_blocked_at`を設定する。
+- `immediate_hidden`: API実行時点で投稿から24時間以内かつ公開中の直接子なし。`is_hidden=1`, `hidden_reason='deleted_within_24h'`, `hidden_at`, `download_blocked=1`を設定し、pending申請は作らない。
+- `delete_requested`: 公開中の直接子がある、または24時間経過済み。`delete_requests`へ`status='pending'`を追加し、`versions.delete_requested_at`, `download_blocked=1`, `download_blocked_at`を設定する。
 - request bodyの`reason`はDBの`delete_requests.message`へ保存する。
 - `delete_requests.created_at`を申請日時として扱う。
 - 管理承認前はD1/R2を物理削除せず、progressImageも保持する。
@@ -448,7 +454,9 @@ request body:
 共通判定:
 
 - 24時間判定はWorkerがD1上で`created_at >= datetime('now', '-24 hours')`を実行する。
-- 派生判定は`parent_version_id`が対象version IDと一致する直接子の存在で行い、非表示などの状態では除外しない。
+- `visibleChildVersionCount`は`parent_version_id`が対象version IDと一致し、`COALESCE(is_hidden, 0)=0`の直接子数とする。即時非表示可否はこの値で判定する。
+- `totalChildVersionCount`は`parent_version_id`が一致する全直接子数とし、監査・参考表示に使う。
+- 削除申請中、取り消し済み、DL不可、没譜面、中間履歴でも`is_hidden=0`なら公開中の子としてブロック条件に含める。
 - 一覧表示の参考値と異なる場合も、APIレスポンスの`outcome`を正とする。
 - `immediate_hidden`は論理削除であり、R2オブジェクトの物理削除や`file_deleted_at`更新は行わない。
 
@@ -474,7 +482,7 @@ request body:
 | `RATE_LIMITED` | 429 | 短時間のパスワード試行上限超過。 |
 | `INVALID_REQUEST` | 400 | Content-TypeまたはJSON形式が不正。 |
 
-成功・失敗は `post_logs` の `withdraw_version` / `request_delete` として記録する。detailには`outcome`, `within24Hours`, `hasDescendants`, `versionId`, `chartId`, `hasReason`, `reasonLength`を記録し、passwordと理由本文は記録しない。R2削除と復旧はこのフェーズでは行わない。
+成功・失敗は `post_logs` の `withdraw_version` / `request_delete` として記録する。detailには`outcome`, `within24Hours`, `hasDescendants`, `visibleChildVersionCount`, `totalChildVersionCount`, `versionId`, `chartId`, `hasReason`, `reasonLength`を記録し、passwordと理由本文は記録しない。R2削除と復旧はこのフェーズでは行わない。
 
 ## 管理者向け削除申請API
 
@@ -524,6 +532,8 @@ query parameters:
       "downloadBlocked": true,
       "downloadBlockReason": "delete_requested",
       "childVersionCount": 0,
+      "visibleChildVersionCount": 0,
+      "totalChildVersionCount": 1,
       "canApprove": true
     }
   ],
@@ -533,7 +543,7 @@ query parameters:
 }
 ```
 
-`password_hash`, R2 key, requester hash、ADMIN_TOKEN、HASH_SECRETは返さない。`isHidden=true`でもpending申請が存在する場合は現在状態として返す。
+`childVersionCount`と`visibleChildVersionCount`は公開中の直接子数、`totalChildVersionCount`は非表示を含む全直接子数とする。`password_hash`, R2 key, requester hash、ADMIN_TOKEN、HASH_SECRETは返さない。`isHidden=true`でもpending申請が存在する場合は現在状態として返す。
 
 ### POST /api/admin/delete-requests/:requestId/approve
 
@@ -564,7 +574,7 @@ request body:
 - `delete_requests.status='approved'`, `handled_at`, `handled_by='admin'`, `admin_note`を設定する。
 - `versions.is_hidden=1`, `hidden_at`, `hidden_reason='delete_request_approved'`, `download_blocked=1`, `updated_at`を設定する。
 - 既に非表示の場合は既存の`hidden_reason`を保持し、`outcome='already_hidden'`を返す。
-- 直接子がある場合は409 `DELETE_REQUEST_HAS_DESCENDANTS`とし、申請とversionを変更しない。
+- 公開中の直接子がある場合だけ409 `DELETE_REQUEST_HAS_DESCENDANTS`とし、申請とversionを変更しない。全直接子が`is_hidden=1`なら承認できる。
 - D1 version行、R2譜面ファイル、progressImageを物理削除せず、`file_deleted_at`も設定しない。
 
 ### POST /api/admin/delete-requests/:requestId/reject

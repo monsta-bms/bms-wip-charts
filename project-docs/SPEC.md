@@ -413,20 +413,22 @@ MVPではサムネイルクリックによる拡大表示は実装しない。�
 24時間ルール:
 
 - 判定基準は `versions.created_at` とし、WorkerがD1上で `created_at >= datetime('now', '-24 hours')` を評価する。
-- 派生versionの有無は、非表示・取り消し済み・削除申請中・没譜面・中間履歴を含む直接子の存在で判定する。
+- `visibleChildVersionCount`は`parent_version_id`が一致し、`COALESCE(is_hidden, 0)=0`の直接子数とする。即時非表示可否はこの値で判定する。
+- `totalChildVersionCount`は`parent_version_id`が一致する全直接子数とし、非表示versionも含めて監査・参考表示に使う。
+- 削除申請中、取り消し済み、DL不可、没譜面、中間履歴でも公開中なら`visibleChildVersionCount`へ含める。24時間以内即時非表示済み、管理承認済みなど`is_hidden=1`の子は除外する。
 - 一覧の24時間表示は参考情報であり、最終結果はAPI実行時の再判定と `outcome` を正とする。
 
 取り消し:
 
-- 24時間以内かつ直接子なし: `outcome='immediate_hidden'`。`is_hidden=1`, `hidden_reason='canceled_within_24h'`, `hidden_at`, `withdrawn_at`, `download_blocked=1`を設定する。
-- 24時間以内で直接子あり: `outcome='download_blocked'`。一覧には残し、DLを停止する。
+- 24時間以内かつ公開中の直接子なし: `outcome='immediate_hidden'`。`is_hidden=1`, `hidden_reason='canceled_within_24h'`, `hidden_at`, `withdrawn_at`, `download_blocked=1`を設定する。
+- 24時間以内で公開中の直接子あり: `outcome='download_blocked'`。一覧には残し、DLを停止する。
 - 24時間経過後: `outcome='download_blocked'`。一覧には残し、DLを停止する。
 - 既存の `download_block_reason` は上書きせず、未設定の場合だけ `withdrawn` を使う。
 
 削除:
 
-- 24時間以内かつ直接子なし: `outcome='immediate_hidden'`。`is_hidden=1`, `hidden_reason='deleted_within_24h'`, `hidden_at`, `download_blocked=1`を設定し、pending削除申請は作らない。
-- 24時間以内で直接子あり、または24時間経過後: `outcome='delete_requested'`。`delete_requests`へpendingを追加し、`delete_requested_at`と`download_blocked=1`を設定する。
+- 24時間以内かつ公開中の直接子なし: `outcome='immediate_hidden'`。`is_hidden=1`, `hidden_reason='deleted_within_24h'`, `hidden_at`, `download_blocked=1`を設定し、pending削除申請は作らない。
+- 24時間以内で公開中の直接子あり、または24時間経過後: `outcome='delete_requested'`。`delete_requests`へpendingを追加し、`delete_requested_at`と`download_blocked=1`を設定する。
 - API入力の `reason` は `delete_requests.message` に保存し、申請日時は `delete_requests.created_at` とする。
 - 同一versionにpending申請がある場合は重複受付しない。
 
@@ -436,7 +438,7 @@ MVPではサムネイルクリックによる拡大表示は実装しない。�
 - `download_blocked`はDL制御であり、追記不可条件ではない。
 - `withdrawn_at`または`delete_requested_at`があっても追記できる。
 - `is_hidden=1`または`is_rejected=1`は追記不可とする。完成版に置換済み中間履歴など既存の明示的な追記不可条件も維持する。
-- 即時非表示UPDATEは24時間条件と直接子不存在条件を再確認し、競合を検出した場合はDL停止または削除申請へ寄せる。
+- 即時非表示UPDATEは24時間条件と公開中の直接子不存在条件を再確認し、競合を検出した場合はDL停止または削除申請へ寄せる。
 
 共通仕様:
 
@@ -444,7 +446,7 @@ MVPではサムネイルクリックによる拡大表示は実装しない。�
 - passwordは `hashWithSecret('password:' + password, HASH_SECRET)` で検証する。
 - password、password_hash、HASH_SECRET、生IP、生UA、削除理由本文はログに出さない。
 - 同じIP/UAハッシュで10分以内に5回以上 `INVALID_PASSWORD` が記録された場合は `RATE_LIMITED` とする。
-- 成功・失敗は `post_logs` の既存action `withdraw_version` / `request_delete` に記録し、detailには `outcome`, `within24Hours`, `hasDescendants`, ID、理由有無と文字数を残す。
+- 成功・失敗は `post_logs` の既存action `withdraw_version` / `request_delete` に記録し、detailには `outcome`, `within24Hours`, `hasDescendants`, `visibleChildVersionCount`, `totalChildVersionCount`, ID、理由有無と文字数を残す。
 - 通知、物理削除、復旧、処理済み申請の履歴検索は後続フェーズとする。
 
 ## 削除申請の管理
@@ -461,14 +463,15 @@ MVPではサムネイルクリックによる拡大表示は実装しない。�
 pending一覧:
 
 - `GET /api/admin/delete-requests?status=pending&page=1&pageSize=50` で古い申請から表示する。
-- `delete_requests`, `versions`, `charts`, `songs`を結合し、申請理由、申請日時、曲・差分・版、作者、進捗、現在状態、直接子数を返す。
+- `delete_requests`, `versions`, `charts`, `songs`を結合し、申請理由、申請日時、曲・差分・版、作者、進捗、現在状態、公開中の直接子数、履歴上の全直接子数を返す。
 - `password_hash`, R2 key, requester hash、secretは返さない。
-- 24時間以内かつ直接子なしで即時非表示になったversionはpending申請を作らないため、この一覧には出ない。
+- 24時間以内かつ公開中の直接子なしで即時非表示になったversionはpending申請を作らないため、この一覧には出ない。
 
 承認:
 
 - `POST /api/admin/delete-requests/:requestId/approve`を使い、`adminNote`は任意、1000文字以内とする。
-- `status='pending'`かつ直接子がないversionだけ承認できる。直接子がある場合は`DELETE_REQUEST_HAS_DESCENDANTS`を返し、申請とversionを変更しない。
+- `status='pending'`かつ`visibleChildVersionCount=0`のversionだけ承認できる。公開中の直接子がある場合は`DELETE_REQUEST_HAS_DESCENDANTS`を返し、申請とversionを変更しない。
+- `totalChildVersionCount>0`でも全直接子が`is_hidden=1`なら承認できる。
 - 承認時は`delete_requests.status='approved'`, `handled_at`, `handled_by='admin'`, `admin_note`を設定する。
 - versionは`is_hidden=1`, `hidden_at`, `hidden_reason='delete_request_approved'`, `download_blocked=1`, `updated_at`を設定する。
 - 既に非表示のversionでは既存の`hidden_reason`を上書きせず、pending申請だけをapprovedにできる。
@@ -486,7 +489,7 @@ pending一覧:
 
 - 管理者の承認・却下・競合・失敗は`post_logs`ではなく`admin_logs`へ記録する。
 - actionは`approve_delete_request`または`reject_delete_request`とする。
-- detailにはrequest/version/chart ID、前後状態、直接子数、outcome/errorCode、管理メモ文字数を記録する。
+- detailにはrequest/version/chart ID、公開中・全直接子数、前後状態、outcome/errorCode、管理メモ文字数を記録する。
 - ADMIN_TOKEN、password、HASH_SECRET、生IP、生UA、申請理由本文は`admin_logs`へ記録しない。
 - R2物理削除、親versionの構造保持削除、復旧、複数管理者識別は後続フェーズとする。
 

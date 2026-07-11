@@ -31,7 +31,11 @@ https://monsta-bms.github.io/bms-wip-charts/
 - 24時間以内かつ派生ありの削除で`outcome=delete_requested`になること。
 - 24時間経過後の取り消しで`outcome=download_blocked`になること。
 - 24時間経過後の削除で`outcome=delete_requested`になること。
-- 非表示、取り消し済み、削除申請中、没譜面、中間履歴の直接子も派生versionとして数えること。
+- 取り消し済み、削除申請中、DL不可、没譜面、中間履歴でも`is_hidden=0`の直接子は公開中の派生versionとして数えること。
+- `is_hidden=1`の直接子は即時非表示を止める派生versionとして数えないこと。
+- `GET /api/charts`の`hasChildVersions`, `hasDescendants`, `childVersionCount`, `visibleChildVersionCount`が公開中の直接子を基準にすること。
+- `GET /api/charts`の`totalChildVersionCount`が`is_hidden=1`を含む全直接子数になること。
+- 子versionが`is_hidden=1`になった後、24時間以内の親versionを即時非表示できること。
 - 取り消し/削除申請後、`download_blocked=1`となりDL不可になること。
 - `withdrawn_at`があっても追記投稿できること。
 - `delete_requested_at`があっても追記投稿できること。
@@ -48,7 +52,7 @@ https://monsta-bms.github.io/bms-wip-charts/
 - 実行後はAPIの`outcome`別結果メッセージがモーダル内に表示されること。
 - 即時非表示で一覧行が消えても、結果メッセージが自動で消えないこと。
 - `post_logs`のactionが既存値`withdraw_version` / `request_delete`のままであること。
-- `post_logs.detail`に`outcome`, `within24Hours`, `hasDescendants`, version/chart ID、理由有無と文字数が記録されること。
+- `post_logs.detail`に`outcome`, `within24Hours`, `hasDescendants`, `visibleChildVersionCount`, `totalChildVersionCount`, version/chart ID、理由有無と文字数が記録されること。
 - password、password_hash、HASH_SECRET、生IP、生UA、削除理由本文がconsole・post_logsへ残らないこと。
 - 管理パスワード未入力、誤入力、試行制限の既存挙動が壊れていないこと。
 - お気に入り★、数字パス版ラベル、ツリー、中間履歴折り畳み、進捗サムネイルが壊れていないこと。
@@ -65,17 +69,21 @@ pending削除申請の管理MVPを確認する:
 - WorkerにADMIN_TOKENがない場合は`CONFIG_MISSING`になること。
 - 正しいADMIN_TOKENでpending一覧を取得できること。
 - pending一覧が申請日時の古い順で表示されること。
-- pending一覧に申請日時、理由、曲名、差分名、数字パス版、作者、進捗、version作成日時、直接子数、現在状態が表示されること。
+- pending一覧に申請日時、理由、曲名、差分名、数字パス版、作者、進捗、version作成日時、公開中の直接子数、履歴上の全直接子数、現在状態が表示されること。
 - 一覧APIがpassword_hash、R2 key、requester hash、ADMIN_TOKEN、HASH_SECRETを返さないこと。
 - `is_hidden=true`でもpending申請があれば管理一覧に現在状態として表示されること。
-- 24時間以内かつ直接子なしで即時非表示になったversionはpending一覧に出ないこと。
+- 24時間以内かつ公開中の直接子なしで即時非表示になったversionはpending一覧に出ないこと。
 - 末端versionのpending申請を承認できること。
 - 承認後に`delete_requests.status='approved'`, `handled_at`, `handled_by`, `admin_note`が設定されること。
 - 承認後に`versions.is_hidden=1`, `hidden_reason='delete_request_approved'`, `hidden_at`, `download_blocked=1`になること。
 - 既に非表示のversionを承認しても既存の`hidden_reason`が上書きされないこと。
 - 承認後もD1 versions行、R2譜面ファイル、progressImageが残り、`file_deleted_at`が設定されないこと。
-- 直接子があるversionでは承認ボタンがdisabledになること。
-- 直接子がある申請をAPIで承認すると`DELETE_REQUEST_HAS_DESCENDANTS`になり、申請がpendingのまま、version状態も変わらないこと。
+- `is_hidden=0`の直接子があるversionでは承認ボタンがdisabledになること。
+- `is_hidden=0`の直接子がある申請をAPIで承認すると`DELETE_REQUEST_HAS_DESCENDANTS`になり、申請がpendingのまま、version状態も変わらないこと。
+- 全直接子が`is_hidden=1`なら`visibleChildVersionCount=0`かつ`totalChildVersionCount>0`と表示され、承認ボタンが有効になること。
+- 子versionが`is_hidden=1`になった後、親versionのpending削除申請を承認できること。
+- 削除申請中だが表示中の子versionは管理承認のブロック条件に含まれること。
+- 取り消し済みだが表示中の子versionは管理承認のブロック条件に含まれること。
 - 削除申請を却下でき、adminNote未入力では`INVALID_ADMIN_NOTE`になること。
 - 却下後に`delete_requests.status='rejected'`, `handled_at`, `handled_by`, `admin_note`が設定されること。
 - 却下後、別のpending申請がなければ`versions.delete_requested_at`が解除されること。
@@ -85,7 +93,7 @@ pending削除申請の管理MVPを確認する:
 - 同じ申請を二重処理すると`DELETE_REQUEST_ALREADY_HANDLED`になること。
 - 承認、却下、直接子による拒否、競合、失敗が`admin_logs`へ記録されること。
 - `admin_logs.action`が`approve_delete_request`または`reject_delete_request`になること。
-- `admin_logs.detail`にrequest/version/chart ID、前後状態、直接子数、outcome/errorCode、管理メモ文字数が入ること。
+- `admin_logs.detail`にrequest/version/chart ID、公開中・全直接子数、前後状態、outcome/errorCode、管理メモ文字数が入ること。
 - ADMIN_TOKEN、password、HASH_SECRET、生IP、生UA、申請理由本文がHTML、console、admin_logsへ残らないこと。
 - 承認・却下後に管理一覧が再取得され、処理結果が画面に表示されること。
 - スマホ幅でも一覧確認、承認、却下が操作できること。

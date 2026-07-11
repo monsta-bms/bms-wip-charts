@@ -26,6 +26,7 @@ type DeleteRequestListRow = {
   chart_name: string;
   song_title: string;
   child_version_count: number;
+  total_child_version_count: number;
 };
 
 type DeleteRequestActionRow = {
@@ -38,6 +39,7 @@ type DeleteRequestActionRow = {
   download_blocked: number;
   download_block_reason: string | null;
   child_version_count: number;
+  total_child_version_count: number;
   other_pending_count: number;
 };
 
@@ -50,6 +52,8 @@ type AdminLogContext = {
   versionId?: string | null;
   chartId?: string | null;
   childVersionCount?: number;
+  visibleChildVersionCount?: number;
+  totalChildVersionCount?: number;
   beforeStatus?: string | null;
   afterStatus?: string | null;
   outcome?: string | null;
@@ -181,6 +185,9 @@ async function writeAdminLog(
         versionId: context.versionId ?? null,
         chartId: context.chartId ?? null,
         childVersionCount: context.childVersionCount ?? null,
+        visibleChildVersionCount:
+          context.visibleChildVersionCount ?? context.childVersionCount ?? null,
+        totalChildVersionCount: context.totalChildVersionCount ?? null,
         beforeStatus: context.beforeStatus ?? null,
         afterStatus: context.afterStatus ?? null,
         outcome: context.outcome ?? null,
@@ -213,7 +220,13 @@ async function selectDeleteRequest(env: Env, requestId: string): Promise<DeleteR
         SELECT COUNT(*)
         FROM versions AS children
         WHERE children.parent_version_id = versions.id
+          AND COALESCE(children.is_hidden, 0) = 0
       ) AS child_version_count,
+      (
+        SELECT COUNT(*)
+        FROM versions AS children
+        WHERE children.parent_version_id = versions.id
+      ) AS total_child_version_count,
       (
         SELECT COUNT(*)
         FROM delete_requests AS other_requests
@@ -279,7 +292,13 @@ async function listPendingDeleteRequests(request: Request, env: Env): Promise<Re
           SELECT COUNT(*)
           FROM versions AS children
           WHERE children.parent_version_id = versions.id
-        ) AS child_version_count
+            AND COALESCE(children.is_hidden, 0) = 0
+        ) AS child_version_count,
+        (
+          SELECT COUNT(*)
+          FROM versions AS children
+          WHERE children.parent_version_id = versions.id
+        ) AS total_child_version_count
       FROM delete_requests
       INNER JOIN versions ON versions.id = delete_requests.version_id
       INNER JOIN charts ON charts.id = versions.chart_id
@@ -311,6 +330,8 @@ async function listPendingDeleteRequests(request: Request, env: Env): Promise<Re
         downloadBlocked: Number(row.download_blocked) === 1,
         downloadBlockReason: row.download_block_reason,
         childVersionCount: Number(row.child_version_count),
+        visibleChildVersionCount: Number(row.child_version_count),
+        totalChildVersionCount: Number(row.total_child_version_count),
         canApprove: Number(row.child_version_count) === 0
       })),
       page,
@@ -376,12 +397,14 @@ async function approveDeleteRequest(
   }
 
   const childVersionCount = Number(current.child_version_count);
+  const totalChildVersionCount = Number(current.total_child_version_count);
   if (current.request_status !== "pending") {
     await writeAdminLog(env, logAction, "warning", "DELETE_REQUEST_ALREADY_HANDLED", {
       requestId,
       versionId: current.version_id,
       chartId: current.chart_id,
       childVersionCount,
+      totalChildVersionCount,
       beforeStatus: current.request_status,
       afterStatus: current.request_status,
       errorCode: "DELETE_REQUEST_ALREADY_HANDLED",
@@ -403,6 +426,7 @@ async function approveDeleteRequest(
       versionId: current.version_id,
       chartId: current.chart_id,
       childVersionCount,
+      totalChildVersionCount,
       beforeStatus: current.request_status,
       afterStatus: current.request_status,
       errorCode: "DELETE_REQUEST_HAS_DESCENDANTS",
@@ -414,7 +438,7 @@ async function approveDeleteRequest(
       409,
       "DELETE_REQUEST_HAS_DESCENDANTS",
       "派生versionがあるため承認できません。",
-      `The target version has ${childVersionCount} direct child version(s).`
+      `The target version has ${childVersionCount} visible direct child version(s).`
     );
   }
 
@@ -450,6 +474,7 @@ async function approveDeleteRequest(
             SELECT 1
             FROM versions AS children
             WHERE children.parent_version_id = versions.id
+              AND COALESCE(children.is_hidden, 0) = 0
           )
       `).bind(current.version_id, requestId),
       env.DB.prepare(`
@@ -483,6 +508,9 @@ async function approveDeleteRequest(
         versionId: current.version_id,
         chartId: current.chart_id,
         childVersionCount: Number(latest?.child_version_count ?? childVersionCount),
+        totalChildVersionCount: Number(
+          latest?.total_child_version_count ?? totalChildVersionCount
+        ),
         beforeStatus: current.request_status,
         afterStatus: latest?.request_status ?? null,
         errorCode,
@@ -508,6 +536,7 @@ async function approveDeleteRequest(
       versionId: current.version_id,
       chartId: current.chart_id,
       childVersionCount,
+      totalChildVersionCount,
       beforeStatus: "pending",
       afterStatus: "approved",
       outcome,
@@ -526,6 +555,7 @@ async function approveDeleteRequest(
       versionId: current.version_id,
       chartId: current.chart_id,
       childVersionCount,
+      totalChildVersionCount,
       beforeStatus: current.request_status,
       errorCode: "DELETE_REQUEST_APPROVE_FAILED",
       adminNoteLength: body.adminNote.length
@@ -584,12 +614,14 @@ async function rejectDeleteRequest(
   }
 
   const childVersionCount = Number(current.child_version_count);
+  const totalChildVersionCount = Number(current.total_child_version_count);
   if (current.request_status !== "pending") {
     await writeAdminLog(env, logAction, "warning", "DELETE_REQUEST_ALREADY_HANDLED", {
       requestId,
       versionId: current.version_id,
       chartId: current.chart_id,
       childVersionCount,
+      totalChildVersionCount,
       beforeStatus: current.request_status,
       afterStatus: current.request_status,
       errorCode: "DELETE_REQUEST_ALREADY_HANDLED",
@@ -680,6 +712,7 @@ async function rejectDeleteRequest(
         versionId: current.version_id,
         chartId: current.chart_id,
         childVersionCount,
+        totalChildVersionCount,
         beforeStatus: current.request_status,
         afterStatus: latest?.request_status ?? null,
         errorCode: "DELETE_REQUEST_ALREADY_HANDLED",
@@ -700,6 +733,7 @@ async function rejectDeleteRequest(
       versionId: current.version_id,
       chartId: current.chart_id,
       childVersionCount,
+      totalChildVersionCount,
       beforeStatus: "pending",
       afterStatus: "rejected",
       outcome: shouldRestoreDownload ? "request_rejected_download_restored" : "request_rejected",
@@ -719,6 +753,7 @@ async function rejectDeleteRequest(
       versionId: current.version_id,
       chartId: current.chart_id,
       childVersionCount,
+      totalChildVersionCount,
       beforeStatus: current.request_status,
       errorCode: "DELETE_REQUEST_REJECT_FAILED",
       adminNoteLength: body.adminNote.length
