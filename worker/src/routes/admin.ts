@@ -1,4 +1,5 @@
 import { apiError, Env, errorDetail, methodNotAllowed, ok } from "../utils/response";
+import { deleteR2CleanupFile, listR2CleanupCandidates } from "./r2Cleanup";
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
@@ -897,6 +898,18 @@ export async function handleAdminRoute(
       return methodNotAllowed(request, env, request.method);
     }
     return listPendingDeleteRequests(request, env);
+  }
+
+  if (segments.length === 1 && segments[0] === "r2-cleanup-candidates") {
+    return listR2CleanupCandidates(request, env);
+  }
+
+  if (
+    segments.length === 3
+    && segments[0] === "r2-cleanup"
+    && segments[2] === "delete-file"
+  ) {
+    return deleteR2CleanupFile(request, env, segments[1]);
   }
 
   if (

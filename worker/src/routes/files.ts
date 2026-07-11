@@ -8,6 +8,7 @@ type FileRow = {
   file_size: number;
   file_sha256: string;
   r2_key: string;
+  file_deleted_at: string | null;
   version_is_hidden: number;
   version_hidden_reason: string | null;
   download_blocked: number;
@@ -68,6 +69,7 @@ async function selectFileRow(env: Env, fileId: string): Promise<FileRow | null> 
       versions.file_size AS file_size,
       versions.file_sha256 AS file_sha256,
       versions.r2_key AS r2_key,
+      versions.file_deleted_at AS file_deleted_at,
       versions.is_hidden AS version_is_hidden,
       versions.hidden_reason AS version_hidden_reason,
       versions.download_blocked AS download_blocked,
@@ -126,6 +128,17 @@ export async function handleFileRoute(request: Request, env: Env, fileId: string
       "FILE_NOT_FOUND",
       "ファイルが見つかりません。",
       "No version exists for the requested fileId."
+    );
+  }
+
+  if (fileRow.file_deleted_at) {
+    return apiError(
+      request,
+      env,
+      410,
+      "FILE_DELETED",
+      "この譜面ファイルは削除済みです。",
+      `The R2 chart file was deleted at ${fileRow.file_deleted_at}.`
     );
   }
 

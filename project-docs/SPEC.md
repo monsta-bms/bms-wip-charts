@@ -493,6 +493,32 @@ pending一覧:
 - ADMIN_TOKEN、password、HASH_SECRET、生IP、生UA、申請理由本文は`admin_logs`へ記録しない。
 - R2物理削除、親versionの構造保持削除、復旧、複数管理者識別は後続フェーズとする。
 
+## 管理者によるR2 cleanup
+
+R2-CLEANUP-01では、削除意思が確定した論理削除versionの譜面ファイルだけを、管理画面から1件ずつ整理する。D1 version行、`progressMap`、`progressImage` PNGは保持する。
+
+cleanup対象は次の全条件を満たすversionに限定する。
+
+- `is_hidden=1`
+- `download_blocked=1`
+- `file_deleted_at IS NULL`
+- `hidden_at IS NOT NULL`
+- `hidden_at`から30日以上経過
+- `hidden_reason IN ('delete_request_approved', 'deleted_within_24h')`
+
+`is_hidden=1`だけではcleanup対象にしない。公開中のDL不可version、pending削除申請、`canceled_within_24h`、`admin_hidden`、`hidden_at IS NULL`は対象外とする。保持期間はブラウザではなくWorker/D1で再判定し、`created_at`や`download_blocked_at`へfallbackしない。
+
+削除対象は`versions.r2_key`が指す譜面R2 objectのみとする。`versions.progress_image_key`が指すPNGは削除しない。R2 objectを削除した、またはobject不在を確認した後に次を更新する。
+
+- `file_deleted_at=CURRENT_TIMESTAMP`
+- 通常削除は`file_delete_reason='r2_cleanup_deleted'`
+- object不在またはR2 key欠落のD1修復は`file_delete_reason='r2_object_missing_during_cleanup'`
+- `updated_at=CURRENT_TIMESTAMP`
+
+R2削除失敗時は`file_deleted_at`を設定しない。R2削除後にD1更新が失敗した場合、次回実行でobject不在を検出してD1を修復する。`file_deleted_at IS NOT NULL`なのにobjectが存在する逆方向の不整合は、このMVPでは自動削除しない。
+
+cleanupは`ADMIN_TOKEN`認証後の管理画面で手動実行し、確認文字列`DELETE_R2_FILE`を要求する。実行結果は`admin_logs`へ記録するが、ADMIN_TOKEN、secret、生IP、生UA、raw R2 keyは記録しない。一括削除、Cron、自動削除、progressImage削除は後続フェーズとする。
+
 ## 自動削除準備
 
 将来、Cloudflare Workers Cron Triggerで1日1回程度、DL不可から30日経過したversionのR2譜面ファイルを整理する。
@@ -521,6 +547,8 @@ MVPの自動削除対象reason候補:
 - `GET /api/admin/delete-requests`
 - `POST /api/admin/delete-requests/:requestId/approve`
 - `POST /api/admin/delete-requests/:requestId/reject`
+- `GET /api/admin/r2-cleanup-candidates`
+- `POST /api/admin/r2-cleanup/:versionId/delete-file`
 - `POST /api/admin/hide-version`
 - `POST /api/admin/ban`
 

@@ -23,8 +23,19 @@
   const decisionMessage = document.querySelector("#adminDecisionMessage");
   const decisionSubmit = document.querySelector("#adminDecisionSubmit");
   const closeButtons = Array.from(document.querySelectorAll("[data-admin-dialog-close]"));
+  const cleanupOlderThanDays = document.querySelector("#adminCleanupOlderThanDays");
+  const cleanupRefreshButton = document.querySelector("#adminCleanupRefreshButton");
+  const cleanupSummary = document.querySelector("#adminCleanupSummary");
+  const cleanupList = document.querySelector("#adminCleanupList");
+  const cleanupPreviousButton = document.querySelector("#adminCleanupPreviousPage");
+  const cleanupNextButton = document.querySelector("#adminCleanupNextPage");
+  const cleanupPageStatus = document.querySelector("#adminCleanupPageStatus");
 
-  if (!authForm || !tokenInput || !listElement || !dialog || !decisionForm) {
+  if (
+    !authForm || !tokenInput || !listElement || !dialog || !decisionForm
+    || !cleanupOlderThanDays || !cleanupRefreshButton || !cleanupSummary || !cleanupList
+    || !cleanupPreviousButton || !cleanupNextButton || !cleanupPageStatus
+  ) {
     return;
   }
 
@@ -35,7 +46,11 @@
     items: [],
     selected: null,
     decision: null,
-    loading: false
+    loading: false,
+    cleanupPage: 1,
+    cleanupTotal: 0,
+    cleanupItems: [],
+    cleanupLoading: false
   };
 
   function createElement(tagName, className, text) {
@@ -90,7 +105,18 @@
     previousButton.disabled = loading || state.page <= 1;
     const pageCount = Math.max(1, Math.ceil(state.total / pageSize));
     nextButton.disabled = loading || state.page >= pageCount;
+    cleanupRefreshButton.disabled = loading || state.cleanupLoading || !state.token;
     listElement.classList.toggle("is-loading", loading);
+  }
+
+  function setCleanupLoading(loading) {
+    state.cleanupLoading = loading;
+    cleanupOlderThanDays.disabled = loading;
+    cleanupRefreshButton.disabled = loading || state.loading || !state.token;
+    cleanupPreviousButton.disabled = loading || state.cleanupPage <= 1;
+    const pageCount = Math.max(1, Math.ceil(state.cleanupTotal / pageSize));
+    cleanupNextButton.disabled = loading || state.cleanupPage >= pageCount;
+    cleanupList.classList.toggle("is-loading", loading);
   }
 
   async function requestJson(path, options = {}) {
@@ -325,11 +351,164 @@
     }
   }
 
+  function formatFileSize(value) {
+    const bytes = Number(value);
+    if (!Number.isFinite(bytes) || bytes < 0) {
+      return "不明";
+    }
+    if (bytes < 1024) {
+      return `${bytes} B`;
+    }
+    if (bytes < 1024 * 1024) {
+      return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function buildCleanupRow(item) {
+    const row = createElement("article", "admin-cleanup-row");
+
+    const versionCell = createElement("div", "admin-cell");
+    versionCell.append(
+      createElement("p", "admin-primary", `${item.songTitle} / ${item.chartName}`),
+      createElement("p", "admin-secondary", `版 ${item.versionLabel} · ${item.author}`),
+      createElement("p", "admin-secondary", `versionId: ${item.versionId}`)
+    );
+
+    const hiddenCell = createElement("div", "admin-cell");
+    hiddenCell.append(
+      createElement("p", "admin-primary", item.hiddenReason || "理由不明"),
+      createElement("p", "admin-secondary", `非表示: ${formatDateTime(item.hiddenAt)}`),
+      createElement("p", "admin-secondary", `経過: ${Number(item.ageDays)}日`)
+    );
+
+    const fileCell = createElement("div", "admin-cell");
+    fileCell.append(
+      createElement("p", "admin-primary", item.fileName || "ファイル名不明"),
+      createElement("p", "admin-secondary", `${formatFileSize(item.fileSize)} · R2 key ${item.hasR2Key ? "登録あり" : "なし"}`),
+      createElement("p", "admin-cleanup-sha", `SHA-256: ${item.fileSha256 || "不明"}`),
+      createElement("p", "admin-secondary", `file_deleted_at: ${item.fileDeletedAt || "未設定"}`)
+    );
+
+    const actionCell = createElement("div", "admin-cleanup-action");
+    const confirmation = document.createElement("input");
+    confirmation.type = "text";
+    confirmation.placeholder = "DELETE_R2_FILE";
+    confirmation.autocomplete = "off";
+    confirmation.setAttribute("aria-label", `${item.versionId} の削除確認文字列`);
+    const deleteButton = createElement("button", "admin-cleanup-delete-button", "譜面ファイル削除");
+    deleteButton.type = "button";
+    deleteButton.disabled = true;
+    deleteButton.title = "譜面R2ファイルだけを削除します。progressImageは保持されます。";
+    confirmation.addEventListener("input", () => {
+      deleteButton.disabled = state.cleanupLoading || confirmation.value !== "DELETE_R2_FILE";
+    });
+    deleteButton.addEventListener("click", async () => {
+      await deleteCleanupCandidate(item, confirmation.value, deleteButton, confirmation);
+    });
+    actionCell.append(
+      createElement("p", "admin-cleanup-preserve-note", "progressImageは保持"),
+      confirmation,
+      deleteButton
+    );
+
+    row.append(versionCell, hiddenCell, fileCell, actionCell);
+    return row;
+  }
+
+  function renderCleanupList() {
+    cleanupList.replaceChildren();
+    if (state.cleanupItems.length === 0) {
+      cleanupList.append(createElement("p", "admin-empty", "cleanup候補はありません。"));
+    } else {
+      state.cleanupItems.forEach((item) => cleanupList.append(buildCleanupRow(item)));
+    }
+    const pageCount = Math.max(1, Math.ceil(state.cleanupTotal / pageSize));
+    cleanupSummary.textContent = `${state.cleanupTotal}件 · hidden_atから${Number(cleanupOlderThanDays.value)}日以上 · progressImageは保持`;
+    cleanupPageStatus.textContent = `${state.cleanupPage} / ${pageCount}`;
+    cleanupPreviousButton.disabled = state.cleanupLoading || state.cleanupPage <= 1;
+    cleanupNextButton.disabled = state.cleanupLoading || state.cleanupPage >= pageCount;
+  }
+
+  function getCleanupAgeDays() {
+    const parsed = Number.parseInt(cleanupOlderThanDays.value, 10);
+    const value = Number.isInteger(parsed) ? Math.max(30, parsed) : 30;
+    cleanupOlderThanDays.value = String(value);
+    return value;
+  }
+
+  async function loadCleanupCandidates() {
+    if (!state.token) {
+      setStatus("ADMIN_TOKENを入力してください。", "error");
+      return;
+    }
+    const olderThanDays = getCleanupAgeDays();
+    setCleanupLoading(true);
+    setStatus("");
+    try {
+      const body = await requestJson(
+        `/api/admin/r2-cleanup-candidates?olderThanDays=${olderThanDays}&page=${state.cleanupPage}&pageSize=${pageSize}`
+      );
+      state.cleanupItems = Array.isArray(body?.items) ? body.items : [];
+      state.cleanupTotal = Number(body?.total || 0);
+      renderCleanupList();
+      setStatus(`R2 cleanup候補を${state.cleanupItems.length}件読み込みました。`, "success");
+    } catch (error) {
+      const code = error?.code || "REQUEST_FAILED";
+      setStatus(
+        `${error?.message || "R2 cleanup候補の取得に失敗しました。"}\ncode: ${code}\n${error?.detail || ""}`,
+        "error"
+      );
+      if (code === "ADMIN_AUTH_REQUIRED") {
+        state.token = "";
+      }
+    } finally {
+      setCleanupLoading(false);
+    }
+  }
+
+  async function deleteCleanupCandidate(item, confirm, button, input) {
+    if (confirm !== "DELETE_R2_FILE" || state.cleanupLoading) {
+      return;
+    }
+    button.disabled = true;
+    input.disabled = true;
+    try {
+      const body = await requestJson(
+        `/api/admin/r2-cleanup/${encodeURIComponent(item.versionId)}/delete-file`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            confirm,
+            olderThanDays: getCleanupAgeDays(),
+            expectedHiddenAt: item.hiddenAt,
+            expectedFileSha256: item.fileSha256
+          })
+        }
+      );
+      state.cleanupPage = 1;
+      await loadCleanupCandidates();
+      setStatus(
+        `譜面ファイルcleanupを記録しました。\nversionId: ${body.versionId}\noutcome: ${body.outcome}\nprogressImage: 保持`,
+        "success"
+      );
+    } catch (error) {
+      const code = error?.code || "REQUEST_FAILED";
+      setStatus(
+        `${error?.message || "譜面ファイルcleanupに失敗しました。"}\ncode: ${code}\n${error?.detail || ""}`,
+        "error"
+      );
+      input.disabled = false;
+      button.disabled = input.value !== "DELETE_R2_FILE";
+    }
+  }
+
   authForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     state.token = tokenInput.value.trim();
     tokenInput.value = "";
     state.page = 1;
+    state.cleanupPage = 1;
     await loadRequests();
   });
   refreshButton.addEventListener("click", loadRequests);
@@ -344,6 +523,23 @@
     if (state.page < pageCount) {
       state.page += 1;
       await loadRequests();
+    }
+  });
+  cleanupRefreshButton.addEventListener("click", async () => {
+    state.cleanupPage = 1;
+    await loadCleanupCandidates();
+  });
+  cleanupPreviousButton.addEventListener("click", async () => {
+    if (state.cleanupPage > 1) {
+      state.cleanupPage -= 1;
+      await loadCleanupCandidates();
+    }
+  });
+  cleanupNextButton.addEventListener("click", async () => {
+    const pageCount = Math.max(1, Math.ceil(state.cleanupTotal / pageSize));
+    if (state.cleanupPage < pageCount) {
+      state.cleanupPage += 1;
+      await loadCleanupCandidates();
     }
   });
   decisionForm.addEventListener("submit", submitDecision);

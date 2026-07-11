@@ -4,17 +4,17 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex,nofollow">
-    <title>削除申請管理 | BMS制作途中譜面共有</title>
-    <link rel="stylesheet" href="./admin.css?v=admin-delete-01">
+    <title>管理 | BMS制作途中譜面共有</title>
+    <link rel="stylesheet" href="./admin.css?v=r2-cleanup-01">
   </head>
   <body>
     <main class="admin-shell">
       <header class="admin-header">
         <div>
           <p class="admin-kicker">BMS WIP CHARTS</p>
-          <h1>削除申請管理</h1>
+          <h1>管理</h1>
         </div>
-        <span class="admin-environment">pending queue</span>
+        <span class="admin-environment">manual operations</span>
       </header>
 
       <section class="admin-auth" aria-labelledby="adminAuthTitle">
@@ -56,6 +56,34 @@
           <button id="adminNextPage" type="button" class="secondary-button" disabled>次へ</button>
         </nav>
       </section>
+
+      <section class="admin-queue admin-cleanup" aria-labelledby="adminCleanupTitle">
+        <div class="admin-queue-header admin-cleanup-header">
+          <div>
+            <h2 id="adminCleanupTitle">R2 cleanup</h2>
+            <p id="adminCleanupSummary">論理削除から30日以上経過した譜面ファイルを1件ずつ削除します。progressImageは保持します。</p>
+          </div>
+          <div class="admin-cleanup-controls">
+            <label for="adminCleanupOlderThanDays">保持日数</label>
+            <input id="adminCleanupOlderThanDays" type="number" min="30" step="1" value="30">
+            <button id="adminCleanupRefreshButton" type="button" class="secondary-button" disabled>cleanup候補を読み込み</button>
+          </div>
+        </div>
+
+        <div class="admin-cleanup-list-header" aria-hidden="true">
+          <span>対象version</span>
+          <span>非表示状態</span>
+          <span>譜面ファイル</span>
+          <span>1件cleanup</span>
+        </div>
+        <div id="adminCleanupList" class="admin-cleanup-list"></div>
+
+        <nav class="admin-pagination" aria-label="R2 cleanup候補ページ">
+          <button id="adminCleanupPreviousPage" type="button" class="secondary-button" disabled>前へ</button>
+          <span id="adminCleanupPageStatus">1 / 1</span>
+          <button id="adminCleanupNextPage" type="button" class="secondary-button" disabled>次へ</button>
+        </nav>
+      </section>
     </main>
 
     <dialog id="adminDecisionDialog" class="admin-dialog">
@@ -87,6 +115,6 @@
       </form>
     </dialog>
 
-    <script src="./admin.js?v=admin-delete-01"></script>
+    <script src="./admin.js?v=r2-cleanup-01"></script>
   </body>
 </html>

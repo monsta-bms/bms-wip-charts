@@ -302,6 +302,7 @@ versionレスポンスには以下を含める。
 
 - `version.is_hidden=1` または親chart非表示の場合は `FILE_NOT_AVAILABLE`。
 - `download_blocked=1` の場合は `FILE_DOWNLOAD_BLOCKED`。
+- `file_deleted_at IS NOT NULL`の場合はR2へアクセスせず、HTTP 410 `FILE_DELETED`。
 - D1にはあるがR2にない場合は `R2_FILE_NOT_FOUND`。
 
 ### GET /api/progress-images/:versionId
@@ -624,3 +625,96 @@ request body:
 | `DELETE_REQUEST_REJECT_FAILED` | 500 | 却下処理失敗。 |
 
 承認・却下・競合・失敗は`admin_logs`へ記録する。申請一覧の参照は記録しない。
+
+## 管理者向けR2 cleanup API
+
+全APIで次のheaderを必須とする。
+
+```http
+Authorization: Bearer <ADMIN_TOKEN>
+```
+
+レスポンスや`admin_logs`にはraw R2 key、ADMIN_TOKEN、secret、生IP、生UAを含めない。cleanup対象は`is_hidden=1`, `download_blocked=1`, `file_deleted_at IS NULL`, `hidden_at`から30日以上経過し、`hidden_reason`が`delete_request_approved`または`deleted_within_24h`のversionに限定する。
+
+### GET /api/admin/r2-cleanup-candidates
+
+query parameters:
+
+| name | default | 内容 |
+| --- | ---: | --- |
+| `olderThanDays` | 30 | 最小30。30未満は30へ丸める。 |
+| `page` | 1 | 1以上。 |
+| `pageSize` | 50 | 最大100。 |
+
+候補一覧ではR2 `head`を行わず、実行時に再確認する。
+
+```json
+{
+  "ok": true,
+  "items": [
+    {
+      "versionId": "version_xxx",
+      "chartId": "chart_xxx",
+      "songTitle": "曲名",
+      "chartName": "差分名",
+      "versionLabel": "1-2-1",
+      "branchPath": "root/a/b",
+      "author": "作者",
+      "hiddenReason": "delete_request_approved",
+      "hiddenAt": "2026-06-01 00:00:00",
+      "ageDays": 31,
+      "fileDeletedAt": null,
+      "hasR2Key": true,
+      "fileName": "chart.bms",
+      "fileSize": 12345,
+      "fileSha256": "..."
+    }
+  ],
+  "olderThanDays": 30,
+  "page": 1,
+  "pageSize": 50,
+  "total": 1
+}
+```
+
+### POST /api/admin/r2-cleanup/:versionId/delete-file
+
+request body:
+
+```json
+{
+  "confirm": "DELETE_R2_FILE",
+  "olderThanDays": 30,
+  "expectedHiddenAt": "2026-06-01 00:00:00",
+  "expectedFileSha256": "..."
+}
+```
+
+実行時にD1状態、保持期間、`expectedHiddenAt`、任意の`expectedFileSha256`を再検証する。R2 objectが存在する場合は`head`, `delete`, 再`head`の順で消失を確認し、その後にD1へ`file_deleted_at`, `file_delete_reason`, `updated_at`を記録する。objectが既にない、またはR2 keyが欠落している場合はD1修復として成功扱いにする。`progress_image_key`のobjectは削除しない。
+
+成功outcome:
+
+| outcome | 内容 |
+| --- | --- |
+| `r2_file_deleted` | 譜面R2 objectを削除しD1へ記録。 |
+| `r2_object_missing_reconciled` | object不在またはkey欠落を確認しD1を修復。 |
+| `already_deleted` | `file_deleted_at`設定済み。冪等成功。 |
+
+成功レスポンスは`progressImagePreserved: true`を返す。
+
+cleanupエラー:
+
+| code | HTTP | 内容 |
+| --- | ---: | --- |
+| `ADMIN_AUTH_REQUIRED` | 401 | ADMIN_TOKENがない、または不一致。 |
+| `CONFIG_MISSING` | 500 | WorkerにADMIN_TOKENが設定されていない。 |
+| `VERSION_NOT_FOUND` | 404 | versionIdが存在しない。 |
+| `CLEANUP_CONFIRM_REQUIRED` | 400 | 確認文字列またはJSON形式が不正。 |
+| `CLEANUP_TARGET_NOT_ELIGIBLE` | 400/409 | 保持日数または現在状態がcleanup条件外。 |
+| `CLEANUP_EXPECTED_VALUE_MISMATCH` | 409 | hidden_atまたはSHA-256が一覧取得時から変化。 |
+| `CLEANUP_R2_KEY_MISSING` | 成功ログ | key欠落をobject不在としてD1修復。 |
+| `CLEANUP_R2_DELETE_FAILED` | 500 | R2 head/delete/消失確認失敗。D1削除日時は更新しない。 |
+| `CLEANUP_D1_UPDATE_FAILED` | 500 | 対象照会またはR2結果のD1記録失敗。 |
+| `CLEANUP_CANDIDATE_LIST_FAILED` | 500 | 候補一覧取得失敗。 |
+
+cleanup実行結果は`admin_logs.action='r2_cleanup_delete_file'`、失敗は`r2_cleanup_delete_file_failed`で記録する。detailにはversion/chart、非表示理由・日時、保持日数、R2 key有無、outcome/errorCode、削除記録日時、SHA-256有無、ファイルサイズだけを含める。

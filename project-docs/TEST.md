@@ -99,6 +99,66 @@ pending削除申請の管理MVPを確認する:
 - スマホ幅でも一覧確認、承認、却下が操作できること。
 - 公開一覧、初回投稿、追記投稿、DL、24時間ルール、進捗マップ、進捗画像、ツリー、中間履歴、お気に入りが壊れていないこと。
 
+## R2-CLEANUP-01 確認項目
+
+- `GET /api/admin/r2-cleanup-candidates`と`POST /api/admin/r2-cleanup/:versionId/delete-file`は正しいADMIN_TOKENが必須であること。
+- WorkerにADMIN_TOKENがない場合は`CONFIG_MISSING`になること。
+- `hidden_at`から30日未満のversionは候補に出ないこと。
+- `hidden_reason='delete_request_approved'`かつ30日以上経過したversionが候補に出ること。
+- `hidden_reason='deleted_within_24h'`かつ30日以上経過したversionが候補に出ること。
+- `hidden_reason='canceled_within_24h'`または`admin_hidden`のversionは候補に出ないこと。
+- `download_blocked=1`でも`is_hidden=0`の公開中versionは候補に出ないこと。
+- `hidden_at IS NULL`または`file_deleted_at IS NOT NULL`のversionは候補に出ないこと。
+- 候補APIがraw R2 key、ADMIN_TOKEN、secretを返さないこと。
+- 候補一覧の`olderThanDays`が30未満の場合はサーバー側で30へ丸められること。
+- `confirm='DELETE_R2_FILE'`なしでは削除できず、`CLEANUP_CONFIRM_REQUIRED`になること。
+- `expectedHiddenAt`不一致では`CLEANUP_EXPECTED_VALUE_MISMATCH`になり、R2/D1を変更しないこと。
+- 指定した`expectedFileSha256`不一致では`CLEANUP_EXPECTED_VALUE_MISMATCH`になり、R2/D1を変更しないこと。
+- 実行時に対象条件をD1で再判定し、条件外なら`CLEANUP_TARGET_NOT_ELIGIBLE`になること。
+- R2譜面objectが存在する場合、削除成功後に`file_deleted_at`と`file_delete_reason='r2_cleanup_deleted'`が入ること。
+- R2譜面objectが既にない場合、`outcome='r2_object_missing_reconciled'`で`file_delete_reason='r2_object_missing_during_cleanup'`が入ること。
+- R2 key欠落時もD1修復し、`admin_logs.detail.errorCode='CLEANUP_R2_KEY_MISSING'`が記録されること。
+- R2削除失敗時は`file_deleted_at`が設定されないこと。
+- `file_deleted_at IS NOT NULL`への再実行は`outcome='already_deleted'`になること。
+- `file_deleted_at IS NOT NULL`の`GET /api/files/:fileId`はR2へアクセスせず、HTTP 410 `FILE_DELETED`になること。
+- cleanup後も`progress_image_key`と進捗画像R2 objectが残り、`GET /api/progress-images/:versionId`の既存方針が維持されること。
+- cleanup成功は`admin_logs.action='r2_cleanup_delete_file'`、失敗は`r2_cleanup_delete_file_failed`で記録されること。
+- `admin_logs.detail`にversion/chart、hidden reason/at、保持日数、R2 key有無、outcome/errorCode、file_deleted_at、SHA-256有無、fileSizeが入り、ADMIN_TOKEN、secret、生IP、生UA、raw R2 keyが残らないこと。
+- 管理画面のR2 cleanupセクションが削除申請管理と分離され、1件ごとに確認文字列を要求すること。
+- cleanup実行後に候補一覧が再読み込みされ、progressImage保持が画面に明記されること。
+- 公開一覧、投稿、追記、DL制御、取り消し、削除申請、管理承認/却下、お気に入りが壊れていないこと。
+
+既存データ確認SQL:
+
+```sql
+-- 厳格なMVP候補
+SELECT COUNT(*)
+FROM versions
+WHERE is_hidden = 1
+  AND download_blocked = 1
+  AND file_deleted_at IS NULL
+  AND hidden_at IS NOT NULL
+  AND hidden_at <= datetime('now', '-30 days')
+  AND hidden_reason IN ('delete_request_approved', 'deleted_within_24h');
+
+-- 非表示だが譜面ファイル削除未記録
+SELECT id, hidden_reason, hidden_at, file_deleted_at
+FROM versions
+WHERE is_hidden = 1
+  AND file_deleted_at IS NULL;
+
+-- DL不可だが公開中。cleanup対象外
+SELECT id, download_block_reason, download_blocked_at
+FROM versions
+WHERE download_blocked = 1
+  AND COALESCE(is_hidden, 0) = 0;
+
+-- 譜面ファイル削除記録済み
+SELECT id, file_deleted_at, file_delete_reason
+FROM versions
+WHERE file_deleted_at IS NOT NULL;
+```
+
 ## FAV-01 確認項目
 
 投稿一覧version行のお気に入り★機能を確認する:
