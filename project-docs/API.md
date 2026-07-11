@@ -22,6 +22,8 @@ https://monsta-bms.github.io/bms-wip-charts/
 - `GET /api/charts`
 - `POST /api/charts` 初回投稿
 - `POST /api/charts/:chartId/versions` 追記投稿
+- `POST /api/versions/:versionId/withdraw` version取り下げ
+- `POST /api/versions/:versionId/delete-request` version削除申請
 - `GET /api/files/:fileId`
 - `GET /api/progress-images/:versionId`
 - progressMap保存と一覧サムネイル表示
@@ -30,8 +32,6 @@ https://monsta-bms.github.io/bms-wip-charts/
 
 未実装:
 
-- 取り下げAPI
-- 削除申請API
 - 難易度表API
 - 検索
 - ページング本実装
@@ -365,3 +365,99 @@ versionレスポンスには以下を含める。
 | `BMS_NO_PLAY_NOTES` | プレイノートが見つからなかった。解析値は0件として保存する。 |
 | `BMS_UNSUPPORTED_CHANNEL_PATTERN` | 未対応のチャンネル表記があり、その行を解析対象外にした。 |
 | `PROGRESS_IMAGE_ATTACH_FAILED` | フロント側PNG生成またはFormData添付に失敗した。投稿自体はprogressImageなしで継続する。 |
+
+
+## 投稿者によるversion管理
+
+### POST /api/versions/:versionId/withdraw
+
+投稿時の管理パスワードを検証し、対象versionを取り下げる。
+
+送信形式:
+
+- `Content-Type: application/json`
+
+request body:
+
+```json
+{
+  "password": "投稿時の管理パスワード"
+}
+```
+
+成功レスポンス:
+
+```json
+{
+  "ok": true,
+  "versionId": "version_xxx",
+  "withdrawn": true,
+  "withdrawnAt": "2026-07-11 00:00:00"
+}
+```
+
+状態変更:
+
+- `withdrawn_at=CURRENT_TIMESTAMP`
+- `download_blocked=1`
+- `download_blocked_at=COALESCE(download_blocked_at, CURRENT_TIMESTAMP)`
+- 未ブロックの場合のみ `download_block_reason='withdrawn'`
+- `updated_at=CURRENT_TIMESTAMP`
+- 既存の別DL停止理由は上書きしない。
+- D1行、R2譜面ファイル、progressImageは削除しない。
+
+### POST /api/versions/:versionId/delete-request
+
+投稿時の管理パスワードを検証し、削除申請を受け付ける。
+
+request body:
+
+```json
+{
+  "password": "投稿時の管理パスワード",
+  "reason": "任意。500文字以内"
+}
+```
+
+成功レスポンス:
+
+```json
+{
+  "ok": true,
+  "versionId": "version_xxx",
+  "deleteRequested": true,
+  "deleteRequestedAt": "2026-07-11 00:00:00"
+}
+```
+
+状態変更:
+
+- `delete_requests` に `status='pending'` を追加する。
+- `versions.delete_requested_at=CURRENT_TIMESTAMP`
+- `versions.updated_at=CURRENT_TIMESTAMP`
+- 削除申請だけでは `download_blocked`、DL、追記投稿を変更しない。
+- 管理承認前はD1/R2を物理削除しない。
+
+認証と試行制限:
+
+- passwordは既存投稿と同じHASH_SECRET付きSHA-256方式で検証する。
+- 同一IP/UAハッシュについて、10分以内に5回以上 `INVALID_PASSWORD` が記録された場合はHTTP 429 `RATE_LIMITED` を返す。
+- password、password_hash、HASH_SECRET、生IP、生UAはログに出さない。
+
+主なエラー:
+
+| code | HTTP | 内容 |
+| --- | ---: | --- |
+| `VERSION_NOT_FOUND` | 404 | versionが存在しない、または非表示。 |
+| `PASSWORD_REQUIRED` | 400 | passwordが空。 |
+| `INVALID_PASSWORD` | 401 | 管理パスワード不一致。 |
+| `VERSION_ALREADY_WITHDRAWN` | 409 | 取り下げ済み。 |
+| `DELETE_REQUEST_ALREADY_EXISTS` | 409 | pending削除申請が存在する。 |
+| `INVALID_DELETE_REQUEST_REASON` | 400 | reasonの型または長さが不正。 |
+| `WITHDRAW_FAILED` | 500 | 取り下げ処理失敗。 |
+| `DELETE_REQUEST_FAILED` | 500 | 削除申請処理失敗。 |
+| `SERVER_CONFIG_ERROR` | 500 | HASH_SECRET未設定。 |
+| `RATE_LIMITED` | 429 | 短時間のパスワード試行上限超過。 |
+| `INVALID_REQUEST` | 400 | Content-TypeまたはJSON形式が不正。 |
+
+成功・失敗は `post_logs` の `withdraw_version` / `request_delete` として記録する。R2削除、管理承認、却下、復旧はこのフェーズでは行わない。
