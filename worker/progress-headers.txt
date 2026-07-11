@@ -1,0 +1,13 @@
+HTTP/1.1 200 OK
+Date: Mon, 06 Jul 2026 10:16:27 GMT
+Content-Type: image/png
+Content-Length: 6205
+Connection: keep-alive
+Cache-Control: public, max-age=300
+Vary: Origin
+Report-To: {"group":"cf-nel","max_age":604800,"endpoints":[{"url":"https://a.nel.cloudflare.com/report/v4?s=mTUthvgECQ%2FC0gWQy%2BuPTj1MiRwVtRLQQmG24sKg%2BMD90h10R1V5eGxQDQQoXn4HMWTLZPUO%2F63fewHZfNqNhtPRva01I8CZa5%2FejsZpnLa7dh9%2BzEICqnEvGwmUhiXavm%2BWl3FOwUTKOZy9CAmAjwtKXGVGgmo6exqQdYFTHqDYi8MNgjHDmx2lChJrRg%3D%3D"}]}
+Nel: {"report_to":"cf-nel","success_fraction":0.0,"max_age":604800}
+Server: cloudflare
+CF-RAY: a16ddaa08f397eef-KIX
+alt-svc: h3=":443"; ma=86400
+

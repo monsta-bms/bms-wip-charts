@@ -1,0 +1,25 @@
+
+*---------------------- HEADER FIELD
+
+#PLAYER 1
+#GENRE TEST
+#TITLE êØÇÃäÌas
+#ARTIST test-artist
+#BPM 120
+#PLAYLEVEL 3
+#RANK 2
+
+
+#TOTAL 300
+#LNTYPE 1
+
+#WAV01 test.wav
+
+
+*---------------------- MAIN DATA FIELD
+
+
+
+#00111:01
+
+
