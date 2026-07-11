@@ -16,6 +16,41 @@ GitHub Pages URL:
 https://monsta-bms.github.io/bms-wip-charts/
 ```
 
+## WITHDRAW-01 確認項目
+
+投稿者によるversion取り下げ・削除申請MVPを確認する:
+
+- 各version行の管理ボタンから管理モーダルが開くこと。
+- モーダルに版ラベル、作者、現在状態が表示されること。
+- 管理パスワード未入力ではAPI送信されないこと。
+- 保存済み管理パスワードがある場合は入力欄へ初期反映され、編集できること。
+- 間違ったpasswordで `INVALID_PASSWORD` になること。
+- 同じIP/UAで10分以内に5回以上INVALID_PASSWORDが記録された後は `RATE_LIMITED` になること。
+- 正しいpasswordで取り下げに成功すること。
+- 取り下げ前に確認チェックが必要であること。
+- 取り下げ後、`withdrawn_at` 相当が一覧へ反映されること。
+- 取り下げ済み行が控えめに薄く表示されること。
+- 取り下げ後、DLが `DL不可` になること。
+- 取り下げ後、追記が `追記不可` になること。
+- 取り下げ済みversionを追記APIの親に指定しても拒否されること。
+- 取り下げ後もD1行、R2譜面ファイル、progressImageが削除されないこと。
+- 取り下げ済みへの再取り下げが `VERSION_ALREADY_WITHDRAWN` になること。
+- 正しいpasswordで削除申請に成功すること。
+- reasonが500文字を超えると `INVALID_DELETE_REQUEST_REASON` になること。
+- 削除申請後、一覧に `削除申請中` と表示されること。
+- 削除申請だけではDL可能のままであること。
+- 削除申請だけでは追記投稿が従来通り可能であること。
+- 同一versionのpending申請重複が `DELETE_REQUEST_ALREADY_EXISTS` になること。
+- `post_logs` に成功・失敗が `withdraw_version` / `request_delete` で記録されること。
+- password、password_hash、HASH_SECRET、生IP、生UAがconsole・post_logsへ残らないこと。
+- BASE、追記version、完成version、DL不可version、没譜面versionで管理UIを開けること。
+- 中間履歴versionでは展開中に管理UIを開けること。
+- 子versionがある親を取り下げても、子versionが連鎖して取り下げ・非表示にならないこと。
+- お気に入り★、数字パス版ラベル、ツリー表示、進捗サムネイルが壊れていないこと。
+- DL/追記投稿ボタンの既存動作が、状態変更対象以外で壊れていないこと。
+- 初回投稿・追記投稿フォームが壊れていないこと。
+- スマホ幅で管理モーダルが大きく崩れず操作できること。
+
 ## FAV-01 確認項目
 
 投稿一覧version行のお気に入り★機能を確認する:
