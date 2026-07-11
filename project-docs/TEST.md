@@ -16,40 +16,44 @@ GitHub Pages URL:
 https://monsta-bms.github.io/bms-wip-charts/
 ```
 
-## WITHDRAW-01 確認項目
+## VERSION-LIFECYCLE-24H-01 確認項目
 
-投稿者によるversion取り下げ・削除申請MVPを確認する:
+投稿から24時間以内/以後で分岐する取り消し・削除MVPを確認する:
 
-- 各version行の管理ボタンから管理モーダルが開くこと。
-- モーダルに版ラベル、作者、現在状態が表示されること。
-- 管理パスワード未入力ではAPI送信されないこと。
-- 保存済み管理パスワードがある場合は入力欄へ初期反映され、編集できること。
-- 間違ったpasswordで `INVALID_PASSWORD` になること。
-- 同じIP/UAで10分以内に5回以上INVALID_PASSWORDが記録された後は `RATE_LIMITED` になること。
-- 正しいpasswordで取り下げに成功すること。
-- 取り下げ前に確認チェックが必要であること。
-- 取り下げ後、`withdrawn_at` 相当が一覧へ反映されること。
-- 取り下げ済み行が控えめに薄く表示されること。
-- 取り下げ後、DLが `DL不可` になること。
-- 取り下げ後、追記が `追記不可` になること。
-- 取り下げ済みversionを追記APIの親に指定しても拒否されること。
-- 取り下げ後もD1行、R2譜面ファイル、progressImageが削除されないこと。
-- 取り下げ済みへの再取り下げが `VERSION_ALREADY_WITHDRAWN` になること。
-- 正しいpasswordで削除申請に成功すること。
-- reasonが500文字を超えると `INVALID_DELETE_REQUEST_REASON` になること。
-- 削除申請後、一覧に `削除申請中` と表示されること。
-- 削除申請だけではDL可能のままであること。
-- 削除申請だけでは追記投稿が従来通り可能であること。
-- 同一versionのpending申請重複が `DELETE_REQUEST_ALREADY_EXISTS` になること。
-- `post_logs` に成功・失敗が `withdraw_version` / `request_delete` で記録されること。
-- password、password_hash、HASH_SECRET、生IP、生UAがconsole・post_logsへ残らないこと。
-- BASE、追記version、完成version、DL不可version、没譜面versionで管理UIを開けること。
-- 中間履歴versionでは展開中に管理UIを開けること。
-- 子versionがある親を取り下げても、子versionが連鎖して取り下げ・非表示にならないこと。
-- お気に入り★、数字パス版ラベル、ツリー表示、進捗サムネイルが壊れていないこと。
-- DL/追記投稿ボタンの既存動作が、状態変更対象以外で壊れていないこと。
-- 初回投稿・追記投稿フォームが壊れていないこと。
-- スマホ幅で管理モーダルが大きく崩れず操作できること。
+- 24時間以内かつ派生なしの取り消しで `outcome=immediate_hidden` になること。
+- 24時間以内かつ派生なしの削除で `outcome=immediate_hidden` になること。
+- `immediate_hidden` 後、一覧から消えること。
+- `immediate_hidden` 後もD1 versions行が残り、`is_hidden=1`になること。
+- `immediate_hidden` 後もR2譜面ファイルとprogressImageが残り、`file_deleted_at`が設定されないこと。
+- 取り消しの即時非表示では`hidden_reason='canceled_within_24h'`と`withdrawn_at`が設定されること。
+- 削除の即時非表示では`hidden_reason='deleted_within_24h'`となり、pending削除申請が作られないこと。
+- 24時間以内かつ派生ありの取り消しで`outcome=download_blocked`になること。
+- 24時間以内かつ派生ありの削除で`outcome=delete_requested`になること。
+- 24時間経過後の取り消しで`outcome=download_blocked`になること。
+- 24時間経過後の削除で`outcome=delete_requested`になること。
+- 非表示、取り消し済み、削除申請中、没譜面、中間履歴の直接子も派生versionとして数えること。
+- 取り消し/削除申請後、`download_blocked=1`となりDL不可になること。
+- `withdrawn_at`があっても追記投稿できること。
+- `delete_requested_at`があっても追記投稿できること。
+- `download_blocked=1`だけでは追記拒否されないこと。
+- `is_hidden=1`または`is_rejected=1`では追記できないこと。
+- 既存の別`download_block_reason`が取り消し/削除操作で上書きされないこと。
+- 同一versionのpending申請重複が`DELETE_REQUEST_ALREADY_EXISTS`になること。
+- `delete_requests.message`にAPI入力のreasonが保存され、`created_at`が申請日時になること。
+- 各version行に投稿日時が表示されること。
+- 投稿から24時間以内の行に短い`24h以内`バッジが表示されること。
+- 24時間以内かつ派生なしのバッジtooltipで、管理操作により非表示になる可能性が分かること。
+- 管理モーダルに投稿日時、経過時間、期限、残り時間、派生version有無が表示されること。
+- 管理モーダルに取り消し/削除それぞれの事前説明が表示されること。
+- 実行後はAPIの`outcome`別結果メッセージがモーダル内に表示されること。
+- 即時非表示で一覧行が消えても、結果メッセージが自動で消えないこと。
+- `post_logs`のactionが既存値`withdraw_version` / `request_delete`のままであること。
+- `post_logs.detail`に`outcome`, `within24Hours`, `hasDescendants`, version/chart ID、理由有無と文字数が記録されること。
+- password、password_hash、HASH_SECRET、生IP、生UA、削除理由本文がconsole・post_logsへ残らないこと。
+- 管理パスワード未入力、誤入力、試行制限の既存挙動が壊れていないこと。
+- お気に入り★、数字パス版ラベル、ツリー、中間履歴折り畳み、進捗サムネイルが壊れていないこと。
+- DL/追記投稿ボタン、初回投稿・追記投稿フォームが壊れていないこと。
+- スマホ幅で投稿日時と管理モーダルが大きく崩れないこと。
 
 ## FAV-01 確認項目
 

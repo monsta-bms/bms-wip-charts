@@ -78,6 +78,8 @@ type VersionRow = {
   delete_requested_at: string | null;
   hidden_at: string | null;
   download_blocked_at: string | null;
+  within_24_hours: number;
+  has_child_versions: number;
 };
 
 type ExistingSongRow = {
@@ -389,6 +391,9 @@ function buildVersion(row: VersionRow) {
       downloadUrl: downloadBlocked ? null : `/api/files/${encodeURIComponent(row.file_id)}`
     },
     createdAt: row.created_at,
+    within24Hours: toBoolean(row.within_24_hours),
+    hasChildVersions: toBoolean(row.has_child_versions),
+    hasDescendants: toBoolean(row.has_child_versions),
     updatedAt: row.updated_at
   };
 }
@@ -598,7 +603,16 @@ async function selectVisibleVersionRows(env: Env, chartIds: string[]): Promise<V
       versions.withdrawn_at AS withdrawn_at,
       versions.delete_requested_at AS delete_requested_at,
       versions.hidden_at AS hidden_at,
-      versions.download_blocked_at AS download_blocked_at
+      versions.download_blocked_at AS download_blocked_at,
+      CASE
+        WHEN versions.created_at >= datetime('now', '-24 hours') THEN 1
+        ELSE 0
+      END AS within_24_hours,
+      EXISTS (
+        SELECT 1
+        FROM versions AS child_versions
+        WHERE child_versions.parent_version_id = versions.id
+      ) AS has_child_versions
     FROM versions
     WHERE versions.is_hidden = 0
       AND versions.chart_id IN (${placeholders})

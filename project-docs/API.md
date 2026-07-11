@@ -22,7 +22,7 @@ https://monsta-bms.github.io/bms-wip-charts/
 - `GET /api/charts`
 - `POST /api/charts` 初回投稿
 - `POST /api/charts/:chartId/versions` 追記投稿
-- `POST /api/versions/:versionId/withdraw` version取り下げ
+- `POST /api/versions/:versionId/withdraw` version取り消し
 - `POST /api/versions/:versionId/delete-request` version削除申請
 - `GET /api/files/:fileId`
 - `GET /api/progress-images/:versionId`
@@ -171,6 +171,9 @@ versionレスポンスには以下を含める。
 - `progressImage`: 進捗画像がある場合のみ以下のobject、ない場合は `null`
 - `collapsedByCompletion`, `collapsedReason`, `collapsedAt`, `collapsedByVersionId`
 - `downloadBlocked`, `downloadBlockReason`, `downloadBlockedAt`
+- `createdAt`: version投稿日時。D1のUTC時刻を返す。
+- `within24Hours`: 一覧表示用の参考判定。最終判定は管理API実行時に再計算する。
+- `hasChildVersions`, `hasDescendants`: 直接子versionが1件以上あるか。非表示versionも判定対象に含む。
 
 `progressImage` 例:
 
@@ -371,7 +374,7 @@ versionレスポンスには以下を含める。
 
 ### POST /api/versions/:versionId/withdraw
 
-投稿時の管理パスワードを検証し、対象versionを取り下げる。
+投稿時の管理パスワードを検証し、対象versionを取り消す。ルート名は互換性のため `withdraw` を維持する。
 
 送信形式:
 
@@ -391,24 +394,24 @@ request body:
 {
   "ok": true,
   "versionId": "version_xxx",
-  "withdrawn": true,
-  "withdrawnAt": "2026-07-11 00:00:00"
+  "action": "withdraw",
+  "outcome": "download_blocked",
+  "within24Hours": false,
+  "hasDescendants": true,
+  "effectiveAt": "2026-07-11T00:00:00.000Z"
 }
 ```
 
-状態変更:
+`outcome`:
 
-- `withdrawn_at=CURRENT_TIMESTAMP`
-- `download_blocked=1`
-- `download_blocked_at=COALESCE(download_blocked_at, CURRENT_TIMESTAMP)`
-- 未ブロックの場合のみ `download_block_reason='withdrawn'`
-- `updated_at=CURRENT_TIMESTAMP`
-- 既存の別DL停止理由は上書きしない。
-- D1行、R2譜面ファイル、progressImageは削除しない。
+- `immediate_hidden`: API実行時点で投稿から24時間以内かつ直接子なし。`is_hidden=1`, `hidden_reason='canceled_within_24h'`, `hidden_at`, `withdrawn_at`, `download_blocked=1`を設定する。
+- `download_blocked`: 直接子がある、または24時間経過済み。`withdrawn_at`, `download_blocked=1`, `download_blocked_at`を設定し、未ブロック時だけ理由を`withdrawn`にする。
+- いずれもD1行、R2譜面ファイル、progressImageは削除しない。
+- `download_blocked`は追記拒否条件ではなく、非表示でなければ追記可能。
 
 ### POST /api/versions/:versionId/delete-request
 
-投稿時の管理パスワードを検証し、削除申請を受け付ける。
+投稿時の管理パスワードを検証し、24時間ルールに基づいて即時論理削除または削除申請を行う。
 
 request body:
 
@@ -425,18 +428,29 @@ request body:
 {
   "ok": true,
   "versionId": "version_xxx",
-  "deleteRequested": true,
-  "deleteRequestedAt": "2026-07-11 00:00:00"
+  "action": "delete_request",
+  "outcome": "delete_requested",
+  "within24Hours": false,
+  "hasDescendants": true,
+  "effectiveAt": "2026-07-11T00:00:00.000Z"
 }
 ```
 
-状態変更:
+`outcome`:
 
-- `delete_requests` に `status='pending'` を追加する。
-- `versions.delete_requested_at=CURRENT_TIMESTAMP`
-- `versions.updated_at=CURRENT_TIMESTAMP`
-- 削除申請だけでは `download_blocked`、DL、追記投稿を変更しない。
-- 管理承認前はD1/R2を物理削除しない。
+- `immediate_hidden`: API実行時点で投稿から24時間以内かつ直接子なし。`is_hidden=1`, `hidden_reason='deleted_within_24h'`, `hidden_at`, `download_blocked=1`を設定し、pending申請は作らない。
+- `delete_requested`: 直接子がある、または24時間経過済み。`delete_requests`へ`status='pending'`を追加し、`versions.delete_requested_at`, `download_blocked=1`, `download_blocked_at`を設定する。
+- request bodyの`reason`はDBの`delete_requests.message`へ保存する。
+- `delete_requests.created_at`を申請日時として扱う。
+- 管理承認前はD1/R2を物理削除せず、progressImageも保持する。
+- 削除申請後も対象versionが非表示でなければ追記可能。
+
+共通判定:
+
+- 24時間判定はWorkerがD1上で`created_at >= datetime('now', '-24 hours')`を実行する。
+- 派生判定は`parent_version_id`が対象version IDと一致する直接子の存在で行い、非表示などの状態では除外しない。
+- 一覧表示の参考値と異なる場合も、APIレスポンスの`outcome`を正とする。
+- `immediate_hidden`は論理削除であり、R2オブジェクトの物理削除や`file_deleted_at`更新は行わない。
 
 認証と試行制限:
 
@@ -451,13 +465,13 @@ request body:
 | `VERSION_NOT_FOUND` | 404 | versionが存在しない、または非表示。 |
 | `PASSWORD_REQUIRED` | 400 | passwordが空。 |
 | `INVALID_PASSWORD` | 401 | 管理パスワード不一致。 |
-| `VERSION_ALREADY_WITHDRAWN` | 409 | 取り下げ済み。 |
+| `VERSION_ALREADY_WITHDRAWN` | 409 | 取り消し済み。 |
 | `DELETE_REQUEST_ALREADY_EXISTS` | 409 | pending削除申請が存在する。 |
 | `INVALID_DELETE_REQUEST_REASON` | 400 | reasonの型または長さが不正。 |
-| `WITHDRAW_FAILED` | 500 | 取り下げ処理失敗。 |
+| `WITHDRAW_FAILED` | 500 | 取り消し処理失敗。 |
 | `DELETE_REQUEST_FAILED` | 500 | 削除申請処理失敗。 |
 | `SERVER_CONFIG_ERROR` | 500 | HASH_SECRET未設定。 |
 | `RATE_LIMITED` | 429 | 短時間のパスワード試行上限超過。 |
 | `INVALID_REQUEST` | 400 | Content-TypeまたはJSON形式が不正。 |
 
-成功・失敗は `post_logs` の `withdraw_version` / `request_delete` として記録する。R2削除、管理承認、却下、復旧はこのフェーズでは行わない。
+成功・失敗は `post_logs` の `withdraw_version` / `request_delete` として記録する。detailには`outcome`, `within24Hours`, `hasDescendants`, `versionId`, `chartId`, `hasReason`, `reasonLength`を記録し、passwordと理由本文は記録しない。R2削除、管理承認、却下、復旧はこのフェーズでは行わない。

@@ -33,7 +33,7 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。�
 - 分岐version管理、`branch_path` 生成、完成到達時の親version DL不可化
 - `versions.file_deleted_at` / `versions.file_delete_reason` の自動削除準備カラム
 - versionId単位のブラウザ内お気に入り★とお気に入りのみ表示
-- 投稿者管理パスワードによるversion取り下げ・削除申請MVP
+- 投稿者管理パスワードによるversion取り消し・削除申請MVP
 
 未実装:
 
@@ -406,39 +406,46 @@ MVPではサムネイルクリックによる拡大表示は実装しない。�
 - 将来検索を追加する場合は、検索キーワード一致 AND お気に入り関連行の条件で絞り込むことを検討する。
 - 将来アカウント機能ができた場合は、サーバー保存や端末間同期を検討する。
 
-## 投稿者による取り下げ・削除申請
+## 投稿者による取り消し・削除
 
-投稿一覧の各version行から、投稿時の管理パスワードを使って投稿者操作を行える。
+投稿一覧の各version行から、投稿時の管理パスワードを使って操作する。UIでは「取り消し」と表示し、既存APIルートと内部ログactionは `withdraw` / `withdraw_version` を維持する。
 
-取り下げ:
+24時間ルール:
 
-- `POST /api/versions/:versionId/withdraw` を使う。
-- `versions.withdrawn_at` を設定し、DLと追記投稿を停止する。
-- 未ブロックversionでは `download_block_reason='withdrawn'` とする。
-- 完成到達など別のDL停止理由が既にある場合は、その理由を上書きしない。
-- D1行、R2譜面ファイル、progressImage PNGは削除しない。
-- 一覧には履歴として残し、取り下げ済みであることを表示する。
-- 子versionは連鎖して取り下げ・非表示にしない。
-- 復旧機能は後続フェーズで検討する。
+- 判定基準は `versions.created_at` とし、WorkerがD1上で `created_at >= datetime('now', '-24 hours')` を評価する。
+- 派生versionの有無は、非表示・取り消し済み・削除申請中・没譜面・中間履歴を含む直接子の存在で判定する。
+- 一覧の24時間表示は参考情報であり、最終結果はAPI実行時の再判定と `outcome` を正とする。
 
-削除申請:
+取り消し:
 
-- `POST /api/versions/:versionId/delete-request` を使う。
-- `delete_requests` に `status='pending'` の申請を追加する。
-- `versions.delete_requested_at` を設定する。
-- 管理承認前はD1/R2を物理削除しない。
-- 削除申請だけではDLと追記投稿を停止しない。即時停止が必要な場合は取り下げを使う。
+- 24時間以内かつ直接子なし: `outcome='immediate_hidden'`。`is_hidden=1`, `hidden_reason='canceled_within_24h'`, `hidden_at`, `withdrawn_at`, `download_blocked=1`を設定する。
+- 24時間以内で直接子あり: `outcome='download_blocked'`。一覧には残し、DLを停止する。
+- 24時間経過後: `outcome='download_blocked'`。一覧には残し、DLを停止する。
+- 既存の `download_block_reason` は上書きせず、未設定の場合だけ `withdrawn` を使う。
+
+削除:
+
+- 24時間以内かつ直接子なし: `outcome='immediate_hidden'`。`is_hidden=1`, `hidden_reason='deleted_within_24h'`, `hidden_at`, `download_blocked=1`を設定し、pending削除申請は作らない。
+- 24時間以内で直接子あり、または24時間経過後: `outcome='delete_requested'`。`delete_requests`へpendingを追加し、`delete_requested_at`と`download_blocked=1`を設定する。
+- API入力の `reason` は `delete_requests.message` に保存し、申請日時は `delete_requests.created_at` とする。
 - 同一versionにpending申請がある場合は重複受付しない。
-- 管理承認、却下、通知、物理削除、申請一覧は後続フェーズとする。
+
+論理削除と操作可否:
+
+- `immediate_hidden`は物理削除ではない。D1 versions行、R2譜面ファイル、progressImage PNGを保持し、`file_deleted_at`は設定しない。
+- `download_blocked`はDL制御であり、追記不可条件ではない。
+- `withdrawn_at`または`delete_requested_at`があっても追記できる。
+- `is_hidden=1`または`is_rejected=1`は追記不可とする。完成版に置換済み中間履歴など既存の明示的な追記不可条件も維持する。
+- 即時非表示UPDATEは24時間条件と直接子不存在条件を再確認し、競合を検出した場合はDL停止または削除申請へ寄せる。
 
 共通仕様:
 
 - request bodyは `application/json` とし、`password` を必須にする。
-- passwordは既存投稿と同じ `hashWithSecret('password:' + password, HASH_SECRET)` で検証する。
-- password、password_hash、HASH_SECRET、生IP、生UAはログに出さない。
+- passwordは `hashWithSecret('password:' + password, HASH_SECRET)` で検証する。
+- password、password_hash、HASH_SECRET、生IP、生UA、削除理由本文はログに出さない。
 - 同じIP/UAハッシュで10分以内に5回以上 `INVALID_PASSWORD` が記録された場合は `RATE_LIMITED` とする。
-- 成功・失敗は `post_logs` の `withdraw_version` / `request_delete` に記録する。
-- R2譜面ファイルとprogressImageは履歴確認用に残し、今回のAPIから削除しない。
+- 成功・失敗は `post_logs` の既存action `withdraw_version` / `request_delete` に記録し、detailには `outcome`, `within24Hours`, `hasDescendants`, ID、理由有無と文字数を残す。
+- 管理承認、却下、通知、物理削除、復旧、申請一覧は後続フェーズとする。
 
 ## 自動削除準備
 

@@ -47,9 +47,66 @@
     return version?.displayVersion || version?.display_version || "ver?.?";
   }
 
+  function parseApiDate(value) {
+    const source = String(value || "").trim();
+    if (!source) {
+      return null;
+    }
+
+    const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(source)
+      ? `${source.replace(" ", "T")}Z`
+      : source;
+    const date = new Date(normalized);
+    return Number.isFinite(date.getTime()) ? date : null;
+  }
+
   function getCreatedAtTime(version) {
-    const time = Date.parse(version?.createdAt || version?.created_at || "");
-    return Number.isFinite(time) ? time : 0;
+    return parseApiDate(version?.createdAt || version?.created_at)?.getTime() || 0;
+  }
+
+  function isWithin24Hours(version) {
+    if (typeof version?.within24Hours === "boolean") {
+      return version.within24Hours;
+    }
+
+    const createdAt = getCreatedAtTime(version);
+    return createdAt > 0 && Date.now() - createdAt < 24 * 60 * 60 * 1000;
+  }
+
+  function hasChildVersions(version) {
+    return version?.hasChildVersions === true || version?.hasDescendants === true;
+  }
+
+  function formatPostedAt(version) {
+    const date = parseApiDate(version?.createdAt || version?.created_at);
+    if (!date) {
+      return "投稿日時不明";
+    }
+
+    return `投稿 ${new Intl.DateTimeFormat("ja-JP", {
+      timeZone: "Asia/Tokyo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false
+    }).format(date)}`;
+  }
+
+  function renderLifecycleMeta(version) {
+    const postedAt = formatPostedAt(version);
+    if (!isWithin24Hours(version)) {
+      return `<span class="version-posted-at">${html(postedAt)}</span>`;
+    }
+
+    const tooltip = hasChildVersions(version)
+      ? "24時間以内ですが、派生版があるため管理操作では即時非表示になりません"
+      : "管理操作により一覧から非表示になる可能性があります";
+    return `
+      <span class="version-posted-at">${html(postedAt)}</span>
+      <span class="within-24h-badge" title="${html(tooltip)}">24h以内</span>
+    `;
   }
 
   function getParentBranchPath(version) {
@@ -469,7 +526,7 @@
     const badges = [];
 
     if (isWithdrawn(version)) {
-      badges.push(`<span class="withdrawn-badge">取り下げ済み</span>`);
+      badges.push(`<span class="withdrawn-badge">取り消し済み</span>`);
     } else {
       if (isRejected(version)) {
         badges.push(`<span class="rejected-badge compact">没譜面</span>`);
@@ -556,6 +613,9 @@
     button.dataset.author = String(version?.author || "未入力");
     button.dataset.withdrawn = isWithdrawn(version) ? "true" : "false";
     button.dataset.deleteRequested = isDeleteRequested(version) ? "true" : "false";
+    button.dataset.createdAt = String(version?.createdAt || version?.created_at || "");
+    button.dataset.within24Hours = isWithin24Hours(version) ? "true" : "false";
+    button.dataset.hasDescendants = hasChildVersions(version) ? "true" : "false";
     actions.appendChild(button);
   }
 
@@ -682,6 +742,7 @@
             <span class="version-state-badges">${renderStateBadges(node, progress)}</span>
           </span>
           <span class="version-parent-line" title="${html(titleText)}">${html(parentText)}</span>
+          <span class="version-lifecycle-line">${renderLifecycleMeta(version)}</span>
         </span>
       `;
     }
@@ -699,13 +760,8 @@
 
     enhanceDownloadControl(row, version, displayVersionLabel, supersededIntermediate);
     ensureManagementControl(row, version, getChartId(options.entry), displayVersionLabel);
-    if (supersededIntermediate || withdrawn) {
-      lockAppendControl(
-        row,
-        withdrawn
-          ? "取り下げ済みversionから追記投稿はできません"
-          : "完成版に置き換え済みの中間履歴のため追記できません"
-      );
+    if (supersededIntermediate) {
+      lockAppendControl(row, "完成版に置き換え済みの中間履歴のため追記できません");
     }
   }
 

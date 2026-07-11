@@ -47,7 +47,6 @@ type ParentVersionRow = {
   level: string | null;
   is_hidden: number;
   is_rejected: number;
-  withdrawn_at: string | null;
 };
 
 type ExistingVersionRow = { id: string };
@@ -472,8 +471,7 @@ async function selectParentVersion(env: Env, parentVersionId: string): Promise<P
       difficulty,
       level,
       is_hidden,
-      is_rejected,
-      withdrawn_at
+      is_rejected
     FROM versions
     WHERE id = ?
     LIMIT 1
@@ -570,18 +568,6 @@ async function validateChartAndParent(
         code: "REJECTED_CHART_CANNOT_BE_EXTENDED",
         message: "没譜面から追記投稿はできません。",
         detail: `parentVersionId is rejected: ${parentVersionId}`
-      })
-    };
-  }
-
-  if (parent.withdrawn_at) {
-    return {
-      ok: false,
-      response: await failAppendVersion(request, env, context, {
-        status: 409,
-        code: "WITHDRAWN_VERSION_CANNOT_BE_EXTENDED",
-        message: "取り下げ済みversionから追記投稿はできません。",
-        detail: `parentVersionId is withdrawn: ${parentVersionId}`
       })
     };
   }

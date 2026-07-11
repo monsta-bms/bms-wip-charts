@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="./list-ui-refresh.css?v=ui-tree-overlay-01">
     <link rel="stylesheet" href="./progress-image-preview.css?v=ui-tree-overlay-01">
     <link rel="stylesheet" href="./tree-progress-polish.css?v=tree-shape-fix-01">
-    <link rel="stylesheet" href="./version-management-ui.css?v=withdraw-01">
+    <link rel="stylesheet" href="./version-management-ui.css?v=version-lifecycle-24h-01">
   </head>
   <body>
     <div class="page-shell">
@@ -173,7 +173,7 @@
                     <label class="field">
                       <span class="field-label">管理パスワード <span class="required-mark">*</span></span>
                       <input id="password" name="password" type="password" autocomplete="current-password" required>
-                      <span class="field-help">取り下げ・削除申請に使います。公開されません。忘れると投稿者側で操作できません。</span>
+                      <span class="field-help">取り消し・削除申請に使います。公開されません。忘れると投稿者側で操作できません。</span>
                     </label>
 
                     <label class="field checkbox-field save-password-field">
@@ -236,6 +236,22 @@
             <dt>状態</dt>
             <dd id="versionManagementState">-</dd>
           </div>
+          <div>
+            <dt>投稿日時</dt>
+            <dd id="versionManagementCreatedAt">-</dd>
+          </div>
+          <div>
+            <dt>経過時間</dt>
+            <dd id="versionManagementElapsed">-</dd>
+          </div>
+          <div>
+            <dt>24時間期限</dt>
+            <dd id="versionManagementDeadline">-</dd>
+          </div>
+          <div>
+            <dt>派生版</dt>
+            <dd id="versionManagementDescendants">-</dd>
+          </div>
         </dl>
 
         <label class="field">
@@ -245,27 +261,27 @@
         </label>
 
         <section class="version-management-action" aria-labelledby="withdrawActionTitle">
-          <h3 id="withdrawActionTitle">取り下げ</h3>
-          <p>このversionのDLと追記を停止します。履歴、譜面ファイル、進捗画像は削除されません。子versionは連鎖して取り下げません。</p>
+          <h3 id="withdrawActionTitle">取り消し</h3>
+          <p id="versionWithdrawDescription">対象の状態を確認しています。</p>
           <label class="version-management-confirm">
             <input id="versionWithdrawConfirm" type="checkbox">
-            <span>取り下げ後はこの画面から復旧できないことを確認しました。</span>
+            <span>操作後はこの画面から復旧できないことを確認しました。</span>
           </label>
           <div class="version-management-buttons">
-            <button class="version-withdraw-button" id="versionWithdrawButton" type="button">取り下げる</button>
+            <button class="version-withdraw-button" id="versionWithdrawButton" type="button">取り消す</button>
           </div>
         </section>
 
         <section class="version-management-action" aria-labelledby="deleteRequestActionTitle">
-          <h3 id="deleteRequestActionTitle">削除申請</h3>
-          <p>管理承認までは物理削除されず、申請だけではDL・追記も停止しません。公開を止める場合は先に取り下げてください。</p>
+          <h3 id="deleteRequestActionTitle">削除</h3>
+          <p id="versionDeleteDescription">対象の状態を確認しています。</p>
           <label class="field">
             <span class="field-label">申請理由（任意）</span>
             <textarea id="versionDeleteReason" rows="3" maxlength="500" placeholder="削除を希望する理由"></textarea>
             <span class="field-help">500文字以内。</span>
           </label>
           <div class="version-management-buttons">
-            <button class="version-delete-request-button" id="versionDeleteRequestButton" type="button">削除を申請</button>
+            <button class="version-delete-request-button" id="versionDeleteRequestButton" type="button">削除する</button>
           </div>
         </section>
 
@@ -283,9 +299,9 @@
     <script src="./branch-append-ui.js?v=ui-tree-overlay-01"></script>
     <script src="./progress-image-preview.js?v=ui-tree-overlay-01"></script>
     <script src="./progress-image-formdata.js?v=ui-tree-overlay-01"></script>
-    <script src="./branch-tree-list.js?v=ui-tree-overlay-01"></script>
+    <script src="./branch-tree-list.js?v=version-lifecycle-24h-01"></script>
     <script src="./tree-progress-polish.js?v=tree-shape-fix-01"></script>
     <script src="./favorites-list.js?v=fav-01"></script>
-    <script src="./version-management-ui.js?v=withdraw-01"></script>
+    <script src="./version-management-ui.js?v=version-lifecycle-24h-01"></script>
   </body>
 </html>

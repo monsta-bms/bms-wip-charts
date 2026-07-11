@@ -25,6 +25,35 @@
   white-space: nowrap;
 }
 
+.version-lifecycle-line {
+  align-items: center;
+  color: #74828d;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.66rem;
+  gap: 5px;
+  line-height: 1.25;
+  margin-top: 2px;
+  min-width: 0;
+}
+
+.version-posted-at {
+  white-space: nowrap;
+}
+
+.within-24h-badge {
+  background: #fff6dc;
+  border: 1px solid #e8cd82;
+  border-radius: 999px;
+  color: #7a5800;
+  display: inline-flex;
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 2px 5px;
+  white-space: nowrap;
+}
+
 button.version-management-button {
   align-items: center;
   background: #fff;
@@ -103,7 +132,7 @@ button.version-management-close {
   border-radius: 6px;
   display: grid;
   gap: 8px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 0;
   padding: 12px;
 }

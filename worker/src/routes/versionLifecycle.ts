@@ -16,7 +16,16 @@ type VersionLifecycleRow = {
   file_sha256: string | null;
   is_hidden: number;
   withdrawn_at: string | null;
+  delete_requested_at: string | null;
+  created_at: string;
 };
+
+type LifecycleSnapshot = {
+  within24Hours: boolean;
+  hasDescendants: boolean;
+};
+
+type LifecycleOutcome = "immediate_hidden" | "download_blocked" | "delete_requested";
 
 type LifecycleContext = {
   ipHash: string;
@@ -25,6 +34,10 @@ type LifecycleContext = {
   chartId?: string | null;
   versionId?: string | null;
   fileSha256?: string | null;
+  within24Hours?: boolean;
+  hasDescendants?: boolean;
+  reasonLength?: number;
+  hasReason?: boolean;
 };
 
 type LifecycleRequestBody = {
@@ -105,7 +118,23 @@ async function failLifecycle(
   failure: Failure
 ): Promise<Response> {
   try {
-    await writePostLog(env, context, action, "rejected", failure.code, failure.detail);
+    await writePostLog(
+      env,
+      context,
+      action,
+      "rejected",
+      failure.code,
+      [
+        `errorCode=${failure.code}`,
+        `versionId=${context.versionId ?? "unknown"}`,
+        `chartId=${context.chartId ?? "unknown"}`,
+        `within24Hours=${context.within24Hours ?? "unknown"}`,
+        `hasDescendants=${context.hasDescendants ?? "unknown"}`,
+        `hasReason=${context.hasReason ?? false}`,
+        `reasonLength=${context.reasonLength ?? 0}`,
+        `detail=${failure.detail}`
+      ].join("; ")
+    );
   } catch (error) {
     console.error("[version-lifecycle-post-log] failed to write rejected operation log", {
       code: "POST_LOG_WRITE_FAILED",
@@ -232,12 +261,156 @@ async function selectVersion(env: Env, versionId: string): Promise<VersionLifecy
       versions.password_hash,
       versions.file_sha256,
       versions.is_hidden,
-      versions.withdrawn_at
+      versions.withdrawn_at,
+      versions.delete_requested_at,
+      versions.created_at
     FROM versions
     INNER JOIN charts ON charts.id = versions.chart_id
     WHERE versions.id = ?
     LIMIT 1
   `).bind(versionId).first<VersionLifecycleRow>();
+}
+
+async function readLifecycleSnapshot(env: Env, versionId: string): Promise<LifecycleSnapshot> {
+  const row = await env.DB.prepare(`
+    SELECT
+      CASE
+        WHEN created_at >= datetime('now', '-24 hours') THEN 1
+        ELSE 0
+      END AS within_24_hours,
+      EXISTS (
+        SELECT 1
+        FROM versions AS children
+        WHERE children.parent_version_id = versions.id
+      ) AS has_descendants
+    FROM versions
+    WHERE id = ?
+    LIMIT 1
+  `).bind(versionId).first<{ within_24_hours: number; has_descendants: number }>();
+
+  return {
+    within24Hours: Number(row?.within_24_hours ?? 0) === 1,
+    hasDescendants: Number(row?.has_descendants ?? 0) === 1
+  };
+}
+
+function applySnapshotToContext(context: LifecycleContext, snapshot: LifecycleSnapshot): void {
+  context.within24Hours = snapshot.within24Hours;
+  context.hasDescendants = snapshot.hasDescendants;
+}
+
+async function writeAcceptedLifecycleLog(
+  env: Env,
+  context: LifecycleContext,
+  action: LifecycleAction,
+  outcome: LifecycleOutcome,
+  version: VersionLifecycleRow
+): Promise<void> {
+  try {
+    await writePostLog(
+      env,
+      context,
+      action,
+      "accepted",
+      null,
+      [
+        `outcome=${outcome}`,
+        `within24Hours=${context.within24Hours ?? false}`,
+        `hasDescendants=${context.hasDescendants ?? false}`,
+        `versionId=${version.id}`,
+        `chartId=${version.chart_id}`,
+        `hasReason=${context.hasReason ?? false}`,
+        `reasonLength=${context.reasonLength ?? 0}`,
+        "r2Deleted=false",
+        "progressImageDeleted=false"
+      ].join("; ")
+    );
+  } catch (error) {
+    console.error("[version-lifecycle-post-log] failed to write accepted operation log", {
+      code: "POST_LOG_WRITE_FAILED",
+      action,
+      outcome,
+      versionId: version.id,
+      message: errorDetail(error)
+    });
+  }
+}
+
+async function tryImmediateHide(
+  env: Env,
+  versionId: string,
+  hiddenReason: "canceled_within_24h" | "deleted_within_24h",
+  fallbackDownloadReason: "withdrawn" | "delete_requested",
+  markWithdrawn: boolean
+): Promise<boolean> {
+  const withdrawnAssignment = markWithdrawn ? "withdrawn_at = CURRENT_TIMESTAMP," : "";
+  const result = await env.DB.prepare(`
+    UPDATE versions
+    SET
+      is_hidden = 1,
+      hidden_at = CURRENT_TIMESTAMP,
+      hidden_reason = ?,
+      download_blocked = 1,
+      download_block_reason = CASE
+        WHEN download_blocked = 0 OR download_block_reason IS NULL THEN ?
+        ELSE download_block_reason
+      END,
+      download_blocked_at = COALESCE(download_blocked_at, CURRENT_TIMESTAMP),
+      ${withdrawnAssignment}
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+      AND is_hidden = 0
+      ${markWithdrawn ? "AND withdrawn_at IS NULL" : ""}
+      AND created_at >= datetime('now', '-24 hours')
+      AND NOT EXISTS (
+        SELECT 1
+        FROM versions AS children
+        WHERE children.parent_version_id = versions.id
+      )
+  `).bind(hiddenReason, fallbackDownloadReason, versionId).run();
+
+  return Number(result.meta.changes ?? 0) === 1;
+}
+
+async function restoreVisibilityAfterChildRace(
+  env: Env,
+  versionId: string,
+  hiddenReason: "canceled_within_24h" | "deleted_within_24h"
+): Promise<void> {
+  await env.DB.prepare(`
+    UPDATE versions
+    SET
+      is_hidden = 0,
+      hidden_at = NULL,
+      hidden_reason = NULL,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+      AND hidden_reason = ?
+      AND EXISTS (
+        SELECT 1
+        FROM versions AS children
+        WHERE children.parent_version_id = versions.id
+      )
+  `).bind(versionId, hiddenReason).run();
+}
+
+function lifecycleSuccessResponse(
+  request: Request,
+  env: Env,
+  version: VersionLifecycleRow,
+  action: "withdraw" | "delete_request",
+  outcome: LifecycleOutcome,
+  snapshot: LifecycleSnapshot
+): Response {
+  return ok(request, env, {
+    ok: true,
+    versionId: version.id,
+    action,
+    outcome,
+    within24Hours: snapshot.within24Hours,
+    hasDescendants: snapshot.hasDescendants,
+    effectiveAt: new Date().toISOString()
+  });
 }
 
 async function authenticateVersion(
@@ -313,12 +486,43 @@ async function handleWithdraw(
     return failLifecycle(request, env, context, "withdraw_version", {
       status: 409,
       code: "VERSION_ALREADY_WITHDRAWN",
-      message: "このversionは取り下げ済みです。",
+      message: "このversionは取り消し済みです。",
       detail: `versionId is already withdrawn: ${version.id}`
     });
   }
 
   try {
+    let snapshot = await readLifecycleSnapshot(env, version.id);
+    applySnapshotToContext(context, snapshot);
+
+    if (snapshot.within24Hours && !snapshot.hasDescendants) {
+      const hidden = await tryImmediateHide(
+        env,
+        version.id,
+        "canceled_within_24h",
+        "withdrawn",
+        true
+      );
+
+      if (hidden) {
+        snapshot = await readLifecycleSnapshot(env, version.id);
+        if (snapshot.hasDescendants) {
+          await restoreVisibilityAfterChildRace(env, version.id, "canceled_within_24h");
+          snapshot = await readLifecycleSnapshot(env, version.id);
+          applySnapshotToContext(context, snapshot);
+          await writeAcceptedLifecycleLog(env, context, "withdraw_version", "download_blocked", version);
+          return lifecycleSuccessResponse(request, env, version, "withdraw", "download_blocked", snapshot);
+        }
+
+        applySnapshotToContext(context, snapshot);
+        await writeAcceptedLifecycleLog(env, context, "withdraw_version", "immediate_hidden", version);
+        return lifecycleSuccessResponse(request, env, version, "withdraw", "immediate_hidden", snapshot);
+      }
+
+      snapshot = await readLifecycleSnapshot(env, version.id);
+      applySnapshotToContext(context, snapshot);
+    }
+
     const result = await env.DB.prepare(`
       UPDATE versions
       SET
@@ -332,33 +536,23 @@ async function handleWithdraw(
         updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
         AND withdrawn_at IS NULL
+        AND is_hidden = 0
     `).bind(version.id).run();
 
     if (Number(result.meta.changes ?? 0) === 0) {
       return failLifecycle(request, env, context, "withdraw_version", {
         status: 409,
         code: "VERSION_ALREADY_WITHDRAWN",
-        message: "このversionは取り下げ済みです。",
+        message: "このversionは取り消し済みです。",
         detail: `versionId was withdrawn by another request: ${version.id}`
       });
     }
 
-    const updated = await env.DB.prepare(`
-      SELECT withdrawn_at
-      FROM versions
-      WHERE id = ?
-      LIMIT 1
-    `).bind(version.id).first<{ withdrawn_at: string | null }>();
+    snapshot = await readLifecycleSnapshot(env, version.id);
+    applySnapshotToContext(context, snapshot);
 
     try {
-      await writePostLog(
-        env,
-        context,
-        "withdraw_version",
-        "accepted",
-        null,
-        `Version withdrawn. versionId=${version.id}; chartId=${version.chart_id}; r2Deleted=false; progressImageDeleted=false`
-      );
+      await writeAcceptedLifecycleLog(env, context, "withdraw_version", "download_blocked", version);
     } catch (logError) {
       console.error("[version-lifecycle-post-log] failed to write accepted withdraw log", {
         code: "POST_LOG_WRITE_FAILED",
@@ -367,12 +561,7 @@ async function handleWithdraw(
       });
     }
 
-    return ok(request, env, {
-      ok: true,
-      versionId: version.id,
-      withdrawn: true,
-      withdrawnAt: updated?.withdrawn_at ?? null
-    });
+    return lifecycleSuccessResponse(request, env, version, "withdraw", "download_blocked", snapshot);
   } catch (error) {
     console.error("[version-withdraw] failed to update version", {
       code: "WITHDRAW_FAILED",
@@ -382,7 +571,7 @@ async function handleWithdraw(
     return failLifecycle(request, env, context, "withdraw_version", {
       status: 500,
       code: "WITHDRAW_FAILED",
-      message: "versionの取り下げに失敗しました。",
+      message: "versionの取り消しに失敗しました。",
       detail: `D1 withdraw update failed: ${errorDetail(error)}`
     });
   }
@@ -413,6 +602,32 @@ async function handleDeleteRequest(
       });
     }
 
+    let snapshot = await readLifecycleSnapshot(env, version.id);
+    applySnapshotToContext(context, snapshot);
+
+    if (snapshot.within24Hours && !snapshot.hasDescendants) {
+      const hidden = await tryImmediateHide(
+        env,
+        version.id,
+        "deleted_within_24h",
+        "delete_requested",
+        false
+      );
+
+      if (hidden) {
+        snapshot = await readLifecycleSnapshot(env, version.id);
+        if (!snapshot.hasDescendants) {
+          applySnapshotToContext(context, snapshot);
+          await writeAcceptedLifecycleLog(env, context, "request_delete", "immediate_hidden", version);
+          return lifecycleSuccessResponse(request, env, version, "delete_request", "immediate_hidden", snapshot);
+        }
+
+        await restoreVisibilityAfterChildRace(env, version.id, "deleted_within_24h");
+        snapshot = await readLifecycleSnapshot(env, version.id);
+        applySnapshotToContext(context, snapshot);
+      }
+    }
+
     const requestId = makeId("delete_request");
     const results = await env.DB.batch([
       env.DB.prepare(`
@@ -432,6 +647,12 @@ async function handleDeleteRequest(
           WHERE version_id = ?
             AND status = 'pending'
         )
+          AND EXISTS (
+            SELECT 1
+            FROM versions
+            WHERE id = ?
+              AND is_hidden = 0
+          )
       `).bind(
         requestId,
         version.id,
@@ -439,12 +660,19 @@ async function handleDeleteRequest(
         reason,
         context.ipHash,
         context.uaHash,
+        version.id,
         version.id
       ),
       env.DB.prepare(`
         UPDATE versions
         SET
           delete_requested_at = CURRENT_TIMESTAMP,
+          download_blocked = 1,
+          download_block_reason = CASE
+            WHEN download_blocked = 0 OR download_block_reason IS NULL THEN 'delete_requested'
+            ELSE download_block_reason
+          END,
+          download_blocked_at = COALESCE(download_blocked_at, CURRENT_TIMESTAMP),
           updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
           AND EXISTS (
@@ -456,30 +684,29 @@ async function handleDeleteRequest(
     ]);
 
     if (Number(results[0]?.meta.changes ?? 0) === 0) {
+      const concurrentRequest = await env.DB.prepare(`
+        SELECT id
+        FROM delete_requests
+        WHERE version_id = ?
+          AND status = 'pending'
+        LIMIT 1
+      `).bind(version.id).first<{ id: string }>();
+
       return failLifecycle(request, env, context, "request_delete", {
-        status: 409,
-        code: "DELETE_REQUEST_ALREADY_EXISTS",
-        message: "このversionは削除申請中です。",
-        detail: `A pending delete request was created by another request for versionId=${version.id}.`
+        status: concurrentRequest ? 409 : 404,
+        code: concurrentRequest ? "DELETE_REQUEST_ALREADY_EXISTS" : "VERSION_NOT_FOUND",
+        message: concurrentRequest ? "このversionは削除申請中です。" : "対象のversionが見つかりません。",
+        detail: concurrentRequest
+          ? `A pending delete request was created by another request for versionId=${version.id}.`
+          : `versionId became hidden before delete request creation: ${version.id}.`
       });
     }
 
-    const updated = await env.DB.prepare(`
-      SELECT delete_requested_at
-      FROM versions
-      WHERE id = ?
-      LIMIT 1
-    `).bind(version.id).first<{ delete_requested_at: string | null }>();
+    snapshot = await readLifecycleSnapshot(env, version.id);
+    applySnapshotToContext(context, snapshot);
 
     try {
-      await writePostLog(
-        env,
-        context,
-        "request_delete",
-        "accepted",
-        null,
-        `Delete requested. versionId=${version.id}; chartId=${version.chart_id}; reasonProvided=${reason.length > 0}; reasonLength=${reason.length}; r2Deleted=false; progressImageDeleted=false`
-      );
+      await writeAcceptedLifecycleLog(env, context, "request_delete", "delete_requested", version);
     } catch (logError) {
       console.error("[version-lifecycle-post-log] failed to write accepted delete request log", {
         code: "POST_LOG_WRITE_FAILED",
@@ -488,12 +715,7 @@ async function handleDeleteRequest(
       });
     }
 
-    return ok(request, env, {
-      ok: true,
-      versionId: version.id,
-      deleteRequested: true,
-      deleteRequestedAt: updated?.delete_requested_at ?? null
-    });
+    return lifecycleSuccessResponse(request, env, version, "delete_request", "delete_requested", snapshot);
   } catch (error) {
     console.error("[version-delete-request] failed to create delete request", {
       code: "DELETE_REQUEST_FAILED",
@@ -539,6 +761,8 @@ export async function handleVersionLifecycleRoute(
   if (!parsed.ok) {
     return failLifecycle(request, env, context, action, parsed.failure);
   }
+  context.reasonLength = parsed.value.reason.length;
+  context.hasReason = parsed.value.reason.length > 0;
 
   try {
     if (await isRateLimited(env, context)) {
@@ -582,5 +806,4 @@ export async function handleVersionLifecycleRoute(
 
   return handleDeleteRequest(request, env, context, authenticated.value, parsed.value.reason);
 }
-
 
