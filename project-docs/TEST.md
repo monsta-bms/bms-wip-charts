@@ -55,6 +55,42 @@ https://monsta-bms.github.io/bms-wip-charts/
 - DL/追記投稿ボタン、初回投稿・追記投稿フォームが壊れていないこと。
 - スマホ幅で投稿日時と管理モーダルが大きく崩れないこと。
 
+## ADMIN-DELETE-01 確認項目
+
+pending削除申請の管理MVPを確認する:
+
+- `docs/admin.html`を直接開けること。
+- 公開一覧に管理ページへのリンクが追加されていないこと。
+- ADMIN_TOKEN未入力または不正値で一覧を取得できず、`ADMIN_AUTH_REQUIRED`になること。
+- WorkerにADMIN_TOKENがない場合は`CONFIG_MISSING`になること。
+- 正しいADMIN_TOKENでpending一覧を取得できること。
+- pending一覧が申請日時の古い順で表示されること。
+- pending一覧に申請日時、理由、曲名、差分名、数字パス版、作者、進捗、version作成日時、直接子数、現在状態が表示されること。
+- 一覧APIがpassword_hash、R2 key、requester hash、ADMIN_TOKEN、HASH_SECRETを返さないこと。
+- `is_hidden=true`でもpending申請があれば管理一覧に現在状態として表示されること。
+- 24時間以内かつ直接子なしで即時非表示になったversionはpending一覧に出ないこと。
+- 末端versionのpending申請を承認できること。
+- 承認後に`delete_requests.status='approved'`, `handled_at`, `handled_by`, `admin_note`が設定されること。
+- 承認後に`versions.is_hidden=1`, `hidden_reason='delete_request_approved'`, `hidden_at`, `download_blocked=1`になること。
+- 既に非表示のversionを承認しても既存の`hidden_reason`が上書きされないこと。
+- 承認後もD1 versions行、R2譜面ファイル、progressImageが残り、`file_deleted_at`が設定されないこと。
+- 直接子があるversionでは承認ボタンがdisabledになること。
+- 直接子がある申請をAPIで承認すると`DELETE_REQUEST_HAS_DESCENDANTS`になり、申請がpendingのまま、version状態も変わらないこと。
+- 削除申請を却下でき、adminNote未入力では`INVALID_ADMIN_NOTE`になること。
+- 却下後に`delete_requests.status='rejected'`, `handled_at`, `handled_by`, `admin_note`が設定されること。
+- 却下後、別のpending申請がなければ`versions.delete_requested_at`が解除されること。
+- `download_block_reason='delete_requested'`の場合だけDL制限が解除されること。
+- `withdrawn`, `superseded_by_completed_descendant`, `admin_blocked`, `admin_hidden`など他理由のDL制限が解除されないこと。
+- `is_hidden=true`のversionを却下しても公開状態へ戻らないこと。
+- 同じ申請を二重処理すると`DELETE_REQUEST_ALREADY_HANDLED`になること。
+- 承認、却下、直接子による拒否、競合、失敗が`admin_logs`へ記録されること。
+- `admin_logs.action`が`approve_delete_request`または`reject_delete_request`になること。
+- `admin_logs.detail`にrequest/version/chart ID、前後状態、直接子数、outcome/errorCode、管理メモ文字数が入ること。
+- ADMIN_TOKEN、password、HASH_SECRET、生IP、生UA、申請理由本文がHTML、console、admin_logsへ残らないこと。
+- 承認・却下後に管理一覧が再取得され、処理結果が画面に表示されること。
+- スマホ幅でも一覧確認、承認、却下が操作できること。
+- 公開一覧、初回投稿、追記投稿、DL、24時間ルール、進捗マップ、進捗画像、ツリー、中間履歴、お気に入りが壊れていないこと。
+
 ## FAV-01 確認項目
 
 投稿一覧version行のお気に入り★機能を確認する:

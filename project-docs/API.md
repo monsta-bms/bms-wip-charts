@@ -474,4 +474,143 @@ request body:
 | `RATE_LIMITED` | 429 | 短時間のパスワード試行上限超過。 |
 | `INVALID_REQUEST` | 400 | Content-TypeまたはJSON形式が不正。 |
 
-成功・失敗は `post_logs` の `withdraw_version` / `request_delete` として記録する。detailには`outcome`, `within24Hours`, `hasDescendants`, `versionId`, `chartId`, `hasReason`, `reasonLength`を記録し、passwordと理由本文は記録しない。R2削除、管理承認、却下、復旧はこのフェーズでは行わない。
+成功・失敗は `post_logs` の `withdraw_version` / `request_delete` として記録する。detailには`outcome`, `within24Hours`, `hasDescendants`, `versionId`, `chartId`, `hasReason`, `reasonLength`を記録し、passwordと理由本文は記録しない。R2削除と復旧はこのフェーズでは行わない。
+
+## 管理者向け削除申請API
+
+全APIで以下のheaderを必須にする。
+
+```http
+Authorization: Bearer <ADMIN_TOKEN>
+```
+
+ADMIN_TOKENはCloudflare secretで設定し、request URLやJSON bodyには含めない。
+
+### GET /api/admin/delete-requests
+
+pending削除申請を古い順に取得する。
+
+query parameters:
+
+| name | default | 内容 |
+| --- | ---: | --- |
+| `status` | `pending` | ADMIN-DELETE-01では`pending`のみ対応。 |
+| `page` | `1` | 1始まりのページ番号。 |
+| `pageSize` | `50` | 1ページ件数。最大100。 |
+
+成功レスポンス:
+
+```json
+{
+  "ok": true,
+  "items": [
+    {
+      "requestId": "delete_request_xxx",
+      "status": "pending",
+      "message": "申請理由",
+      "createdAt": "2026-07-11 12:00:00",
+      "versionId": "version_xxx",
+      "chartId": "chart_xxx",
+      "songTitle": "曲名",
+      "chartName": "差分名",
+      "versionLabel": "1-2-1",
+      "branchPath": "root/a/b/a",
+      "author": "author",
+      "progress": 59,
+      "versionCreatedAt": "2026-07-10 12:00:00",
+      "withdrawn": false,
+      "isHidden": false,
+      "hiddenReason": null,
+      "downloadBlocked": true,
+      "downloadBlockReason": "delete_requested",
+      "childVersionCount": 0,
+      "canApprove": true
+    }
+  ],
+  "page": 1,
+  "pageSize": 50,
+  "total": 1
+}
+```
+
+`password_hash`, R2 key, requester hash、ADMIN_TOKEN、HASH_SECRETは返さない。`isHidden=true`でもpending申請が存在する場合は現在状態として返す。
+
+### POST /api/admin/delete-requests/:requestId/approve
+
+pending削除申請を承認し、末端versionを論理非表示にする。
+
+request body:
+
+```json
+{
+  "adminNote": "任意。1000文字以内"
+}
+```
+
+成功レスポンス:
+
+```json
+{
+  "ok": true,
+  "requestId": "delete_request_xxx",
+  "versionId": "version_xxx",
+  "status": "approved",
+  "outcome": "version_hidden"
+}
+```
+
+更新内容:
+
+- `delete_requests.status='approved'`, `handled_at`, `handled_by='admin'`, `admin_note`を設定する。
+- `versions.is_hidden=1`, `hidden_at`, `hidden_reason='delete_request_approved'`, `download_blocked=1`, `updated_at`を設定する。
+- 既に非表示の場合は既存の`hidden_reason`を保持し、`outcome='already_hidden'`を返す。
+- 直接子がある場合は409 `DELETE_REQUEST_HAS_DESCENDANTS`とし、申請とversionを変更しない。
+- D1 version行、R2譜面ファイル、progressImageを物理削除せず、`file_deleted_at`も設定しない。
+
+### POST /api/admin/delete-requests/:requestId/reject
+
+pending削除申請を却下する。
+
+request body:
+
+```json
+{
+  "adminNote": "必須。1000文字以内"
+}
+```
+
+成功レスポンス:
+
+```json
+{
+  "ok": true,
+  "requestId": "delete_request_xxx",
+  "versionId": "version_xxx",
+  "status": "rejected",
+  "outcome": "request_rejected",
+  "downloadRestored": true
+}
+```
+
+更新内容:
+
+- `delete_requests.status='rejected'`, `handled_at`, `handled_by='admin'`, `admin_note`を設定する。
+- 同じversionに別のpending申請がなければ`versions.delete_requested_at`を解除する。
+- `download_block_reason='delete_requested'`の場合だけ`download_blocked`, reason, blocked_atを解除する。
+- 他理由のDL制限、`is_hidden`, `hidden_reason`, `withdrawn_at`は変更しない。
+
+管理APIエラー:
+
+| code | HTTP | 内容 |
+| --- | ---: | --- |
+| `ADMIN_AUTH_REQUIRED` | 401 | ADMIN_TOKENがない、または不一致。 |
+| `CONFIG_MISSING` | 500 | WorkerにADMIN_TOKENが設定されていない。 |
+| `DELETE_REQUEST_NOT_FOUND` | 404 | requestIdが存在しない。 |
+| `DELETE_REQUEST_ALREADY_HANDLED` | 409 | 申請がpendingではない。 |
+| `DELETE_REQUEST_HAS_DESCENDANTS` | 409 | 対象versionに直接子があり承認不可。 |
+| `INVALID_ADMIN_NOTE` | 400 | adminNoteの型、必須、長さが不正。 |
+| `DELETE_REQUEST_LIST_FAILED` | 500 | pending一覧取得失敗。 |
+| `DELETE_REQUEST_APPROVE_FAILED` | 500 | 承認処理失敗。 |
+| `DELETE_REQUEST_REJECT_FAILED` | 500 | 却下処理失敗。 |
+
+承認・却下・競合・失敗は`admin_logs`へ記録する。申請一覧の参照は記録しない。

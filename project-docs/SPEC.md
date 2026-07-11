@@ -445,7 +445,50 @@ MVPではサムネイルクリックによる拡大表示は実装しない。�
 - password、password_hash、HASH_SECRET、生IP、生UA、削除理由本文はログに出さない。
 - 同じIP/UAハッシュで10分以内に5回以上 `INVALID_PASSWORD` が記録された場合は `RATE_LIMITED` とする。
 - 成功・失敗は `post_logs` の既存action `withdraw_version` / `request_delete` に記録し、detailには `outcome`, `within24Hours`, `hasDescendants`, ID、理由有無と文字数を残す。
-- 管理承認、却下、通知、物理削除、復旧、申請一覧は後続フェーズとする。
+- 通知、物理削除、復旧、処理済み申請の履歴検索は後続フェーズとする。
+
+## 削除申請の管理
+
+管理UIは公開一覧へ埋め込まず、`docs/admin.html` の専用URLとして提供する。公開一覧には管理ページへのリンクを置かず、URLを隠すこと自体は認証手段としない。
+
+認証:
+
+- 全管理APIで `Authorization: Bearer <ADMIN_TOKEN>` を必須にする。
+- `ADMIN_TOKEN` はCloudflare secretで管理し、URL、HTML属性、console、D1ログへ出さない。
+- 管理ページではトークンをページのメモリ内だけに保持し、`localStorage`へ保存しない。
+- `ADMIN_TOKEN`未設定は`CONFIG_MISSING`、不一致は`ADMIN_AUTH_REQUIRED`とする。
+
+pending一覧:
+
+- `GET /api/admin/delete-requests?status=pending&page=1&pageSize=50` で古い申請から表示する。
+- `delete_requests`, `versions`, `charts`, `songs`を結合し、申請理由、申請日時、曲・差分・版、作者、進捗、現在状態、直接子数を返す。
+- `password_hash`, R2 key, requester hash、secretは返さない。
+- 24時間以内かつ直接子なしで即時非表示になったversionはpending申請を作らないため、この一覧には出ない。
+
+承認:
+
+- `POST /api/admin/delete-requests/:requestId/approve`を使い、`adminNote`は任意、1000文字以内とする。
+- `status='pending'`かつ直接子がないversionだけ承認できる。直接子がある場合は`DELETE_REQUEST_HAS_DESCENDANTS`を返し、申請とversionを変更しない。
+- 承認時は`delete_requests.status='approved'`, `handled_at`, `handled_by='admin'`, `admin_note`を設定する。
+- versionは`is_hidden=1`, `hidden_at`, `hidden_reason='delete_request_approved'`, `download_blocked=1`, `updated_at`を設定する。
+- 既に非表示のversionでは既存の`hidden_reason`を上書きせず、pending申請だけをapprovedにできる。
+- 承認は論理非表示であり、R2譜面ファイル、progressImage、D1 version行を物理削除せず、`file_deleted_at`も設定しない。
+
+却下:
+
+- `POST /api/admin/delete-requests/:requestId/reject`を使い、`adminNote`を必須、1000文字以内とする。
+- `delete_requests.status='rejected'`, `handled_at`, `handled_by='admin'`, `admin_note`を設定する。
+- 同じversionに別のpending申請がなければ`delete_requested_at`を解除する。
+- `download_block_reason='delete_requested'`の場合だけDL制限を解除する。`withdrawn`, `superseded_by_completed_descendant`, `admin_blocked`, `admin_hidden`など別理由の制限は保持する。
+- 却下時に`is_hidden`, `hidden_reason`, `withdrawn_at`を復旧しない。
+
+監査:
+
+- 管理者の承認・却下・競合・失敗は`post_logs`ではなく`admin_logs`へ記録する。
+- actionは`approve_delete_request`または`reject_delete_request`とする。
+- detailにはrequest/version/chart ID、前後状態、直接子数、outcome/errorCode、管理メモ文字数を記録する。
+- ADMIN_TOKEN、password、HASH_SECRET、生IP、生UA、申請理由本文は`admin_logs`へ記録しない。
+- R2物理削除、親versionの構造保持削除、復旧、複数管理者識別は後続フェーズとする。
 
 ## 自動削除準備
 
@@ -472,6 +515,9 @@ MVPの自動削除対象reason候補:
 - `POST /api/charts/:chartId/versions`
 - `GET /api/files/:fileId`
 - `GET /api/progress-images/:versionId`
+- `GET /api/admin/delete-requests`
+- `POST /api/admin/delete-requests/:requestId/approve`
+- `POST /api/admin/delete-requests/:requestId/reject`
 - `POST /api/admin/hide-version`
 - `POST /api/admin/ban`
 

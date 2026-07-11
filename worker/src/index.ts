@@ -121,9 +121,13 @@ async function routeRequest(request: Request, env: Env): Promise<Response> {
     return handleFileRoute(request, env, decodeURIComponent(fileMatch[1]));
   }
 
-  const adminMatch = path.match(/^\/api\/admin\/([^/]+)$/);
+  const adminMatch = path.match(/^\/api\/admin(?:\/(.*))?$/);
   if (adminMatch) {
-    return handleAdminRoute(request, env, decodeURIComponent(adminMatch[1]));
+    const segments = (adminMatch[1] ?? "")
+      .split("/")
+      .filter(Boolean)
+      .map((segment) => decodeURIComponent(segment));
+    return handleAdminRoute(request, env, segments);
   }
 
   return notFound(request, env);

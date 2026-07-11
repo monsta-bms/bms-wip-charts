@@ -1,0 +1,489 @@
+:root {
+  color-scheme: light;
+  font-family: Inter, "Noto Sans JP", "Yu Gothic UI", sans-serif;
+  color: #1f2a33;
+  background: #eef2f4;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  background: #176b55;
+  border: 1px solid #176b55;
+  border-radius: 5px;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+  min-height: 38px;
+  padding: 8px 14px;
+}
+
+button:hover,
+button:focus-visible {
+  background: #0f5744;
+  border-color: #0f5744;
+}
+
+button:disabled {
+  background: #edf1f3;
+  border-color: #d6dee3;
+  color: #8a969f;
+  cursor: not-allowed;
+}
+
+.admin-shell {
+  margin: 0 auto;
+  max-width: 1320px;
+  padding: 28px 24px 48px;
+}
+
+.admin-header,
+.admin-auth,
+.admin-queue-header,
+.admin-auth-controls,
+.admin-dialog-header,
+.admin-dialog-actions,
+.admin-pagination {
+  align-items: center;
+  display: flex;
+}
+
+.admin-header {
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.admin-kicker,
+.admin-header h1,
+.admin-auth h2,
+.admin-queue h2,
+.admin-queue p,
+.admin-auth p {
+  margin: 0;
+}
+
+.admin-kicker {
+  color: #26735f;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.admin-header h1 {
+  font-size: 1.55rem;
+  margin-top: 3px;
+}
+
+.admin-environment {
+  background: #e3ece8;
+  border: 1px solid #c5d8d1;
+  border-radius: 999px;
+  color: #49645a;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 5px 9px;
+}
+
+.admin-auth,
+.admin-queue {
+  background: #fff;
+  border: 1px solid #d7e0e5;
+  border-radius: 7px;
+  box-shadow: 0 7px 24px rgba(31, 47, 58, 0.06);
+}
+
+.admin-auth {
+  gap: 24px;
+  justify-content: space-between;
+  padding: 16px 18px;
+}
+
+.admin-auth h2,
+.admin-queue h2 {
+  font-size: 1rem;
+}
+
+.admin-auth p,
+.admin-queue p {
+  color: #6b7882;
+  font-size: 0.76rem;
+  margin-top: 4px;
+}
+
+.admin-auth-form {
+  min-width: min(100%, 430px);
+}
+
+.admin-auth-form label,
+.admin-dialog-panel > label {
+  color: #5d6b75;
+  display: block;
+  font-size: 0.74rem;
+  font-weight: 800;
+  margin-bottom: 5px;
+}
+
+.admin-auth-controls {
+  gap: 8px;
+}
+
+input,
+textarea {
+  background: #fff;
+  border: 1px solid #c9d4dc;
+  border-radius: 5px;
+  color: #1f2a33;
+  min-width: 0;
+  padding: 9px 10px;
+  width: 100%;
+}
+
+input:focus,
+textarea:focus {
+  border-color: #438b78;
+  outline: 3px solid rgba(67, 139, 120, 0.15);
+}
+
+.admin-status {
+  border-radius: 6px;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  margin: 14px 0;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+}
+
+.admin-status[data-kind="success"] {
+  background: #eaf7f1;
+  border: 1px solid #b9ddcf;
+  color: #155c47;
+}
+
+.admin-status[data-kind="error"] {
+  background: #fff0f2;
+  border: 1px solid #edc6ce;
+  color: #81384a;
+}
+
+.admin-queue {
+  margin-top: 16px;
+  overflow: hidden;
+}
+
+.admin-queue-header {
+  justify-content: space-between;
+  padding: 16px 18px;
+}
+
+.secondary-button {
+  background: #fff;
+  border-color: #b9c8d0;
+  color: #4e606c;
+}
+
+.secondary-button:hover,
+.secondary-button:focus-visible {
+  background: #f3f7f6;
+  border-color: #7d9d92;
+  color: #214f42;
+}
+
+.admin-list-header,
+.admin-request-row {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(190px, 0.9fr) minmax(280px, 1.35fr) minmax(210px, 0.9fr) 168px;
+}
+
+.admin-list-header {
+  background: #f5f7f8;
+  border-bottom: 1px solid #dbe3e8;
+  border-top: 1px solid #dbe3e8;
+  color: #6d7b85;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 9px 18px;
+}
+
+.admin-request-row {
+  align-items: center;
+  border-bottom: 1px solid #e1e7eb;
+  padding: 15px 18px;
+}
+
+.admin-request-row:last-child {
+  border-bottom: 0;
+}
+
+.admin-request-row.is-blocked {
+  background: #fffaf0;
+}
+
+.admin-cell {
+  min-width: 0;
+}
+
+.admin-primary,
+.admin-secondary,
+.admin-message,
+.admin-state-list {
+  margin: 0;
+}
+
+.admin-primary {
+  font-size: 0.9rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.admin-secondary,
+.admin-message {
+  color: #667580;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  margin-top: 4px;
+}
+
+.admin-message {
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  display: -webkit-box;
+  overflow: hidden;
+}
+
+.admin-state-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.admin-state {
+  background: #eef3f5;
+  border: 1px solid #d7e0e5;
+  border-radius: 999px;
+  color: #5d6c77;
+  font-size: 0.66rem;
+  font-weight: 800;
+  padding: 3px 7px;
+}
+
+.admin-state.is-warning {
+  background: #fff3d8;
+  border-color: #ead093;
+  color: #775600;
+}
+
+.admin-state.is-hidden {
+  background: #edf0f4;
+  color: #4f5d69;
+}
+
+.admin-actions {
+  display: flex;
+  gap: 7px;
+  justify-content: flex-end;
+}
+
+.admin-actions button {
+  min-width: 72px;
+}
+
+.admin-reject-button {
+  background: #fff;
+  border-color: #c77a87;
+  color: #8a3649;
+}
+
+.admin-reject-button:hover,
+.admin-reject-button:focus-visible {
+  background: #fff1f3;
+  border-color: #a64a60;
+  color: #743044;
+}
+
+.admin-empty {
+  color: #687680;
+  padding: 38px 18px;
+  text-align: center;
+}
+
+.admin-pagination {
+  border-top: 1px solid #e1e7eb;
+  gap: 12px;
+  justify-content: flex-end;
+  padding: 12px 18px;
+}
+
+.admin-pagination span {
+  color: #64727d;
+  font-size: 0.76rem;
+  min-width: 64px;
+  text-align: center;
+}
+
+.admin-dialog {
+  background: transparent;
+  border: 0;
+  max-height: min(90vh, 720px);
+  max-width: min(92vw, 590px);
+  padding: 0;
+  width: 100%;
+}
+
+.admin-dialog::backdrop {
+  backdrop-filter: blur(2px);
+  background: rgba(25, 38, 47, 0.48);
+}
+
+.admin-dialog-panel {
+  background: #fff;
+  border: 1px solid #d6e0e5;
+  border-radius: 7px;
+  box-shadow: 0 24px 70px rgba(24, 39, 50, 0.22);
+  display: grid;
+  gap: 15px;
+  margin: 0;
+  max-height: min(90vh, 720px);
+  overflow: auto;
+  padding: 20px;
+}
+
+.admin-dialog-header {
+  justify-content: space-between;
+}
+
+.admin-dialog-type,
+.admin-dialog-header h2,
+.admin-dialog-hint,
+.admin-dialog-message {
+  margin: 0;
+}
+
+.admin-dialog-type {
+  color: #64747e;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.admin-dialog-header h2 {
+  font-size: 1.15rem;
+  margin-top: 2px;
+}
+
+.dialog-close {
+  background: transparent;
+  border-color: transparent;
+  color: #60707b;
+  font-size: 1.3rem;
+  min-height: 34px;
+  padding: 0;
+  width: 34px;
+}
+
+.admin-dialog-summary {
+  background: #f5f7f8;
+  border: 1px solid #dce4e8;
+  border-radius: 6px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  padding: 12px;
+}
+
+.admin-dialog-summary dt {
+  color: #6c7a84;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.admin-dialog-summary dd {
+  font-size: 0.85rem;
+  font-weight: 800;
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.admin-dialog-hint {
+  color: #687680;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.admin-dialog-message {
+  background: #fff0f2;
+  border: 1px solid #edc6ce;
+  border-radius: 5px;
+  color: #81384a;
+  font-size: 0.8rem;
+  padding: 9px 10px;
+  white-space: pre-wrap;
+}
+
+.admin-dialog-actions {
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.admin-dialog.is-rejecting #adminDecisionSubmit {
+  background: #9b4054;
+  border-color: #9b4054;
+}
+
+@media (max-width: 860px) {
+  .admin-list-header {
+    display: none;
+  }
+
+  .admin-request-row {
+    align-items: start;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 620px) {
+  .admin-shell {
+    padding: 18px 12px 32px;
+  }
+
+  .admin-auth,
+  .admin-auth-controls,
+  .admin-request-row {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .admin-auth-form {
+    min-width: 0;
+  }
+
+  .admin-actions,
+  .admin-actions button,
+  .admin-dialog-actions,
+  .admin-dialog-actions button {
+    width: 100%;
+  }
+
+  .admin-dialog-summary {
+    grid-template-columns: 1fr;
+  }
+}
