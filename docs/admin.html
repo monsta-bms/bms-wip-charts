@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex,nofollow">
     <title>管理 | BMS制作途中譜面共有</title>
-    <link rel="stylesheet" href="./admin.css?v=r2-cleanup-01">
+    <link rel="stylesheet" href="./admin.css?v=ban-01">
   </head>
   <body>
     <main class="admin-shell">
@@ -84,6 +84,54 @@
           <button id="adminCleanupNextPage" type="button" class="secondary-button" disabled>次へ</button>
         </nav>
       </section>
+
+      <section class="admin-queue admin-ban" aria-labelledby="adminBanLogsTitle">
+        <div class="admin-queue-header">
+          <div>
+            <h2 id="adminBanLogsTitle">最近の投稿ログ</h2>
+            <p id="adminBanLogsSummary">認証後に短縮ハッシュを読み込みます。</p>
+          </div>
+          <button id="adminBanLogsRefresh" type="button" class="secondary-button" disabled>再読み込み</button>
+        </div>
+        <p class="admin-ban-warning">IP BANは共有回線の利用者を巻き込む可能性があります。対象ログと期間を確認してください。</p>
+        <div class="admin-ban-log-header" aria-hidden="true">
+          <span>日時・結果</span><span>対象</span><span>短縮ハッシュ</span><span>BAN作成</span>
+        </div>
+        <div id="adminBanLogList" class="admin-ban-log-list"></div>
+        <nav class="admin-pagination" aria-label="投稿ログページ">
+          <button id="adminBanLogsPrevious" type="button" class="secondary-button" disabled>前へ</button>
+          <span id="adminBanLogsPageStatus">1 / 1</span>
+          <button id="adminBanLogsNext" type="button" class="secondary-button" disabled>次へ</button>
+        </nav>
+      </section>
+
+      <section class="admin-queue admin-ban" aria-labelledby="adminBansTitle">
+        <div class="admin-queue-header admin-ban-list-controls">
+          <div>
+            <h2 id="adminBansTitle">BAN管理</h2>
+            <p id="adminBansSummary">有効なBANを表示します。</p>
+          </div>
+          <div class="admin-ban-filter">
+            <label for="adminBanState">状態</label>
+            <select id="adminBanState">
+              <option value="active">active</option>
+              <option value="expired">expired</option>
+              <option value="disabled">disabled</option>
+              <option value="all">all</option>
+            </select>
+            <button id="adminBansRefresh" type="button" class="secondary-button" disabled>再読み込み</button>
+          </div>
+        </div>
+        <div class="admin-ban-list-header" aria-hidden="true">
+          <span>対象</span><span>理由・期間</span><span>状態</span><span>操作</span>
+        </div>
+        <div id="adminBanList" class="admin-ban-list"></div>
+        <nav class="admin-pagination" aria-label="BAN一覧ページ">
+          <button id="adminBansPrevious" type="button" class="secondary-button" disabled>前へ</button>
+          <span id="adminBansPageStatus">1 / 1</span>
+          <button id="adminBansNext" type="button" class="secondary-button" disabled>次へ</button>
+        </nav>
+      </section>
     </main>
 
     <dialog id="adminDecisionDialog" class="admin-dialog">
@@ -115,6 +163,53 @@
       </form>
     </dialog>
 
-    <script src="./admin.js?v=r2-cleanup-01"></script>
+    <dialog id="adminBanCreateDialog" class="admin-dialog">
+      <form id="adminBanCreateForm" class="admin-dialog-panel">
+        <header class="admin-dialog-header">
+          <div><p class="admin-dialog-type">CREATE BAN</p><h2>BANを作成</h2></div>
+          <button type="button" class="dialog-close" data-ban-create-close aria-label="閉じる">x</button>
+        </header>
+        <dl class="admin-dialog-summary">
+          <div><dt>投稿ログ</dt><dd id="adminBanSourceLog"></dd></div>
+          <div><dt>対象</dt><dd id="adminBanTarget"></dd></div>
+          <div><dt>短縮ハッシュ</dt><dd id="adminBanHashShort"></dd></div>
+          <div><dt>注意</dt><dd id="adminBanTargetWarning"></dd></div>
+        </dl>
+        <label for="adminBanReason">BAN理由</label>
+        <textarea id="adminBanReason" rows="4" maxlength="500" required></textarea>
+        <label for="adminBanDuration">期間</label>
+        <select id="adminBanDuration" required>
+          <option value="24h">24時間</option>
+          <option value="7d" selected>7日</option>
+          <option value="30d">30日</option>
+          <option value="permanent">無期限</option>
+        </select>
+        <p id="adminBanCreateMessage" class="admin-dialog-message" role="alert" hidden></p>
+        <div class="admin-dialog-actions">
+          <button type="button" class="secondary-button" data-ban-create-close>キャンセル</button>
+          <button id="adminBanCreateSubmit" type="submit">BANを作成</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="adminBanLiftDialog" class="admin-dialog">
+      <form id="adminBanLiftForm" class="admin-dialog-panel">
+        <header class="admin-dialog-header">
+          <div><p class="admin-dialog-type">LIFT BAN</p><h2>BANを解除</h2></div>
+          <button type="button" class="dialog-close" data-ban-lift-close aria-label="閉じる">x</button>
+        </header>
+        <p id="adminBanLiftTarget" class="admin-primary"></p>
+        <label for="adminBanLiftNote">解除理由</label>
+        <textarea id="adminBanLiftNote" rows="4" maxlength="1000" required></textarea>
+        <p id="adminBanLiftMessage" class="admin-dialog-message" role="alert" hidden></p>
+        <div class="admin-dialog-actions">
+          <button type="button" class="secondary-button" data-ban-lift-close>キャンセル</button>
+          <button id="adminBanLiftSubmit" type="submit">BANを解除</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="./admin.js?v=ban-01"></script>
+    <script src="./admin-ban.js?v=ban-01"></script>
   </body>
 </html>

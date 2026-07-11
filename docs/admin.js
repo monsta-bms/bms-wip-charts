@@ -145,6 +145,8 @@
     return body;
   }
 
+  window.adminApiRequest = requestJson;
+
   function addState(container, label, kind = "") {
     const badge = createElement("span", `admin-state${kind ? ` ${kind}` : ""}`, label);
     container.append(badge);
@@ -510,6 +512,9 @@
     state.page = 1;
     state.cleanupPage = 1;
     await loadRequests();
+    if (state.token) {
+      window.dispatchEvent(new CustomEvent("admin-authenticated"));
+    }
   });
   refreshButton.addEventListener("click", loadRequests);
   previousButton.addEventListener("click", async () => {

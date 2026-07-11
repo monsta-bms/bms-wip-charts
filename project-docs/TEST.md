@@ -124,6 +124,33 @@ pending削除申請の管理MVPを確認する:
 - cleanup後も`progress_image_key`と進捗画像R2 objectが残り、`GET /api/progress-images/:versionId`の既存方針が維持されること。
 - cleanup成功は`admin_logs.action='r2_cleanup_delete_file'`、失敗は`r2_cleanup_delete_file_failed`で記録されること。
 - `admin_logs.detail`にversion/chart、hidden reason/at、保持日数、R2 key有無、outcome/errorCode、file_deleted_at、SHA-256有無、fileSizeが入り、ADMIN_TOKEN、secret、生IP、生UA、raw R2 keyが残らないこと。
+
+## BAN-01 確認項目
+
+- 正しい`ADMIN_TOKEN`で`GET /api/admin/post-logs`から最近の投稿ログを取得できること。
+- 投稿ログ一覧には短縮`ipHashShort` / `uaHashShort` / `fileSha256Short`だけが表示され、full hash、生IP、生UAがAPI・HTML・consoleに出ないこと。
+- `unknown` IP marker由来のログでは`canBanIp=false`となり、IP BAN作成ボタンが無効になること。
+- 投稿ログから`ip_hash` BANを作成できること。
+- `file_sha256`が記録された投稿ログからfile SHA BANを作成できること。
+- UA BANの作成導線およびIP+UA組み合わせBANがないこと。
+- BAN理由が必須で、空または長すぎる値は`INVALID_BAN_REASON`になること。
+- `duration`が`24h`, `7d`, `30d`, `permanent`以外なら`INVALID_BAN_DURATION`になること。
+- source logに対象hashがない場合は`BAN_SOURCE_HASH_NOT_AVAILABLE`になること。
+- BAN作成後、同じIPからの初回投稿がmultipart解析前にHTTP 403 `POSTING_BLOCKED`になること。
+- BAN作成後、同じIPからの追記投稿がmultipart解析前にHTTP 403 `POSTING_BLOCKED`になること。
+- file SHA BAN対象ファイルはSHA計算後、R2保存・D1 version作成前に`POSTING_BLOCKED`になること。
+- BAN拒否レスポンスがbanId、banType、banValue、hash、詳細期限を返さないこと。
+- BAN拒否が既存action、`result=rejected`, `error_code=POSTING_BLOCKED`で`post_logs`に記録され、detailにraw hashや生IP/UAがないこと。
+- BAN判定DB障害または`HASH_SECRET`未設定時に`BAN_CHECK_FAILED`でfail closedになること。
+- active/expired/disabled/allのBAN一覧を取得でき、full `ban_value`が返らないこと。
+- BAN解除後、同じ投稿元またはファイルで投稿できること。
+- 同一BANの再作成で既存行が再有効化されること。
+- 既に解除済みのBAN解除が`already_lifted`として冪等成功すること。
+- `expired_at`経過後は投稿でき、BAN一覧ではexpiredになること。
+- BAN中でも公開一覧閲覧、DL、取り消し、削除申請、管理操作、管理承認/却下、R2 cleanupが従来通り動作すること。
+- BAN作成・解除が`admin_logs`の`create_ban` / `lift_ban`に記録されること。
+- `admin_logs.detail`に短縮hash、sourcePostLogId、期間、結果、エラーコード等だけが入り、full hash、生IP、生UA、ADMIN_TOKEN、HASH_SECRET、解除理由本文が残らないこと。
+- 既存の初回投稿、追記投稿、管理承認/却下、R2 cleanup、progressMap、progressImageが壊れていないこと。
 - 管理画面のR2 cleanupセクションが削除申請管理と分離され、1件ごとに確認文字列を要求すること。
 - cleanup実行後に候補一覧が再読み込みされ、progressImage保持が画面に明記されること。
 - 公開一覧、投稿、追記、DL制御、取り消し、削除申請、管理承認/却下、お気に入りが壊れていないこと。

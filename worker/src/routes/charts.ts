@@ -2,7 +2,9 @@ import { analyzeBmsBuffer, BmsAnalysis, normalizeText, parseBmsMetadata } from "
 import { sanitizeFileName, validateUploadFile } from "../utils/fileValidation";
 import { hashWithSecret, md5HexFromBuffer, sha256HexFromBuffer } from "../utils/hash";
 import { prepareProgressMap } from "../utils/progressMap";
+import { buildRequestFingerprint } from "../utils/requestFingerprint";
 import { apiError, Env, errorDetail, methodNotAllowed, ok } from "../utils/response";
+import { findActiveFileBan } from "./bans";
 
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 200;
@@ -281,24 +283,9 @@ function makeId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID()}`;
 }
 
-function getClientIpMarker(request: Request): string {
-  const cfIp = request.headers.get("CF-Connecting-IP")?.trim();
-  if (cfIp) {
-    return cfIp;
-  }
-
-  const forwardedFor = request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim();
-  return forwardedFor || "unknown";
-}
-
-function getUserAgentMarker(request: Request): string {
-  return request.headers.get("User-Agent")?.trim() || "unknown";
-}
-
 async function buildPostLogContext(request: Request, secret: string): Promise<PostLogContext> {
-  const ipHash = await hashWithSecret(`ip:${getClientIpMarker(request)}`, secret);
-  const uaHash = await hashWithSecret(`ua:${getUserAgentMarker(request)}`, secret);
-  return { ipHash, uaHash };
+  const fingerprint = await buildRequestFingerprint(request, secret);
+  return { ipHash: fingerprint.ipHash, uaHash: fingerprint.uaHash };
 }
 
 function buildBranchSuffix(row: VersionRow): string {
@@ -940,6 +927,27 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
     }
 
     const input = parsed.value;
+    try {
+      if (await findActiveFileBan(env, input.fileSha256)) {
+        return failCreateChart(request, env, context, {
+          status: 403,
+          code: "POSTING_BLOCKED",
+          message: "投稿が制限されています。",
+          detail: "Posting is not available."
+        });
+      }
+    } catch (error) {
+      console.error("[create-chart-file-ban-check] failed before R2 upload", {
+        code: "BAN_CHECK_FAILED",
+        message: errorDetail(error)
+      });
+      return failCreateChart(request, env, context, {
+        status: 503,
+        code: "BAN_CHECK_FAILED",
+        message: "投稿可否の確認に失敗しました。",
+        detail: "File posting protection lookup failed."
+      });
+    }
     const normalizedTitle = normalizeText(input.title);
     const normalizedSubtitle = normalizeText(input.subtitle);
     const normalizedArtist = normalizeText(input.artist);
@@ -957,7 +965,6 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
     } catch (error) {
       console.error("[create-chart-duplicate-check] failed to check duplicate file", {
         code: "DB_INSERT_FAILED",
-        fileSha256: input.fileSha256,
         message: errorDetail(error)
       });
 

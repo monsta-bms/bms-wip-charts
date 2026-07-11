@@ -718,3 +718,125 @@ cleanupエラー:
 | `CLEANUP_CANDIDATE_LIST_FAILED` | 500 | 候補一覧取得失敗。 |
 
 cleanup実行結果は`admin_logs.action='r2_cleanup_delete_file'`、失敗は`r2_cleanup_delete_file_failed`で記録する。detailにはversion/chart、非表示理由・日時、保持日数、R2 key有無、outcome/errorCode、削除記録日時、SHA-256有無、ファイルサイズだけを含める。
+
+## BAN管理API
+
+以下はすべて`Authorization: Bearer <ADMIN_TOKEN>`を必須とする。レスポンスにはfull `ip_hash`、full `ua_hash`、full `file_sha256`、生IP、生UA、`ADMIN_TOKEN`、`HASH_SECRET`を含めない。
+
+### GET /api/admin/post-logs
+
+query:
+
+| name | default | 制約 |
+| --- | ---: | --- |
+| `page` | 1 | 1以上 |
+| `pageSize` | 50 | 最大100 |
+
+最近の投稿ログを新しい順で返す。hashは先頭12文字の短縮値だけを返す。`canBanIp=false`はIP hash欠落または`unknown` marker由来を表す。
+
+```json
+{
+  "ok": true,
+  "items": [
+    {
+      "postLogId": "post_log_xxx",
+      "createdAt": "2026-07-11 12:00:00",
+      "action": "create_chart",
+      "result": "accepted",
+      "errorCode": null,
+      "ipHashShort": "0123456789ab...",
+      "uaHashShort": "abcdef012345...",
+      "fileSha256Short": "fedcba987654...",
+      "hasIpHash": true,
+      "hasUaHash": true,
+      "hasFileSha256": true,
+      "canBanIp": true,
+      "versionId": "version_xxx",
+      "chartId": "chart_xxx",
+      "detailSummary": "create_chart / accepted"
+    }
+  ],
+  "page": 1,
+  "pageSize": 50,
+  "total": 1
+}
+```
+
+### POST /api/admin/bans
+
+管理UIはfull hashを送らず、対象`post_logs`のIDを送る。
+
+```json
+{
+  "sourcePostLogId": "post_log_xxx",
+  "targetType": "ip_hash",
+  "reason": "荒らし投稿",
+  "duration": "7d"
+}
+```
+
+`targetType`は`ip_hash`または`file_sha256`、`duration`は`24h`, `7d`, `30d`, `permanent`。Workerがsource logから対応するfull hashを取得し、`bans`へ保存する。同一type/valueが既にある場合は既存行を再有効化する。
+
+```json
+{
+  "ok": true,
+  "banId": "ban_xxx",
+  "banType": "ip_hash",
+  "banValueShort": "0123456789ab...",
+  "active": true,
+  "expiredAt": "2026-07-18 12:00:00",
+  "reactivated": false,
+  "outcome": "ban_created"
+}
+```
+
+### GET /api/admin/bans
+
+queryの`state`は`active`（default）, `expired`, `disabled`, `all`。`page`/`pageSize`はpost-logsと同じ。activeは`active=1`, `disabled_at IS NULL`, `expired_at IS NULL OR expired_at > CURRENT_TIMESTAMP`で判定する。
+
+返却項目は`banId`, `banType`, `banValueShort`, `reason`, `active`, `storedActive`, `createdAt`, `updatedAt`, `expiredAt`, `disabledAt`, `state`。full `ban_value`は返さない。
+
+### POST /api/admin/bans/:banId/lift
+
+```json
+{
+  "adminNote": "解除理由"
+}
+```
+
+解除時は`active=0`, `disabled_at=CURRENT_TIMESTAMP`, `updated_at=CURRENT_TIMESTAMP`とする。既に解除済みの場合は冪等成功として`outcome: "already_lifted"`を返す。解除理由はschema変更を行わず`admin_logs.detail`へ長さだけを記録し、本文は保存しない。
+
+### 投稿APIでのBAN判定
+
+`POST /api/charts`と`POST /api/charts/:chartId/versions`は、multipart解析前にrequest fingerprint BANを照合する。file SHA-256 BANはファイルSHA計算後、R2保存前に照合する。BAN時は次の一般化レスポンスだけを返す。
+
+```json
+{
+  "code": "POSTING_BLOCKED",
+  "message": "投稿が制限されています。",
+  "detail": "Posting is not available."
+}
+```
+
+BAN関連エラー:
+
+| code | HTTP | 内容 |
+| --- | ---: | --- |
+| `POSTING_BLOCKED` | 403 | active BANに一致。対象詳細は返さない。 |
+| `BAN_CHECK_FAILED` | 503 | BAN照合または保護設定確認に失敗。fail closed。 |
+| `BAN_NOT_FOUND` | 404 | banIdが存在しない。 |
+| `BAN_ALREADY_DISABLED` | 409 | 予約コード。MVPは冪等`already_lifted`を返す。 |
+| `INVALID_BAN_TARGET_TYPE` | 400 | targetTypeまたはJSON bodyが不正。 |
+| `INVALID_BAN_DURATION` | 400 | durationが不正。 |
+| `INVALID_BAN_REASON` | 400 | reasonが空または長すぎる。 |
+| `INVALID_BAN_STATE` | 400 | BAN一覧stateが不正。 |
+| `BAN_SOURCE_LOG_NOT_FOUND` | 404 | sourcePostLogIdが存在しない。 |
+| `BAN_SOURCE_HASH_NOT_AVAILABLE` | 409 | 対象hashがない、またはunknown IP由来。 |
+| `BAN_CREATE_FAILED` | 500 | BAN作成・再有効化失敗。 |
+| `BAN_LIFT_FAILED` | 400/500 | 解除body不正またはD1更新失敗。 |
+| `BAN_LIST_FAILED` | 500 | BAN一覧取得失敗。 |
+| `POST_LOG_LIST_FAILED` | 500 | 投稿ログ一覧取得失敗。 |
+| `ADMIN_AUTH_REQUIRED` | 401 | ADMIN_TOKENがない、または不一致。 |
+| `CONFIG_MISSING` | 500 | ADMIN_TOKENまたは管理操作に必要なHASH_SECRETが未設定。 |
+
+BAN拒否は既存action（`create_chart` / `append_version`）、`result='rejected'`, `error_code='POSTING_BLOCKED'`で`post_logs`へ記録する。detailにはstage、banType、targetKind、SHA有無、errorCodeだけを入れ、raw ban valueや生IP/UAは入れない。BAN作成・解除は`admin_logs.action='create_ban'` / `'lift_ban'`で記録する。

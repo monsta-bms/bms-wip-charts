@@ -1,4 +1,10 @@
 import { apiError, Env, errorDetail, methodNotAllowed, ok } from "../utils/response";
+import {
+  createAdminBan,
+  liftAdminBan,
+  listAdminBans,
+  listAdminPostLogs
+} from "./bans";
 import { deleteR2CleanupFile, listR2CleanupCandidates } from "./r2Cleanup";
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -900,6 +906,28 @@ export async function handleAdminRoute(
     return listPendingDeleteRequests(request, env);
   }
 
+  if (segments.length === 1 && segments[0] === "post-logs") {
+    return listAdminPostLogs(request, env);
+  }
+
+  if (segments.length === 1 && segments[0] === "bans") {
+    if (request.method === "GET") {
+      return listAdminBans(request, env);
+    }
+    if (request.method === "POST") {
+      return createAdminBan(request, env);
+    }
+    return methodNotAllowed(request, env, request.method);
+  }
+
+  if (
+    segments.length === 3
+    && segments[0] === "bans"
+    && segments[2] === "lift"
+  ) {
+    return liftAdminBan(request, env, segments[1]);
+  }
+
   if (segments.length === 1 && segments[0] === "r2-cleanup-candidates") {
     return listR2CleanupCandidates(request, env);
   }
@@ -930,14 +958,6 @@ export async function handleAdminRoute(
       hidden: false,
       mode: "stub",
       message: "Version hiding is not implemented in Phase 9."
-    });
-  }
-
-  if (segments.length === 1 && request.method === "POST" && segments[0] === "ban") {
-    return ok(request, env, {
-      banned: false,
-      mode: "stub",
-      message: "Ban registration is not implemented in Phase 9."
     });
   }
 

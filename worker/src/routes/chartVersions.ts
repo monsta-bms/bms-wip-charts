@@ -2,7 +2,9 @@ import { analyzeBmsBuffer, BmsAnalysis, normalizeText, parseBmsMetadata } from "
 import { sanitizeFileName, validateUploadFile } from "../utils/fileValidation";
 import { hashWithSecret, md5HexFromBuffer, sha256HexFromBuffer } from "../utils/hash";
 import { prepareAppendProgressMap } from "../utils/progressMap";
+import { buildRequestFingerprint } from "../utils/requestFingerprint";
 import { apiError, Env, errorDetail, methodNotAllowed, ok } from "../utils/response";
+import { findActiveFileBan } from "./bans";
 
 type ApiFailure = {
   status: number;
@@ -80,21 +82,9 @@ function makeId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID()}`;
 }
 
-function getClientIpMarker(request: Request): string {
-  return request.headers.get("CF-Connecting-IP")?.trim()
-    || request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim()
-    || "unknown";
-}
-
-function getUserAgentMarker(request: Request): string {
-  return request.headers.get("User-Agent")?.trim() || "unknown";
-}
-
 async function buildPostLogContext(request: Request, secret: string): Promise<PostLogContext> {
-  return {
-    ipHash: await hashWithSecret(`ip:${getClientIpMarker(request)}`, secret),
-    uaHash: await hashWithSecret(`ua:${getUserAgentMarker(request)}`, secret)
-  };
+  const fingerprint = await buildRequestFingerprint(request, secret);
+  return { ipHash: fingerprint.ipHash, uaHash: fingerprint.uaHash };
 }
 
 function parseBooleanField(value: string): boolean {
@@ -612,6 +602,28 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
     }
 
     const input = parsed.value;
+    try {
+      if (await findActiveFileBan(env, input.fileSha256)) {
+        return failAppendVersion(request, env, context, {
+          status: 403,
+          code: "POSTING_BLOCKED",
+          message: "投稿が制限されています。",
+          detail: "Posting is not available."
+        });
+      }
+    } catch (error) {
+      console.error("[append-version-file-ban-check] failed before R2 upload", {
+        code: "BAN_CHECK_FAILED",
+        chartId,
+        message: errorDetail(error)
+      });
+      return failAppendVersion(request, env, context, {
+        status: 503,
+        code: "BAN_CHECK_FAILED",
+        message: "投稿可否の確認に失敗しました。",
+        detail: "File posting protection lookup failed."
+      });
+    }
     const parentValidation = await validateChartAndParent(request, env, context, chartId, input.parentVersionId);
     if (!parentValidation.ok) {
       return parentValidation.response;
@@ -646,7 +658,6 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
     } catch (error) {
       console.error("[append-version-duplicate-check] failed to check duplicate file", {
         code: "DB_READ_FAILED",
-        fileSha256: input.fileSha256,
         message: errorDetail(error)
       });
       return failAppendVersion(request, env, context, {

@@ -534,6 +534,27 @@ MVPの自動削除対象reason候補:
 
 自動削除時はD1行を物理削除せず、`is_hidden=1` と `hidden_reason='auto_deleted_after_download_block'` にし、`file_deleted_at` と `file_delete_reason` を保存する。進捗画像は履歴確認用として残す。
 
+## BAN-01 投稿制限
+
+BANは、ログインなし投稿サイトで管理者が有害な初回投稿・追記投稿を明示的に制限するために使う。閲覧、DL、取り消し、削除申請、管理操作、管理承認・却下、R2 cleanupはBAN対象外とし、投稿者が自分の投稿を整理する経路は塞がない。
+
+MVPで管理画面から作成できる対象は次の2種類とする。
+
+- `ip_hash`: 投稿リクエスト元のIP markerを`HASH_SECRET`でハッシュ化した値。共有回線を巻き込む可能性があるため、管理画面に注意を表示する。
+- `file_sha256`: 同一内容の譜面ファイルの再投稿を止める補助対象。
+
+`ua_hash`は既存BANデータとの照合互換だけを維持し、管理画面から作成しない。IP+UA組み合わせBANは現schemaで安全に表現できないため未対応とし、IP行とUA行をAND条件の代用として作成してはならない。
+
+IP markerは本番では`CF-Connecting-IP`を優先し、ローカル互換時だけ`X-Forwarded-For`先頭値を使う。markerが取得できない場合は`unknown`をハッシュ化して投稿ログへ残すが、そのログからIP BANは作成できない。ハッシュ規則は既存`post_logs`と共通化し、`hashWithSecret("ip:" + marker, HASH_SECRET)`および`hashWithSecret("ua:" + marker, HASH_SECRET)`を使う。`HASH_SECRET`未設定時やBAN照合DB障害時は投稿を安全側で拒否する。`HASH_SECRET`を変更すると既存`post_logs`と`bans`の照合が継続できなくなるため、運用中は固定する。
+
+初回・追記投稿では、multipart解析より前に`ip_hash`を照合する。既存データ互換としてactiveな`ua_hash`も照合する。ファイルBANはmultipart解析とSHA-256計算後、R2保存およびD1 version作成より前に照合する。active判定は`active=1 AND disabled_at IS NULL AND (expired_at IS NULL OR expired_at > CURRENT_TIMESTAMP)`とする。BAN拒否はHTTP 403 `POSTING_BLOCKED`とし、ban id/type/valueや期限など回避に使える情報を公開レスポンスへ出さない。
+
+BAN期間は24時間、7日、30日、無期限を扱う。解除は物理削除ではなく`active=0`, `disabled_at=CURRENT_TIMESTAMP`, `updated_at=CURRENT_TIMESTAMP`で記録する。既存の同一`ban_type`/`ban_value`を再度BANした場合は、同じ行を再有効化して理由・期限を更新する。
+
+管理画面には最近の`post_logs`とBAN一覧を独立セクションとして表示する。full hash、生IP、生UAは返さず、短縮ハッシュだけを表示する。BAN作成時は管理UIからhash値を送らず、`sourcePostLogId`を受けたWorkerがD1内のfull hashを解決する。BAN作成・解除は`admin_logs`へ`create_ban` / `lift_ban`として記録するが、full hash、生IP、生UA、`ADMIN_TOKEN`、`HASH_SECRET`はdetailへ入れない。
+
+Rate Limitはパスワード失敗などに対する短時間制限、BANは管理者判断による明示制限として区別する。両方が適用される投稿APIではBANを先に判定し、エラーコードも`POSTING_BLOCKED`と`RATE_LIMITED`に分ける。
+
 ## API仕様
 
 既存API:
@@ -549,8 +570,11 @@ MVPの自動削除対象reason候補:
 - `POST /api/admin/delete-requests/:requestId/reject`
 - `GET /api/admin/r2-cleanup-candidates`
 - `POST /api/admin/r2-cleanup/:versionId/delete-file`
+- `GET /api/admin/post-logs`
+- `POST /api/admin/bans`
+- `GET /api/admin/bans`
+- `POST /api/admin/bans/:banId/lift`
 - `POST /api/admin/hide-version`
-- `POST /api/admin/ban`
 
 APIエラーは必ず JSON で `code`, `message`, `detail` を返す。
 
