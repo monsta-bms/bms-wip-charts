@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="./list-ui-refresh.css?v=ui-tree-overlay-01">
     <link rel="stylesheet" href="./progress-image-preview.css?v=ui-tree-overlay-01">
     <link rel="stylesheet" href="./tree-progress-polish.css?v=tree-shape-fix-01">
+    <link rel="stylesheet" href="./version-management-ui.css?v=withdraw-01">
   </head>
   <body>
     <div class="page-shell">
@@ -215,6 +216,66 @@
       </main>
     </div>
 
+    <dialog class="version-management-dialog" id="versionManagementDialog" aria-labelledby="versionManagementTitle">
+      <form class="version-management-panel" id="versionManagementForm" novalidate>
+        <div class="version-management-header">
+          <h2 id="versionManagementTitle">投稿管理</h2>
+          <button class="version-management-close" type="button" data-version-management-close aria-label="閉じる">×</button>
+        </div>
+
+        <dl class="version-management-summary">
+          <div>
+            <dt>版</dt>
+            <dd id="versionManagementVersion">-</dd>
+          </div>
+          <div>
+            <dt>作者</dt>
+            <dd id="versionManagementAuthor">-</dd>
+          </div>
+          <div>
+            <dt>状態</dt>
+            <dd id="versionManagementState">-</dd>
+          </div>
+        </dl>
+
+        <label class="field">
+          <span class="field-label">管理パスワード <span class="required-mark">*</span></span>
+          <input id="versionManagementPassword" type="password" autocomplete="current-password" required>
+          <span class="field-help">投稿時の管理パスワードを入力してください。公開・ログ保存はされません。</span>
+        </label>
+
+        <section class="version-management-action" aria-labelledby="withdrawActionTitle">
+          <h3 id="withdrawActionTitle">取り下げ</h3>
+          <p>このversionのDLと追記を停止します。履歴、譜面ファイル、進捗画像は削除されません。子versionは連鎖して取り下げません。</p>
+          <label class="version-management-confirm">
+            <input id="versionWithdrawConfirm" type="checkbox">
+            <span>取り下げ後はこの画面から復旧できないことを確認しました。</span>
+          </label>
+          <div class="version-management-buttons">
+            <button class="version-withdraw-button" id="versionWithdrawButton" type="button">取り下げる</button>
+          </div>
+        </section>
+
+        <section class="version-management-action" aria-labelledby="deleteRequestActionTitle">
+          <h3 id="deleteRequestActionTitle">削除申請</h3>
+          <p>管理承認までは物理削除されず、申請だけではDL・追記も停止しません。公開を止める場合は先に取り下げてください。</p>
+          <label class="field">
+            <span class="field-label">申請理由（任意）</span>
+            <textarea id="versionDeleteReason" rows="3" maxlength="500" placeholder="削除を希望する理由"></textarea>
+            <span class="field-help">500文字以内。</span>
+          </label>
+          <div class="version-management-buttons">
+            <button class="version-delete-request-button" id="versionDeleteRequestButton" type="button">削除を申請</button>
+          </div>
+        </section>
+
+        <p class="version-management-message" id="versionManagementMessage" role="status" aria-live="polite" hidden></p>
+        <div class="version-management-buttons">
+          <button class="secondary" type="button" data-version-management-close>キャンセル</button>
+        </div>
+      </form>
+    </dialog>
+
     <script src="./progress-layer-colors.js?v=ui-tree-overlay-01"></script>
     <script src="./app.js?v=ui-tree-overlay-01"></script>
     <script src="./progress-song-end-analysis.js?v=ui-tree-overlay-01"></script>
@@ -225,5 +286,6 @@
     <script src="./branch-tree-list.js?v=ui-tree-overlay-01"></script>
     <script src="./tree-progress-polish.js?v=tree-shape-fix-01"></script>
     <script src="./favorites-list.js?v=fav-01"></script>
+    <script src="./version-management-ui.js?v=withdraw-01"></script>
   </body>
 </html>
