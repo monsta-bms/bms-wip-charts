@@ -414,7 +414,7 @@ async function handleDeleteRequest(
     }
 
     const requestId = makeId("delete_request");
-    await env.DB.batch([
+    const results = await env.DB.batch([
       env.DB.prepare(`
         INSERT INTO delete_requests (
           id,
@@ -424,14 +424,22 @@ async function handleDeleteRequest(
           requester_ip_hash,
           requester_ua_hash,
           status
-        ) VALUES (?, ?, ?, ?, ?, ?, 'pending')
+        )
+        SELECT ?, ?, ?, ?, ?, ?, 'pending'
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM delete_requests
+          WHERE version_id = ?
+            AND status = 'pending'
+        )
       `).bind(
         requestId,
         version.id,
         version.chart_id,
         reason,
         context.ipHash,
-        context.uaHash
+        context.uaHash,
+        version.id
       ),
       env.DB.prepare(`
         UPDATE versions
@@ -439,8 +447,22 @@ async function handleDeleteRequest(
           delete_requested_at = CURRENT_TIMESTAMP,
           updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).bind(version.id)
+          AND EXISTS (
+            SELECT 1
+            FROM delete_requests
+            WHERE id = ?
+          )
+      `).bind(version.id, requestId)
     ]);
+
+    if (Number(results[0]?.meta.changes ?? 0) === 0) {
+      return failLifecycle(request, env, context, "request_delete", {
+        status: 409,
+        code: "DELETE_REQUEST_ALREADY_EXISTS",
+        message: "このversionは削除申請中です。",
+        detail: `A pending delete request was created by another request for versionId=${version.id}.`
+      });
+    }
 
     const updated = await env.DB.prepare(`
       SELECT delete_requested_at
@@ -560,4 +582,5 @@ export async function handleVersionLifecycleRoute(
 
   return handleDeleteRequest(request, env, context, authenticated.value, parsed.value.reason);
 }
+
 
