@@ -362,6 +362,10 @@
     return version?.deleteRequested === true || version?.delete_requested === true;
   }
 
+  function isWithdrawn(version) {
+    return version?.withdrawn === true || Boolean(version?.withdrawnAt || version?.withdrawn_at);
+  }
+
   function isHiddenVersion(version) {
     return version?.hidden === true || version?.isHidden === true || version?.is_hidden === true;
   }
@@ -464,16 +468,20 @@
     const version = node.version;
     const badges = [];
 
-    if (isRejected(version)) {
-      badges.push(`<span class="rejected-badge compact">没譜面</span>`);
-    } else if (isCompleted(version, progress)) {
-      badges.push(`<span class="completed-badge compact">完成</span>`);
-    }
+    if (isWithdrawn(version)) {
+      badges.push(`<span class="withdrawn-badge">取り下げ済み</span>`);
+    } else {
+      if (isRejected(version)) {
+        badges.push(`<span class="rejected-badge compact">没譜面</span>`);
+      } else if (isCompleted(version, progress)) {
+        badges.push(`<span class="completed-badge compact">完成</span>`);
+      }
 
-    if (isDeleteRequested(version)) {
-      badges.push(`<span class="delete-requested-badge">削除申請中</span>`);
-    } else if (isHiddenVersion(version)) {
-      badges.push(`<span class="hidden-badge">非表示</span>`);
+      if (isDeleteRequested(version)) {
+        badges.push(`<span class="delete-requested-badge">削除申請中</span>`);
+      } else if (isHiddenVersion(version)) {
+        badges.push(`<span class="hidden-badge">非表示</span>`);
+      }
     }
 
     return badges.slice(0, 2).join("");
@@ -510,7 +518,7 @@
     }
   }
 
-  function lockAppendControl(row) {
+  function lockAppendControl(row, title = "完成版に置き換え済みの中間履歴のため追記できません") {
     const actions = row.querySelector(".version-actions");
     if (!actions) {
       return;
@@ -525,9 +533,30 @@
     locked.className = "secondary append-disabled-intermediate";
     locked.type = "button";
     locked.disabled = true;
-    locked.title = "完成版に置き換え済みの中間履歴のため追記できません";
+    locked.title = title;
     locked.textContent = "追記不可";
     appendButton.replaceWith(locked);
+  }
+
+  function ensureManagementControl(row, version, chartId, displayVersionLabel) {
+    const actions = row.querySelector(".version-actions");
+    if (!actions || actions.querySelector(".version-management-button")) {
+      return;
+    }
+
+    const button = document.createElement("button");
+    button.className = "secondary version-management-button";
+    button.type = "button";
+    button.textContent = "…";
+    button.title = `${displayVersionLabel} の投稿管理`;
+    button.setAttribute("aria-label", `${displayVersionLabel} の投稿管理`);
+    button.dataset.versionId = getVersionId(version);
+    button.dataset.chartId = chartId || "";
+    button.dataset.versionLabel = displayVersionLabel;
+    button.dataset.author = String(version?.author || "未入力");
+    button.dataset.withdrawn = isWithdrawn(version) ? "true" : "false";
+    button.dataset.deleteRequested = isDeleteRequested(version) ? "true" : "false";
+    actions.appendChild(button);
   }
 
   function ensureGroupGutter(row) {
@@ -604,6 +633,7 @@
     const collapsed = isCollapsedByCompletion(version);
     const blocked = isDownloadBlocked(version);
     const deleteRequested = isDeleteRequested(version);
+    const withdrawn = isWithdrawn(version);
     const hidden = isHiddenVersion(version);
     const supersededIntermediate = isSupersededIntermediateNode(node);
     const tag = row.querySelector(".version-tag");
@@ -620,8 +650,11 @@
     row.classList.toggle("is-collapsed-by-completion", collapsed);
     row.classList.toggle("is-download-blocked", blocked || supersededIntermediate);
     row.classList.toggle("is-delete-requested", deleteRequested);
+    row.classList.toggle("is-withdrawn", withdrawn);
     row.classList.toggle("is-hidden-version", hidden);
     row.classList.toggle("is-intermediate-history", supersededIntermediate);
+    row.dataset.versionId = getVersionId(version);
+    row.dataset.chartId = getChartId(options.entry);
     row.dataset.depth = String(node.depth);
     row.dataset.branchPath = branchPath;
     row.dataset.parentBranchPath = node.parent ? getBranchPath(node.parent) : "";
@@ -665,8 +698,14 @@
     }
 
     enhanceDownloadControl(row, version, displayVersionLabel, supersededIntermediate);
-    if (supersededIntermediate) {
-      lockAppendControl(row);
+    ensureManagementControl(row, version, getChartId(options.entry), displayVersionLabel);
+    if (supersededIntermediate || withdrawn) {
+      lockAppendControl(
+        row,
+        withdrawn
+          ? "取り下げ済みversionから追記投稿はできません"
+          : "完成版に置き換え済みの中間履歴のため追記できません"
+      );
     }
   }
 
@@ -830,7 +869,9 @@
         const groupId = getCollapseGroupId(node, treeNodes);
         const collapsible = intermediateGroups.has(groupId) && intermediateGroups.get(groupId)?.includes(node);
         const expanded = groupId ? expandedIntermediateGroups.has(groupId) : false;
-        enhanceRow(row, node, collapsible ? { collapsedGroupId: groupId, expanded } : {});
+        enhanceRow(row, node, collapsible
+          ? { collapsedGroupId: groupId, expanded, entry }
+          : { entry });
 
         if (collapsible) {
           collapsedKeys.add(getNodeKey(node.version));
