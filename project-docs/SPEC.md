@@ -33,12 +33,11 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。�
 - 分岐version管理、`branch_path` 生成、完成到達時の親version DL不可化
 - `versions.file_deleted_at` / `versions.file_delete_reason` の自動削除準備カラム
 - versionId単位のブラウザ内お気に入り★とお気に入りのみ表示
+- 投稿者管理パスワードによるversion取り下げ・削除申請MVP
 
 未実装:
 
 - ZIP内部のBMS解析
-- 取り下げAPI
-- 削除申請API
 - 難易度表API
 - 検索
 - ページング本実装
@@ -406,6 +405,40 @@ MVPではサムネイルクリックによる拡大表示は実装しない。�
 - 中間履歴内のversionがお気に入りの場合、フィルタON時はそのversionが見えるようにし、通常表示時の中間履歴折り畳み挙動は維持する。
 - 将来検索を追加する場合は、検索キーワード一致 AND お気に入り関連行の条件で絞り込むことを検討する。
 - 将来アカウント機能ができた場合は、サーバー保存や端末間同期を検討する。
+
+## 投稿者による取り下げ・削除申請
+
+投稿一覧の各version行から、投稿時の管理パスワードを使って投稿者操作を行える。
+
+取り下げ:
+
+- `POST /api/versions/:versionId/withdraw` を使う。
+- `versions.withdrawn_at` を設定し、DLと追記投稿を停止する。
+- 未ブロックversionでは `download_block_reason='withdrawn'` とする。
+- 完成到達など別のDL停止理由が既にある場合は、その理由を上書きしない。
+- D1行、R2譜面ファイル、progressImage PNGは削除しない。
+- 一覧には履歴として残し、取り下げ済みであることを表示する。
+- 子versionは連鎖して取り下げ・非表示にしない。
+- 復旧機能は後続フェーズで検討する。
+
+削除申請:
+
+- `POST /api/versions/:versionId/delete-request` を使う。
+- `delete_requests` に `status='pending'` の申請を追加する。
+- `versions.delete_requested_at` を設定する。
+- 管理承認前はD1/R2を物理削除しない。
+- 削除申請だけではDLと追記投稿を停止しない。即時停止が必要な場合は取り下げを使う。
+- 同一versionにpending申請がある場合は重複受付しない。
+- 管理承認、却下、通知、物理削除、申請一覧は後続フェーズとする。
+
+共通仕様:
+
+- request bodyは `application/json` とし、`password` を必須にする。
+- passwordは既存投稿と同じ `hashWithSecret('password:' + password, HASH_SECRET)` で検証する。
+- password、password_hash、HASH_SECRET、生IP、生UAはログに出さない。
+- 同じIP/UAハッシュで10分以内に5回以上 `INVALID_PASSWORD` が記録された場合は `RATE_LIMITED` とする。
+- 成功・失敗は `post_logs` の `withdraw_version` / `request_delete` に記録する。
+- R2譜面ファイルとprogressImageは履歴確認用に残し、今回のAPIから削除しない。
 
 ## 自動削除準備
 
