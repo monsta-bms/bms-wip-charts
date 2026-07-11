@@ -1,4 +1,8 @@
-import { buildRequestFingerprint, getUnknownIpHash } from "../utils/requestFingerprint";
+import {
+  buildRequestFingerprint,
+  getUnknownIpHash
+} from "../utils/requestFingerprint";
+import type { RequestFingerprint } from "../utils/requestFingerprint";
 import { apiError, Env, errorDetail, methodNotAllowed, ok } from "../utils/response";
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -7,7 +11,7 @@ const HASH_PREVIEW_LENGTH = 12;
 const MAX_BAN_REASON_LENGTH = 500;
 const MAX_ADMIN_NOTE_LENGTH = 1000;
 
-type PostingAction = "create_chart" | "append_version";
+export type PostingAction = "create_chart" | "append_version";
 type BanTargetType = "ip_hash" | "file_sha256";
 type BanDuration = "24h" | "7d" | "30d" | "permanent";
 type BanListState = "active" | "expired" | "disabled" | "all";
@@ -229,7 +233,8 @@ export async function enforcePreMultipartPostingBan(
   request: Request,
   env: Env,
   action: PostingAction,
-  chartId: string | null = null
+  chartId: string | null = null,
+  existingFingerprint?: RequestFingerprint
 ): Promise<Response | null> {
   const secret = getHashSecret(env);
   if (!secret) {
@@ -243,7 +248,7 @@ export async function enforcePreMultipartPostingBan(
     );
   }
 
-  const fingerprint = await buildRequestFingerprint(request, secret);
+  const fingerprint = existingFingerprint ?? await buildRequestFingerprint(request, secret);
   let ban: ActiveBanRow | null;
   try {
     ban = await findFingerprintBan(env, fingerprint.ipHash, fingerprint.uaHash);

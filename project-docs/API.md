@@ -840,3 +840,74 @@ BAN関連エラー:
 | `CONFIG_MISSING` | 500 | ADMIN_TOKENまたは管理操作に必要なHASH_SECRETが未設定。 |
 
 BAN拒否は既存action（`create_chart` / `append_version`）、`result='rejected'`, `error_code='POSTING_BLOCKED'`で`post_logs`へ記録する。detailにはstage、banType、targetKind、SHA有無、errorCodeだけを入れ、raw ban valueや生IP/UAは入れない。BAN作成・解除は`admin_logs.action='create_ban'` / `'lift_ban'`で記録する。
+
+## 投稿・追記レート制限
+
+対象API:
+
+- `POST /api/charts`
+- `POST /api/charts/:chartId/versions`
+
+BAN判定後、progressImageを含むmultipart解析前に、既存`post_logs`を`ip_hash`単位で集計する。取り消し、削除申請、閲覧、DL、管理API、R2 cleanup、管理パスワード失敗制限は対象外。
+
+accepted上限:
+
+| action | 10分 | 1時間 | 24時間 |
+| --- | ---: | ---: | ---: |
+| `create_chart` | 3 | 10 | 30 |
+| `append_version` | 5 | 20 | 60 |
+
+初回・追記合算のclient起因rejected上限は10分10件、1時間30件。次の固定allowlistだけを数える。
+
+```text
+INVALID_FORM
+PASSWORD_REQUIRED
+INVALID_EXTENSION
+FILE_TOO_LARGE
+INVALID_PROGRESS
+INVALID_REJECTED_FLAG_FOR_FOLLOWUP
+INVALID_PROGRESS_MAP
+PROGRESS_MAP_OUT_OF_RANGE
+PROGRESS_MAP_BLOCK_COUNT_MISMATCH
+PROGRESS_MAP_UNCHANGED
+CHART_NOT_FOUND
+PARENT_VERSION_NOT_FOUND
+PARENT_VERSION_CHART_MISMATCH
+REJECTED_CHART_CANNOT_BE_EXTENDED
+TITLE_ARTIST_MISMATCH
+DUPLICATE_FILE
+CHART_ALREADY_EXISTS
+```
+
+`POSTING_BLOCKED`, `POST_RATE_LIMITED`, `BAN_CHECK_FAILED`, `POST_RATE_LIMIT_CHECK_FAILED`およびサーバー起因エラーは数えない。
+
+上限超過レスポンス:
+
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: 420
+Cache-Control: no-store
+```
+
+```json
+{
+  "code": "POST_RATE_LIMITED",
+  "message": "短時間の投稿数が多すぎます。しばらく待ってから再試行してください。",
+  "detail": "Posting rate limit exceeded.",
+  "retryAfterSeconds": 420
+}
+```
+
+複数ルール違反時は、各時間窓の最古対象ログから算出した解除までの残り秒数の最大値を`Retry-After`と`retryAfterSeconds`へ設定する。公開レスポンスにはrule、limit、count、hash、内部SQLを出さない。
+
+rate-limit拒否ログは既存action、`result='rejected'`, `error_code='POST_RATE_LIMITED'`, `file_sha256=NULL`でbest effort記録する。ログ書込み失敗でも429応答を維持する。production相当でIP markerが取得できない場合、またはD1集計に失敗した場合はHTTP 503を返す。
+
+```json
+{
+  "code": "POST_RATE_LIMIT_CHECK_FAILED",
+  "message": "投稿回数の確認に失敗しました。しばらく待ってから再試行してください。",
+  "detail": "Posting rate limit lookup failed."
+}
+```
+
+ローカルhostでIP marker不明の場合は共通`unknown`バケットを作らず、レート制限だけをスキップする。schema、migration、index、環境変数、管理UIの追加はない。

@@ -151,6 +151,29 @@ pending削除申請の管理MVPを確認する:
 - BAN作成・解除が`admin_logs`の`create_ban` / `lift_ban`に記録されること。
 - `admin_logs.detail`に短縮hash、sourcePostLogId、期間、結果、エラーコード等だけが入り、full hash、生IP、生UA、ADMIN_TOKEN、HASH_SECRET、解除理由本文が残らないこと。
 - 既存の初回投稿、追記投稿、管理承認/却下、R2 cleanup、progressMap、progressImageが壊れていないこと。
+
+## POST-RATE-LIMIT-01 確認項目
+
+- 上限未満では初回投稿・追記投稿が従来のmultipart処理へ進むこと。
+- 初回投稿がacceptedの10分3件、1時間10件、24時間30件の各上限でHTTP 429 `POST_RATE_LIMITED`になること。
+- 追記投稿がacceptedの10分5件、1時間20件、24時間60件の各上限でHTTP 429 `POST_RATE_LIMITED`になること。
+- allowlist内のclient起因rejectedが初回・追記合算で10分10件、1時間30件に達すると429になること。
+- `POSTING_BLOCKED`, `POST_RATE_LIMITED`, `BAN_CHECK_FAILED`, `POST_RATE_LIMIT_CHECK_FAILED`を件数へ含めないこと。
+- DB/R2/config/Worker起因rejectedを件数へ含めないこと。
+- BAN中かつrate limit超過中はHTTP 403 `POSTING_BLOCKED`が優先されること。
+- rate-limit拒否時にprogressImageを含むmultipart解析、R2保存、songs/charts/versions作成が行われないこと。
+- rate-limit拒否時に既存action、`result='rejected'`, `error_code='POST_RATE_LIMITED'`, `file_sha256=NULL`のpost_logが残ること。
+- rate-limit拒否ログのdetailに生IP、生UA、full hashが含まれないこと。
+- `POST_RATE_LIMITED`を連打しても解除時刻が延長されないこと。
+- 時間窓外になると投稿可能になること。
+- 異なる`ip_hash`へ影響しないこと。
+- ローカルでIP marker不明の場合はレート制限をスキップし、共通unknownバケットを作らないこと。
+- production相当でIP marker不明の場合はmultipart前にHTTP 503 `POST_RATE_LIMIT_CHECK_FAILED`になること。
+- D1集計失敗時はHTTP 503 `POST_RATE_LIMIT_CHECK_FAILED`でfail closedになること。
+- `Retry-After`ヘッダーと本文`retryAfterSeconds`が一致すること。
+- 複数ルール違反時は解除までの残り時間が最長のルールを返すこと。
+- 既存の管理パスワード失敗`RATE_LIMITED`、BAN、取り消し、削除申請、管理API、R2 cleanup、DL、公開一覧が壊れていないこと。
+- D1 schema、migration、index、R2仕様、Secret、Binding、Pages/管理UIに変更がないこと。
 - 管理画面のR2 cleanupセクションが削除申請管理と分離され、1件ごとに確認文字列を要求すること。
 - cleanup実行後に候補一覧が再読み込みされ、progressImage保持が画面に明記されること。
 - 公開一覧、投稿、追記、DL制御、取り消し、削除申請、管理承認/却下、お気に入りが壊れていないこと。

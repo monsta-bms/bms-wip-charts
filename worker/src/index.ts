@@ -3,7 +3,7 @@ import { handleChartVersionsRoute } from "./routes/chartVersions";
 import { handleChartsRoute } from "./routes/charts";
 import { handleFileRoute } from "./routes/files";
 import { handleVersionLifecycleRoute } from "./routes/versionLifecycle";
-import { enforcePreMultipartPostingBan } from "./routes/bans";
+import { enforcePreMultipartPostingProtection } from "./routes/postingProtection";
 import {
   addProgressImagesToChartsResponse,
   attachProgressImageAfterPostSuccess,
@@ -75,14 +75,14 @@ async function routeRequest(request: Request, env: Env): Promise<Response> {
   if (versionMatch) {
     const chartId = decodeURIComponent(versionMatch[1]);
     if (request.method === "POST") {
-      const banResponse = await enforcePreMultipartPostingBan(
+      const protectionResponse = await enforcePreMultipartPostingProtection(
         request,
         env,
         "append_version",
         chartId
       );
-      if (banResponse) {
-        return banResponse;
+      if (protectionResponse) {
+        return protectionResponse;
       }
       return handlePostWithOptionalProgressImage(
         request,
@@ -96,9 +96,13 @@ async function routeRequest(request: Request, env: Env): Promise<Response> {
 
   if (path === "/api/charts") {
     if (request.method === "POST") {
-      const banResponse = await enforcePreMultipartPostingBan(request, env, "create_chart");
-      if (banResponse) {
-        return banResponse;
+      const protectionResponse = await enforcePreMultipartPostingProtection(
+        request,
+        env,
+        "create_chart"
+      );
+      if (protectionResponse) {
+        return protectionResponse;
       }
       return handlePostWithOptionalProgressImage(
         request,

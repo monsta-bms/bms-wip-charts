@@ -555,6 +555,27 @@ BAN期間は24時間、7日、30日、無期限を扱う。解除は物理削除
 
 Rate Limitはパスワード失敗などに対する短時間制限、BANは管理者判断による明示制限として区別する。両方が適用される投稿APIではBANを先に判定し、エラーコードも`POSTING_BLOCKED`と`RATE_LIMITED`に分ける。
 
+## POST-RATE-LIMIT-01 投稿・追記レート制限
+
+初回投稿`POST /api/charts`と追記投稿`POST /api/charts/:chartId/versions`だけを対象とし、取り消し、削除申請、閲覧、DL、管理API、R2 cleanup、既存の管理パスワード失敗制限は対象外とする。制限キーは`ip_hash`のみとし、生IP、生UA、`ua_hash`単独、IP+UA複合値、author、chartId、versionIdは使用しない。
+
+投稿前処理はCORS確認、request fingerprint生成、IP/UA BAN判定、投稿レート制限、progressImageを含むmultipart解析、file SHA-256 BAN、通常検証、R2保存、D1保存の順とする。fingerprintはpre-multipart BAN判定とレート制限の間で共有し、BANを常に先に判定する。
+
+accepted上限:
+
+| action | 10分 | 1時間 | 24時間 |
+| --- | ---: | ---: | ---: |
+| `create_chart` | 3 | 10 | 30 |
+| `append_version` | 5 | 20 | 60 |
+
+client起因rejectedは初回・追記を合算し、10分10件、1時間30件を上限とする。client起因判定はコード内の固定allowlistに限定し、`POSTING_BLOCKED`, `POST_RATE_LIMITED`, `BAN_CHECK_FAILED`, `POST_RATE_LIMIT_CHECK_FAILED`およびD1/R2/config/Worker起因エラーは数えない。レート制限拒否はHTTP 429 `POST_RATE_LIMITED`とし、`Retry-After`ヘッダーと本文`retryAfterSeconds`へ同じ値を返す。複数ルール違反時は各時間窓の最古ログから残り秒数を求め、最大値を採用する。
+
+集計には既存`post_logs`と`idx_post_logs_ip_hash_created_at`を使い、schema、migration、index、専用カウンターテーブルは追加しない。`POST_RATE_LIMITED`拒否はbest effortで既存action、`result='rejected'`、`file_sha256=NULL`として記録する。detailにはpre-multipart stage、代表rule、window、limit、count、errorCodeだけを入れ、生IP、生UA、hashは重複保存しない。
+
+IP marker不明時は`localhost`, `127.0.0.1`, `[::1]`等のローカル開発環境ではレート制限をスキップする。その他では共通`unknown`バケットへ集約せず、HTTP 503 `POST_RATE_LIMIT_CHECK_FAILED`でfail closedとする。D1集計も原子的な予約処理ではないため、完全同時リクエストが少数すり抜ける可能性がある。また、共有回線では複数利用者を同じ制限へ巻き込む可能性がある。
+
+管理画面へ専用UIや手動解除を追加しない。既存post_logs一覧で`POST_RATE_LIMITED`を確認し、時間経過で自動解除する。
+
 ## API仕様
 
 既存API:
