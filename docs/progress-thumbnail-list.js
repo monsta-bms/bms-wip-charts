@@ -999,9 +999,6 @@
     }
 
     progressThumbnailBridgeInstalled = true;
-    if (typeof loadCharts === "function") {
-      loadCharts();
-    }
   }
 
   function debugProgressThumbnails(root = listElement || document) {
@@ -1061,10 +1058,6 @@
     renderCharts = renderChartsWithProgressThumbnails;
   } catch (error) {
     window.renderCharts = renderChartsWithProgressThumbnails;
-  }
-
-  if (typeof loadCharts === "function") {
-    loadCharts();
   }
 
   window.setTimeout(installFinalProgressThumbnailBridge, 0);

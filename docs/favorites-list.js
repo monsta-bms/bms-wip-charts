@@ -495,8 +495,4 @@
 
   injectStyles();
   updateFilterButton();
-
-  if (typeof loadCharts === "function") {
-    loadCharts();
-  }
 })();

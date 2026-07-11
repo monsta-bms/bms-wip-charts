@@ -1292,8 +1292,4 @@
   } catch (error) {
     window.renderCharts = renderChartsWithAppend;
   }
-
-  if (typeof loadCharts === "function") {
-    loadCharts();
-  }
 })();

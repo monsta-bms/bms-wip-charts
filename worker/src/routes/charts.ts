@@ -8,11 +8,13 @@ import { findActiveFileBan } from "./bans";
 
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 200;
+const MAX_SEARCH_QUERY_LENGTH = 100;
 
 type ListParams = {
   page: number;
   pageSize: number;
   q: string;
+  normalizedQuery: string;
   offset: number;
 };
 
@@ -247,12 +249,23 @@ function parseListParams(url: URL): ParseResult {
     };
   }
 
+  const q = (url.searchParams.get("q") ?? "").trim();
+  if (Array.from(q).length > MAX_SEARCH_QUERY_LENGTH) {
+    return {
+      ok: false,
+      code: "INVALID_QUERY_PARAM",
+      message: "クエリパラメータが不正です。",
+      detail: `q must be ${MAX_SEARCH_QUERY_LENGTH} characters or less.`
+    };
+  }
+
   return {
     ok: true,
     value: {
       page: page.value,
       pageSize: pageSize.value,
-      q: (url.searchParams.get("q") ?? "").trim(),
+      q,
+      normalizedQuery: normalizeText(q),
       offset
     }
   };
@@ -513,7 +526,57 @@ async function cleanupR2AfterDbFailure(
   }
 }
 
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, "\\$&");
+}
+
+function buildVisibleChartFilter(params: ListParams): { sql: string; bindings: string[] } {
+  const conditions = [
+    "charts.is_hidden = 0",
+    `EXISTS (
+      SELECT 1
+      FROM versions
+      WHERE versions.chart_id = charts.id
+        AND versions.is_hidden = 0
+    )`
+  ];
+  const bindings: string[] = [];
+
+  if (params.q) {
+    const normalizedPattern = `%${escapeLikePattern(params.normalizedQuery)}%`;
+    const authorPattern = `%${escapeLikePattern(params.q)}%`;
+    conditions.push(`(
+      songs.normalized_title LIKE ? ESCAPE '\\'
+      OR songs.normalized_subtitle LIKE ? ESCAPE '\\'
+      OR songs.normalized_artist LIKE ? ESCAPE '\\'
+      OR songs.normalized_subartist LIKE ? ESCAPE '\\'
+      OR charts.normalized_chart_name LIKE ? ESCAPE '\\'
+      OR EXISTS (
+        SELECT 1
+        FROM versions AS author_versions
+        WHERE author_versions.chart_id = charts.id
+          AND author_versions.is_hidden = 0
+          AND author_versions.author LIKE ? ESCAPE '\\' COLLATE NOCASE
+      )
+    )`);
+    bindings.push(
+      normalizedPattern,
+      normalizedPattern,
+      normalizedPattern,
+      normalizedPattern,
+      normalizedPattern,
+      authorPattern
+    );
+  }
+
+  return {
+    sql: conditions.join("\n      AND "),
+    bindings
+  };
+}
+
 async function selectVisibleChartRows(env: Env, params: ListParams): Promise<ChartRow[]> {
+  const filter = buildVisibleChartFilter(params);
   const result = await env.DB.prepare(`
     SELECT
       songs.id AS song_id,
@@ -531,18 +594,24 @@ async function selectVisibleChartRows(env: Env, params: ListParams): Promise<Cha
       charts.updated_at AS chart_updated_at
     FROM charts
     INNER JOIN songs ON songs.id = charts.song_id
-    WHERE charts.is_hidden = 0
-      AND EXISTS (
-        SELECT 1
-        FROM versions
-        WHERE versions.chart_id = charts.id
-          AND versions.is_hidden = 0
-      )
+    WHERE ${filter.sql}
     ORDER BY charts.updated_at DESC, charts.id ASC
     LIMIT ? OFFSET ?
-  `).bind(params.pageSize + 1, params.offset).all<ChartRow>();
+  `).bind(...filter.bindings, params.pageSize + 1, params.offset).all<ChartRow>();
 
   return result.results ?? [];
+}
+
+async function selectVisibleChartCount(env: Env, params: ListParams): Promise<number> {
+  const filter = buildVisibleChartFilter(params);
+  const row = await env.DB.prepare(`
+    SELECT COUNT(*) AS total
+    FROM charts
+    INNER JOIN songs ON songs.id = charts.song_id
+    WHERE ${filter.sql}
+  `).bind(...filter.bindings).first<{ total: number }>();
+
+  return Number(row?.total ?? 0);
 }
 
 async function selectVisibleVersionRows(env: Env, chartIds: string[]): Promise<VersionRow[]> {
@@ -645,6 +714,7 @@ async function handleChartList(request: Request, env: Env): Promise<Response> {
 
   try {
     const chartRowsWithLookahead = await selectVisibleChartRows(env, params);
+    const total = await selectVisibleChartCount(env, params);
     const hasNext = chartRowsWithLookahead.length > params.pageSize;
     const chartRows = chartRowsWithLookahead.slice(0, params.pageSize);
     const chartIds = chartRows.map((row) => row.chart_id);
@@ -665,7 +735,11 @@ async function handleChartList(request: Request, env: Env): Promise<Response> {
       pagination: {
         page: params.page,
         pageSize: params.pageSize,
+        total,
         hasNext
+      },
+      query: {
+        q: params.q
       }
     });
   } catch (error) {

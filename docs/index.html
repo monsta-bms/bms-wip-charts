@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>BMS差分共有</title>
-    <link rel="stylesheet" href="./style.css?v=ui-tree-overlay-01">
+    <link rel="stylesheet" href="./style.css?v=search-pagination-01">
     <link rel="stylesheet" href="./branch-tree-list.css?v=ui-tree-overlay-01">
     <link rel="stylesheet" href="./list-ui-refresh.css?v=ui-tree-overlay-01">
     <link rel="stylesheet" href="./progress-image-preview.css?v=ui-tree-overlay-01">
@@ -208,10 +208,23 @@
           <div class="section-heading">
             <h2 id="listTitle">投稿一覧</h2>
             <div class="list-toolbar" aria-label="投稿一覧フィルタ">
+              <form class="chart-search-form" id="chartSearchForm" role="search">
+                <label class="visually-hidden" for="chartSearchInput">曲名・アーティスト・差分名・差分作者を検索</label>
+                <input id="chartSearchInput" type="search" maxlength="100" autocomplete="off" placeholder="曲名・アーティスト・差分名・差分作者">
+                <button id="chartSearchButton" type="submit">検索</button>
+                <button class="secondary" id="chartSearchClearButton" type="button">クリア</button>
+              </form>
               <button class="favorite-filter-toggle" id="favoriteFilterToggle" type="button" aria-pressed="false">☆ お気に入りのみ</button>
             </div>
           </div>
+          <div class="chart-list-summary">
+            <p id="chartSearchSummary" aria-live="polite"></p>
+            <p id="chartListFeedback" role="status" aria-live="polite" hidden></p>
+          </div>
           <div class="chart-list" id="chartList"></div>
+          <div class="chart-list-pagination">
+            <button class="secondary" id="loadMoreChartsButton" type="button" hidden>さらに読み込む</button>
+          </div>
         </section>
       </main>
     </div>
@@ -293,15 +306,15 @@
     </dialog>
 
     <script src="./progress-layer-colors.js?v=ui-tree-overlay-01"></script>
-    <script src="./app.js?v=ui-tree-overlay-01"></script>
+    <script src="./app.js?v=search-pagination-01"></script>
     <script src="./progress-song-end-analysis.js?v=ui-tree-overlay-01"></script>
-    <script src="./progress-thumbnail-list.js?v=ui-tree-overlay-01"></script>
-    <script src="./branch-append-ui.js?v=ui-tree-overlay-01"></script>
+    <script src="./progress-thumbnail-list.js?v=search-pagination-01"></script>
+    <script src="./branch-append-ui.js?v=search-pagination-01"></script>
     <script src="./progress-image-preview.js?v=ui-tree-overlay-01"></script>
     <script src="./progress-image-formdata.js?v=ui-tree-overlay-01"></script>
-    <script src="./branch-tree-list.js?v=version-lifecycle-24h-01"></script>
+    <script src="./branch-tree-list.js?v=search-pagination-01"></script>
     <script src="./tree-progress-polish.js?v=tree-shape-fix-01"></script>
-    <script src="./favorites-list.js?v=fav-01"></script>
+    <script src="./favorites-list.js?v=search-pagination-01"></script>
     <script src="./version-management-ui.js?v=version-lifecycle-24h-01"></script>
   </body>
 </html>

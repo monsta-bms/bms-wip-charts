@@ -982,8 +982,4 @@
   } catch (error) {
     window.renderCharts = renderChartsAsTree;
   }
-
-  if (typeof loadCharts === "function") {
-    loadCharts();
-  }
 })();
