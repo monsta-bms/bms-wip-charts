@@ -970,3 +970,49 @@ Workerまたはライブラリ起因の予期しない検査失敗はHTTP 503 `Z
 - `progressMap.blocks`: Workerが内部譜面から再生成した標準ブロック
 
 `ZIP_PROGRESS_MAP_MISMATCH`は、クライアントblocksの改ざん・不一致、またはZIP追記時の親格子不一致に対してHTTP 400で返す。`ZIP_BMS_ANALYSIS_FAILED`は、内部譜面解析に失敗し、送信されたprogressMapを検証できない場合にHTTP 400で返す。両方ともclient rejected投稿レート制限対象とする。progressMapなしの解析失敗は投稿を許可し、`BMS_ANALYSIS_FAILED` warningを返す。内部バイト取得などWorker起因障害は既存`ZIP_INSPECTION_FAILED` HTTP 503とし、レート制限対象外とする。
+
+## 公開BMS難易度表
+
+認証不要の公開読み取りAPIとして、RC★とRC★★の2表を提供する。
+
+| 表 | 取込用HTML | header | data |
+| --- | --- | --- | --- |
+| RC★ | `GET /difficulty-tables/rc-star` | `GET /api/difficulty-tables/rc-star/header.json` | `GET /api/difficulty-tables/rc-star/data.json` |
+| RC★★ | `GET /difficulty-tables/rc-double-star` | `GET /api/difficulty-tables/rc-double-star/header.json` | `GET /api/difficulty-tables/rc-double-star/data.json` |
+
+全ルートでGET/HEAD/OPTIONSを許可し、`Access-Control-Allow-Origin: *`を返す。その他のmethodはHTTP 405。不明な表IDはHTTP 400 `INVALID_DIFFICULTY_TABLE`、D1取得失敗はHTTP 503 `DIFFICULTY_TABLE_UNAVAILABLE`とし、内部SQLや例外詳細をレスポンスへ出さない。
+
+header例:
+
+```json
+{
+  "name": "リサイクルセンター RC★",
+  "symbol": "RC★",
+  "data_url": "https://bms-wip-charts-worker.monsta3228gsl.workers.dev/api/difficulty-tables/rc-star/data.json",
+  "level_order": ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "他"]
+}
+```
+
+dataは譜面objectの配列を返す。対象なしはHTTP 200の`[]`。
+
+```json
+[
+  {
+    "md5": "0123456789abcdef0123456789abcdef",
+    "level": "5",
+    "title": "曲名",
+    "artist": "アーティスト",
+    "url_diff": "https://bms-wip-charts-worker.monsta3228gsl.workers.dev/api/files/file_xxx",
+    "name_diff": "差分名 / 1-2",
+    "bms_wip_original_difficulty": "st9",
+    "bms_wip_chart_name": "差分名",
+    "bms_wip_version": "1-2",
+    "bms_wip_author": "差分作者",
+    "bms_wip_completed_at": "2026-07-12T00:00:00.000Z",
+    "bms_wip_subtitle": "サブタイトル",
+    "bms_wip_subartist": "サブアーティスト"
+  }
+]
+```
+
+`url`、`org_md5`、外側ZIPのSHA-256は出力しない。header/取込HTMLは`Cache-Control: public, max-age=3600, must-revalidate`、dataは`public, max-age=60, must-revalidate`とし、すべてETagと`If-None-Match`による304応答に対応する。エラー応答は`Cache-Control: no-store`とする。

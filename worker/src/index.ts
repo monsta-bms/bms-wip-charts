@@ -1,6 +1,10 @@
 import { handleAdminRoute } from "./routes/admin";
 import { handleChartVersionsRoute } from "./routes/chartVersions";
 import { handleChartsRoute } from "./routes/charts";
+import {
+  handleDifficultyTableRoute,
+  isDifficultyTablePath
+} from "./routes/difficultyTables";
 import { handleFileRoute } from "./routes/files";
 import { handleVersionLifecycleRoute } from "./routes/versionLifecycle";
 import { enforcePreMultipartPostingProtection } from "./routes/postingProtection";
@@ -51,6 +55,10 @@ async function handlePostWithOptionalProgressImage(
 async function routeRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname;
+
+  if (isDifficultyTablePath(path)) {
+    return handleDifficultyTableRoute(request, env, path);
+  }
 
   if (request.method === "OPTIONS") {
     return optionsResponse(request, env);

@@ -652,3 +652,42 @@ ZIP投稿は、外側の5MiB制限とSHA-256 BAN・重複判定を通過した�
 - PagesはZIP選択時だけローカル配置したzip.jsを遅延読込し、最大2MiBの内部譜面1件を既存メタデータ・進捗マップUIへ渡す。ブラウザ解析は入力補助であり、保存判定には使わない。
 - メタデータ解析失敗はフォーム値へfallbackする。BMS解析失敗はprogressMapなしならwarning、progressMapありなら検証不能として拒否する。標準ブロックはWorker/Pagesとも最大5000件とする。
 - R2には外側ZIPだけを保存し、内部譜面名・内部ファイルは永続保存しない。既存ZIPの自動再解析は行わない。
+
+## DIFFICULTY-TABLE-01 完成差分フィード
+
+完成差分は一般的なBMS難易度表形式で、次の2表へ統合して公開する。
+
+- `rc-star`: 表示名`リサイクルセンター RC★`、symbol `RC★`、level order `0`～`20`、`他`
+- `rc-double-star`: 表示名`リサイクルセンター RC★★`、symbol `RC★★`、level order `1`～`7`
+
+各表は取込用HTML、header JSON、data JSONを提供する。dataはページングせず配列を返し、空の場合もHTTP 200の空配列とする。
+
+難易度分類では保存済み`level`を信用せず、`difficulty`をNFKC正規化して前後空白を除去し、整数表記だけを再解析する。`sl`と`st`は大文字小文字を区別しない。
+
+RC★変換:
+
+- `★0`～`★20`: 数値をそのまま使用
+- `sl0, sl1, sl2, sl3, sl4, sl5, sl6, sl7, sl8, sl9, sl10, sl11, sl12`: `0, 1, 3, 5, 6, 8, 10, 12, 14, 15, 17, 18, 19`へ変換
+- `st0`: `20`
+- 空でない未認識表記、小数、範囲外表記: `他`
+- 空またはNULLのdifficulty: 掲載しない
+
+RC★★変換:
+
+- `★21`～`★25`: `1`～`5`
+- `★★1`～`★★7`: `1`～`7`
+- `st1`～`st3`: 数値をそのまま使用
+- `st4`～`st6`: `4`
+- `st7`～`st9`: `5`
+- `st10`～`st12`: `6`
+- `st13`以上: `7`
+
+掲載対象は`progress=100`、version/chart公開中、`download_blocked=0`、`file_deleted_at/withdrawn_at/delete_requested_at IS NULL`、`is_rejected=0`、`collapsed_by_completion=0`、有効な32桁MD5ありをすべて満たすversionとする。BANは既存versionの掲載条件にしない。
+
+同一MD5は、`completed_at`、`created_at`、version IDの降順で最初の1件だけを採用する。この重複排除は2表への分類前に行い、同一MD5が両方へ載らないようにする。異なるMD5の完成分岐はそれぞれ掲載してよい。
+
+標準項目は`md5`, `level`, `title`, `artist`, `url_diff`, `name_diff`とする。`url`と`org_md5`は原曲情報を保持していないため出力しない。`url_diff`は既存file APIの絶対URLとし、ZIPでは内部BMSのMD5を使い、外側ZIPのSHA-256を譜面hashとして出力しない。
+
+元difficulty、chart名、数字パス版ラベル、作者、完成日時、subtitle、subartistは`bms_wip_`名前空間の独自項目として保持する。本フィードは投稿者の自己申告難易度をRC★/RC★★へ統合した完成差分フィードであり、公式な難易度認定ではない。
+
+公開難易度表ルートのGET/HEAD/OPTIONSだけは`Access-Control-Allow-Origin: *`とし、投稿・管理APIのOrigin制限は変更しない。headerと取込HTMLは約1時間、dataは約60秒キャッシュし、ETag再検証に対応する。古いdataが残っていてもDL可否は既存file APIが現在のD1/R2状態で再判定する。

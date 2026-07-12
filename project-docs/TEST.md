@@ -638,3 +638,33 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - ZIP利用者起因エラーが投稿失敗レート制限へ数えられ、503系は数えられないこと。
 - 単体BMS投稿、既存ZIP安全検査、BAN、重複判定、progressImageが壊れていないこと。
 - Worker typecheck、Pages JavaScript構文検査、Worker dry-run bundleが成功すること。
+
+## DIFFICULTY-TABLE-01
+
+- RC★/RC★★それぞれの取込HTML、header JSON、data JSONを取得できること。
+- 取込HTMLの`meta[name="bmstable"]`が対応する絶対header URLを指すこと。
+- RC★の`level_order`が`0`～`20`, `他`の順であること。
+- RC★★の`level_order`が`1`～`7`の順であること。
+- `★0`～`★20`がRC★の同じ整数levelになること。
+- `sl0`がRC★0、`sl1`～`sl12`が仕様の対応levelになること。
+- `st0`がRC★20になること。
+- `★21`～`★25`がRC★★1～5になること。
+- `★★1`～`★★7`がRC★★1～7になること。
+- `st1`～`st3`がRC★★の同じ整数levelになること。
+- `st4`～`st6`がRC★★4、`st7`～`st9`がRC★★5、`st10`～`st12`がRC★★6、`st13`以上がRC★★7になること。
+- NFKC正規化され、`SL`/`ST`の大文字小文字を区別しないこと。
+- 空でない未認識表記、小数、範囲外表記がRC★`他`になること。
+- 空またはNULLのdifficultyは掲載されないこと。
+- `bms_wip_original_difficulty`へ正規化後の元difficultyが残ること。
+- `progress<100`、version/chart非公開、DL不可、R2削除済み、取り消し、削除申請中、没譜面、中間履歴を除外すること。
+- 32桁16進MD5がないversionを除外すること。
+- 同一MD5はcompleted_at、created_at、version IDの降順で1件だけ掲載され、異なるMD5の完成分岐は掲載されること。
+- ZIP投稿では内部BMSのMD5を使い、外側ZIP SHA-256を譜面hashとして出力しないこと。
+- `url_diff`が現在のWorkerを起点とする絶対file API URLであること。
+- `url`と`org_md5`がdataに出力されないこと。
+- 一般的なBMS難易度表パーサーでheader/dataを読み込めること。
+- GET/HEAD/OPTIONSで`Access-Control-Allow-Origin: *`が返り、投稿・管理APIのCORSが変わっていないこと。
+- headerは約1時間、dataは約60秒のCache-Controlを返すこと。
+- ETagを返し、同じ`If-None-Match`でHTTP 304になること。
+- 対象なしはHTTP 200の空配列、不明表は`INVALID_DIFFICULTY_TABLE`、D1障害は`DIFFICULTY_TABLE_UNAVAILABLE`になること。
+- Worker typecheckとdry-run bundleが成功すること。
