@@ -1,5 +1,17 @@
 # BMS WIP Charts 仕様書
 
+## TURNSTILE-01 投稿認証
+
+初回投稿`POST /api/charts`と追記投稿`POST /api/charts/:chartId/versions`にCloudflare Turnstile Managed widgetを適用する。閲覧、DL、取り消し、削除申請、管理API、難易度表、Cron、R2 cleanupは対象外とする。Turnstileの結果だけで自動BANは行わない。
+
+Pagesは初回・追記で同じwidgetを共用し、explicit rendering、`execution=execute`、`appearance=interaction-only`、共通action `chart_submit`を使用する。ローカル入力検証後の投稿操作時にtokenを取得し、`X-Turnstile-Token`ヘッダーでWorkerへ送る。POST試行後は成功・失敗を問わずwidgetをresetするが、API失敗時のフォーム入力は保持する。Turnstile scriptを読み込めない場合は送信せず、画面内の再読込操作を提供する。
+
+Workerの処理順はCORS、fingerprint生成、BAN、投稿レート制限、Turnstile、multipart解析、file SHA BAN・重複確認、ZIP/BMS解析、R2保存、D1保存とする。BANの`POSTING_BLOCKED`と投稿レート制限の`POST_RATE_LIMITED`をTurnstileより先に判定する。Siteverifyは5秒timeout、同じidempotency keyによる最大1回の再試行、token最大2048文字、hostnameとactionの検証を行う。hostnameはリクエストOriginと`ALLOWED_ORIGINS`の許可hostnameに一致させる。token、Secret、生IP、生UA、生のSiteverifyレスポンスは保存・ログ出力しない。
+
+設定はGit管理外のWorker Secret `TURNSTILE_SECRET`と`TURNSTILE_MODE`を使用する。`TURNSTILE_MODE=observe`は旧Pagesとの段階移行専用で、tokenなしや検証失敗を安全な分類だけconsoleへ記録して投稿を許可する。`required`または未設定・不正値ではtokenなし、検証失敗、設定不足、検証不能を拒否する。本番の最終状態は必ず`required`とする。Pagesの公開sitekeyは`meta[name=turnstile-sitekey]`へ設定する。localhostではproduction sitekeyではなくCloudflare公式テストsitekeyを使用する。
+
+required時の拒否は既存`post_logs`へ`result=rejected`、`stage=pre_multipart_turnstile`、error code、再試行有無、判定分類だけを記録する。`TURNSTILE_REQUIRED`と`TURNSTILE_FAILED`は利用者起因の投稿失敗レート制限へ含め、`TURNSTILE_UNAVAILABLE`は含めない。D1 schema、R2保存形式、既存BAN・管理パスワード制限・ZIP安全検査は変更しない。
+
 ## 目的
 
 BMS差分をログイン不要で共有できる1ページサイトを作る。初回投稿と追記投稿を受け付け、作成途中の差分譜面を進捗マップ付きで共有できるようにする。

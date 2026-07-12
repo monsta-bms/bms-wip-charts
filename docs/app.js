@@ -1861,8 +1861,19 @@ async function submitChart() {
 
   try {
     persistPasswordPreference();
+    const turnstileToken = await window.BmsTurnstile?.getToken();
+    if (!turnstileToken) {
+      throw {
+        code: "TURNSTILE_REQUIRED",
+        message: "Turnstile認証を完了してください。",
+        detail: "Turnstile token is unavailable."
+      };
+    }
     await apiRequest("/api/charts", {
       method: "POST",
+      headers: {
+        "X-Turnstile-Token": turnstileToken
+      },
       body: buildChartFormData()
     });
 
@@ -1886,6 +1897,7 @@ async function submitChart() {
     });
     showError(error);
   } finally {
+    window.BmsTurnstile?.reset();
     setSubmitting(false);
   }
 }

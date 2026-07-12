@@ -1,5 +1,32 @@
 # API仕様
 
+## Turnstile投稿認証
+
+対象:
+
+- `POST /api/charts`
+- `POST /api/charts/:chartId/versions`
+
+Pagesはmultipart bodyとは別に、次のヘッダーでtokenを送る。
+
+```http
+X-Turnstile-Token: <turnstile-token>
+```
+
+`X-Turnstile-Token`はCORSの`Access-Control-Allow-Headers`で許可する。既存のOrigin allowlistは変更しない。WorkerはBANと投稿レート制限の後、multipart解析より前にSiteverifyを実行し、共通action `chart_submit`と許可hostnameを照合する。
+
+requiredモードのエラー:
+
+| HTTP | code | 条件 |
+| ---: | --- | --- |
+| 400 | `TURNSTILE_REQUIRED` | tokenがない |
+| 403 | `TURNSTILE_FAILED` | token不正、期限切れ、再利用、長さ超過、hostname/action不一致 |
+| 503 | `TURNSTILE_UNAVAILABLE` | Secret不足、許可hostname設定不足、timeout、Siteverify障害・不正レスポンス |
+
+レスポンスはSiteverifyの詳細error code、token、Secret、IP、UAを含めない。拒否ログは既存action、`result=rejected`、上記error code、`stage=pre_multipart_turnstile`、安全な判定分類、再試行有無を使用する。`TURNSTILE_REQUIRED`と`TURNSTILE_FAILED`はclient rejected投稿レート制限へ含め、`TURNSTILE_UNAVAILABLE`は含めない。
+
+`TURNSTILE_MODE=observe`ではtokenなしの旧Pages投稿を許可し、tokenがある場合は検証するが、失敗しても投稿を止めない。observeは段階移行専用であり、本番最終状態は`required`とする。
+
 ## 概要
 
 GitHub Pages の静的フロント画面を本番Worker APIへ接続している。

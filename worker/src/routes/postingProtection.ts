@@ -3,6 +3,7 @@ import { apiError, Env, errorDetail } from "../utils/response";
 import { enforcePreMultipartPostingBan } from "./bans";
 import type { PostingAction } from "./bans";
 import { enforcePreMultipartPostingRateLimit } from "./postingRateLimit";
+import { enforcePreMultipartTurnstile } from "./turnstile";
 
 export async function enforcePreMultipartPostingProtection(
   request: Request,
@@ -53,7 +54,18 @@ export async function enforcePreMultipartPostingProtection(
     return banResponse;
   }
 
-  return enforcePreMultipartPostingRateLimit(
+  const rateLimitResponse = await enforcePreMultipartPostingRateLimit(
+    request,
+    env,
+    action,
+    fingerprint,
+    chartId
+  );
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
+  return enforcePreMultipartTurnstile(
     request,
     env,
     action,

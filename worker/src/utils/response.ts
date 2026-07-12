@@ -5,6 +5,8 @@ export type Env = {
   ALLOWED_ORIGINS?: string;
   HASH_SECRET?: string;
   ADMIN_TOKEN?: string;
+  TURNSTILE_SECRET?: string;
+  TURNSTILE_MODE?: string;
 };
 
 export type ApiErrorBody = {
@@ -14,7 +16,7 @@ export type ApiErrorBody = {
 };
 
 const allowedMethods = "GET,POST,OPTIONS";
-const allowedHeaders = "Content-Type,Authorization";
+const allowedHeaders = "Content-Type,Authorization,X-Turnstile-Token";
 
 function getAllowedOrigins(env: Env): string[] {
   const rawValue = env.ALLOWED_ORIGINS?.trim() || env.ALLOWED_ORIGIN?.trim() || "";

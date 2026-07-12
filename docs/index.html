@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="turnstile-sitekey" content="0x4AAAAAAD0OJhR8c4dKkDrk">
     <title>BMS差分共有</title>
     <link rel="stylesheet" href="./style.css?v=origin-url-01">
     <link rel="stylesheet" href="./branch-tree-list.css?v=ui-tree-overlay-01">
@@ -203,6 +204,12 @@
               </fieldset>
             </div>
 
+            <div class="turnstile-control" aria-label="投稿認証">
+              <div class="turnstile-widget" id="turnstileWidget"></div>
+              <p class="turnstile-status" id="turnstileStatus" role="status" aria-live="polite" hidden></p>
+              <button class="secondary turnstile-retry" id="turnstileRetryButton" type="button" hidden>認証を再読み込み</button>
+            </div>
+
             <div class="form-actions">
               <button class="secondary" id="cancelAppendButton" type="button" hidden>追記をやめる</button>
               <button id="submitButton" type="submit">投稿する</button>
@@ -313,10 +320,11 @@
 
     <script src="./progress-layer-colors.js?v=ui-tree-overlay-01"></script>
     <script src="./zip-bms-reader.js?v=zip-bms-analysis-01"></script>
-    <script src="./app.js?v=origin-url-01"></script>
+    <script src="./turnstile-controller.js?v=turnstile-01"></script>
+    <script src="./app.js?v=turnstile-01"></script>
     <script src="./progress-song-end-analysis.js?v=ui-tree-overlay-01"></script>
     <script src="./progress-thumbnail-list.js?v=search-pagination-01"></script>
-    <script src="./branch-append-ui.js?v=zip-bms-analysis-01"></script>
+    <script src="./branch-append-ui.js?v=turnstile-01"></script>
     <script src="./progress-image-preview.js?v=ui-tree-overlay-01"></script>
     <script src="./progress-image-formdata.js?v=ui-tree-overlay-01"></script>
     <script src="./branch-tree-list.js?v=search-pagination-01"></script>

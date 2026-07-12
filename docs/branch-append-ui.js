@@ -993,8 +993,19 @@
       if (typeof persistPasswordPreference === "function") {
         persistPasswordPreference();
       }
+      const turnstileToken = await window.BmsTurnstile?.getToken();
+      if (!turnstileToken) {
+        throw {
+          code: "TURNSTILE_REQUIRED",
+          message: "Turnstile認証を完了してください。",
+          detail: "Turnstile token is unavailable."
+        };
+      }
       await callApi(`/api/charts/${encodeURIComponent(appendState.chartId)}/versions`, {
         method: "POST",
+        headers: {
+          "X-Turnstile-Token": turnstileToken
+        },
         body: buildAppendFormData()
       });
       exitAppendMode({ resetForm: true });
@@ -1008,6 +1019,7 @@
       });
       showApiError(error);
     } finally {
+      window.BmsTurnstile?.reset();
       setAppendSubmitting(false);
     }
   }

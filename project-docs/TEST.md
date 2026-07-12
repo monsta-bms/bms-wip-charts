@@ -1,5 +1,31 @@
 # テスト手順
 
+## TURNSTILE-01
+
+- 初回投稿で共通Turnstile controllerからtokenを取得し、投稿できること。
+- 追記投稿で同じTurnstile controllerからtokenを取得し、投稿できること。
+- 初回・追記とも`X-Turnstile-Token`ヘッダーを送ること。
+- `progress-image-formdata.js`のfetch wrapper後も`X-Turnstile-Token`が維持されること。
+- requiredモードでtokenなしがHTTP 400 `TURNSTILE_REQUIRED`になること。
+- requiredモードで不正token、期限切れ相当、再利用token、2048文字超過がHTTP 403 `TURNSTILE_FAILED`になること。
+- Secret不足、Siteverify timeout・障害・不正レスポンスがHTTP 503 `TURNSTILE_UNAVAILABLE`になること。
+- `POSTING_BLOCKED`がTurnstileより先にHTTP 403で返ること。
+- `POST_RATE_LIMITED`がTurnstileより先にHTTP 429で返ること。
+- Turnstile拒否時にmultipart/progressImage解析、file SHA計算、ZIP/BMS解析、R2保存、D1 version作成が行われないこと。
+- `TURNSTILE_REQUIRED`と`TURNSTILE_FAILED`がclient rejected投稿レート制限へ含まれること。
+- `TURNSTILE_UNAVAILABLE`が投稿レート件数へ含まれないこと。
+- 拒否時の`post_logs`に既存action、`result=rejected`、error code、`stage=pre_multipart_turnstile`、再試行有無、安全な判定分類だけが入ること。
+- token、Secret、生IP、生UA、生のSiteverifyレスポンス・詳細error codeがレスポンス、post_logs、consoleへ出ないこと。
+- CORS preflightで`X-Turnstile-Token`が許可され、既存Origin制限が緩和されていないこと。
+- 投稿成功・失敗後にwidgetがresetされ、再投稿で新しいtokenを取得できること。
+- API失敗やTurnstile失敗後も入力済みフォーム内容が消えないこと。
+- Turnstile script読込失敗時は投稿せず、再読込操作が表示されること。
+- Managed widgetがスマホ幅でフォームからはみ出さないこと。
+- observeモードではtokenなしと検証失敗を安全に観測しつつ投稿を許可すること。
+- requiredモードではtokenなし・検証不能をfail closedで拒否すること。
+- 閲覧、DL、取り消し、削除申請、管理API、難易度表、Cron、R2 cleanupへTurnstileが追加されていないこと。
+- Worker typecheck、Pages JavaScript構文検査、Worker dry-run、`git diff --check`が成功すること。
+
 ## 対象
 
 GitHub Pages の静的フロント画面、Worker API接続、初回投稿、追記投稿UI、進捗マップUI、進捗サムネイル、分岐ツリー一覧表示、完成到達後の中間version折り畳み/展開表示、進捗PNGのR2保存、一覧でのprogressMapベース密度サムネイル表示とprogressImage fallback表示を確認する。
