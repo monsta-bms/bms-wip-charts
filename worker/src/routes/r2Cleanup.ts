@@ -1,9 +1,13 @@
 import { apiError, Env, errorDetail, methodNotAllowed, ok } from "../utils/response";
 
-const MIN_CLEANUP_AGE_DAYS = 30;
+export const MIN_CLEANUP_AGE_DAYS = 30;
+export const SCHEDULED_CLEANUP_LIMIT = 20;
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
 const CLEANUP_CONFIRMATION = "DELETE_R2_FILE";
+const CLEANUP_HIDDEN_REASONS = ["delete_request_approved", "deleted_within_24h"] as const;
+
+type CleanupTrigger = "manual" | "cron";
 
 type CleanupCandidateRow = {
   version_id: string;
@@ -57,6 +61,33 @@ type CleanupLogContext = {
   fileDeletedAt?: string | null;
   fileSha256Present?: boolean | null;
   fileSize?: number | null;
+  trigger?: CleanupTrigger;
+  runId?: string | null;
+  objectExisted?: boolean | null;
+  d1Updated?: boolean | null;
+};
+
+type CleanupOptions = {
+  olderThanDays: number;
+  trigger: CleanupTrigger;
+  runId?: string;
+  expectedHiddenAt?: string;
+  expectedFileSha256?: string;
+};
+
+export type ScheduledCleanupSummary = {
+  runId: string;
+  candidateCount: number;
+  processedCount: number;
+  deletedCount: number;
+  missingReconciledCount: number;
+  skippedCount: number;
+  failedCount: number;
+  limit: number;
+  durationMs: number;
+  scheduledTime: number;
+  cron: string;
+  errorCodes: Record<string, number>;
 };
 
 function makeId(prefix: string): string {
@@ -140,7 +171,11 @@ async function writeCleanupLog(
         errorCode: context.errorCode ?? code,
         fileDeletedAt: context.fileDeletedAt ?? null,
         fileSha256Present: context.fileSha256Present ?? null,
-        fileSize: context.fileSize ?? null
+        fileSize: context.fileSize ?? null,
+        trigger: context.trigger ?? "manual",
+        runId: context.runId ?? null,
+        objectExisted: context.objectExisted ?? null,
+        d1Updated: context.d1Updated ?? null
       })
     ).run();
   } catch (error) {
@@ -151,6 +186,18 @@ async function writeCleanupLog(
       message: errorDetail(error)
     });
   }
+}
+
+function cleanupEligibilitySql(alias: string): string {
+  const prefix = alias ? `${alias}.` : "";
+  return `
+    ${prefix}is_hidden = 1
+    AND ${prefix}download_blocked = 1
+    AND ${prefix}file_deleted_at IS NULL
+    AND ${prefix}hidden_at IS NOT NULL
+    AND ${prefix}hidden_at <= datetime('now', '-' || ? || ' days')
+    AND ${prefix}hidden_reason IN ('${CLEANUP_HIDDEN_REASONS[0]}', '${CLEANUP_HIDDEN_REASONS[1]}')
+  `;
 }
 
 async function readCleanupBody(
@@ -306,7 +353,9 @@ function isCleanupEligible(row: CleanupTargetRow): boolean {
     && Number(row.download_blocked) === 1
     && row.hidden_at !== null
     && Number(row.retention_elapsed) === 1
-    && ["delete_request_approved", "deleted_within_24h"].includes(row.hidden_reason ?? "");
+    && CLEANUP_HIDDEN_REASONS.includes(
+      (row.hidden_reason ?? "") as (typeof CLEANUP_HIDDEN_REASONS)[number]
+    );
 }
 
 export async function listR2CleanupCandidates(request: Request, env: Env): Promise<Response> {
@@ -324,14 +373,7 @@ export async function listR2CleanupCandidates(request: Request, env: Env): Promi
   const offset = (page - 1) * pageSize;
 
   try {
-    const whereClause = `
-      versions.is_hidden = 1
-      AND versions.download_blocked = 1
-      AND versions.file_deleted_at IS NULL
-      AND versions.hidden_at IS NOT NULL
-      AND versions.hidden_at <= datetime('now', '-' || ? || ' days')
-      AND versions.hidden_reason IN ('delete_request_approved', 'deleted_within_24h')
-    `;
+    const whereClause = cleanupEligibilitySql("versions");
     const totalRow = await env.DB.prepare(`
       SELECT COUNT(*) AS total
       FROM versions
@@ -402,12 +444,79 @@ export async function listR2CleanupCandidates(request: Request, env: Env): Promi
   }
 }
 
+async function listScheduledCleanupCandidateIds(
+  env: Env,
+  olderThanDays: number,
+  limit: number
+): Promise<string[]> {
+  const result = await env.DB.prepare(`
+    SELECT versions.id AS version_id
+    FROM versions
+    WHERE ${cleanupEligibilitySql("versions")}
+    ORDER BY versions.hidden_at ASC, versions.id ASC
+    LIMIT ?
+  `).bind(olderThanDays, limit).all<{ version_id: string }>();
+  return result.results.map((row) => row.version_id);
+}
+
+async function writeScheduledCleanupSummary(
+  env: Env,
+  summary: ScheduledCleanupSummary,
+  fatalErrorCode: string | null
+): Promise<void> {
+  try {
+    await env.DB.prepare(`
+      INSERT INTO admin_logs (
+        id,
+        action,
+        target_type,
+        target_id,
+        level,
+        code,
+        reason,
+        detail
+      ) VALUES (?, 'r2_cleanup_cron_run', 'system', ?, ?, ?, ?, ?)
+    `).bind(
+      makeId("admin_log"),
+      summary.runId,
+      fatalErrorCode ? "error" : summary.failedCount > 0 ? "warning" : "info",
+      fatalErrorCode,
+      fatalErrorCode ? "failed" : summary.failedCount > 0 ? "completed_with_errors" : "completed",
+      JSON.stringify({
+        trigger: "cron",
+        runId: summary.runId,
+        candidateCount: summary.candidateCount,
+        processedCount: summary.processedCount,
+        deletedCount: summary.deletedCount,
+        missingReconciledCount: summary.missingReconciledCount,
+        skippedCount: summary.skippedCount,
+        failedCount: summary.failedCount,
+        limit: summary.limit,
+        durationMs: summary.durationMs,
+        scheduledTime: summary.scheduledTime,
+        cron: summary.cron,
+        errorCodes: summary.errorCodes,
+        fatalErrorCode
+      })
+    ).run();
+  } catch (error) {
+    console.error("[r2-cleanup-cron-log] failed to write summary log", {
+      code: "ADMIN_LOG_WRITE_FAILED",
+      runId: summary.runId,
+      message: errorDetail(error)
+    });
+  }
+}
+
 async function markFileDeleted(
   env: Env,
   row: CleanupTargetRow,
   olderThanDays: number,
   reason: "r2_cleanup_deleted" | "r2_object_missing_during_cleanup"
-): Promise<string> {
+): Promise<
+  { outcome: "updated"; fileDeletedAt: string }
+  | { outcome: "concurrent_completed"; fileDeletedAt: string; fileDeleteReason: string | null }
+> {
   const result = await env.DB.prepare(`
     UPDATE versions
     SET
@@ -416,12 +525,9 @@ async function markFileDeleted(
       updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
       AND file_deleted_at IS NULL
-      AND is_hidden = 1
-      AND download_blocked = 1
       AND hidden_at = ?
       AND file_sha256 = ?
-      AND hidden_at <= datetime('now', '-' || ? || ' days')
-      AND hidden_reason IN ('delete_request_approved', 'deleted_within_24h')
+      AND ${cleanupEligibilitySql("")}
   `).bind(
     reason,
     row.version_id,
@@ -430,42 +536,40 @@ async function markFileDeleted(
     olderThanDays
   ).run();
 
-  if (Number(result.meta.changes ?? 0) !== 1) {
-    throw new Error("Cleanup target changed before the D1 file deletion marker was written.");
-  }
-
   const updated = await env.DB.prepare(`
-    SELECT file_deleted_at
+    SELECT file_deleted_at, file_delete_reason
     FROM versions
     WHERE id = ?
     LIMIT 1
-  `).bind(row.version_id).first<{ file_deleted_at: string | null }>();
+  `).bind(row.version_id).first<{
+    file_deleted_at: string | null;
+    file_delete_reason: string | null;
+  }>();
+
+  if (Number(result.meta.changes ?? 0) === 0) {
+    if (updated?.file_deleted_at) {
+      return {
+        outcome: "concurrent_completed",
+        fileDeletedAt: updated.file_deleted_at,
+        fileDeleteReason: updated.file_delete_reason
+      };
+    }
+    throw new Error("Cleanup target changed before the D1 file deletion marker was written.");
+  }
+
   if (!updated?.file_deleted_at) {
     throw new Error("D1 update completed without file_deleted_at.");
   }
-  return updated.file_deleted_at;
+  return { outcome: "updated", fileDeletedAt: updated.file_deleted_at };
 }
 
-export async function deleteR2CleanupFile(
+async function cleanupR2File(
   request: Request,
   env: Env,
-  versionId: string
+  versionId: string,
+  options: CleanupOptions
 ): Promise<Response> {
-  if (request.method !== "POST") {
-    return methodNotAllowed(request, env, request.method);
-  }
-
-  const parsed = await readCleanupBody(request, env);
-  if (!parsed.ok) {
-    await writeCleanupLog(env, "r2_cleanup_delete_file_failed", "warning", parsed.code, {
-      versionId,
-      olderThanDays: MIN_CLEANUP_AGE_DAYS,
-      errorCode: parsed.code
-    });
-    return parsed.response;
-  }
-
-  const body = parsed.value;
+  const body = options;
   let row: CleanupTargetRow | null;
   try {
     row = await selectCleanupTarget(env, versionId, body.olderThanDays);
@@ -473,7 +577,10 @@ export async function deleteR2CleanupFile(
     await writeCleanupLog(env, "r2_cleanup_delete_file_failed", "error", "CLEANUP_D1_UPDATE_FAILED", {
       versionId,
       olderThanDays: body.olderThanDays,
-      errorCode: "CLEANUP_D1_UPDATE_FAILED"
+      errorCode: "CLEANUP_D1_UPDATE_FAILED",
+      trigger: options.trigger,
+      runId: options.runId ?? null,
+      d1Updated: false
     });
     return apiError(
       request,
@@ -489,7 +596,10 @@ export async function deleteR2CleanupFile(
     await writeCleanupLog(env, "r2_cleanup_delete_file_failed", "warning", "VERSION_NOT_FOUND", {
       versionId,
       olderThanDays: body.olderThanDays,
-      errorCode: "VERSION_NOT_FOUND"
+      errorCode: "VERSION_NOT_FOUND",
+      trigger: options.trigger,
+      runId: options.runId ?? null,
+      d1Updated: false
     });
     return apiError(request, env, 404, "VERSION_NOT_FOUND", "versionが見つかりません。", "versionId was not found.");
   }
@@ -503,8 +613,30 @@ export async function deleteR2CleanupFile(
     hasR2Key: Boolean(row.r2_key?.trim()),
     fileDeletedAt: row.file_deleted_at,
     fileSha256Present: Boolean(row.file_sha256),
-    fileSize: Number(row.file_size)
+    fileSize: Number(row.file_size),
+    trigger: options.trigger,
+    runId: options.runId ?? null,
+    d1Updated: false
   };
+
+  if (!isCleanupEligible(row) && options.trigger === "cron") {
+    await writeCleanupLog(env, "r2_cleanup_delete_file", "warning", null, {
+      ...logBase,
+      outcome: "skipped_state_changed",
+      d1Updated: false
+    });
+    return ok(request, env, {
+      ok: true,
+      versionId: row.version_id,
+      chartId: row.chart_id,
+      outcome: "skipped_state_changed",
+      fileDeletedAt: row.file_deleted_at,
+      fileDeleteReason: row.file_delete_reason,
+      objectExisted: null,
+      d1Updated: false,
+      progressImagePreserved: true
+    });
+  }
 
   if (!isCleanupEligible(row)) {
     await writeCleanupLog(env, "r2_cleanup_delete_file_failed", "warning", "CLEANUP_TARGET_NOT_ELIGIBLE", {
@@ -521,8 +653,10 @@ export async function deleteR2CleanupFile(
     );
   }
 
-  if (row.hidden_at !== body.expectedHiddenAt
-    || (body.expectedFileSha256 !== undefined && row.file_sha256 !== body.expectedFileSha256)) {
+  if (body.expectedHiddenAt !== undefined && (
+    row.hidden_at !== body.expectedHiddenAt
+    || (body.expectedFileSha256 !== undefined && row.file_sha256 !== body.expectedFileSha256)
+  )) {
     await writeCleanupLog(env, "r2_cleanup_delete_file_failed", "warning", "CLEANUP_EXPECTED_VALUE_MISMATCH", {
       ...logBase,
       errorCode: "CLEANUP_EXPECTED_VALUE_MISMATCH"
@@ -540,7 +674,8 @@ export async function deleteR2CleanupFile(
   if (row.file_deleted_at) {
     await writeCleanupLog(env, "r2_cleanup_delete_file", "info", null, {
       ...logBase,
-      outcome: "already_deleted"
+      outcome: "already_deleted",
+      d1Updated: false
     });
     return ok(request, env, {
       ok: true,
@@ -549,19 +684,23 @@ export async function deleteR2CleanupFile(
       outcome: "already_deleted",
       fileDeletedAt: row.file_deleted_at,
       fileDeleteReason: row.file_delete_reason,
+      objectExisted: null,
+      d1Updated: false,
       progressImagePreserved: true
     });
   }
 
   const r2Key = row.r2_key?.trim() ?? "";
-  let outcome: "r2_file_deleted" | "r2_object_missing_reconciled";
+  let outcome: "r2_file_deleted" | "r2_object_missing_reconciled" | "concurrent_completed";
   let deleteReason: "r2_cleanup_deleted" | "r2_object_missing_during_cleanup";
   let missingReason: "r2_key_missing" | "r2_object_missing" | null = null;
+  let objectExisted: boolean | null = null;
 
   if (!r2Key) {
     outcome = "r2_object_missing_reconciled";
     deleteReason = "r2_object_missing_during_cleanup";
     missingReason = "r2_key_missing";
+    objectExisted = false;
   } else {
     let object: R2Object | null;
     try {
@@ -569,7 +708,9 @@ export async function deleteR2CleanupFile(
     } catch {
       await writeCleanupLog(env, "r2_cleanup_delete_file_failed", "error", "CLEANUP_R2_DELETE_FAILED", {
         ...logBase,
-        errorCode: "CLEANUP_R2_DELETE_FAILED"
+        errorCode: "CLEANUP_R2_DELETE_FAILED",
+        objectExisted,
+        d1Updated: false
       });
       return apiError(
         request,
@@ -585,7 +726,9 @@ export async function deleteR2CleanupFile(
       outcome = "r2_object_missing_reconciled";
       deleteReason = "r2_object_missing_during_cleanup";
       missingReason = "r2_object_missing";
+      objectExisted = false;
     } else {
+      objectExisted = true;
       try {
         await env.FILES.delete(r2Key);
         const remaining = await env.FILES.head(r2Key);
@@ -595,7 +738,9 @@ export async function deleteR2CleanupFile(
       } catch {
         await writeCleanupLog(env, "r2_cleanup_delete_file_failed", "error", "CLEANUP_R2_DELETE_FAILED", {
           ...logBase,
-          errorCode: "CLEANUP_R2_DELETE_FAILED"
+          errorCode: "CLEANUP_R2_DELETE_FAILED",
+          objectExisted,
+          d1Updated: false
         });
         return apiError(
           request,
@@ -612,13 +757,24 @@ export async function deleteR2CleanupFile(
   }
 
   let fileDeletedAt: string;
+  let fileDeleteReason: string | null = deleteReason;
+  let d1Updated = false;
   try {
-    fileDeletedAt = await markFileDeleted(env, row, body.olderThanDays, deleteReason);
+    const markResult = await markFileDeleted(env, row, body.olderThanDays, deleteReason);
+    fileDeletedAt = markResult.fileDeletedAt;
+    if (markResult.outcome === "concurrent_completed") {
+      outcome = "concurrent_completed";
+      fileDeleteReason = markResult.fileDeleteReason;
+    } else {
+      d1Updated = true;
+    }
   } catch (error) {
     await writeCleanupLog(env, "r2_cleanup_delete_file_failed", "error", "CLEANUP_D1_UPDATE_FAILED", {
       ...logBase,
       outcome,
-      errorCode: "CLEANUP_D1_UPDATE_FAILED"
+      errorCode: "CLEANUP_D1_UPDATE_FAILED",
+      objectExisted,
+      d1Updated: false
     });
     return apiError(
       request,
@@ -634,7 +790,9 @@ export async function deleteR2CleanupFile(
     ...logBase,
     outcome,
     fileDeletedAt,
-    errorCode: missingReason === "r2_key_missing" ? "CLEANUP_R2_KEY_MISSING" : null
+    errorCode: missingReason === "r2_key_missing" ? "CLEANUP_R2_KEY_MISSING" : null,
+    objectExisted,
+    d1Updated
   });
   return ok(request, env, {
     ok: true,
@@ -643,7 +801,149 @@ export async function deleteR2CleanupFile(
     outcome,
     missingReason,
     fileDeletedAt,
-    fileDeleteReason: deleteReason,
+    fileDeleteReason,
+    objectExisted,
+    d1Updated,
     progressImagePreserved: true
   });
+}
+
+export async function deleteR2CleanupFile(
+  request: Request,
+  env: Env,
+  versionId: string
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return methodNotAllowed(request, env, request.method);
+  }
+
+  const parsed = await readCleanupBody(request, env);
+  if (!parsed.ok) {
+    await writeCleanupLog(env, "r2_cleanup_delete_file_failed", "warning", parsed.code, {
+      versionId,
+      olderThanDays: MIN_CLEANUP_AGE_DAYS,
+      errorCode: parsed.code,
+      trigger: "manual",
+      d1Updated: false
+    });
+    return parsed.response;
+  }
+
+  return cleanupR2File(request, env, versionId, {
+    olderThanDays: parsed.value.olderThanDays,
+    trigger: "manual",
+    expectedHiddenAt: parsed.value.expectedHiddenAt,
+    expectedFileSha256: parsed.value.expectedFileSha256
+  });
+}
+
+function incrementErrorCode(summary: ScheduledCleanupSummary, code: string): void {
+  summary.errorCodes[code] = (summary.errorCodes[code] ?? 0) + 1;
+}
+
+async function readCleanupResponse(response: Response): Promise<Record<string, unknown>> {
+  try {
+    const body = await response.json();
+    return body && typeof body === "object" && !Array.isArray(body)
+      ? body as Record<string, unknown>
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+export async function runScheduledR2Cleanup(
+  env: Env,
+  scheduledTime: number,
+  cron: string
+): Promise<ScheduledCleanupSummary> {
+  const startedAt = Date.now();
+  const runId = makeId("r2_cleanup_run");
+  const summary: ScheduledCleanupSummary = {
+    runId,
+    candidateCount: 0,
+    processedCount: 0,
+    deletedCount: 0,
+    missingReconciledCount: 0,
+    skippedCount: 0,
+    failedCount: 0,
+    limit: SCHEDULED_CLEANUP_LIMIT,
+    durationMs: 0,
+    scheduledTime,
+    cron,
+    errorCodes: {}
+  };
+
+  let versionIds: string[];
+  try {
+    versionIds = await listScheduledCleanupCandidateIds(
+      env,
+      MIN_CLEANUP_AGE_DAYS,
+      SCHEDULED_CLEANUP_LIMIT
+    );
+    summary.candidateCount = versionIds.length;
+  } catch (error) {
+    incrementErrorCode(summary, "CLEANUP_CANDIDATE_LIST_FAILED");
+    summary.durationMs = Date.now() - startedAt;
+    await writeScheduledCleanupSummary(env, summary, "CLEANUP_CANDIDATE_LIST_FAILED");
+    console.error("[r2-cleanup-cron] candidate lookup failed", {
+      code: "CLEANUP_CANDIDATE_LIST_FAILED",
+      runId,
+      message: errorDetail(error)
+    });
+    throw new Error("Scheduled R2 cleanup candidate lookup failed.");
+  }
+
+  for (const versionId of versionIds) {
+    summary.processedCount += 1;
+    try {
+      const internalRequest = new Request(
+        `https://internal.invalid/api/admin/r2-cleanup/${encodeURIComponent(versionId)}/delete-file`,
+        { method: "POST" }
+      );
+      const response = await cleanupR2File(internalRequest, env, versionId, {
+        olderThanDays: MIN_CLEANUP_AGE_DAYS,
+        trigger: "cron",
+        runId
+      });
+      const body = await readCleanupResponse(response);
+      const outcome = typeof body.outcome === "string" ? body.outcome : "";
+
+      if (!response.ok) {
+        summary.failedCount += 1;
+        incrementErrorCode(
+          summary,
+          typeof body.code === "string" ? body.code : "CLEANUP_ITEM_FAILED"
+        );
+      } else if (outcome === "r2_file_deleted") {
+        summary.deletedCount += 1;
+      } else if (outcome === "r2_object_missing_reconciled") {
+        summary.missingReconciledCount += 1;
+      } else {
+        summary.skippedCount += 1;
+      }
+    } catch (error) {
+      summary.failedCount += 1;
+      incrementErrorCode(summary, "CLEANUP_ITEM_FAILED");
+      await writeCleanupLog(env, "r2_cleanup_delete_file_failed", "error", "CLEANUP_ITEM_FAILED", {
+        versionId,
+        olderThanDays: MIN_CLEANUP_AGE_DAYS,
+        trigger: "cron",
+        runId,
+        outcome: "failed",
+        errorCode: "CLEANUP_ITEM_FAILED",
+        d1Updated: false
+      });
+      console.error("[r2-cleanup-cron] cleanup item failed unexpectedly", {
+        code: "CLEANUP_ITEM_FAILED",
+        runId,
+        versionId,
+        message: errorDetail(error)
+      });
+    }
+  }
+
+  summary.durationMs = Date.now() - startedAt;
+  await writeScheduledCleanupSummary(env, summary, null);
+  return summary;
 }

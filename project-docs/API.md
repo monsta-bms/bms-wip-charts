@@ -732,6 +732,16 @@ cleanupエラー:
 
 cleanup実行結果は`admin_logs.action='r2_cleanup_delete_file'`、失敗は`r2_cleanup_delete_file_failed`で記録する。detailにはversion/chart、非表示理由・日時、保持日数、R2 key有無、outcome/errorCode、削除記録日時、SHA-256有無、ファイルサイズだけを含める。
 
+### Scheduled R2 cleanup
+
+HTTP APIを自己呼び出しせず、Workerの`scheduled()` handlerが手動cleanupと同じ内部処理を直接呼び出す。Cronは`0 18 * * *`（毎日UTC 18:00、JST 03:00）で、30日以上経過した候補を最大20件、`hidden_at ASC, version ID ASC`で取得して逐次処理する。新しいSecret、Binding、管理認証は使用しない。
+
+各候補はR2操作直前にD1から再取得する。対象外へ変化していた場合は`outcome='skipped_state_changed'`としてR2を変更しない。R2 object不在は`outcome='r2_object_missing_reconciled'`としてD1を修復し、同時実行で別処理がD1更新を完了していた場合は`outcome='concurrent_completed'`として冪等成功扱いにする。
+
+個別結果は既存の`r2_cleanup_delete_file` / `r2_cleanup_delete_file_failed`へ`trigger`, `runId`, `objectExisted`, `d1Updated`を追加して記録する。実行全体は`admin_logs.action='r2_cleanup_cron_run'`へ候補・処理・削除・object不在修復・スキップ・失敗件数、上限、所要時間、scheduledTime、cron、エラーコード要約を記録する。raw R2 key、生IP、生UA、ADMIN_TOKEN、Secretは記録しない。
+
+候補取得失敗時はR2操作を開始せずScheduled Eventを失敗終了する。個別失敗は記録して次候補へ進み、R2削除失敗ではD1を更新しない。R2削除後のD1更新失敗は次回のobject不在修復で回復する。progressImageおよびD1行は削除しない。
+
 ## BAN管理API
 
 以下はすべて`Authorization: Bearer <ADMIN_TOKEN>`を必須とする。レスポンスにはfull `ip_hash`、full `ua_hash`、full `file_sha256`、生IP、生UA、`ADMIN_TOKEN`、`HASH_SECRET`を含めない。

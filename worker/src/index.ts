@@ -7,6 +7,7 @@ import {
 } from "./routes/difficultyTables";
 import { handleFileRoute } from "./routes/files";
 import { handleVersionLifecycleRoute } from "./routes/versionLifecycle";
+import { runScheduledR2Cleanup } from "./routes/r2Cleanup";
 import { enforcePreMultipartPostingProtection } from "./routes/postingProtection";
 import {
   addProgressImagesToChartsResponse,
@@ -180,5 +181,23 @@ export default {
         "Unhandled exception in Worker request dispatch."
       );
     }
+  },
+
+  async scheduled(
+    controller: ScheduledController,
+    env: Env,
+    _ctx: ExecutionContext
+  ): Promise<void> {
+    try {
+      await runScheduledR2Cleanup(env, controller.scheduledTime, controller.cron);
+    } catch (error) {
+      console.error("[r2-cleanup-cron] scheduled run failed", {
+        code: "R2_CLEANUP_CRON_FAILED",
+        scheduledTime: controller.scheduledTime,
+        cron: controller.cron,
+        message: errorDetail(error)
+      });
+      throw error;
+    }
   }
-};
+} satisfies ExportedHandler<Env>;

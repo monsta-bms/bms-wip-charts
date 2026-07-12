@@ -3,6 +3,9 @@ main = "src/index.ts"
 compatibility_date = "2026-06-28"
 workers_dev = true
 
+[triggers]
+crons = ["0 18 * * *"]
+
 [vars]
 # カンマ区切りで複数Originを許可する。ブラウザのOriginはパスを含まない。
 ALLOWED_ORIGINS = "https://monsta-bms.github.io,http://localhost:8787"

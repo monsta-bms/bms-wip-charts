@@ -152,6 +152,20 @@ pending削除申請の管理MVPを確認する:
 - cleanup後も`progress_image_key`と進捗画像R2 objectが残り、`GET /api/progress-images/:versionId`の既存方針が維持されること。
 - cleanup成功は`admin_logs.action='r2_cleanup_delete_file'`、失敗は`r2_cleanup_delete_file_failed`で記録されること。
 - `admin_logs.detail`にversion/chart、hidden reason/at、保持日数、R2 key有無、outcome/errorCode、file_deleted_at、SHA-256有無、fileSizeが入り、ADMIN_TOKEN、secret、生IP、生UA、raw R2 keyが残らないこと。
+- Scheduled handlerが毎日JST 03:00（UTC 18:00、`0 18 * * *`）の設定で実行できること。
+- Cron cleanupが1回最大20件を`hidden_at`の古い順、同時刻はversion ID順で逐次処理すること。
+- Cronでも30日条件、`is_hidden=1`、`download_blocked=1`、`file_deleted_at IS NULL`、hidden reason allowlistが維持されること。
+- 30日未満、`canceled_within_24h`、pending削除申請、公開中、DL停止のみ、allowlist外のversionがCron対象にならないこと。
+- 候補取得後に状態を変更したversionは`skipped_state_changed`となり、R2 objectが削除されないこと。
+- R2 objectが既にない場合は`r2_object_missing_reconciled`となり、D1の削除記録が修復されること。
+- 手動cleanupとCronが同時実行され、条件付きUPDATEが0件でも、`file_deleted_at`設定済みなら`concurrent_completed`として壊れないこと。
+- Cronを二重実行しても同じversionやR2 objectが異常状態にならないこと。
+- R2削除失敗時はD1を更新せず、次候補の処理を継続すること。
+- R2削除後にD1更新が失敗した場合、次回実行でobject不在としてD1を修復できること。
+- 候補取得失敗時はR2操作を開始せず、実行全体が失敗として記録されること。
+- 個別ログに`trigger='cron'`, `runId`, `objectExisted`, `d1Updated`が入り、集計ログが`r2_cleanup_cron_run`として残ること。
+- Cron cleanup後もprogressImageとD1のsongs/charts/versions行が残ること。
+- 既存の管理画面候補一覧、確認文字列、1件手動cleanup、30日条件、allowlistが変わらないこと。
 
 ## BAN-01 確認項目
 

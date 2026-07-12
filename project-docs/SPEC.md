@@ -532,7 +532,13 @@ cleanup対象は次の全条件を満たすversionに限定する。
 
 R2削除失敗時は`file_deleted_at`を設定しない。R2削除後にD1更新が失敗した場合、次回実行でobject不在を検出してD1を修復する。`file_deleted_at IS NOT NULL`なのにobjectが存在する逆方向の不整合は、このMVPでは自動削除しない。
 
-cleanupは`ADMIN_TOKEN`認証後の管理画面で手動実行し、確認文字列`DELETE_R2_FILE`を要求する。実行結果は`admin_logs`へ記録するが、ADMIN_TOKEN、secret、生IP、生UA、raw R2 keyは記録しない。一括削除、Cron、自動削除、progressImage削除は後続フェーズとする。
+手動cleanupは`ADMIN_TOKEN`認証後の管理画面から1件ずつ実行し、確認文字列`DELETE_R2_FILE`を要求する。実行結果は`admin_logs`へ記録するが、ADMIN_TOKEN、secret、生IP、生UA、raw R2 keyは記録しない。
+
+同じ対象条件と削除処理を使うCron cleanupを毎日JST 03:00（UTC 18:00、`0 18 * * *`）に実行する。1回最大20件を`hidden_at`昇順、同時刻はversion ID昇順で取得し、1件ずつ逐次処理する。候補取得後も各versionを削除直前にD1から再取得し、状態が変わっていた場合はR2を削除せず`skipped_state_changed`として記録する。候補取得自体に失敗した場合はR2操作を開始しない。
+
+R2 objectが既に存在しない場合は、対象条件を再確認した上で`file_delete_reason='r2_object_missing_during_cleanup'`としてD1を修復する。手動処理とCronが競合して条件付きUPDATEが0件になった場合は、再取得後に`file_deleted_at`設定済みなら`concurrent_completed`として扱う。Cron由来の個別ログには`trigger='cron'`と`runId`を含め、実行全体も`admin_logs.action='r2_cleanup_cron_run'`で集計記録する。
+
+R2削除とD1更新は完全なトランザクションではない。R2削除後にD1更新が失敗した場合は、次回実行でobject不在を検出して修復する。R2削除失敗時はD1を更新せず翌日の候補に残す。D1のversion/chart/song行、progressImage、一括物理削除は対象外とし、既存の手動cleanupも維持する。
 
 ## 自動削除準備
 
