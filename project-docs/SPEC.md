@@ -686,8 +686,19 @@ RC★★変換:
 
 同一MD5は、`completed_at`、`created_at`、version IDの降順で最初の1件だけを採用する。この重複排除は2表への分類前に行い、同一MD5が両方へ載らないようにする。異なるMD5の完成分岐はそれぞれ掲載してよい。
 
-標準項目は`md5`, `level`, `title`, `artist`, `url_diff`, `name_diff`とする。`url`と`org_md5`は原曲情報を保持していないため出力しない。`url_diff`は既存file APIの絶対URLとし、ZIPでは内部BMSのMD5を使い、外側ZIPのSHA-256を譜面hashとして出力しない。
+標準項目は`md5`, `level`, `title`, `artist`, `url_diff`, `name_diff`とする。採用versionに有効な`origin_url`がある場合だけ、原曲配布URLを`url`として追加する。`org_md5`は出力しない。`url_diff`は既存file APIの絶対URLとし、ZIPでは内部BMSのMD5を使い、外側ZIPのSHA-256を譜面hashとして出力しない。
 
 元difficulty、chart名、数字パス版ラベル、作者、完成日時、subtitle、subartistは`bms_wip_`名前空間の独自項目として保持する。本フィードは投稿者の自己申告難易度をRC★/RC★★へ統合した完成差分フィードであり、公式な難易度認定ではない。
 
 公開難易度表ルートのGET/HEAD/OPTIONSだけは`Access-Control-Allow-Origin: *`とし、投稿・管理APIのOrigin制限は変更しない。headerと取込HTMLは約1時間、dataは約60秒キャッシュし、ETag再検証に対応する。古いdataが残っていてもDL可否は既存file APIが現在のD1/R2状態で再判定する。
+
+## ORIGIN-URL-01 原曲配布URL
+
+- `versions.origin_url`へ、version単位の任意snapshotとして保存する。既存versionは`NULL`のままとし、自動推測や一括補完はしない。
+- 初回投稿フォームだけに`原曲配布URL（任意）`を表示する。未入力は`NULL`として保存する。
+- 追記投稿ではクライアント値を受け取らず、親versionの`origin_url`を新versionへコピーする。分岐後に親の値が将来訂正されても、既存子versionのsnapshotは自動変更しない。
+- URLは前後空白を除去し、絶対`http:`/`https:` URLだけを許可する。認証情報、制御文字、未エンコード空白を拒否し、fragmentを削除、queryを維持した`URL.toString()`結果を保存する。保存上限は2048文字とする。
+- WorkerはURLへfetchせず、DNS、存在、リダイレクト、リンク先内容、安全性、永続性を確認しない。URL全文はconsoleや`post_logs`へ記録しない。
+- `GET /api/charts`はversionごとに`originUrl`を返すが、公開一覧UIにはリンクやURL文字列を追加しない。
+- RC★/RC★★では、MD5重複排除後に採用されたversion自身の有効な`origin_url`だけを`url`として出力する。URLなしでも掲載を継続し、`url_diff`と`md5`の既存仕様は変えない。`org_md5`は実装しない。
+- 既存versionへの追加・訂正・削除、追記フォームでの編集は後続フェーズとする。

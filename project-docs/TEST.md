@@ -661,10 +661,32 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 同一MD5はcompleted_at、created_at、version IDの降順で1件だけ掲載され、異なるMD5の完成分岐は掲載されること。
 - ZIP投稿では内部BMSのMD5を使い、外側ZIP SHA-256を譜面hashとして出力しないこと。
 - `url_diff`が現在のWorkerを起点とする絶対file API URLであること。
-- `url`と`org_md5`がdataに出力されないこと。
+- `origin_url`がある採用versionだけ、正規化済み原曲配布URLが`url`としてdataに出力されること。
+- `origin_url`がないversionは`url`キーなしで従来どおり掲載されること。
+- `org_md5`がdataに出力されないこと。
 - 一般的なBMS難易度表パーサーでheader/dataを読み込めること。
 - GET/HEAD/OPTIONSで`Access-Control-Allow-Origin: *`が返り、投稿・管理APIのCORSが変わっていないこと。
 - headerは約1時間、dataは約60秒のCache-Controlを返すこと。
 - ETagを返し、同じ`If-None-Match`でHTTP 304になること。
 - 対象なしはHTTP 200の空配列、不明表は`INVALID_DIFFICULTY_TABLE`、D1障害は`DIFFICULTY_TABLE_UNAVAILABLE`になること。
 - Worker typecheckとdry-run bundleが成功すること。
+
+## ORIGIN-URL-01
+
+- `0004_origin_url.sql`を隔離ローカルD1へ適用でき、`versions.origin_url`がNULL許可・最大2048文字になること。
+- migration適用前からあるversionの`origin_url`が`NULL`のまま維持されること。
+- 原曲配布URL未入力で初回投稿でき、空文字ではなく`NULL`が保存されること。
+- `http://`と`https://`の絶対URLを保存できること。
+- URLの前後空白が除去され、fragmentが削除され、queryが維持されること。
+- 相対URL、`javascript:`/`data:`/`file:`、username/password付きURL、制御文字、未エンコード空白を`INVALID_ORIGIN_URL`で拒否すること。
+- 正規化前または正規化後に2048文字を超えるURLを`ORIGIN_URL_TOO_LONG`で拒否すること。
+- URL検証時にWorkerからfetch、DNS、リダイレクト確認が行われないこと。
+- URL全文がconsoleや`post_logs`へ記録されないこと。
+- 追記versionへ親versionの`origin_url`がコピーされ、クライアント送信値に依存しないこと。
+- 同じ親から分岐した各versionが、作成時点のURL snapshotを保持すること。
+- `GET /api/charts`のversionで`originUrl`を取得でき、未登録時は`null`になること。
+- MD5重複排除後に採用されたversion自身のURLだけがRC★/RC★★の`url`に使われること。
+- URLなしの完成versionも難易度表へ掲載され、`url_diff`、`md5`、RC変換、ETag、CORS、キャッシュが変わらないこと。
+- `org_md5`がAPI・難易度表へ出力されないこと。
+- 初回投稿、追記投稿、検索、ページング、ツリー、進捗サムネイル、お気に入りが壊れていないこと。
+- Worker typecheck、Pages JavaScript構文検査、Worker dry-run、`git diff --check`が成功すること。

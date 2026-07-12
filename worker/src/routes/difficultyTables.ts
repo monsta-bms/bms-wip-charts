@@ -1,4 +1,5 @@
 import { sha256Hex } from "../utils/hash";
+import { normalizeOriginUrl } from "../utils/originUrl";
 import { Env } from "../utils/response";
 
 const TABLE_PATH_PREFIX = "/difficulty-tables/";
@@ -57,6 +58,7 @@ type DifficultyTableRow = {
   completed_at: string | null;
   created_at: string;
   chart_name: string;
+  origin_url: string | null;
 };
 
 type ParsedDifficultyTablePath = {
@@ -281,7 +283,8 @@ async function selectEligibleRows(env: Env): Promise<DifficultyTableRow[]> {
       versions.file_id AS file_id,
       versions.completed_at AS completed_at,
       versions.created_at AS created_at,
-      charts.chart_name AS chart_name
+      charts.chart_name AS chart_name,
+      versions.origin_url AS origin_url
     FROM versions
     INNER JOIN charts ON charts.id = versions.chart_id
     WHERE versions.progress = 100
@@ -329,12 +332,14 @@ function buildTableData(
     }
 
     const versionLabel = buildVersionPathLabel(row.branch_path);
+    const originUrl = normalizeOriginUrl(row.origin_url);
     return [{
       md5: row.md5.toLowerCase(),
       level: classification.level,
       title: row.title,
       artist: row.artist,
       url_diff: buildAbsoluteUrl(request, `/api/files/${encodeURIComponent(row.file_id)}`),
+      ...(originUrl.ok && originUrl.value ? { url: originUrl.value } : {}),
       name_diff: `${row.chart_name} / ${versionLabel}`,
       bms_wip_original_difficulty: classification.originalDifficulty,
       bms_wip_chart_name: row.chart_name,

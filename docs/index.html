@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>BMS差分共有</title>
-    <link rel="stylesheet" href="./style.css?v=search-pagination-01">
+    <link rel="stylesheet" href="./style.css?v=origin-url-01">
     <link rel="stylesheet" href="./branch-tree-list.css?v=ui-tree-overlay-01">
     <link rel="stylesheet" href="./list-ui-refresh.css?v=ui-tree-overlay-01">
     <link rel="stylesheet" href="./progress-image-preview.css?v=ui-tree-overlay-01">
@@ -126,6 +126,12 @@
                   <label class="field compact-text-field">
                     <span class="field-label">差分作者（別名義可） <span class="required-mark">*</span></span>
                     <input id="author" name="author" type="text" autocomplete="off" placeholder="例: tester / anonymous" required>
+                  </label>
+
+                  <label class="field origin-url-field">
+                    <span class="field-label">原曲配布URL（任意）</span>
+                    <input id="originUrl" name="originUrl" type="url" maxlength="2048" inputmode="url" autocomplete="url" placeholder="https://example.com/original-song">
+                    <span class="field-help">リンク先の内容・安全性・永続性はサイト側では確認しません。</span>
                   </label>
                 </div>
               </fieldset>
@@ -307,7 +313,7 @@
 
     <script src="./progress-layer-colors.js?v=ui-tree-overlay-01"></script>
     <script src="./zip-bms-reader.js?v=zip-bms-analysis-01"></script>
-    <script src="./app.js?v=zip-bms-analysis-01"></script>
+    <script src="./app.js?v=origin-url-01"></script>
     <script src="./progress-song-end-analysis.js?v=ui-tree-overlay-01"></script>
     <script src="./progress-thumbnail-list.js?v=search-pagination-01"></script>
     <script src="./branch-append-ui.js?v=zip-bms-analysis-01"></script>

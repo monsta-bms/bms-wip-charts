@@ -18,6 +18,7 @@ const difficultyManualPanel = document.querySelector("#difficultyManualPanel");
 const difficultyManualInput = document.querySelector("#difficultyManual");
 const difficultyPreview = document.querySelector("#difficultyPreview");
 const authorInput = document.querySelector("#author");
+const originUrlInput = document.querySelector("#originUrl");
 const progressInput = document.querySelector("#progress");
 const progressMap = document.querySelector("#progressMap");
 const progressMapStatus = document.querySelector("#progressMapStatus");
@@ -1833,6 +1834,7 @@ function buildChartFormData() {
   formData.append("difficulty", difficulty);
   formData.append("level", extractLevelFromDifficulty(difficulty));
   formData.append("author", authorInput.value.trim());
+  formData.append("originUrl", originUrlInput.value.trim());
   formData.append("progress", isRejectedInput.checked ? "100" : progressInput.value.trim());
   formData.append("comment", commentInput.value.trim());
   formData.append("isRejected", isRejectedInput.checked ? "true" : "false");

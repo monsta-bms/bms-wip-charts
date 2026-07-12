@@ -301,6 +301,10 @@ h2 {
   gap: 5px;
 }
 
+.origin-url-field {
+  grid-column: 1 / -1;
+}
+
 .field-label {
   color: var(--muted);
   display: inline-flex;

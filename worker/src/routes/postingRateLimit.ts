@@ -4,6 +4,8 @@ import type { PostingAction } from "./bans";
 
 const CLIENT_REJECTED_ERROR_CODES = [
   "INVALID_FORM",
+  "INVALID_ORIGIN_URL",
+  "ORIGIN_URL_TOO_LONG",
   "PASSWORD_REQUIRED",
   "INVALID_EXTENSION",
   "FILE_TOO_LARGE",

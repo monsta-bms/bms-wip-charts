@@ -49,6 +49,7 @@ type ParentVersionRow = {
   progress_map_json: string | null;
   difficulty: string | null;
   level: string | null;
+  origin_url: string | null;
   is_hidden: number;
   is_rejected: number;
 };
@@ -445,6 +446,7 @@ async function selectParentVersion(env: Env, parentVersionId: string): Promise<P
       progress_map_json,
       difficulty,
       level,
+      origin_url,
       is_hidden,
       is_rejected
     FROM versions
@@ -812,6 +814,7 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
           artist,
           subartist,
           md5,
+          origin_url,
           is_rejected,
           file_id,
           file_name,
@@ -822,7 +825,7 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
           download_blocked,
           download_block_reason,
           completed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, 0, NULL, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, 0, NULL, ?)
       `).bind(
         versionId,
         chartId,
@@ -846,6 +849,7 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
         artist,
         chart.song_subartist,
         input.md5,
+        parent.origin_url,
         fileId,
         input.fileName,
         input.file.size,
@@ -952,6 +956,7 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
       branchPath,
       progress: storedProgress,
       progressMap: preparedProgressMap.progressMap,
+      originUrl: parent.origin_url,
       fileId,
       file: {
         name: input.fileName,

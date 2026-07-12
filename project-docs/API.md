@@ -75,7 +75,7 @@ APIエラーは必ず以下のJSON形式で返す。
 
 ## D1 schema
 
-既存の `versions` 進捗関連カラム:
+既存の `versions` 追加カラム:
 
 | column | 内容 |
 | --- | --- |
@@ -94,6 +94,7 @@ APIエラーは必ず以下のJSON形式で返す。
 | `collapsed_reason` | 折り畳み理由。 |
 | `collapsed_at` | 折り畳みにした日時。 |
 | `collapsed_by_version_id` | 折り畳み原因になった完成version ID。 |
+| `origin_url` | 原曲配布URLのversion単位snapshot。任意、NULL許可、最大2048文字。 |
 
 ## BMS解析範囲
 
@@ -178,6 +179,7 @@ versionレスポンスには以下を含める。
 - `hasChildVersions`, `hasDescendants`: 公開中の直接子versionが1件以上あるか。`is_hidden=1`の子は除外する。
 - `childVersionCount`, `visibleChildVersionCount`: 公開中の直接子version数。既存`childVersionCount`もこの意味とする。
 - `totalChildVersionCount`: DB上の全直接子version数。`is_hidden=1`も含む。
+- `originUrl`: 初回投稿時に登録され、追記では親から継承した原曲配布URL。未登録は`null`。
 
 `progressImage` 例:
 
@@ -227,6 +229,7 @@ versionレスポンスには以下を含める。
 - `difficulty`
 - `level` optional/internal
 - `author`
+- `originUrl` optional。原曲配布URL。
 - `progress`
 - `progressMap` optional JSON string
 - `progressImage` optional `image/png` file
@@ -245,6 +248,7 @@ versionレスポンスには以下を含める。
 - `progressImage` が送られた場合、Worker側でPNG検証後にR2へ保存し、`versions.progress_image_*` へ保存する。
 - `progressImage` が送信されていない場合は従来通り投稿を成功させる。
 - `isRejected=true` の場合は、入力された `progress` と送信された `progressMap` に関係なく保存値を `progress=100` に強制する。
+- `originUrl`は空欄なら`NULL`。絶対HTTP/HTTPS URLだけを許可し、認証情報、制御文字、未エンコード空白を拒否する。fragmentを削除してqueryを維持し、正規化後も2048文字以内とする。外部URLへの通信は行わない。
 
 成功レスポンスには、保存できた場合のみ `progressImage` objectを含める。
 
@@ -279,6 +283,7 @@ versionレスポンスには以下を含める。
 - 親versionが `is_rejected=1` の場合は `REJECTED_CHART_CANNOT_BE_EXTENDED` を返す。
 - 追記投稿で `isRejected=true` が送られた場合は `INVALID_REJECTED_FLAG_FOR_FOLLOWUP` を返す。
 - 親versionのprogressMap unionと同じ塗り範囲の場合は `PROGRESS_MAP_UNCHANGED` で拒否する。
+- 新versionの`originUrl`は親versionのDB値をコピーする。追記リクエストからのURL入力は受け付けない。
 
 成功レスポンス例:
 
@@ -333,6 +338,8 @@ versionレスポンスには以下を含める。
 | `METHOD_NOT_ALLOWED` | 405 | 許可されていないHTTPメソッド。 |
 | `INVALID_FORM` | 400 | multipart/form-dataや必須項目が不正。 |
 | `PASSWORD_REQUIRED` | 400 | 管理パスワードが未入力。 |
+| `INVALID_ORIGIN_URL` | 400 | 原曲配布URLが絶対HTTP/HTTPS URLではない、認証情報・制御文字・未エンコード空白を含むなど不正。 |
+| `ORIGIN_URL_TOO_LONG` | 400 | 原曲配布URLが正規化前または正規化後に2048文字を超える。 |
 | `SERVER_CONFIG_ERROR` | 500 | `HASH_SECRET` などサーバー設定が不足。 |
 | `INVALID_PROGRESS` | 400 | `progress` が0〜100の整数ではない。 |
 | `INVALID_PROGRESS_MAP` | 400 | `progressMap` がJSONとして不正、または必須構造を満たさない。 |
@@ -1002,6 +1009,7 @@ dataは譜面objectの配列を返す。対象なしはHTTP 200の`[]`。
     "level": "5",
     "title": "曲名",
     "artist": "アーティスト",
+    "url": "https://example.com/original-song?download=1",
     "url_diff": "https://bms-wip-charts-worker.monsta3228gsl.workers.dev/api/files/file_xxx",
     "name_diff": "差分名 / 1-2",
     "bms_wip_original_difficulty": "st9",
@@ -1015,4 +1023,4 @@ dataは譜面objectの配列を返す。対象なしはHTTP 200の`[]`。
 ]
 ```
 
-`url`、`org_md5`、外側ZIPのSHA-256は出力しない。header/取込HTMLは`Cache-Control: public, max-age=3600, must-revalidate`、dataは`public, max-age=60, must-revalidate`とし、すべてETagと`If-None-Match`による304応答に対応する。エラー応答は`Cache-Control: no-store`とする。
+`url`は、MD5重複排除後に採用されたversion自身に有効な`origin_url`がある場合だけ出力し、未登録時はキー自体を省略する。`url_diff`は常に従来どおり出力する。`org_md5`と外側ZIPのSHA-256は出力しない。header/取込HTMLは`Cache-Control: public, max-age=3600, must-revalidate`、dataは`public, max-age=60, must-revalidate`とし、すべてETagと`If-None-Match`による304応答に対応する。エラー応答は`Cache-Control: no-store`とする。

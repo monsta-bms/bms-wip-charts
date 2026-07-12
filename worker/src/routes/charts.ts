@@ -2,6 +2,7 @@ import { BmsAnalysis, normalizeText } from "../utils/bms";
 import { analyzeUploadedBmsBytes } from "../utils/bmsUploadAnalysis";
 import { sanitizeFileName, validateUploadFile } from "../utils/fileValidation";
 import { hashWithSecret, sha256HexFromBuffer } from "../utils/hash";
+import { normalizeOriginUrl } from "../utils/originUrl";
 import { prepareProgressMap } from "../utils/progressMap";
 import { buildRequestFingerprint } from "../utils/requestFingerprint";
 import { apiError, Env, errorDetail, methodNotAllowed, ok } from "../utils/response";
@@ -64,6 +65,7 @@ type VersionRow = {
   artist: string;
   subartist: string;
   md5: string | null;
+  origin_url: string | null;
   is_rejected: number;
   file_id: string;
   file_name: string;
@@ -130,6 +132,7 @@ type CreateChartInput = {
   fileBytes: ArrayBuffer;
   fileSha256: string;
   md5: string | null;
+  originUrl: string | null;
   bmsAnalysis: BmsAnalysis | null;
   analysisWarnings: ApiWarning[];
   bmsAnalysisFailed: boolean;
@@ -389,6 +392,7 @@ function buildVersion(row: VersionRow) {
     artist: row.artist,
     subartist: row.subartist,
     md5: row.md5,
+    originUrl: row.origin_url,
     isRejected: toBoolean(row.is_rejected),
     file: {
       id: row.file_id,
@@ -650,6 +654,7 @@ async function selectVisibleVersionRows(env: Env, chartIds: string[]): Promise<V
       versions.artist AS artist,
       versions.subartist AS subartist,
       versions.md5 AS md5,
+      versions.origin_url AS origin_url,
       versions.is_rejected AS is_rejected,
       versions.file_id AS file_id,
       versions.file_name AS file_name,
@@ -832,6 +837,24 @@ async function parseCreateChartInput(
     };
   }
 
+  const originUrlEntry = form.get("originUrl");
+  const originUrlResult = normalizeOriginUrl(
+    typeof originUrlEntry === "string" ? originUrlEntry : ""
+  );
+  if (!originUrlResult.ok) {
+    return {
+      ok: false,
+      response: await failCreateChart(request, env, context, {
+        status: 400,
+        code: originUrlResult.code,
+        message: originUrlResult.code === "ORIGIN_URL_TOO_LONG"
+          ? "原曲配布URLが長すぎます。"
+          : "原曲配布URLが不正です。",
+        detail: originUrlResult.detail
+      })
+    };
+  }
+
   const validation = validateUploadFile(file);
   if (!validation.ok) {
     return {
@@ -933,6 +956,7 @@ async function parseCreateChartInput(
       fileBytes,
       fileSha256,
       md5,
+      originUrl: originUrlResult.value,
       bmsAnalysis,
       analysisWarnings,
       bmsAnalysisFailed,
@@ -1304,6 +1328,7 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
         artist,
         subartist,
         md5,
+        origin_url,
         is_rejected,
         file_id,
         file_name,
@@ -1314,7 +1339,7 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
         download_blocked,
         download_block_reason,
         completed_at
-      ) VALUES (?, ?, NULL, 1, '', 'root', ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?)
+      ) VALUES (?, ?, NULL, 1, '', 'root', ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?)
     `).bind(
       versionId,
       chartId,
@@ -1334,6 +1359,7 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
       input.artist,
       input.subartist,
       input.md5,
+      input.originUrl,
       input.isRejected ? 1 : 0,
       fileId,
       input.fileName,
@@ -1421,6 +1447,7 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
       isRejected: input.isRejected,
       completed: storedProgress === 100,
       completedAt,
+      originUrl: input.originUrl,
       file: {
         name: input.fileName,
         size: input.file.size,
