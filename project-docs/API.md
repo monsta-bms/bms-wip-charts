@@ -2,7 +2,7 @@
 
 ## CHART-MINIVIEW-01
 
-新規投稿・追記でWorkerのBMS解析に成功した場合、`measure_notes_json`をschemaVersion 3として保存する。schemaVersion 2の既存項目は維持し、`miniView`へ2048段階のレーン別bitsetをBase64で保存する。`miniView`全体は32KiB以下とする。
+新規投稿・追記でWorkerのBMS解析に成功した場合、`measure_notes_json`をschemaVersion 3として保存する。schemaVersion 2の既存項目は維持し、`miniView`へ元BMSの分数位置を保持する圧縮イベント列を保存する。`miniView`全体は32KiB以下とする。
 
 `GET /api/charts`は完全なpayloadを除外し、versionへ次だけを追加する。
 
@@ -24,32 +24,31 @@
 {
   "versionId": "version_xxx",
   "miniView": {
-    "schemaVersion": 1,
+    "schemaVersion": 2,
     "mode": "7key-sp",
-    "resolution": 2048,
     "laneOrder": ["scratch", "key1", "key2", "key3", "key4", "key5", "key6", "key7"],
     "startMeasure": 1,
     "endMeasure": 3,
+    "startPosition": 1,
+    "endPosition": 3.75,
     "noteCount": 1200,
     "tapCount": 1160,
     "longNoteCount": 40,
-    "tapBits": ["..."],
-    "longActiveBits": ["..."],
-    "longStartBits": ["..."],
-    "longEndBits": ["..."],
-    "measureBits": "...",
-    "measurePositions": [0, 682, 1365, 2047]
+    "eventEncoding": "grouped-varint-v1",
+    "eventGroupCount": 123,
+    "eventData": "...",
+    "measureLengths": [[3, 0.75]]
   }
 }
 ```
 
-`measurePositions`は任意で、`startMeasure`から`endMeasure + 1`までの各小節境界を量子化indexで表す。CHART-MINIVIEW-UX-01以降の新規生成payloadでは出力し、既存payloadに存在しない場合もAPI取得可能とする。一覧APIには引き続き完全payloadを含めない。
+`eventData`は同じ小節・レーン・種別・分母のイベントをまとめたvarint列で、各イベントの`pairIndex/pairCount`を丸めず復元できる。`measureLengths`は長さ1.0以外の小節だけを`[measure, length]`で保持する。`startPosition/endPosition`とprogressMap blockの同名値は小節長累積の共通座標である。旧miniView payload schemaVersion 1は`MINIVIEW_NOT_AVAILABLE`とし、一覧APIには引き続き完全payloadを含めない。
 
 成功時は`Cache-Control: public, max-age=300, stale-while-revalidate=300`とpayload SHA-256由来の`ETag`を返し、`If-None-Match`一致時は304とする。
 
 | HTTP | code | 条件 |
 | ---: | --- | --- |
-| 404 | `MINIVIEW_NOT_AVAILABLE` | version/chartが非公開、存在しない、schemaVersion 2、またはunsupported |
+| 404 | `MINIVIEW_NOT_AVAILABLE` | version/chartが非公開、存在しない、measure notes schemaVersion 2、旧miniView payload、またはunsupported |
 | 500 | `MINIVIEW_READ_FAILED` | D1読込または保存JSON解析に失敗 |
 
 ミニビューwarningは投稿レスポンスの既存warningsへ追加するが、投稿自体は成功可能とする。warning detailへBMS本文やイベント一覧は含めない。
@@ -1065,7 +1064,7 @@ Workerまたはライブラリ起因の予期しない検査失敗はHTTP 503 `Z
 - `file.md5`: ZIP内譜面バイト列のMD5
 - `metadata`: Workerが内部譜面から読んだTITLE/SUBTITLE/ARTIST/SUBARTIST/encoding
 - `analysis`: Worker解析によるplayNotes、小節範囲、targetMeasureCount、measureNotes
-- `progressMap.blocks`: Workerが内部譜面から再生成した標準ブロック
+- `progressMap.blocks`: Workerが内部譜面から再生成した標準ブロック。新規保存分は小節長累積座標の`startPosition/endPosition`を含む
 
 `ZIP_PROGRESS_MAP_MISMATCH`は、クライアントblocksの改ざん・不一致、またはZIP追記時の親格子不一致に対してHTTP 400で返す。`ZIP_BMS_ANALYSIS_FAILED`は、内部譜面解析に失敗し、送信されたprogressMapを検証できない場合にHTTP 400で返す。両方ともclient rejected投稿レート制限対象とする。progressMapなしの解析失敗は投稿を許可し、`BMS_ANALYSIS_FAILED` warningを返す。内部バイト取得などWorker起因障害は既存`ZIP_INSPECTION_FAILED` HTTP 503とし、レート制限対象外とする。
 

@@ -374,7 +374,8 @@ function projectMeasureNotes(value: string | null, versionId: string): {
   const ready = miniViewRecord.status === "ready"
     && miniViewRecord.mode === "7key-sp"
     && Boolean(miniViewRecord.payload)
-    && typeof miniViewRecord.payload === "object";
+    && typeof miniViewRecord.payload === "object"
+    && (miniViewRecord.payload as Record<string, unknown>).schemaVersion === 2;
   return {
     measureNotes: {
       ...root,

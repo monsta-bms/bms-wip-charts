@@ -12,7 +12,7 @@
 - 2P側、地雷、特殊チャンネル、判定が曖昧な5keyが`MINIVIEW_UNSUPPORTED_MODE` warningになること。
 - ミニビュー未対応でも投稿、progressMap、progressImage、R2/D1保存が従来通り成功すること。
 - miniView保存値が32KiB以下で、超過時は`MINIVIEW_TOO_COMPLEX`になること。
-- `GET /api/charts`に完全なbitset payloadが含まれず、available/mode/urlだけが返ること。
+- `GET /api/charts`に完全なイベントpayloadが含まれず、available/mode/urlだけが返ること。
 - 公開versionの専用API取得、ETagによる304、schemaVersion 2と非表示version/chartの404を確認すること。
 - 既存schemaVersion 2ではミニビューなしでも一覧と進捗サムネイルが崩れないこと。
 - IntersectionObserverに入った可視行だけを取得し、初期折り畳み中は取得しないこと。
@@ -27,8 +27,14 @@
 - EnterまたはSpace、スマホtapで吹き出しを固定/解除でき、Escまたは外側操作で閉じられること。
 - 画面端とスマホ幅で吹き出しがviewport外へ大きくはみ出さず、横スクロールが発生しないこと。
 - 白鍵盤ノートが薄灰、青鍵盤ノートが青、スクラッチが赤、LNが各レーン同系色、小節線が薄灰で描画されること。
-- 小節長変更を含む新規payloadで`measurePositions`を使い、blockの開始/終了小節と描画範囲が対応すること。
-- `measurePositions`がない既存schemaVersion 3でも線形fallbackで吹き出しが動作すること。
+- 通常4/4小節の16分、24分、32分、48分イベントが元の`pairIndex/pairCount`位置で等間隔に描画されること。
+- `#xxx02`が0.75、0.5、1.5の小節と複数回の小節長変更で、ノート・LN・スクラッチ・16分/1拍/小節グリッドが同じ累積音楽位置を使うこと。
+- progressMap blockの`startPosition/endPosition`とminiView切り出し範囲が一致し、`start <= event < end`だけが表示されること。
+- block終了が小節境界と一致する場合に不要な次小節番号・小節線・ノートが含まれないこと。
+- 0.75小節に通常16分相当の区間が12個表示され、小節の描画高が通常小節の75%になること。
+- スクラッチレーン幅が通常鍵盤の1.5倍、通常7鍵が同じ幅であること。
+- 新規miniView payload schemaVersion 2が32KiB以下で、単体BMSとZIP内部BMSから同じ分数イベントを生成すること。
+- 旧miniView payload schemaVersion 1は不正確な拡大表示へfallbackせず、ミニビュー非対応になること。
 - schemaVersion 2やminiView未対応versionでは操作レイヤーを表示せず、進捗サムネイルだけが従来どおり動作すること。
 - 一覧右側に常時全体ミニビューが表示されず、進捗サムネイル列の幅を圧迫しないこと。
 - 吹き出しが黒系背景となり、16分線、1拍線、小節境界線を強さの違いで判別できること。

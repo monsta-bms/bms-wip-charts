@@ -54,6 +54,12 @@
       index,
       startMeasure: Number.isInteger(Number(block?.startMeasure)) ? Number(block.startMeasure) : null,
       endMeasure: Number.isInteger(Number(block?.endMeasure)) ? Number(block.endMeasure) : null,
+      startPosition: block?.startPosition !== null && block?.startPosition !== undefined && Number.isFinite(Number(block.startPosition))
+        ? Number(block.startPosition)
+        : null,
+      endPosition: block?.endPosition !== null && block?.endPosition !== undefined && Number.isFinite(Number(block.endPosition))
+        ? Number(block.endPosition)
+        : null,
       startTimeSec: Number.isFinite(Number(block?.startTimeSec)) ? Number(block.startTimeSec) : null,
       endTimeSec: Number.isFinite(Number(block?.endTimeSec)) ? Number(block.endTimeSec) : null,
       playNotes: Number.isFinite(Number(block?.playNotes)) ? Number(block.playNotes) : 0

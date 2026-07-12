@@ -33,20 +33,17 @@ function isPayload(value: unknown): value is BmsMiniViewPayload {
     return false;
   }
   const payload = value as Partial<BmsMiniViewPayload>;
-  return payload.schemaVersion === 1
+  return payload.schemaVersion === 2
     && payload.mode === "7key-sp"
-    && Number.isInteger(payload.resolution)
-    && Number(payload.resolution) > 0
     && Array.isArray(payload.laneOrder)
-    && Array.isArray(payload.tapBits)
-    && Array.isArray(payload.longActiveBits)
-    && Array.isArray(payload.longStartBits)
-    && Array.isArray(payload.longEndBits)
-    && typeof payload.measureBits === "string"
-    && (
-      payload.measurePositions === undefined
-      || (Array.isArray(payload.measurePositions) && payload.measurePositions.every(Number.isInteger))
-    );
+    && payload.eventEncoding === "grouped-varint-v1"
+    && Number.isInteger(payload.eventGroupCount)
+    && Number(payload.eventGroupCount) >= 0
+    && typeof payload.eventData === "string"
+    && Array.isArray(payload.measureLengths)
+    && typeof payload.startPosition === "number"
+    && typeof payload.endPosition === "number"
+    && payload.endPosition > payload.startPosition;
 }
 
 async function buildEtag(payload: BmsMiniViewPayload): Promise<string> {

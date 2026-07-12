@@ -261,6 +261,8 @@
         endMeasure: positionToMeasure(endPosition - 0.000001, measureStarts, measureLengths, maxMeasure),
         startStandardPosition: startPosition,
         endStandardPosition: endPosition,
+        startPosition,
+        endPosition,
         startTimeSec: estimateTimeForPosition(startPosition, playEvents),
         endTimeSec: estimateTimeForPosition(endPosition, playEvents),
         playNotes: blockNotes.length

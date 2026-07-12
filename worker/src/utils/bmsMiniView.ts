@@ -1,11 +1,9 @@
 import type { BmsAnalysis } from "./bms";
 
 export const MINI_VIEW_PAYLOAD_MAX_BYTES = 32 * 1024;
-export const MINI_VIEW_RESOLUTION = 2048;
 
 const MINI_VIEW_MAX_EVENTS = 50_000;
 const LANE_COUNT = 8;
-const BITSET_BYTES = Math.ceil(MINI_VIEW_RESOLUTION / 8);
 const CONTROL_FLOW_PATTERN = /^#(?:RANDOM|SETRANDOM|ENDRANDOM|IF|ELSEIF|ELSE|ENDIF|SWITCH|SETSWITCH|CASE|SKIP|DEF|ENDSW)\b/i;
 const MINE_CHANNEL_PATTERN = /^[DE][1-9]$/i;
 const SECOND_PLAYER_CHANNEL_PATTERN = /^(?:2[1-9]|6[1-9])$/;
@@ -52,25 +50,24 @@ export type BmsMiniViewWarningCode =
   | "MINIVIEW_GENERATION_FAILED";
 
 export type BmsMiniViewPayload = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   mode: "7key-sp";
-  resolution: number;
   laneOrder: string[];
   startMeasure: number;
   endMeasure: number;
+  startPosition: number;
+  endPosition: number;
   noteCount: number;
   tapCount: number;
   longNoteCount: number;
-  tapBits: string[];
-  longActiveBits: string[];
-  longStartBits: string[];
-  longEndBits: string[];
-  measureBits: string;
-  measurePositions?: number[];
+  eventEncoding: "grouped-varint-v1";
+  eventGroupCount: number;
+  eventData: string;
+  measureLengths: Array<[number, number]>;
 };
 
 export type StoredBmsMiniView = {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   status: "ready" | "unsupported";
   mode: "7key-sp" | null;
   reasonCode?: BmsMiniViewWarningCode;
@@ -90,20 +87,34 @@ type RawLaneEvent = {
   lane: number;
   measure: number;
   fraction: number;
+  pairIndex: number;
+  pairCount: number;
   objectId: string;
   position?: number;
 };
 
 type LongInterval = {
   lane: number;
-  start: number;
-  end: number;
+  startEvent: RawLaneEvent;
+  endEvent: RawLaneEvent;
+  startPosition: number;
+  endPosition: number;
+};
+
+type PackedEventKind = 0 | 1 | 2;
+
+type PackedMiniEvent = {
+  lane: number;
+  measure: number;
+  numerator: number;
+  denominator: number;
+  kind: PackedEventKind;
 };
 
 function unsupported(code: BmsMiniViewWarningCode, message: string, detail?: string): BmsMiniViewAnalysisResult {
   return {
     miniView: {
-      schemaVersion: 1,
+      schemaVersion: 2,
       status: "unsupported",
       mode: null,
       reasonCode: code
@@ -122,18 +133,23 @@ function hasNonZeroObject(data: string): boolean {
   return false;
 }
 
-function splitObjects(data: string): Array<{ objectId: string; fraction: number }> | null {
+function splitObjects(data: string): Array<{
+  objectId: string;
+  fraction: number;
+  pairIndex: number;
+  pairCount: number;
+}> | null {
   const normalized = data.trim();
   if (normalized.length === 0 || normalized.length % 2 !== 0 || !/^[0-9A-Za-z]+$/.test(normalized)) {
     return null;
   }
 
   const pairCount = normalized.length / 2;
-  const result: Array<{ objectId: string; fraction: number }> = [];
+  const result: Array<{ objectId: string; fraction: number; pairIndex: number; pairCount: number }> = [];
   for (let index = 0; index < pairCount; index += 1) {
     const objectId = normalized.slice(index * 2, index * 2 + 2).toUpperCase();
     if (objectId !== "00") {
-      result.push({ objectId, fraction: index / pairCount });
+      result.push({ objectId, fraction: index / pairCount, pairIndex: index, pairCount });
     }
   }
   return result;
@@ -164,13 +180,6 @@ function compareEvents(a: RawLaneEvent, b: RawLaneEvent): number {
   return Number(a.position) - Number(b.position) || a.lane - b.lane || a.objectId.localeCompare(b.objectId);
 }
 
-function setBit(bits: Uint8Array, index: number): void {
-  if (index < 0 || index >= MINI_VIEW_RESOLUTION) {
-    return;
-  }
-  bits[index >> 3] |= 1 << (index & 7);
-}
-
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
   for (let index = 0; index < bytes.length; index += 1) {
@@ -179,15 +188,80 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-function quantizePosition(position: number, start: number, end: number): number {
-  const ratio = end > start ? (position - start) / (end - start) : 0;
-  return Math.max(0, Math.min(MINI_VIEW_RESOLUTION - 1, Math.round(ratio * (MINI_VIEW_RESOLUTION - 1))));
+function appendVarint(target: number[], value: number): void {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error("Chart miniview varint value is invalid.");
+  }
+  let remaining = value;
+  do {
+    const next = remaining % 128;
+    remaining = Math.floor(remaining / 128);
+    target.push(next | (remaining > 0 ? 0x80 : 0));
+  } while (remaining > 0);
+}
+
+function encodePackedEvents(events: PackedMiniEvent[]): { data: string; groupCount: number } {
+  const sorted = [...events].sort((left, right) => (
+    left.measure - right.measure
+    || left.lane - right.lane
+    || left.kind - right.kind
+    || left.denominator - right.denominator
+    || left.numerator - right.numerator
+  ));
+  const groups: PackedMiniEvent[][] = [];
+  for (const event of sorted) {
+    if (
+      !Number.isSafeInteger(event.measure)
+      || event.measure < 0
+      || !Number.isSafeInteger(event.lane)
+      || event.lane < 0
+      || event.lane >= LANE_COUNT
+      || !Number.isSafeInteger(event.numerator)
+      || event.numerator < 0
+      || !Number.isSafeInteger(event.denominator)
+      || event.denominator <= 0
+      || event.numerator >= event.denominator
+    ) {
+      throw new Error("Chart miniview contains an invalid exact event.");
+    }
+    const previous = groups[groups.length - 1];
+    const first = previous?.[0];
+    if (
+      first
+      && first.measure === event.measure
+      && first.lane === event.lane
+      && first.kind === event.kind
+      && first.denominator === event.denominator
+    ) {
+      previous.push(event);
+    } else {
+      groups.push([event]);
+    }
+  }
+
+  const bytes: number[] = [];
+  let previousMeasure = 0;
+  for (const group of groups) {
+    const first = group[0];
+    appendVarint(bytes, first.measure - previousMeasure);
+    previousMeasure = first.measure;
+    bytes.push((first.kind << 3) | first.lane);
+    appendVarint(bytes, first.denominator);
+    appendVarint(bytes, group.length);
+    let previousNumerator = 0;
+    for (const event of group) {
+      appendVarint(bytes, event.numerator - previousNumerator);
+      previousNumerator = event.numerator;
+    }
+  }
+  return { data: bytesToBase64(Uint8Array.from(bytes)), groupCount: groups.length };
 }
 
 function buildPayload(
   taps: RawLaneEvent[],
   longNotes: LongInterval[],
   measureStarts: number[],
+  measureLengths: Map<number, number>,
   analysis: BmsAnalysis
 ): BmsMiniViewPayload | null {
   const startMeasure = analysis.displayFirstMeasure;
@@ -201,65 +275,50 @@ function buildPayload(
   if (!Number.isFinite(startPosition) || !Number.isFinite(endPosition) || endPosition <= startPosition) {
     return null;
   }
-
-  const tapBits = Array.from({ length: LANE_COUNT }, () => new Uint8Array(BITSET_BYTES));
-  const longActiveBits = Array.from({ length: LANE_COUNT }, () => new Uint8Array(BITSET_BYTES));
-  const longStartBits = Array.from({ length: LANE_COUNT }, () => new Uint8Array(BITSET_BYTES));
-  const longEndBits = Array.from({ length: LANE_COUNT }, () => new Uint8Array(BITSET_BYTES));
-  const activeDiffs = Array.from({ length: LANE_COUNT }, () => new Int32Array(MINI_VIEW_RESOLUTION + 1));
-  const measureBits = new Uint8Array(BITSET_BYTES);
-
-  for (const tap of taps) {
-    setBit(tapBits[tap.lane], quantizePosition(Number(tap.position), startPosition, endPosition));
-  }
-
-  for (const longNote of longNotes) {
-    const startIndex = quantizePosition(longNote.start, startPosition, endPosition);
-    const endIndex = Math.max(startIndex, quantizePosition(longNote.end, startPosition, endPosition));
-    setBit(longStartBits[longNote.lane], startIndex);
-    setBit(longEndBits[longNote.lane], endIndex);
-    activeDiffs[longNote.lane][startIndex] += 1;
-    if (endIndex + 1 < activeDiffs[longNote.lane].length) {
-      activeDiffs[longNote.lane][endIndex + 1] -= 1;
-    }
-  }
-
-  for (let lane = 0; lane < LANE_COUNT; lane += 1) {
-    let active = 0;
-    for (let index = 0; index < MINI_VIEW_RESOLUTION; index += 1) {
-      active += activeDiffs[lane][index];
-      if (active > 0) {
-        setBit(longActiveBits[lane], index);
+  const packed = encodePackedEvents([
+    ...taps.map((event): PackedMiniEvent => ({
+      lane: event.lane,
+      measure: event.measure,
+      numerator: event.pairIndex,
+      denominator: event.pairCount,
+      kind: 0
+    })),
+    ...longNotes.flatMap((interval): PackedMiniEvent[] => ([
+      {
+        lane: interval.lane,
+        measure: interval.startEvent.measure,
+        numerator: interval.startEvent.pairIndex,
+        denominator: interval.startEvent.pairCount,
+        kind: 1
+      },
+      {
+        lane: interval.lane,
+        measure: interval.endEvent.measure,
+        numerator: interval.endEvent.pairIndex,
+        denominator: interval.endEvent.pairCount,
+        kind: 2
       }
-    }
-  }
-
-  const measurePositions: number[] = [];
-  for (let measure = startMeasure; measure <= endMeasure + 1; measure += 1) {
-    const position = measureStarts[measure];
-    if (Number.isFinite(position)) {
-      const quantizedPosition = quantizePosition(position, startPosition, endPosition);
-      measurePositions.push(quantizedPosition);
-      setBit(measureBits, quantizedPosition);
-    }
-  }
+    ]))
+  ]);
+  const lengthOverrides = [...measureLengths.entries()]
+    .filter(([measure, length]) => measure >= 0 && measure <= endMeasure && Number.isFinite(length) && length > 0 && length !== 1)
+    .sort(([left], [right]) => left - right);
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     mode: "7key-sp",
-    resolution: MINI_VIEW_RESOLUTION,
     laneOrder: [...MINI_VIEW_LANE_ORDER],
     startMeasure,
     endMeasure,
+    startPosition,
+    endPosition,
     noteCount: taps.length + longNotes.length,
     tapCount: taps.length,
     longNoteCount: longNotes.length,
-    tapBits: tapBits.map(bytesToBase64),
-    longActiveBits: longActiveBits.map(bytesToBase64),
-    longStartBits: longStartBits.map(bytesToBase64),
-    longEndBits: longEndBits.map(bytesToBase64),
-    measureBits: bytesToBase64(measureBits),
-    measurePositions
+    eventEncoding: "grouped-varint-v1",
+    eventGroupCount: packed.groupCount,
+    eventData: packed.data,
+    measureLengths: lengthOverrides
   };
 }
 
@@ -355,7 +414,14 @@ export function analyzeBmsMiniView(
         return unsupported("MINIVIEW_GENERATION_FAILED", "Chart miniview found malformed playable channel data.", lineKey);
       }
       for (const object of objects) {
-        const event = { lane, measure, fraction: object.fraction, objectId: object.objectId };
+        const event = {
+          lane,
+          measure,
+          fraction: object.fraction,
+          pairIndex: object.pairIndex,
+          pairCount: object.pairCount,
+          objectId: object.objectId
+        };
         if (NORMAL_LANES.has(channel)) {
           normalEvents.push(event);
         } else {
@@ -404,7 +470,13 @@ export function analyzeBmsMiniView(
           }
           consumed.add(previous);
           consumed.add(event);
-          longNotes.push({ lane, start: Number(previous.position), end: Number(event.position) });
+          longNotes.push({
+            lane,
+            startEvent: previous,
+            endEvent: event,
+            startPosition: Number(previous.position),
+            endPosition: Number(event.position)
+          });
           previous = null;
         } else {
           previous = event;
@@ -422,14 +494,22 @@ export function analyzeBmsMiniView(
         if (!(end > start)) {
           return unsupported("MINIVIEW_MALFORMED_LN", "Long-note interval has an invalid endpoint.", `lane=${lane}`);
         }
-        longNotes.push({ lane, start, end });
+        longNotes.push({
+          lane,
+          startEvent: laneLong[index],
+          endEvent: laneLong[index + 1],
+          startPosition: start,
+          endPosition: end
+        });
       }
     }
 
     for (let lane = 0; lane < LANE_COUNT; lane += 1) {
-      const laneIntervals = longNotes.filter((item) => item.lane === lane).sort((a, b) => a.start - b.start || a.end - b.end);
+      const laneIntervals = longNotes
+        .filter((item) => item.lane === lane)
+        .sort((a, b) => a.startPosition - b.startPosition || a.endPosition - b.endPosition);
       for (let index = 1; index < laneIntervals.length; index += 1) {
-        if (laneIntervals[index].start <= laneIntervals[index - 1].end) {
+        if (laneIntervals[index].startPosition <= laneIntervals[index - 1].endPosition) {
           return unsupported("MINIVIEW_MALFORMED_LN", "Long-note intervals overlap.", `lane=${lane}`);
         }
       }
@@ -439,17 +519,19 @@ export function analyzeBmsMiniView(
           return unsupported("MINIVIEW_GENERATION_FAILED", "Duplicate notes share the same lane position.", `lane=${lane}`);
         }
       }
-      if (laneTaps.some((tap) => laneIntervals.some((interval) => Number(tap.position) >= interval.start && Number(tap.position) <= interval.end))) {
+      if (laneTaps.some((tap) => laneIntervals.some((interval) => (
+        Number(tap.position) >= interval.startPosition && Number(tap.position) <= interval.endPosition
+      )))) {
         return unsupported("MINIVIEW_MALFORMED_LN", "A normal note overlaps a long-note interval.", `lane=${lane}`);
       }
     }
 
-    const payload = buildPayload(taps, longNotes, measureStarts, analysis);
+    const payload = buildPayload(taps, longNotes, measureStarts, measureLengths, analysis);
     if (!payload) {
       return unsupported("MINIVIEW_GENERATION_FAILED", "Chart miniview could not build a display range.");
     }
     const miniView: StoredBmsMiniView = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       status: "ready",
       mode: "7key-sp",
       payload

@@ -30,77 +30,167 @@
     return new URL(path, `${base.replace(/\/$/, "")}/`).href;
   }
 
-  function decodeBits(value, resolution) {
+  function decodeBase64Bytes(value) {
     const binary = atob(String(value || ""));
-    const expectedBytes = Math.ceil(resolution / 8);
-    if (binary.length !== expectedBytes) {
-      throw new Error("Invalid chart miniview bitset length.");
-    }
     return Uint8Array.from(binary, (character) => character.charCodeAt(0));
   }
 
-  function bitAt(bits, index) {
-    return (bits[index >> 3] & (1 << (index & 7))) !== 0;
+  function readVarint(state) {
+    let value = 0;
+    let multiplier = 1;
+    for (let byteIndex = 0; byteIndex < 8; byteIndex += 1) {
+      if (state.offset >= state.bytes.length) {
+        throw new Error("Chart miniview packed data ended unexpectedly.");
+      }
+      const byte = state.bytes[state.offset++];
+      value += (byte & 0x7f) * multiplier;
+      if ((byte & 0x80) === 0) {
+        if (!Number.isSafeInteger(value)) {
+          throw new Error("Chart miniview packed integer is too large.");
+        }
+        return value;
+      }
+      multiplier *= 128;
+    }
+    throw new Error("Chart miniview packed integer is invalid.");
+  }
+
+  function buildMeasureGeometry(endMeasure, overrides) {
+    const lengths = Array.from({ length: endMeasure + 1 }, () => 1);
+    for (const entry of overrides) {
+      if (!Array.isArray(entry) || entry.length !== 2) {
+        throw new Error("Chart miniview measure length is invalid.");
+      }
+      const measure = Number(entry[0]);
+      const length = Number(entry[1]);
+      if (!Number.isInteger(measure) || measure < 0 || measure > endMeasure || !Number.isFinite(length) || length <= 0) {
+        throw new Error("Chart miniview measure length is invalid.");
+      }
+      lengths[measure] = length;
+    }
+    const starts = Array.from({ length: endMeasure + 2 }, () => 0);
+    for (let measure = 0; measure <= endMeasure; measure += 1) {
+      starts[measure + 1] = starts[measure] + lengths[measure];
+    }
+    return { lengths, starts };
+  }
+
+  function decodePackedEvents(value, groupCount, measureStarts, measureLengths, endMeasure) {
+    const state = { bytes: decodeBase64Bytes(value), offset: 0 };
+    const events = [];
+    let measure = 0;
+    for (let groupIndex = 0; groupIndex < groupCount; groupIndex += 1) {
+      measure += readVarint(state);
+      if (measure > endMeasure || state.offset >= state.bytes.length) {
+        throw new Error("Chart miniview event measure is invalid.");
+      }
+      const descriptor = state.bytes[state.offset++];
+      const lane = descriptor & 0x07;
+      const kind = descriptor >> 3;
+      const denominator = readVarint(state);
+      const count = readVarint(state);
+      if (kind > 2 || denominator <= 0 || count <= 0) {
+        throw new Error("Chart miniview event group is invalid.");
+      }
+      let numerator = 0;
+      for (let index = 0; index < count; index += 1) {
+        numerator += readVarint(state);
+        if (numerator >= denominator) {
+          throw new Error("Chart miniview event fraction is invalid.");
+        }
+        events.push({
+          lane,
+          kind,
+          measure,
+          numerator,
+          denominator,
+          position: measureStarts[measure] + numerator / denominator * measureLengths[measure]
+        });
+      }
+    }
+    if (state.offset !== state.bytes.length) {
+      throw new Error("Chart miniview packed data has trailing bytes.");
+    }
+    return events;
   }
 
   function normalizePayload(value) {
     if (!value || typeof value !== "object") {
       throw new Error("Chart miniview payload is missing.");
     }
-    const resolution = Number(value.resolution);
     const startMeasure = Number(value.startMeasure);
     const endMeasure = Number(value.endMeasure);
+    const startPosition = Number(value.startPosition);
+    const endPosition = Number(value.endPosition);
+    const eventGroupCount = Number(value.eventGroupCount);
     if (
-      value.schemaVersion !== 1
+      value.schemaVersion !== 2
       || value.mode !== "7key-sp"
-      || !Number.isInteger(resolution)
-      || resolution <= 0
-      || resolution > 4096
       || !Array.isArray(value.laneOrder)
       || value.laneOrder.length !== 8
       || !Number.isInteger(startMeasure)
       || !Number.isInteger(endMeasure)
       || endMeasure < startMeasure
+      || !Number.isFinite(startPosition)
+      || !Number.isFinite(endPosition)
+      || endPosition <= startPosition
+      || value.eventEncoding !== "grouped-varint-v1"
+      || !Number.isInteger(eventGroupCount)
+      || eventGroupCount < 0
+      || typeof value.eventData !== "string"
+      || !Array.isArray(value.measureLengths)
     ) {
       throw new Error("Chart miniview payload is unsupported.");
     }
-
-    const readLaneBits = (source) => {
-      if (!Array.isArray(source) || source.length !== 8) {
-        throw new Error("Chart miniview lane data is invalid.");
+    const geometry = buildMeasureGeometry(endMeasure, value.measureLengths);
+    if (
+      Math.abs(geometry.starts[startMeasure] - startPosition) > 1e-9
+      || Math.abs(geometry.starts[endMeasure + 1] - endPosition) > 1e-9
+    ) {
+      throw new Error("Chart miniview position range is inconsistent.");
+    }
+    const events = decodePackedEvents(
+      value.eventData,
+      eventGroupCount,
+      geometry.starts,
+      geometry.lengths,
+      endMeasure
+    );
+    const tapEvents = events.filter((event) => event.kind === 0);
+    const longNotes = [];
+    for (let lane = 0; lane < 8; lane += 1) {
+      const endpoints = events
+        .filter((event) => event.lane === lane && event.kind !== 0)
+        .sort((left, right) => left.position - right.position || left.kind - right.kind);
+      let start = null;
+      for (const event of endpoints) {
+        if (event.kind === 1 && start === null) {
+          start = event;
+        } else if (event.kind === 2 && start && event.position > start.position) {
+          longNotes.push({ lane, start, end: event });
+          start = null;
+        } else {
+          throw new Error("Chart miniview long-note data is invalid.");
+        }
       }
-      return source.map((item) => decodeBits(item, resolution));
-    };
-    let measurePositions = null;
-    if (value.measurePositions !== undefined) {
-      if (
-        !Array.isArray(value.measurePositions)
-        || value.measurePositions.length !== endMeasure - startMeasure + 2
-      ) {
-        throw new Error("Chart miniview measure positions are invalid.");
+      if (start) {
+        throw new Error("Chart miniview long-note data is incomplete.");
       }
-      measurePositions = value.measurePositions.map(Number);
-      if (measurePositions.some((position, index) => (
-        !Number.isInteger(position)
-        || position < 0
-        || position >= resolution
-        || (index > 0 && position < measurePositions[index - 1])
-      ))) {
-        throw new Error("Chart miniview measure positions are invalid.");
-      }
+    }
+    if (tapEvents.length !== Number(value.tapCount) || longNotes.length !== Number(value.longNoteCount)) {
+      throw new Error("Chart miniview event counts are inconsistent.");
     }
 
     return {
       ...value,
-      resolution,
       startMeasure,
       endMeasure,
-      measurePositions,
-      tapBitsets: readLaneBits(value.tapBits),
-      longActiveBitsets: readLaneBits(value.longActiveBits),
-      longStartBitsets: readLaneBits(value.longStartBits),
-      longEndBitsets: readLaneBits(value.longEndBits),
-      measureBitset: decodeBits(value.measureBits, resolution)
+      startPosition,
+      endPosition,
+      measureLengths: geometry.lengths,
+      measureStarts: geometry.starts,
+      tapEvents,
+      longNotes
     };
   }
 
@@ -178,22 +268,32 @@
     const measureBandGap = large ? 4 : 0;
     const lanePlotWidth = Math.max(1, plotWidth - measureBandWidth - measureBandGap);
     const measureBandX = plotX + lanePlotWidth + measureBandGap;
-    const laneWidth = lanePlotWidth / 8;
-    const rangeStart = Math.max(0, Math.min(payload.resolution - 1, Number(viewRange?.startIndex) || 0));
-    const rangeEnd = Math.max(
-      rangeStart,
-      Math.min(payload.resolution - 1, Number.isFinite(Number(viewRange?.endIndex))
-        ? Number(viewRange.endIndex)
-        : payload.resolution - 1)
-    );
-    const yForIndex = (index) => plotY
-      + (rangeEnd - index) / Math.max(rangeEnd - rangeStart, 1) * plotHeight;
+    const rangeStart = Number.isFinite(Number(viewRange?.startPosition))
+      ? Math.max(payload.startPosition, Number(viewRange.startPosition))
+      : payload.startPosition;
+    const rangeEnd = Number.isFinite(Number(viewRange?.endPosition))
+      ? Math.min(payload.endPosition, Number(viewRange.endPosition))
+      : payload.endPosition;
+    if (!(rangeEnd > rangeStart)) {
+      throw new Error("Chart miniview display range is invalid.");
+    }
+    const laneUnits = [1.5, 1, 1, 1, 1, 1, 1, 1];
+    const unitWidth = lanePlotWidth / 8.5;
+    const laneGeometry = [];
+    let laneX = plotX;
+    for (const units of laneUnits) {
+      const widthForLane = units * unitWidth;
+      laneGeometry.push({ x: laneX, width: widthForLane });
+      laneX += widthForLane;
+    }
+    const yForPosition = (position) => plotY
+      + (rangeEnd - position) / (rangeEnd - rangeStart) * plotHeight;
 
     context.fillStyle = "#050505";
     context.fillRect(0, 0, width, height);
     for (let lane = 0; lane < 8; lane += 1) {
       context.fillStyle = getLanePalette(lane).laneFill;
-      context.fillRect(plotX + lane * laneWidth, plotY, laneWidth, plotHeight);
+      context.fillRect(laneGeometry[lane].x, plotY, laneGeometry[lane].width, plotHeight);
     }
     if (large) {
       context.fillStyle = "#8F8F8F";
@@ -203,76 +303,70 @@
     context.strokeStyle = "#3A3A3A";
     context.lineWidth = large ? 1 : 0.6;
     for (let lane = 1; lane < 8; lane += 1) {
-      const x = plotX + lane * laneWidth;
+      const x = laneGeometry[lane].x;
       context.beginPath();
       context.moveTo(x, plotY);
       context.lineTo(x, plotY + plotHeight);
       context.stroke();
     }
 
-    if (large) {
-      const visibleStartMeasure = Number.isInteger(Number(viewRange?.startMeasure))
-        ? Math.max(payload.startMeasure, Number(viewRange.startMeasure))
-        : payload.startMeasure;
-      const visibleEndMeasure = Number.isInteger(Number(viewRange?.endMeasure))
-        ? Math.min(payload.endMeasure, Number(viewRange.endMeasure))
-        : payload.endMeasure;
-      for (let measure = visibleStartMeasure; measure <= visibleEndMeasure; measure += 1) {
-        const measureStartIndex = measureBoundaryIndex(payload, measure);
-        const measureEndIndex = measureBoundaryIndex(payload, measure + 1);
-        const startY = yForIndex(measureStartIndex);
-        const endY = yForIndex(measureEndIndex);
-        const measurePixelHeight = Math.abs(endY - startY);
-
-        if (measurePixelHeight >= 28) {
-          context.strokeStyle = "#2C2C2C";
-          context.lineWidth = 0.65;
-          for (let division = 1; division < 16; division += 1) {
-            if (division % 4 === 0) {
-              continue;
-            }
-            const index = measureStartIndex + (measureEndIndex - measureStartIndex) * division / 16;
-            const y = yForIndex(index);
-            context.beginPath();
-            context.moveTo(plotX, y);
-            context.lineTo(plotX + lanePlotWidth, y);
-            context.stroke();
+    const visibleMeasures = [];
+    for (let measure = payload.startMeasure; measure <= payload.endMeasure; measure += 1) {
+      const measureStart = payload.measureStarts[measure];
+      const measureEnd = payload.measureStarts[measure + 1];
+      if (measureStart < rangeEnd && measureEnd > rangeStart) {
+        visibleMeasures.push({ measure, start: measureStart, end: measureEnd });
+      }
+    }
+    for (const item of visibleMeasures) {
+      const clippedStart = Math.max(item.start, rangeStart);
+      const clippedEnd = Math.min(item.end, rangeEnd);
+      const measurePixelHeight = Math.abs(yForPosition(clippedEnd) - yForPosition(clippedStart));
+      if (large && measurePixelHeight >= 28) {
+        const divisionCount = Math.ceil((item.end - item.start) / 0.0625 - 1e-9);
+        for (let division = 1; division < divisionCount; division += 1) {
+          const position = item.start + division * 0.0625;
+          if (position <= rangeStart || position >= rangeEnd || position >= item.end - 1e-9) {
+            continue;
           }
-        }
-        if (measurePixelHeight >= 10) {
-          context.strokeStyle = "#4A4A4A";
-          context.lineWidth = 0.9;
-          for (let beat = 1; beat < 4; beat += 1) {
-            const index = measureStartIndex + (measureEndIndex - measureStartIndex) * beat / 4;
-            const y = yForIndex(index);
-            context.beginPath();
-            context.moveTo(plotX, y);
-            context.lineTo(plotX + lanePlotWidth, y);
-            context.stroke();
-          }
-        }
-
-        context.strokeStyle = "#BDBDBD";
-        context.lineWidth = 1.2;
-        context.beginPath();
-        context.moveTo(plotX, startY);
-        context.lineTo(plotX + plotWidth, startY);
-        context.stroke();
-
-        if (measurePixelHeight >= 14) {
-          context.fillStyle = "#F6F6F6";
-          context.font = "700 12px system-ui, sans-serif";
-          context.textAlign = "center";
-          context.textBaseline = "middle";
-          context.fillText(String(measure), measureBandX + measureBandWidth / 2, (startY + endY) / 2);
+          context.strokeStyle = division % 4 === 0 ? "#4A4A4A" : "#2C2C2C";
+          context.lineWidth = division % 4 === 0 ? 0.9 : 0.65;
+          const y = yForPosition(position);
+          context.beginPath();
+          context.moveTo(plotX, y);
+          context.lineTo(plotX + lanePlotWidth, y);
+          context.stroke();
         }
       }
-      const finalBoundaryY = yForIndex(measureBoundaryIndex(payload, visibleEndMeasure + 1));
+      if (item.start >= rangeStart - 1e-9 && item.start <= rangeEnd + 1e-9) {
+        const startY = yForPosition(item.start);
+        context.strokeStyle = "#BDBDBD";
+        context.lineWidth = large ? 1.2 : 0.7;
+        context.beginPath();
+        context.moveTo(plotX, startY);
+        context.lineTo(plotX + (large ? plotWidth : lanePlotWidth), startY);
+        context.stroke();
+      }
+      if (large && measurePixelHeight >= 14) {
+        context.fillStyle = "#F6F6F6";
+        context.font = "700 12px system-ui, sans-serif";
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+        context.fillText(
+          String(item.measure),
+          measureBandX + measureBandWidth / 2,
+          (yForPosition(clippedStart) + yForPosition(clippedEnd)) / 2
+        );
+      }
+    }
+    const finalVisibleBoundary = visibleMeasures.at(-1)?.end;
+    if (Number.isFinite(finalVisibleBoundary) && finalVisibleBoundary <= rangeEnd + 1e-9) {
+      const finalY = yForPosition(finalVisibleBoundary);
       context.strokeStyle = "#BDBDBD";
-      context.lineWidth = 1.2;
+      context.lineWidth = large ? 1.2 : 0.7;
       context.beginPath();
-      context.moveTo(plotX, finalBoundaryY);
-      context.lineTo(plotX + plotWidth, finalBoundaryY);
+      context.moveTo(plotX, finalY);
+      context.lineTo(plotX + (large ? plotWidth : lanePlotWidth), finalY);
       context.stroke();
     }
 
@@ -280,51 +374,58 @@
     context.beginPath();
     context.rect(plotX + 1, plotY + 1, Math.max(1, lanePlotWidth - 2), Math.max(1, plotHeight - 2));
     context.clip();
-    for (let lane = 0; lane < 8; lane += 1) {
-      const x = plotX + lane * laneWidth;
-      const activeBits = payload.longActiveBitsets[lane];
-      context.fillStyle = getLanePalette(lane).longFill;
-      let runStart = -1;
-      for (let index = rangeStart; index <= rangeEnd + 1; index += 1) {
-        const active = index <= rangeEnd && bitAt(activeBits, index);
-        if (active && runStart < 0) {
-          runStart = index;
-        } else if (!active && runStart >= 0) {
-          const yStart = yForIndex(runStart);
-          const yEnd = yForIndex(Math.max(runStart + 1, index - 1));
-          const longWidth = laneWidth * (lane === 0 ? 0.82 : 0.68);
-          const longX = x + (laneWidth - longWidth) / 2;
-          const longTop = Math.min(yStart, yEnd);
-          context.fillRect(longX, longTop, Math.max(2, longWidth), Math.max(3, Math.abs(yEnd - yStart)));
-          runStart = -1;
-        }
+    for (const longNote of payload.longNotes) {
+      if (longNote.end.position <= rangeStart || longNote.start.position >= rangeEnd) {
+        continue;
       }
+      const geometry = laneGeometry[longNote.lane];
+      const palette = getLanePalette(longNote.lane);
+      const start = Math.max(longNote.start.position, rangeStart);
+      const end = Math.min(longNote.end.position, rangeEnd);
+      const yStart = yForPosition(start);
+      const yEnd = yForPosition(end);
+      const longWidth = geometry.width * (longNote.lane === 0 ? 0.82 : 0.68);
+      context.fillStyle = palette.longFill;
+      context.fillRect(
+        geometry.x + (geometry.width - longWidth) / 2,
+        Math.min(yStart, yEnd),
+        Math.max(2, longWidth),
+        Math.max(3, Math.abs(yEnd - yStart))
+      );
     }
 
-    for (let lane = 0; lane < 8; lane += 1) {
-      const x = plotX + lane * laneWidth;
-      const tapBits = payload.tapBitsets[lane];
-      const startBits = payload.longStartBitsets[lane];
-      const endBits = payload.longEndBitsets[lane];
-      const palette = getLanePalette(lane);
-      for (let index = rangeStart; index <= rangeEnd; index += 1) {
-        const y = yForIndex(index);
-        if (bitAt(tapBits, index)) {
-          const noteWidth = Math.max(2, laneWidth * (lane === 0 ? 0.92 : 0.8));
-          const noteHeight = large ? (lane === 0 ? 4.2 : 3.2) : 1.4;
-          const noteX = x + (laneWidth - noteWidth) / 2;
-          const noteY = Math.max(plotY + 1, Math.min(plotY + plotHeight - noteHeight - 1, y - noteHeight / 2));
-          context.fillStyle = palette.noteFill;
-          context.fillRect(noteX, noteY, noteWidth, noteHeight);
+    for (const event of payload.tapEvents) {
+      if (event.position < rangeStart || event.position >= rangeEnd) {
+        continue;
+      }
+      const geometry = laneGeometry[event.lane];
+      const noteWidth = Math.max(2, geometry.width * (event.lane === 0 ? 0.92 : 0.8));
+      const noteHeight = large ? (event.lane === 0 ? 4.2 : 3.2) : 1.4;
+      const y = yForPosition(event.position);
+      context.fillStyle = getLanePalette(event.lane).noteFill;
+      context.fillRect(
+        geometry.x + (geometry.width - noteWidth) / 2,
+        Math.max(plotY + 1, Math.min(plotY + plotHeight - noteHeight - 1, y - noteHeight / 2)),
+        noteWidth,
+        noteHeight
+      );
+    }
+    for (const longNote of payload.longNotes) {
+      for (const event of [longNote.start, longNote.end]) {
+        if (event.position < rangeStart || event.position >= rangeEnd) {
+          continue;
         }
-        if (bitAt(startBits, index) || bitAt(endBits, index)) {
-          const markerWidth = Math.max(2, laneWidth * (lane === 0 ? 0.94 : 0.82));
-          const markerHeight = large ? 4.5 : 1.7;
-          const markerX = x + (laneWidth - markerWidth) / 2;
-          const markerY = Math.max(plotY + 1, Math.min(plotY + plotHeight - markerHeight - 1, y - markerHeight / 2));
-          context.fillStyle = palette.longMarker;
-          context.fillRect(markerX, markerY, markerWidth, markerHeight);
-        }
+        const geometry = laneGeometry[event.lane];
+        const markerWidth = Math.max(2, geometry.width * (event.lane === 0 ? 0.94 : 0.82));
+        const markerHeight = large ? 4.5 : 1.7;
+        const y = yForPosition(event.position);
+        context.fillStyle = getLanePalette(event.lane).longMarker;
+        context.fillRect(
+          geometry.x + (geometry.width - markerWidth) / 2,
+          Math.max(plotY + 1, Math.min(plotY + plotHeight - markerHeight - 1, y - markerHeight / 2)),
+          markerWidth,
+          markerHeight
+        );
       }
     }
     context.restore();
@@ -460,28 +561,31 @@
     return Math.max(0, Math.min(ranges.length - 1, Math.floor(Math.max(0, Math.min(0.999999, ratio)) * ranges.length)));
   }
 
-  function measureBoundaryIndex(payload, measure) {
-    const measureCount = payload.endMeasure - payload.startMeasure + 1;
-    const offset = Math.max(0, Math.min(measureCount, measure - payload.startMeasure));
-    if (payload.measurePositions && payload.measurePositions.length === measureCount + 1) {
-      return payload.measurePositions[offset];
+  function measureForPosition(payload, position) {
+    for (let measure = payload.startMeasure; measure <= payload.endMeasure; measure += 1) {
+      if (position >= payload.measureStarts[measure] - 1e-9 && position < payload.measureStarts[measure + 1] - 1e-9) {
+        return measure;
+      }
     }
-    return Math.round(offset / Math.max(measureCount, 1) * (payload.resolution - 1));
+    return payload.endMeasure;
   }
 
   function buildBlockViewRange(payload, block) {
-    const startMeasure = Math.max(payload.startMeasure, Number(block.startMeasure));
-    const endMeasure = Math.min(payload.endMeasure, Number(block.endMeasure));
-    if (!Number.isInteger(startMeasure) || !Number.isInteger(endMeasure) || endMeasure < startMeasure) {
+    const startPosition = Number(block.startPosition);
+    const endPosition = Number(block.endPosition);
+    if (!Number.isFinite(startPosition) || !Number.isFinite(endPosition) || endPosition <= startPosition) {
       return null;
     }
-    const startIndex = measureBoundaryIndex(payload, startMeasure);
-    const endBoundary = measureBoundaryIndex(payload, endMeasure + 1);
+    const clippedStart = Math.max(payload.startPosition, startPosition);
+    const clippedEnd = Math.min(payload.endPosition, endPosition);
+    if (clippedEnd <= clippedStart) {
+      return null;
+    }
     return {
-      startIndex,
-      endIndex: Math.max(startIndex + 1, Math.min(payload.resolution - 1, endBoundary - 1)),
-      startMeasure,
-      endMeasure
+      startPosition: clippedStart,
+      endPosition: clippedEnd,
+      startMeasure: measureForPosition(payload, clippedStart),
+      endMeasure: measureForPosition(payload, Math.max(clippedStart, clippedEnd - 1e-9))
     };
   }
 

@@ -228,6 +228,12 @@
       index,
       startMeasure: Number.isInteger(Number(block?.startMeasure)) ? Number(block.startMeasure) : index,
       endMeasure: Number.isInteger(Number(block?.endMeasure)) ? Number(block.endMeasure) : Number(block?.startMeasure ?? index),
+      startPosition: block?.startPosition !== null && block?.startPosition !== undefined && Number.isFinite(Number(block.startPosition))
+        ? Number(block.startPosition)
+        : null,
+      endPosition: block?.endPosition !== null && block?.endPosition !== undefined && Number.isFinite(Number(block.endPosition))
+        ? Number(block.endPosition)
+        : null,
       startTimeSec: Number.isFinite(Number(block?.startTimeSec)) ? Number(block.startTimeSec) : null,
       endTimeSec: Number.isFinite(Number(block?.endTimeSec)) ? Number(block.endTimeSec) : null,
       playNotes: Number.isFinite(Number(block?.playNotes)) ? Number(block.playNotes) : 0
@@ -1332,9 +1338,19 @@
 
     return leftBlocks.every((block, index) => {
       const other = rightBlocks[index];
+      const hasLeftStart = block.startPosition !== null && block.startPosition !== undefined;
+      const hasRightStart = other.startPosition !== null && other.startPosition !== undefined;
+      const hasLeftEnd = block.endPosition !== null && block.endPosition !== undefined;
+      const hasRightEnd = other.endPosition !== null && other.endPosition !== undefined;
+      const leftStart = Number(block.startPosition);
+      const rightStart = Number(other.startPosition);
+      const leftEnd = Number(block.endPosition);
+      const rightEnd = Number(other.endPosition);
       return Number(block.index) === Number(other.index)
         && Number(block.startMeasure) === Number(other.startMeasure)
-        && Number(block.endMeasure) === Number(other.endMeasure);
+        && Number(block.endMeasure) === Number(other.endMeasure)
+        && (!hasLeftStart || !hasRightStart || Math.abs(leftStart - rightStart) <= 1e-9)
+        && (!hasLeftEnd || !hasRightEnd || Math.abs(leftEnd - rightEnd) <= 1e-9);
     });
   }
 })();

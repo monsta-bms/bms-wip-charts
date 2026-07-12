@@ -548,7 +548,17 @@
       blockRanges: blockStates.map((state) => ({
         index: state.index,
         startMeasure: Number.isInteger(Number(state.block?.startMeasure)) ? Number(state.block.startMeasure) : null,
-        endMeasure: Number.isInteger(Number(state.block?.endMeasure)) ? Number(state.block.endMeasure) : null
+        endMeasure: Number.isInteger(Number(state.block?.endMeasure)) ? Number(state.block.endMeasure) : null,
+        startPosition: state.block?.startPosition !== null
+          && state.block?.startPosition !== undefined
+          && Number.isFinite(Number(state.block.startPosition))
+          ? Number(state.block.startPosition)
+          : null,
+        endPosition: state.block?.endPosition !== null
+          && state.block?.endPosition !== undefined
+          && Number.isFinite(Number(state.block.endPosition))
+          ? Number(state.block.endPosition)
+          : null
       })),
       paintedIndexes,
       paintedCount: paintedIndexes.size,
@@ -656,8 +666,12 @@
       ></span>
     `).join("");
     const userLabel = model.userCount === 1 ? "1 user" : `${model.userCount} users`;
-    const hasBlockRanges = model.blockRanges.some((range) => range.startMeasure !== null && range.endMeasure !== null);
-    const blockNavigator = versionId && hasBlockRanges
+    const hasExactBlockRanges = model.blockRanges.some((range) => (
+      Number.isFinite(range.startPosition)
+      && Number.isFinite(range.endPosition)
+      && range.endPosition > range.startPosition
+    ));
+    const blockNavigator = versionId && hasExactBlockRanges
       ? `<button
           class="progress-thumbnail-block-navigator"
           type="button"

@@ -6,17 +6,17 @@
 
 MVPの対応レーンは1P側の通常鍵盤`11-15,18,19`、スクラッチ`16`、LNTYPE 1のLN鍵盤`51-55,58,59`、LNスクラッチ`56`とする。`#LNOBJ`も対応する。7key判定は`.bme`または6/7鍵チャンネルの実使用を根拠とし、5keyとの区別が曖昧な場合は推測表示しない。2P、10key/14key、PMS、LNTYPE 2、地雷、特殊配置、RANDOM/IF/SWITCH系、未閉鎖・競合LNはミニビュー未対応とする。
 
-`versions.measure_notes_json`は新規解析成功分からschemaVersion 3とし、schemaVersion 2の全フィールドを維持したまま`miniView`を追加する。曲方向を2048段階へ量子化し、通常ノート、LN継続、LN開始、LN終了、小節線をレーン別bitsetとしてBase64保存する。保存する`miniView`全体は32KiB以下とし、超過時は`MINIVIEW_TOO_COMPLEX` warningとしてunsupported metadataだけを保存する。`progress_map_json`と`progressImage`は変更しない。
+`versions.measure_notes_json`は新規解析成功分からschemaVersion 3とし、schemaVersion 2の全フィールドを維持したまま`miniView`を追加する。CHART-MINIVIEW-POSITION-01以降のminiView payloadはschemaVersion 2とし、通常ノート、LN開始・終了を`measure / lane / pairIndex / pairCount / kind`単位で保持する。同じ小節・レーン・種別・分母のイベントをまとめたvarint列をBase64保存し、24分・32分・48分を含む元の分数位置を丸めない。保存する`miniView`全体は32KiB以下とし、超過時は`MINIVIEW_TOO_COMPLEX` warningとしてunsupported metadataだけを保存する。D1 migration、R2派生データ、`progressImage`は追加しない。
 
-一覧APIは完全なbitset payloadを返さず、各versionの`miniView.available`、`mode`、専用取得URLだけを返す。公開中のversionだけ`GET /api/versions/:versionId/mini-view`でpayloadを取得できる。非表示version、非表示chart、schemaVersion 2、unsupportedは`MINIVIEW_NOT_AVAILABLE`とする。レスポンスはETagと短時間キャッシュを使用する。
+一覧APIは完全なイベントpayloadを返さず、各versionの`miniView.available`、`mode`、専用取得URLだけを返す。公開中かつ精密payloadを持つversionだけ`GET /api/versions/:versionId/mini-view`でpayloadを取得できる。非表示version、非表示chart、measure notes schemaVersion 2、旧miniView payload schemaVersion 1、unsupportedは`MINIVIEW_NOT_AVAILABLE`とする。レスポンスはETagと短時間キャッシュを使用する。
 
 Pagesは既存進捗サムネイルとは別にCanvas 2Dの縦型ミニマップを表示する。IntersectionObserverで画面付近の可視行だけ取得し、折り畳み中の行は取得しない。同時取得は最大4件、versionId単位でメモリキャッシュし、devicePixelRatioは最大2とする。buttonとしてクリック/Enterに対応し、native dialogで拡大、Escで閉じられるようにする。
 
-CHART-MINIVIEW-UX-01では、進捗サムネイル全体へ単一の操作レイヤーを重ね、ポインタ位置または左右キーから`progressMap.blocks`の実ブロック番号を選択する。hover/focus/tap時は画面内で再利用する吹き出しCanvasを1つだけ表示し、そのブロックの`startMeasure`から`endMeasure`に対応するminiView範囲を拡大描画する。hoverごとのAPI取得は行わず、既存のversionIdメモリキャッシュを使用する。クリックdialogは全譜面確認用として維持する。
+CHART-MINIVIEW-UX-01では、進捗サムネイル全体へ単一の操作レイヤーを重ね、ポインタ位置または左右キーから`progressMap.blocks`の実ブロック番号を選択する。hover/focus/tap時は画面内で再利用する吹き出しCanvasを1つだけ表示し、そのブロックの正確な`startPosition`以上`endPosition`未満に対応するminiView範囲を拡大描画する。hoverごとのAPI取得は行わず、既存のversionIdメモリキャッシュを使用する。クリックdialogは全譜面確認用として維持する。
 
 CHART-MINIVIEW-UX-02では、一覧右側の常時全体ミニビューを廃止し、進捗ブロック連動の吹き出しを主表示とする。吹き出しは黒系背景、16分・1拍・小節境界の3段階グリッド、白鍵・青鍵・スクラッチ・LNの色分け、右側の小節番号帯を使用し、曲進行を下から上へ描画する。固定中に別ブロックをクリックした場合は解除を挟まず固定先を切り替え、同一ブロックの再クリック、Esc、外側操作で解除する。miniView未対応versionは進捗メタ欄へ控えめな非対応表示を出す。
 
-新規生成payloadには任意の`measurePositions`を追加し、`startMeasure`から`endMeasure + 1`までの小節境界を2048段階のindexで保持する。小節長変更を含む譜面ではこの配列をblock範囲変換に使用する。既存schemaVersion 3で配列がないpayloadは、小節番号による線形換算へfallbackする。ノート色は白鍵盤を薄灰、青鍵盤を青、スクラッチを赤、LN継続を各レーン同系色、小節線を薄灰とする。
+音楽位置は`measureStart[m] = mより前のmeasureLength合計`、`eventPosition = measureStart[measure] + pairIndex / pairCount * measureLength[measure]`で定義する。`#xxx02`省略時の小節長は1.0とし、BPM/STOPは縦位置へ反映しない。progressMap blockは同じ座標系の`startPosition/endPosition`を保持し、境界ぴったりで終了するblockへ次小節を含めない。16分線は各小節開始から0.0625、1拍線は0.25、小節線は累積小節境界に描き、0.75小節は通常小節の75%の高さとする。スクラッチ幅は通常鍵盤の1.5倍とし、通常7鍵は等幅を維持する。旧miniView payload schemaVersion 1は不正確な拡大表示へfallbackせず、ミニビュー非対応として扱う。
 
 ミニビュー生成失敗や未対応構文は投稿拒否理由にせず、`MINIVIEW_UNSUPPORTED_MODE`、`MINIVIEW_RANDOM_UNSUPPORTED`、`MINIVIEW_LNTYPE2_UNSUPPORTED`、`MINIVIEW_MALFORMED_LN`、`MINIVIEW_TOO_COMPLEX`、`MINIVIEW_GENERATION_FAILED` warningを返す。既存schemaVersion 2は再解析せず、従来の進捗サムネイル表示を維持する。
 
@@ -234,6 +234,8 @@ round(塗られた標準化ブロック数のunion / 標準化ブロック総数
       "index": 0,
       "startMeasure": 4,
       "endMeasure": 7,
+      "startPosition": 4,
+      "endPosition": 5,
       "startTimeSec": 0,
       "endTimeSec": 2.1,
       "playNotes": 20
@@ -263,6 +265,7 @@ round(塗られた標準化ブロック数のunion / 標準化ブロック総数
 - `blockMode=standardized_measure` とする。
 - `blocks` は下段の標準化ブロックと1対1対応する。
 - `blocks` は曲終端基準の表示範囲まで作る。
+- `startPosition/endPosition`は小節長を累積した音楽位置で、1ブロック幅は原則1.0、終端blockだけ曲終端で切る。旧保存値ではNULLを許容する。
 - `ranges` は連続したブロックindexを `[startIndex, endIndex]` で圧縮して持つ。
 - progressは全layerのunion / `targetBlockCount` で算出する。
 - 重複して塗られたブロックは1回だけ数える。

@@ -37,6 +37,8 @@ export type BmsStandardBlock = {
   index: number;
   startMeasure: number;
   endMeasure: number;
+  startPosition: number;
+  endPosition: number;
   startTimeSec: number | null;
   endTimeSec: number | null;
   playNotes: number;
@@ -710,6 +712,8 @@ function analyzeStandardBlocks(text: string): BmsStandardBlock[] {
       index,
       startMeasure: measureForPosition(startPosition, displayMeasureStarts, measureLengths, maxMeasure),
       endMeasure: measureForPosition(blockEndPosition - 0.000001, displayMeasureStarts, measureLengths, maxMeasure),
+      startPosition,
+      endPosition: blockEndPosition,
       startTimeSec: estimateTimeForPosition(startPosition, positionedEvents),
       endTimeSec: estimateTimeForPosition(blockEndPosition, positionedEvents),
       playNotes: positionedEvents.filter((event) => event.standardPosition >= startPosition && event.standardPosition < blockEndPosition).length

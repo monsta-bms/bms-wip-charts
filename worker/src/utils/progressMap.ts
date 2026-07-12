@@ -9,6 +9,8 @@ type ProgressMapBlock = {
   index: number;
   startMeasure: number | null;
   endMeasure: number | null;
+  startPosition: number | null;
+  endPosition: number | null;
   startTimeSec: number | null;
   endTimeSec: number | null;
   playNotes: number;
@@ -131,6 +133,18 @@ function normalizeNullableSeconds(value: unknown, fieldName: string): number | n
   return value;
 }
 
+function normalizeNullablePosition(value: unknown, fieldName: string): number | null | ProgressMapFailure {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return failure("INVALID_PROGRESS_MAP", `${fieldName} must be a non-negative number or null.`);
+  }
+
+  return value;
+}
+
 function parseProgressMap(rawProgressMap: string): { ok: true; value: unknown } | { ok: false; failure: ProgressMapFailure } {
   try {
     return { ok: true, value: JSON.parse(rawProgressMap) };
@@ -167,6 +181,23 @@ function normalizeBlock(value: unknown, expectedIndex: number): { ok: true; valu
     return { ok: false, failure: endMeasure };
   }
 
+  const startPosition = normalizeNullablePosition(value.startPosition, `blocks[${expectedIndex}].startPosition`);
+  if (isProgressMapFailure(startPosition)) {
+    return { ok: false, failure: startPosition };
+  }
+
+  const endPosition = normalizeNullablePosition(value.endPosition, `blocks[${expectedIndex}].endPosition`);
+  if (isProgressMapFailure(endPosition)) {
+    return { ok: false, failure: endPosition };
+  }
+
+  if (startPosition !== null && endPosition !== null && endPosition <= startPosition) {
+    return {
+      ok: false,
+      failure: failure("INVALID_PROGRESS_MAP", `blocks[${expectedIndex}] position range must be increasing.`)
+    };
+  }
+
   const startTimeSec = normalizeNullableSeconds(value.startTimeSec, `blocks[${expectedIndex}].startTimeSec`);
   if (isProgressMapFailure(startTimeSec)) {
     return { ok: false, failure: startTimeSec };
@@ -190,6 +221,8 @@ function normalizeBlock(value: unknown, expectedIndex: number): { ok: true; valu
       index: expectedIndex,
       startMeasure,
       endMeasure,
+      startPosition,
+      endPosition,
       startTimeSec,
       endTimeSec,
       playNotes: value.playNotes
@@ -202,6 +235,16 @@ function nullableSecondsEqual(left: number | null, right: number | null): boolea
     return left === right;
   }
   return Math.abs(left - right) <= 0.05;
+}
+
+function nullablePositionMatchesClient(client: number | null, expected: number | null): boolean {
+  if (client === null) {
+    return true;
+  }
+  if (expected === null) {
+    return false;
+  }
+  return Math.abs(client - expected) <= 1e-9;
 }
 
 function buildCanonicalLayout(bmsAnalysis: BmsAnalysis): ProgressMapLayout {
@@ -229,6 +272,8 @@ function layoutsMatchAnalysis(client: ProgressMapLayout, canonical: ProgressMapL
     return block.index === expected.index
       && block.startMeasure === expected.startMeasure
       && block.endMeasure === expected.endMeasure
+      && nullablePositionMatchesClient(block.startPosition, expected.startPosition)
+      && nullablePositionMatchesClient(block.endPosition, expected.endPosition)
       && block.playNotes === expected.playNotes
       && nullableSecondsEqual(block.startTimeSec, expected.startTimeSec)
       && nullableSecondsEqual(block.endTimeSec, expected.endTimeSec);
@@ -249,7 +294,9 @@ function layoutsShareGrid(left: ProgressMapLayout, right: ProgressMapLayout): bo
     const other = right.blocks[index];
     return block.index === other.index
       && block.startMeasure === other.startMeasure
-      && block.endMeasure === other.endMeasure;
+      && block.endMeasure === other.endMeasure
+      && (block.startPosition === null || other.startPosition === null || Math.abs(block.startPosition - other.startPosition) <= 1e-9)
+      && (block.endPosition === null || other.endPosition === null || Math.abs(block.endPosition - other.endPosition) <= 1e-9);
   });
 }
 

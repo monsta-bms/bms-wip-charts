@@ -606,6 +606,8 @@ function buildStandardBlocks(playEvents, measureStarts, measureLengths, maxMeasu
       endMeasure: positionToMeasure(endPosition - 0.000001, measureStarts, measureLengths, maxMeasure),
       startStandardPosition: startPosition,
       endStandardPosition: endPosition,
+      startPosition,
+      endPosition,
       startTimeSec: estimateTimeForPosition(startPosition, playEvents),
       endTimeSec: estimateTimeForPosition(endPosition, playEvents),
       playNotes: blockNotes.length
@@ -1057,6 +1059,12 @@ function normalizeProgressMapBlock(block, index) {
     index,
     startMeasure: Number.isInteger(block.startMeasure) ? block.startMeasure : null,
     endMeasure: Number.isInteger(block.endMeasure) ? block.endMeasure : null,
+    startPosition: Number.isFinite(block.startPosition ?? block.startStandardPosition)
+      ? Number(block.startPosition ?? block.startStandardPosition)
+      : null,
+    endPosition: Number.isFinite(block.endPosition ?? block.endStandardPosition)
+      ? Number(block.endPosition ?? block.endStandardPosition)
+      : null,
     startTimeSec: Number.isFinite(block.startTimeSec) ? block.startTimeSec : null,
     endTimeSec: Number.isFinite(block.endTimeSec) ? block.endTimeSec : null,
     playNotes: Number.isInteger(block.playNotes) && block.playNotes > 0 ? block.playNotes : 0
