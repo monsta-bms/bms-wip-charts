@@ -12,6 +12,10 @@ MVPの対応レーンは1P側の通常鍵盤`11-15,18,19`、スクラッチ`16`�
 
 Pagesは既存進捗サムネイルとは別にCanvas 2Dの縦型ミニマップを表示する。IntersectionObserverで画面付近の可視行だけ取得し、折り畳み中の行は取得しない。同時取得は最大4件、versionId単位でメモリキャッシュし、devicePixelRatioは最大2とする。buttonとしてクリック/Enterに対応し、native dialogで拡大、Escで閉じられるようにする。
 
+CHART-MINIVIEW-UX-01では、進捗サムネイル全体へ単一の操作レイヤーを重ね、ポインタ位置または左右キーから`progressMap.blocks`の実ブロック番号を選択する。hover/focus/tap時は画面内で再利用する吹き出しCanvasを1つだけ表示し、そのブロックの`startMeasure`から`endMeasure`に対応するminiView範囲を拡大描画する。hoverごとのAPI取得は行わず、既存のversionIdメモリキャッシュを使用する。クリックdialogは全譜面確認用として維持する。
+
+新規生成payloadには任意の`measurePositions`を追加し、`startMeasure`から`endMeasure + 1`までの小節境界を2048段階のindexで保持する。小節長変更を含む譜面ではこの配列をblock範囲変換に使用する。既存schemaVersion 3で配列がないpayloadは、小節番号による線形換算へfallbackする。ノート色は白鍵盤を薄灰、青鍵盤を青、スクラッチを赤、LN継続を各レーン同系色、小節線を薄灰とする。
+
 ミニビュー生成失敗や未対応構文は投稿拒否理由にせず、`MINIVIEW_UNSUPPORTED_MODE`、`MINIVIEW_RANDOM_UNSUPPORTED`、`MINIVIEW_LNTYPE2_UNSUPPORTED`、`MINIVIEW_MALFORMED_LN`、`MINIVIEW_TOO_COMPLEX`、`MINIVIEW_GENERATION_FAILED` warningを返す。既存schemaVersion 2は再解析せず、従来の進捗サムネイル表示を維持する。
 
 ## TURNSTILE-01 投稿認証

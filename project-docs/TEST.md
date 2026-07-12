@@ -22,6 +22,15 @@
 - buttonをクリックまたはEnterで開け、Escで閉じ、操作元へfocusが戻ること。
 - スマホ幅でdialogが画面外へはみ出さず、横スクロールが出ないこと。
 - 既存のツリー、折り畳み、進捗サムネイル、DL、追記投稿、お気に入りが壊れないこと。
+- 進捗サムネイル上のポインタ位置に応じて実ブロック番号が切り替わり、対応する小節範囲の吹き出しが表示されること。
+- hover解除で吹き出しが閉じ、連続hover時に同じversionのpayloadを再取得しないこと。
+- Tabで進捗ブロック操作面へ移動でき、左右キー・Home・Endでblockを変更できること。
+- EnterまたはSpace、スマホtapで吹き出しを固定/解除でき、Escまたは外側操作で閉じられること。
+- 画面端とスマホ幅で吹き出しがviewport外へ大きくはみ出さず、横スクロールが発生しないこと。
+- 白鍵盤ノートが薄灰、青鍵盤ノートが青、スクラッチが赤、LNが各レーン同系色、小節線が薄灰で描画されること。
+- 小節長変更を含む新規payloadで`measurePositions`を使い、blockの開始/終了小節と描画範囲が対応すること。
+- `measurePositions`がない既存schemaVersion 3でも線形fallbackで吹き出しが動作すること。
+- schemaVersion 2やminiView未対応versionでは操作レイヤーを表示せず、進捗サムネイルだけが従来どおり動作すること。
 - Worker typecheck、Pages JavaScript構文検査、Worker dry-run、`git diff --check`が成功すること。
 
 ## TURNSTILE-01

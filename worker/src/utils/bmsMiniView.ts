@@ -66,6 +66,7 @@ export type BmsMiniViewPayload = {
   longStartBits: string[];
   longEndBits: string[];
   measureBits: string;
+  measurePositions?: number[];
 };
 
 export type StoredBmsMiniView = {
@@ -233,10 +234,13 @@ function buildPayload(
     }
   }
 
+  const measurePositions: number[] = [];
   for (let measure = startMeasure; measure <= endMeasure + 1; measure += 1) {
     const position = measureStarts[measure];
     if (Number.isFinite(position)) {
-      setBit(measureBits, quantizePosition(position, startPosition, endPosition));
+      const quantizedPosition = quantizePosition(position, startPosition, endPosition);
+      measurePositions.push(quantizedPosition);
+      setBit(measureBits, quantizedPosition);
     }
   }
 
@@ -254,7 +258,8 @@ function buildPayload(
     longActiveBits: longActiveBits.map(bytesToBase64),
     longStartBits: longStartBits.map(bytesToBase64),
     longEndBits: longEndBits.map(bytesToBase64),
-    measureBits: bytesToBase64(measureBits)
+    measureBits: bytesToBase64(measureBits),
+    measurePositions
   };
 }
 

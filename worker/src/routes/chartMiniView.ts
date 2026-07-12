@@ -42,7 +42,11 @@ function isPayload(value: unknown): value is BmsMiniViewPayload {
     && Array.isArray(payload.longActiveBits)
     && Array.isArray(payload.longStartBits)
     && Array.isArray(payload.longEndBits)
-    && typeof payload.measureBits === "string";
+    && typeof payload.measureBits === "string"
+    && (
+      payload.measurePositions === undefined
+      || (Array.isArray(payload.measurePositions) && payload.measurePositions.every(Number.isInteger))
+    );
 }
 
 async function buildEtag(payload: BmsMiniViewPayload): Promise<string> {

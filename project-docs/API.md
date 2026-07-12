@@ -29,7 +29,7 @@
     "resolution": 2048,
     "laneOrder": ["scratch", "key1", "key2", "key3", "key4", "key5", "key6", "key7"],
     "startMeasure": 1,
-    "endMeasure": 128,
+    "endMeasure": 3,
     "noteCount": 1200,
     "tapCount": 1160,
     "longNoteCount": 40,
@@ -37,10 +37,13 @@
     "longActiveBits": ["..."],
     "longStartBits": ["..."],
     "longEndBits": ["..."],
-    "measureBits": "..."
+    "measureBits": "...",
+    "measurePositions": [0, 682, 1365, 2047]
   }
 }
 ```
+
+`measurePositions`は任意で、`startMeasure`から`endMeasure + 1`までの各小節境界を量子化indexで表す。CHART-MINIVIEW-UX-01以降の新規生成payloadでは出力し、既存payloadに存在しない場合もAPI取得可能とする。一覧APIには引き続き完全payloadを含めない。
 
 成功時は`Cache-Control: public, max-age=300, stale-while-revalidate=300`とpayload SHA-256由来の`ETag`を返し、`If-None-Match`一致時は304とする。
 

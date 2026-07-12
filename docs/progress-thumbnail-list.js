@@ -9,6 +9,7 @@
   const emptyBarFill = "#D3E5DF";
   const emptyStripFill = "#DCEAE5";
   const colorLabels = ["青", "紫", "橙", "赤", "水色"];
+  const progressBlockRangesByVersionId = new Map();
 
   function html(value) {
     if (typeof escapeHtml === "function") {
@@ -544,6 +545,11 @@
     return {
       totalBlocks,
       blockStates,
+      blockRanges: blockStates.map((state) => ({
+        index: state.index,
+        startMeasure: Number.isInteger(Number(state.block?.startMeasure)) ? Number(state.block.startMeasure) : null,
+        endMeasure: Number.isInteger(Number(state.block?.endMeasure)) ? Number(state.block.endMeasure) : null
+      })),
       paintedIndexes,
       paintedCount: paintedIndexes.size,
       unpaintedCount: Math.max(0, totalBlocks - paintedIndexes.size),
@@ -631,7 +637,7 @@
     return lines.join("\n");
   }
 
-  function renderProgressMapThumbnailGraph(model, progress) {
+  function renderProgressMapThumbnailGraph(model, progress, versionId = "") {
     const cellCount = Math.max(1, Math.min(model.totalBlocks, thumbnailMaxCells));
     const summaries = Array.from({ length: cellCount }, (_, cellIndex) => summarizeCell(model, cellIndex, cellCount));
     const bars = summaries.map((summary) => `
@@ -650,11 +656,23 @@
       ></span>
     `).join("");
     const userLabel = model.userCount === 1 ? "1 user" : `${model.userCount} users`;
+    const hasBlockRanges = model.blockRanges.some((range) => range.startMeasure !== null && range.endMeasure !== null);
+    const blockNavigator = versionId && hasBlockRanges
+      ? `<button
+          class="progress-thumbnail-block-navigator"
+          type="button"
+          data-progress-block-navigator
+          data-version-id="${html(versionId)}"
+          data-selected-block="0"
+          aria-label="進捗ブロックの譜面範囲をプレビュー。左右キーでブロックを選択できます"
+        ></button>`
+      : "";
 
     return `
       <div class="progress-thumbnail-graph" style="--progress-thumbnail-cells: ${cellCount};">
         <div class="progress-thumbnail-density" aria-hidden="true">${bars}</div>
         <div class="progress-thumbnail-fill-strip" aria-hidden="true">${strip}</div>
+        ${blockNavigator}
       </div>
       <div class="progress-thumbnail-meta">
         <span>${html(model.paintedCount)}/${html(model.totalBlocks)} blocks</span>
@@ -680,15 +698,18 @@
     }
 
     if (model) {
+      progressBlockRangesByVersionId.set(versionId, model.blockRanges);
       const tooltip = buildTooltip(model, progress);
+      const interactiveVersionId = version?.miniView?.available === true ? versionId : "";
       return `
         <div class="progress-thumbnail has-progress-map" aria-label="${html(tooltip)}" title="${html(tooltip)}" data-version-id="${html(versionId)}" data-density-scale="${html(model.densityScale)}"${imageUrl ? ` data-progress-image-src="${html(imageUrl)}"` : ""}>
-          ${renderProgressMapThumbnailGraph(model, progress)}
+          ${renderProgressMapThumbnailGraph(model, progress, interactiveVersionId)}
         </div>
       `;
     }
 
     if (imageUrl) {
+      progressBlockRangesByVersionId.delete(versionId);
       return `
         <div class="progress-thumbnail has-progress-image" aria-label="progress ${html(progress)}%" data-version-id="${html(versionId)}" data-progress-image-src="${html(imageUrl)}">
           <div class="progress-thumbnail-image-wrap"></div>
@@ -698,6 +719,7 @@
       `;
     }
 
+    progressBlockRangesByVersionId.delete(versionId);
     return "";
   }
 
@@ -1071,6 +1093,7 @@
   window.mountProgressImageThumbnails = mountProgressImageThumbnails;
   window.scheduleProgressImageThumbnailMount = scheduleProgressImageThumbnailMount;
   window.applyStoredProgressThumbnails = applyStoredProgressThumbnails;
+  window.getProgressThumbnailBlockRanges = (versionId) => progressBlockRangesByVersionId.get(String(versionId || "")) || null;
   window.debugProgressThumbnails = debugProgressThumbnails;
 
   try {
