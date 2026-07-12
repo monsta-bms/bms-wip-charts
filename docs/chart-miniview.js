@@ -115,9 +115,9 @@
       return;
     }
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
-    context.fillStyle = "#f5f8f7";
+    context.fillStyle = "#090909";
     context.fillRect(0, 0, width, height);
-    context.strokeStyle = "#d6e1dd";
+    context.strokeStyle = "#303030";
     context.lineWidth = 1;
     for (let lane = 1; lane < 8; lane += 1) {
       const x = Math.round(lane * width / 8) + 0.5;
@@ -131,28 +131,25 @@
   function getLanePalette(lane) {
     if (lane === 0) {
       return {
-        laneFill: "#F2E6E6",
-        noteFill: "#DC6262",
-        noteStroke: "#A94747",
-        longFill: "#C65353",
-        longMarker: "#A83E3E"
+        laneFill: "#120808",
+        noteFill: "#FF5555",
+        longFill: "#D94A4A",
+        longMarker: "#FF7777"
       };
     }
     if (lane % 2 === 0) {
       return {
-        laneFill: "#EAF3F6",
-        noteFill: "#32B4E2",
-        noteStroke: "#237F9F",
-        longFill: "#2D8FBC",
-        longMarker: "#206D91"
+        laneFill: "#080B14",
+        noteFill: "#4B74FF",
+        longFill: "#7F9BFF",
+        longMarker: "#A8B9FF"
       };
     }
     return {
-      laneFill: "#F3F6F6",
-      noteFill: "#E6E6E6",
-      noteStroke: "#859198",
-      longFill: "#BFC7CC",
-      longMarker: "#7E8B92"
+      laneFill: "#090909",
+      noteFill: "#EDEDED",
+      longFill: "#AFC3FF",
+      longMarker: "#D9E2FF"
     };
   }
 
@@ -171,12 +168,17 @@
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     context.clearRect(0, 0, width, height);
 
-    const padding = large ? 10 : 3;
-    const plotX = padding;
-    const plotY = padding;
-    const plotWidth = Math.max(1, width - padding * 2);
-    const plotHeight = Math.max(1, height - padding * 2);
-    const laneWidth = plotWidth / 8;
+    const paddingX = large ? 8 : 3;
+    const paddingY = large ? 12 : 3;
+    const plotX = paddingX;
+    const plotY = paddingY;
+    const plotWidth = Math.max(1, width - paddingX * 2);
+    const plotHeight = Math.max(1, height - paddingY * 2);
+    const measureBandWidth = large ? 36 : 0;
+    const measureBandGap = large ? 4 : 0;
+    const lanePlotWidth = Math.max(1, plotWidth - measureBandWidth - measureBandGap);
+    const measureBandX = plotX + lanePlotWidth + measureBandGap;
+    const laneWidth = lanePlotWidth / 8;
     const rangeStart = Math.max(0, Math.min(payload.resolution - 1, Number(viewRange?.startIndex) || 0));
     const rangeEnd = Math.max(
       rangeStart,
@@ -185,17 +187,21 @@
         : payload.resolution - 1)
     );
     const yForIndex = (index) => plotY
-      + (index - rangeStart) / Math.max(rangeEnd - rangeStart, 1) * plotHeight;
+      + (rangeEnd - index) / Math.max(rangeEnd - rangeStart, 1) * plotHeight;
 
-    context.fillStyle = "#F3F6F6";
-    context.fillRect(plotX, plotY, plotWidth, plotHeight);
+    context.fillStyle = "#050505";
+    context.fillRect(0, 0, width, height);
     for (let lane = 0; lane < 8; lane += 1) {
       context.fillStyle = getLanePalette(lane).laneFill;
       context.fillRect(plotX + lane * laneWidth, plotY, laneWidth, plotHeight);
     }
+    if (large) {
+      context.fillStyle = "#8F8F8F";
+      context.fillRect(measureBandX, plotY, measureBandWidth, plotHeight);
+    }
 
-    context.strokeStyle = "rgba(116, 132, 137, 0.2)";
-    context.lineWidth = 1;
+    context.strokeStyle = "#3A3A3A";
+    context.lineWidth = large ? 1 : 0.6;
     for (let lane = 1; lane < 8; lane += 1) {
       const x = plotX + lane * laneWidth;
       context.beginPath();
@@ -204,19 +210,76 @@
       context.stroke();
     }
 
-    context.strokeStyle = "#C9D3D6";
-    context.lineWidth = large ? 1 : 0.7;
-    for (let index = rangeStart; index <= rangeEnd; index += 1) {
-      if (!bitAt(payload.measureBitset, index)) {
-        continue;
+    if (large) {
+      const visibleStartMeasure = Number.isInteger(Number(viewRange?.startMeasure))
+        ? Math.max(payload.startMeasure, Number(viewRange.startMeasure))
+        : payload.startMeasure;
+      const visibleEndMeasure = Number.isInteger(Number(viewRange?.endMeasure))
+        ? Math.min(payload.endMeasure, Number(viewRange.endMeasure))
+        : payload.endMeasure;
+      for (let measure = visibleStartMeasure; measure <= visibleEndMeasure; measure += 1) {
+        const measureStartIndex = measureBoundaryIndex(payload, measure);
+        const measureEndIndex = measureBoundaryIndex(payload, measure + 1);
+        const startY = yForIndex(measureStartIndex);
+        const endY = yForIndex(measureEndIndex);
+        const measurePixelHeight = Math.abs(endY - startY);
+
+        if (measurePixelHeight >= 28) {
+          context.strokeStyle = "#2C2C2C";
+          context.lineWidth = 0.65;
+          for (let division = 1; division < 16; division += 1) {
+            if (division % 4 === 0) {
+              continue;
+            }
+            const index = measureStartIndex + (measureEndIndex - measureStartIndex) * division / 16;
+            const y = yForIndex(index);
+            context.beginPath();
+            context.moveTo(plotX, y);
+            context.lineTo(plotX + lanePlotWidth, y);
+            context.stroke();
+          }
+        }
+        if (measurePixelHeight >= 10) {
+          context.strokeStyle = "#4A4A4A";
+          context.lineWidth = 0.9;
+          for (let beat = 1; beat < 4; beat += 1) {
+            const index = measureStartIndex + (measureEndIndex - measureStartIndex) * beat / 4;
+            const y = yForIndex(index);
+            context.beginPath();
+            context.moveTo(plotX, y);
+            context.lineTo(plotX + lanePlotWidth, y);
+            context.stroke();
+          }
+        }
+
+        context.strokeStyle = "#BDBDBD";
+        context.lineWidth = 1.2;
+        context.beginPath();
+        context.moveTo(plotX, startY);
+        context.lineTo(plotX + plotWidth, startY);
+        context.stroke();
+
+        if (measurePixelHeight >= 14) {
+          context.fillStyle = "#F6F6F6";
+          context.font = "700 12px system-ui, sans-serif";
+          context.textAlign = "center";
+          context.textBaseline = "middle";
+          context.fillText(String(measure), measureBandX + measureBandWidth / 2, (startY + endY) / 2);
+        }
       }
-      const y = yForIndex(index);
+      const finalBoundaryY = yForIndex(measureBoundaryIndex(payload, visibleEndMeasure + 1));
+      context.strokeStyle = "#BDBDBD";
+      context.lineWidth = 1.2;
       context.beginPath();
-      context.moveTo(plotX, y);
-      context.lineTo(plotX + plotWidth, y);
+      context.moveTo(plotX, finalBoundaryY);
+      context.lineTo(plotX + plotWidth, finalBoundaryY);
       context.stroke();
     }
 
+    context.save();
+    context.beginPath();
+    context.rect(plotX + 1, plotY + 1, Math.max(1, lanePlotWidth - 2), Math.max(1, plotHeight - 2));
+    context.clip();
     for (let lane = 0; lane < 8; lane += 1) {
       const x = plotX + lane * laneWidth;
       const activeBits = payload.longActiveBitsets[lane];
@@ -229,7 +292,10 @@
         } else if (!active && runStart >= 0) {
           const yStart = yForIndex(runStart);
           const yEnd = yForIndex(Math.max(runStart + 1, index - 1));
-          context.fillRect(x + laneWidth * 0.27, yStart, Math.max(1, laneWidth * 0.46), Math.max(1, yEnd - yStart));
+          const longWidth = laneWidth * (lane === 0 ? 0.82 : 0.68);
+          const longX = x + (laneWidth - longWidth) / 2;
+          const longTop = Math.min(yStart, yEnd);
+          context.fillRect(longX, longTop, Math.max(2, longWidth), Math.max(3, Math.abs(yEnd - yStart)));
           runStart = -1;
         }
       }
@@ -244,26 +310,31 @@
       for (let index = rangeStart; index <= rangeEnd; index += 1) {
         const y = yForIndex(index);
         if (bitAt(tapBits, index)) {
-          const noteX = x + 0.7;
-          const noteY = y - (large ? 1 : 0.5);
-          const noteWidth = Math.max(1, laneWidth - 1.4);
-          const noteHeight = large ? 2.2 : 1.2;
+          const noteWidth = Math.max(2, laneWidth * (lane === 0 ? 0.92 : 0.8));
+          const noteHeight = large ? (lane === 0 ? 4.2 : 3.2) : 1.4;
+          const noteX = x + (laneWidth - noteWidth) / 2;
+          const noteY = Math.max(plotY + 1, Math.min(plotY + plotHeight - noteHeight - 1, y - noteHeight / 2));
           context.fillStyle = palette.noteFill;
           context.fillRect(noteX, noteY, noteWidth, noteHeight);
-          context.strokeStyle = palette.noteStroke;
-          context.lineWidth = large ? 0.7 : 0.45;
-          context.strokeRect(noteX, noteY, noteWidth, noteHeight);
         }
         if (bitAt(startBits, index) || bitAt(endBits, index)) {
+          const markerWidth = Math.max(2, laneWidth * (lane === 0 ? 0.94 : 0.82));
+          const markerHeight = large ? 4.5 : 1.7;
+          const markerX = x + (laneWidth - markerWidth) / 2;
+          const markerY = Math.max(plotY + 1, Math.min(plotY + plotHeight - markerHeight - 1, y - markerHeight / 2));
           context.fillStyle = palette.longMarker;
-          context.fillRect(x + laneWidth * 0.12, y - 1, Math.max(1, laneWidth * 0.76), large ? 2.5 : 1.5);
+          context.fillRect(markerX, markerY, markerWidth, markerHeight);
         }
       }
     }
+    context.restore();
 
-    context.strokeStyle = "#8D9A9E";
+    context.strokeStyle = "#D0D0D0";
     context.lineWidth = 1;
-    context.strokeRect(plotX + 0.5, plotY + 0.5, Math.max(0, plotWidth - 1), Math.max(0, plotHeight - 1));
+    context.strokeRect(plotX + 0.5, plotY + 0.5, Math.max(0, lanePlotWidth - 1), Math.max(0, plotHeight - 1));
+    if (large) {
+      context.strokeRect(measureBandX + 0.5, plotY + 0.5, Math.max(0, measureBandWidth - 1), Math.max(0, plotHeight - 1));
+    }
   }
 
   async function fetchPayloadFromNetwork(url) {
@@ -365,7 +436,7 @@
         <span class="chart-miniview-range-meta"></span>
       </div>
       <canvas class="chart-miniview-range-canvas" aria-hidden="true"></canvas>
-      <span class="chart-miniview-range-hint">左右キーでブロック移動 / Escで閉じる</span>
+      <span class="chart-miniview-range-hint">クリックで固定・切替 / ←→で移動 / Escで閉じる</span>
     `;
     document.body.appendChild(rangePreview);
     rangePreviewCanvas = rangePreview.querySelector("canvas");
@@ -457,6 +528,7 @@
     activeRangeTarget?.removeAttribute("aria-describedby");
     if (activeRangeTarget) {
       delete activeRangeTarget.dataset.previewActive;
+      delete activeRangeTarget.dataset.previewMode;
     }
     if (rangePreview) {
       rangePreview.hidden = true;
@@ -485,11 +557,13 @@
     activeRangeTarget?.removeAttribute("aria-describedby");
     if (activeRangeTarget && activeRangeTarget !== target) {
       delete activeRangeTarget.dataset.previewActive;
+      delete activeRangeTarget.dataset.previewMode;
     }
     activeRangeTarget = target;
     activeRangeIndex = blockIndex;
     target.dataset.selectedBlock = String(blockIndex);
     target.dataset.previewActive = "true";
+    target.dataset.previewMode = rangePreviewPinned ? "fixed" : "hover";
     target.style.setProperty("--selected-block-index", String(blockIndex));
     target.style.setProperty("--progress-block-count", String(ranges.length));
     target.setAttribute("aria-describedby", rangePreview.id);
@@ -502,6 +576,7 @@
     if (unchanged) {
       return;
     }
+    rangePreview.dataset.state = "loading";
 
     if (rangePreviewLabel) {
       rangePreviewLabel.textContent = `小節 ${block.startMeasure}-${block.endMeasure}`;
@@ -522,6 +597,7 @@
         throw new Error("Chart miniview block range is invalid.");
       }
       drawPayload(rangePreviewCanvas, payload, true, viewRange);
+      rangePreview.dataset.state = "ready";
       if (rangePreviewLabel) {
         rangePreviewLabel.textContent = `小節 ${viewRange.startMeasure}-${viewRange.endMeasure}`;
       }
@@ -535,8 +611,9 @@
         return;
       }
       if (rangePreviewMeta) {
-        rangePreviewMeta.textContent = "読み込めませんでした";
+        rangePreviewMeta.textContent = "ミニビュー非対応";
       }
+      rangePreview.dataset.state = "error";
     }
   }
 
@@ -600,51 +677,9 @@
     if (activeRangeTarget && (!activeRangeTarget.isConnected || activeRangeTarget.closest(".version-row")?.hidden)) {
       closeRangePreview(true);
     }
-    const localObserver = ensureObserver();
-    root.querySelectorAll('.version-row[data-miniview-available="true"]').forEach((row) => {
-      if (row.hidden) {
-        return;
-      }
-      const cell = row.querySelector(":scope > .thumbnail-cell, :scope > .progress-thumbnail-block");
-      if (!cell) {
-        return;
-      }
-      ensureProgressSlot(cell);
-      cell.classList.add("has-chart-miniview");
-      cell.classList.remove("is-empty");
-
-      let shell = cell.querySelector(":scope > .chart-miniview-shell");
-      if (!shell) {
-        shell = document.createElement("div");
-        shell.className = "chart-miniview-shell";
-        shell.innerHTML = `
-          <button class="chart-miniview-button" type="button" data-state="idle">
-            <canvas class="chart-miniview-canvas" aria-hidden="true"></canvas>
-          </button>
-        `;
-        cell.appendChild(shell);
-      }
-
-      const button = shell.querySelector(".chart-miniview-button");
-      const canvas = shell.querySelector("canvas");
-      if (!button || !canvas) {
-        return;
-      }
-      button.dataset.versionId = row.dataset.versionId || "";
-      button.dataset.miniviewUrl = row.dataset.miniviewUrl || "";
-      button.setAttribute("aria-label", "譜面ミニビューを読み込んで開く");
-      button.title = "譜面ミニビュー";
-      drawPlaceholder(canvas);
-
-      const cached = payloadCache.get(button.dataset.versionId);
-      if (cached) {
-        paintRowVersion(button.dataset.versionId, cached);
-      } else if (localObserver) {
-        localObserver.observe(button);
-      } else {
-        queueLoad(button);
-      }
-    });
+    root.querySelectorAll(".chart-miniview-shell").forEach((shell) => shell.remove());
+    root.querySelectorAll(".thumbnail-cell.has-chart-miniview, .progress-thumbnail-block.has-chart-miniview")
+      .forEach((cell) => cell.classList.remove("has-chart-miniview"));
   }
 
   function schedule(root = listElement) {
@@ -700,10 +735,14 @@
 
   listElement.addEventListener("pointerover", (event) => {
     const target = getBlockNavigator(event);
-    if (!target || rangePreviewPinned) {
+    if (!target) {
       return;
     }
     const blockIndex = blockIndexFromPointer(target, event.clientX);
+    if (rangePreviewPinned) {
+      target.dataset.pointerBlock = String(blockIndex);
+      return;
+    }
     if (blockIndex >= 0) {
       showRangePreview(target, blockIndex);
     }
@@ -711,10 +750,14 @@
 
   listElement.addEventListener("pointermove", (event) => {
     const target = getBlockNavigator(event);
-    if (!target || rangePreviewPinned) {
+    if (!target) {
       return;
     }
     const blockIndex = blockIndexFromPointer(target, event.clientX);
+    if (rangePreviewPinned) {
+      target.dataset.pointerBlock = String(blockIndex);
+      return;
+    }
     if (blockIndex >= 0 && (activeRangeTarget !== target || activeRangeIndex !== blockIndex)) {
       showRangePreview(target, blockIndex);
     }
@@ -782,8 +825,13 @@
     const rangeTarget = getBlockNavigator(event);
     if (rangeTarget) {
       event.preventDefault();
-      const selected = Math.max(0, Number(rangeTarget.dataset.selectedBlock) || 0);
-      if (rangePreviewPinned && activeRangeTarget === rangeTarget) {
+      const selected = event.detail > 0 || event.clientX > 0
+        ? blockIndexFromPointer(rangeTarget, event.clientX)
+        : Math.max(0, Number(rangeTarget.dataset.selectedBlock) || 0);
+      if (selected < 0) {
+        return;
+      }
+      if (rangePreviewPinned && activeRangeTarget === rangeTarget && activeRangeIndex === selected) {
         closeRangePreview(true);
       } else {
         rangePreviewPinned = true;

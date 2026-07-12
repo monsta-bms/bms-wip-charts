@@ -14,6 +14,8 @@ Pagesは既存進捗サムネイルとは別にCanvas 2Dの縦型ミニマップ
 
 CHART-MINIVIEW-UX-01では、進捗サムネイル全体へ単一の操作レイヤーを重ね、ポインタ位置または左右キーから`progressMap.blocks`の実ブロック番号を選択する。hover/focus/tap時は画面内で再利用する吹き出しCanvasを1つだけ表示し、そのブロックの`startMeasure`から`endMeasure`に対応するminiView範囲を拡大描画する。hoverごとのAPI取得は行わず、既存のversionIdメモリキャッシュを使用する。クリックdialogは全譜面確認用として維持する。
 
+CHART-MINIVIEW-UX-02では、一覧右側の常時全体ミニビューを廃止し、進捗ブロック連動の吹き出しを主表示とする。吹き出しは黒系背景、16分・1拍・小節境界の3段階グリッド、白鍵・青鍵・スクラッチ・LNの色分け、右側の小節番号帯を使用し、曲進行を下から上へ描画する。固定中に別ブロックをクリックした場合は解除を挟まず固定先を切り替え、同一ブロックの再クリック、Esc、外側操作で解除する。miniView未対応versionは進捗メタ欄へ控えめな非対応表示を出す。
+
 新規生成payloadには任意の`measurePositions`を追加し、`startMeasure`から`endMeasure + 1`までの小節境界を2048段階のindexで保持する。小節長変更を含む譜面ではこの配列をblock範囲変換に使用する。既存schemaVersion 3で配列がないpayloadは、小節番号による線形換算へfallbackする。ノート色は白鍵盤を薄灰、青鍵盤を青、スクラッチを赤、LN継続を各レーン同系色、小節線を薄灰とする。
 
 ミニビュー生成失敗や未対応構文は投稿拒否理由にせず、`MINIVIEW_UNSUPPORTED_MODE`、`MINIVIEW_RANDOM_UNSUPPORTED`、`MINIVIEW_LNTYPE2_UNSUPPORTED`、`MINIVIEW_MALFORMED_LN`、`MINIVIEW_TOO_COMPLEX`、`MINIVIEW_GENERATION_FAILED` warningを返す。既存schemaVersion 2は再解析せず、従来の進捗サムネイル表示を維持する。

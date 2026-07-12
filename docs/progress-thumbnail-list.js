@@ -637,7 +637,7 @@
     return lines.join("\n");
   }
 
-  function renderProgressMapThumbnailGraph(model, progress, versionId = "") {
+  function renderProgressMapThumbnailGraph(model, progress, versionId = "", miniViewUnavailable = false) {
     const cellCount = Math.max(1, Math.min(model.totalBlocks, thumbnailMaxCells));
     const summaries = Array.from({ length: cellCount }, (_, cellIndex) => summarizeCell(model, cellIndex, cellCount));
     const bars = summaries.map((summary) => `
@@ -667,6 +667,9 @@
           aria-label="進捗ブロックの譜面範囲をプレビュー。左右キーでブロックを選択できます"
         ></button>`
       : "";
+    const miniViewStatus = miniViewUnavailable
+      ? `<span class="progress-thumbnail-miniview-status" title="この譜面形式ではミニビューを表示できません">ビューなし</span>`
+      : "";
 
     return `
       <div class="progress-thumbnail-graph" style="--progress-thumbnail-cells: ${cellCount};">
@@ -678,6 +681,7 @@
         <span>${html(model.paintedCount)}/${html(model.totalBlocks)} blocks</span>
         <span aria-hidden="true">·</span>
         <span>${html(userLabel)}</span>
+        ${miniViewStatus}
       </div>
     `;
   }
@@ -701,9 +705,10 @@
       progressBlockRangesByVersionId.set(versionId, model.blockRanges);
       const tooltip = buildTooltip(model, progress);
       const interactiveVersionId = version?.miniView?.available === true ? versionId : "";
+      const miniViewUnavailable = Boolean(version?.miniView) && version.miniView.available !== true;
       return `
         <div class="progress-thumbnail has-progress-map" aria-label="${html(tooltip)}" title="${html(tooltip)}" data-version-id="${html(versionId)}" data-density-scale="${html(model.densityScale)}"${imageUrl ? ` data-progress-image-src="${html(imageUrl)}"` : ""}>
-          ${renderProgressMapThumbnailGraph(model, progress, interactiveVersionId)}
+          ${renderProgressMapThumbnailGraph(model, progress, interactiveVersionId, miniViewUnavailable)}
         </div>
       `;
     }

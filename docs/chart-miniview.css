@@ -38,7 +38,8 @@ button.progress-thumbnail-block-navigator:focus-visible {
   outline: 0;
 }
 
-button.progress-thumbnail-block-navigator[data-preview-active="true"]::after {
+button.progress-thumbnail-block-navigator[data-preview-mode="hover"]::after,
+button.progress-thumbnail-block-navigator[data-preview-mode="fixed"]::after {
   background: rgba(22, 115, 93, 0.1);
   border: 1px solid rgba(22, 115, 93, 0.7);
   bottom: 0;
@@ -50,9 +51,16 @@ button.progress-thumbnail-block-navigator[data-preview-active="true"]::after {
   width: calc(100% / var(--progress-block-count));
 }
 
+button.progress-thumbnail-block-navigator[data-preview-mode="fixed"]::after {
+  background: rgba(22, 115, 93, 0.2);
+  border-color: #0F6854;
+  border-width: 2px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.75);
+}
+
 .chart-miniview-range-preview {
-  background: #ffffff;
-  border: 1px solid #9fb4ad;
+  background: #151515;
+  border: 1px solid #6D7477;
   border-radius: 8px;
   box-shadow: 0 12px 30px rgba(28, 48, 43, 0.2);
   box-sizing: border-box;
@@ -70,8 +78,8 @@ button.progress-thumbnail-block-navigator[data-preview-active="true"]::after {
 }
 
 .chart-miniview-range-preview::before {
-  background: #ffffff;
-  border-color: #9fb4ad;
+  background: #151515;
+  border-color: #6D7477;
   border-style: solid;
   content: "";
   height: 12px;
@@ -112,18 +120,18 @@ button.progress-thumbnail-block-navigator[data-preview-active="true"]::after {
 }
 
 .chart-miniview-range-label {
-  color: #17372f;
+  color: #F2F2F2;
   font-size: 0.9rem;
 }
 
 .chart-miniview-range-meta,
 .chart-miniview-range-hint {
-  color: #597069;
+  color: #C4C9CB;
   font-size: 0.72rem;
 }
 
 .chart-miniview-range-canvas {
-  background: #F3F6F6;
+  background: #050505;
   display: block;
   height: min(56vh, 340px);
   width: 278px;
@@ -131,6 +139,44 @@ button.progress-thumbnail-block-navigator[data-preview-active="true"]::after {
 
 .chart-miniview-range-hint {
   text-align: center;
+}
+
+.chart-miniview-range-preview[data-state="loading"] .chart-miniview-range-canvas {
+  opacity: 0.45;
+}
+
+.chart-miniview-range-preview[data-state="loading"] .chart-miniview-range-meta::before {
+  animation: chart-miniview-loading 0.9s linear infinite;
+  border: 2px solid #5A6467;
+  border-radius: 50%;
+  border-top-color: #EDEDED;
+  content: "";
+  display: inline-block;
+  height: 10px;
+  margin-right: 5px;
+  vertical-align: -1px;
+  width: 10px;
+}
+
+.chart-miniview-range-preview[data-state="error"] .chart-miniview-range-canvas {
+  opacity: 0.25;
+}
+
+.chart-miniview-range-preview[data-state="error"] .chart-miniview-range-meta {
+  color: #FF9B9B;
+}
+
+.progress-thumbnail-miniview-status {
+  color: #7C8985;
+  font-size: 0.7rem;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+@keyframes chart-miniview-loading {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .chart-miniview-shell {
@@ -307,10 +353,6 @@ button.progress-thumbnail-block-navigator[data-preview-active="true"]::after {
   .chart-miniview-range-canvas {
     height: min(48vh, 300px);
     width: calc(100vw - 34px);
-  }
-
-  .chart-miniview-range-hint {
-    display: none;
   }
 
   .chart-miniview-dialog {
