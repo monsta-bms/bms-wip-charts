@@ -1,0 +1,196 @@
+.thumbnail-cell.has-chart-miniview,
+.progress-thumbnail-block.has-chart-miniview {
+  align-items: stretch;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 70px;
+  overflow: visible;
+}
+
+.progress-thumbnail-slot {
+  align-self: center;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.chart-miniview-shell {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.chart-miniview-button {
+  background: #f8fbfa;
+  border: 1px solid #b9ccc5;
+  border-radius: 6px;
+  cursor: pointer;
+  display: block;
+  height: 72px;
+  padding: 2px;
+  position: relative;
+  width: 70px;
+}
+
+.chart-miniview-button:hover {
+  background: #eef6f3;
+  border-color: #6d9c8c;
+}
+
+.chart-miniview-button:focus-visible {
+  outline: 2px solid #16735d;
+  outline-offset: 2px;
+}
+
+.chart-miniview-button[data-state="loading"]::after {
+  background: rgba(248, 251, 250, 0.82);
+  color: #42645a;
+  content: "…";
+  display: grid;
+  font-size: 1rem;
+  inset: 1px;
+  place-items: center;
+  position: absolute;
+}
+
+.chart-miniview-button[data-state="error"]::after {
+  background: rgba(248, 251, 250, 0.9);
+  color: #8a4b42;
+  content: "!";
+  display: grid;
+  font-weight: 800;
+  inset: 1px;
+  place-items: center;
+  position: absolute;
+}
+
+.chart-miniview-canvas {
+  display: block;
+  height: 66px;
+  width: 64px;
+}
+
+.chart-miniview-dialog {
+  background: #ffffff;
+  border: 1px solid #9fb4ad;
+  border-radius: 8px;
+  color: #17372f;
+  max-height: 92vh;
+  max-width: min(92vw, 520px);
+  padding: 0;
+  width: min(92vw, 480px);
+}
+
+.chart-miniview-dialog::backdrop {
+  background: rgba(20, 35, 31, 0.48);
+}
+
+.chart-miniview-dialog-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.chart-miniview-dialog-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.chart-miniview-dialog-header h2 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.chart-miniview-dialog-close {
+  align-items: center;
+  background: transparent;
+  border: 1px solid #c6d4cf;
+  border-radius: 6px;
+  color: #335d51;
+  display: inline-flex;
+  font-size: 1.25rem;
+  height: 36px;
+  justify-content: center;
+  padding: 0;
+  width: 36px;
+}
+
+.chart-miniview-dialog-canvas-wrap {
+  align-items: center;
+  background: #f5f8f7;
+  display: flex;
+  justify-content: center;
+  max-height: 72vh;
+  min-height: 360px;
+  overflow: hidden;
+}
+
+.chart-miniview-dialog-canvas {
+  display: block;
+  height: min(68vh, 680px);
+  max-width: 100%;
+  width: min(78vw, 380px);
+}
+
+.chart-miniview-dialog-summary {
+  color: #4f685f;
+  font-size: 0.82rem;
+  margin: 0;
+  text-align: center;
+}
+
+.version-row.is-intermediate-history .chart-miniview-button {
+  opacity: 0.9;
+}
+
+@media (max-width: 960px) {
+  .thumbnail-cell.has-chart-miniview,
+  .progress-thumbnail-block.has-chart-miniview {
+    gap: 5px;
+    grid-template-columns: minmax(0, 1fr) 52px;
+  }
+
+  .chart-miniview-button {
+    height: 64px;
+    width: 52px;
+  }
+
+  .chart-miniview-canvas {
+    height: 58px;
+    width: 46px;
+  }
+}
+
+@media (max-width: 760px) {
+  .thumbnail-cell.has-chart-miniview,
+  .progress-thumbnail-block.has-chart-miniview {
+    grid-template-columns: minmax(0, 1fr) 76px;
+  }
+
+  .chart-miniview-button {
+    height: 76px;
+    width: 76px;
+  }
+
+  .chart-miniview-canvas {
+    height: 70px;
+    width: 70px;
+  }
+}
+
+@media (max-width: 480px) {
+  .chart-miniview-dialog {
+    max-width: 96vw;
+    width: 96vw;
+  }
+
+  .chart-miniview-dialog-panel {
+    padding: 12px;
+  }
+
+  .chart-miniview-dialog-canvas {
+    height: min(66vh, 600px);
+    width: min(82vw, 340px);
+  }
+}

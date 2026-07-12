@@ -349,8 +349,50 @@ function parseStoredJson(value: string | null, fieldName: string, versionId: str
   }
 }
 
+function projectMeasureNotes(value: string | null, versionId: string): {
+  measureNotes: unknown | null;
+  miniView: {
+    available: boolean;
+    mode: string | null;
+    url: string | null;
+  };
+} {
+  const parsed = parseStoredJson(value, "measure_notes_json", versionId);
+  const unavailable = { available: false, mode: null, url: null };
+  if (!parsed || typeof parsed !== "object") {
+    return { measureNotes: parsed, miniView: unavailable };
+  }
+
+  const root = parsed as Record<string, unknown>;
+  const rawMiniView = root.miniView;
+  if (root.schemaVersion !== 3 || !rawMiniView || typeof rawMiniView !== "object") {
+    return { measureNotes: parsed, miniView: unavailable };
+  }
+
+  const miniViewRecord = rawMiniView as Record<string, unknown>;
+  const { payload: _payload, ...miniViewSummary } = miniViewRecord;
+  const ready = miniViewRecord.status === "ready"
+    && miniViewRecord.mode === "7key-sp"
+    && Boolean(miniViewRecord.payload)
+    && typeof miniViewRecord.payload === "object";
+  return {
+    measureNotes: {
+      ...root,
+      miniView: miniViewSummary
+    },
+    miniView: ready
+      ? {
+          available: true,
+          mode: "7key-sp",
+          url: `/api/versions/${encodeURIComponent(versionId)}/mini-view`
+        }
+      : unavailable
+  };
+}
+
 function buildVersion(row: VersionRow) {
   const downloadBlocked = toBoolean(row.download_blocked);
+  const measureNotesProjection = projectMeasureNotes(row.measure_notes_json, row.version_id);
 
   return {
     id: row.version_id,
@@ -366,7 +408,8 @@ function buildVersion(row: VersionRow) {
     firstNoteMeasure: row.first_note_measure,
     lastNoteMeasure: row.last_note_measure,
     targetMeasureCount: row.target_measure_count,
-    measureNotes: parseStoredJson(row.measure_notes_json, "measure_notes_json", row.version_id),
+    measureNotes: measureNotesProjection.measureNotes,
+    miniView: measureNotesProjection.miniView,
     progressMap: parseStoredJson(row.progress_map_json, "progress_map_json", row.version_id),
     completed: row.progress === 100,
     completedAt: row.completed_at,
@@ -899,7 +942,7 @@ async function parseCreateChartInput(
   };
 
   if (validation.isBmsText) {
-    const analyzed = analyzeUploadedBmsBytes(fileBytes);
+    const analyzed = analyzeUploadedBmsBytes(fileBytes, file.name);
     md5 = analyzed.md5;
     bmsAnalysis = analyzed.analysis;
     bmsAnalysisFailed = analyzed.analysisFailed;
@@ -1086,7 +1129,7 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
         });
       }
 
-      const analyzed = analyzeUploadedBmsBytes(inspection.chart.bytes);
+      const analyzed = analyzeUploadedBmsBytes(inspection.chart.bytes, inspection.chart.fileName);
       input.md5 = analyzed.md5;
       input.bmsAnalysis = analyzed.analysis;
       input.bmsAnalysisFailed = analyzed.analysisFailed;

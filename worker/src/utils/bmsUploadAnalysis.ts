@@ -1,4 +1,5 @@
-import { analyzeBmsBuffer, BmsAnalysis, BmsAnalysisWarning, BmsMetadata, parseBmsMetadata } from "./bms";
+import { analyzeBmsBuffer, BmsAnalysis, BmsAnalysisWarning, BmsMetadata, decodeBmsText, parseBmsMetadata } from "./bms";
+import { analyzeBmsMiniView } from "./bmsMiniView";
 import { md5HexFromBuffer } from "./hash";
 
 export type UploadAnalysisWarning = {
@@ -28,7 +29,7 @@ function toWarning(warning: BmsAnalysisWarning): UploadAnalysisWarning {
   };
 }
 
-export function analyzeUploadedBmsBytes(buffer: ArrayBuffer): UploadBmsAnalysis {
+export function analyzeUploadedBmsBytes(buffer: ArrayBuffer, sourceFileName = ""): UploadBmsAnalysis {
   let metadata: BmsMetadata = {};
   let metadataWarning: UploadAnalysisWarning | null = null;
   let analysis: BmsAnalysis | null = null;
@@ -48,6 +49,17 @@ export function analyzeUploadedBmsBytes(buffer: ArrayBuffer): UploadBmsAnalysis 
   try {
     analysis = analyzeBmsBuffer(buffer);
     analysisWarnings.push(...analysis.warnings.map(toWarning));
+
+    const decoded = decodeBmsText(buffer);
+    const miniViewResult = analyzeBmsMiniView(decoded.text, sourceFileName, analysis);
+    analysis.measureNotesJson = {
+      ...analysis.measureNotesJson,
+      schemaVersion: 3,
+      miniView: miniViewResult.miniView
+    };
+    if (miniViewResult.warning) {
+      analysisWarnings.push(miniViewResult.warning);
+    }
   } catch (error) {
     analysisFailed = true;
     analysisWarnings.push({

@@ -1,5 +1,6 @@
 import { handleAdminRoute } from "./routes/admin";
 import { handleChartVersionsRoute } from "./routes/chartVersions";
+import { handleChartMiniViewRoute } from "./routes/chartMiniView";
 import { handleChartsRoute } from "./routes/charts";
 import {
   handleDifficultyTableRoute,
@@ -155,6 +156,11 @@ async function routeRequest(request: Request, env: Env): Promise<Response> {
       .filter(Boolean)
       .map((segment) => decodeURIComponent(segment));
     return handleAdminRoute(request, env, segments);
+  }
+
+  const chartMiniViewMatch = path.match(/^\/api\/versions\/([^/]+)\/mini-view$/);
+  if (chartMiniViewMatch) {
+    return handleChartMiniViewRoute(request, env, decodeURIComponent(chartMiniViewMatch[1]));
   }
 
   return notFound(request, env);

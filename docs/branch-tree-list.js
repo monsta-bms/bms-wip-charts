@@ -47,6 +47,14 @@
     return version?.displayVersion || version?.display_version || "ver?.?";
   }
 
+  function getMiniViewInfo(version) {
+    const miniView = version?.miniView;
+    if (!miniView || miniView.available !== true || miniView.mode !== "7key-sp" || !miniView.url) {
+      return null;
+    }
+    return miniView;
+  }
+
   function parseApiDate(value) {
     const source = String(value || "").trim();
     if (!source) {
@@ -719,6 +727,16 @@
     row.dataset.branchPath = branchPath;
     row.dataset.parentBranchPath = node.parent ? getBranchPath(node.parent) : "";
     row.style.setProperty("--tree-depth", String(node.depth));
+    const miniView = getMiniViewInfo(version);
+    if (miniView) {
+      row.dataset.miniviewAvailable = "true";
+      row.dataset.miniviewMode = miniView.mode;
+      row.dataset.miniviewUrl = miniView.url;
+    } else {
+      delete row.dataset.miniviewAvailable;
+      delete row.dataset.miniviewMode;
+      delete row.dataset.miniviewUrl;
+    }
 
     if (options.collapsedGroupId) {
       row.dataset.collapsedGroupId = options.collapsedGroupId;
@@ -811,6 +829,7 @@
     });
 
     applyVisibleTreeConnectors(list);
+    window.scheduleChartMiniViewMount?.(list);
   }
 
   function getChartId(entry) {
@@ -975,6 +994,7 @@
     baseRenderCharts(data);
     enhanceTreeDisplay(data);
     window.scheduleProgressImageThumbnailMount?.(listElement);
+    window.scheduleChartMiniViewMount?.(listElement);
   }
 
   try {

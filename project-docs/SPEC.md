@@ -1,5 +1,19 @@
 # BMS WIP Charts 仕様書
 
+## CHART-MINIVIEW-01 譜面ミニビュー
+
+新規の初回投稿・追記投稿について、WorkerがBMS本体を解析して7key SP譜面のコンパクトなミニビューを生成する。単体BMSはアップロードされた本体、ZIPは安全検査で展開済みの唯一のBMS/BME/BMLバイト列を利用する。ブラウザ生成値は保存せず、Worker生成結果を正データとする。R2へ派生画像・JSONは保存しない。
+
+MVPの対応レーンは1P側の通常鍵盤`11-15,18,19`、スクラッチ`16`、LNTYPE 1のLN鍵盤`51-55,58,59`、LNスクラッチ`56`とする。`#LNOBJ`も対応する。7key判定は`.bme`または6/7鍵チャンネルの実使用を根拠とし、5keyとの区別が曖昧な場合は推測表示しない。2P、10key/14key、PMS、LNTYPE 2、地雷、特殊配置、RANDOM/IF/SWITCH系、未閉鎖・競合LNはミニビュー未対応とする。
+
+`versions.measure_notes_json`は新規解析成功分からschemaVersion 3とし、schemaVersion 2の全フィールドを維持したまま`miniView`を追加する。曲方向を2048段階へ量子化し、通常ノート、LN継続、LN開始、LN終了、小節線をレーン別bitsetとしてBase64保存する。保存する`miniView`全体は32KiB以下とし、超過時は`MINIVIEW_TOO_COMPLEX` warningとしてunsupported metadataだけを保存する。`progress_map_json`と`progressImage`は変更しない。
+
+一覧APIは完全なbitset payloadを返さず、各versionの`miniView.available`、`mode`、専用取得URLだけを返す。公開中のversionだけ`GET /api/versions/:versionId/mini-view`でpayloadを取得できる。非表示version、非表示chart、schemaVersion 2、unsupportedは`MINIVIEW_NOT_AVAILABLE`とする。レスポンスはETagと短時間キャッシュを使用する。
+
+Pagesは既存進捗サムネイルとは別にCanvas 2Dの縦型ミニマップを表示する。IntersectionObserverで画面付近の可視行だけ取得し、折り畳み中の行は取得しない。同時取得は最大4件、versionId単位でメモリキャッシュし、devicePixelRatioは最大2とする。buttonとしてクリック/Enterに対応し、native dialogで拡大、Escで閉じられるようにする。
+
+ミニビュー生成失敗や未対応構文は投稿拒否理由にせず、`MINIVIEW_UNSUPPORTED_MODE`、`MINIVIEW_RANDOM_UNSUPPORTED`、`MINIVIEW_LNTYPE2_UNSUPPORTED`、`MINIVIEW_MALFORMED_LN`、`MINIVIEW_TOO_COMPLEX`、`MINIVIEW_GENERATION_FAILED` warningを返す。既存schemaVersion 2は再解析せず、従来の進捗サムネイル表示を維持する。
+
 ## TURNSTILE-01 投稿認証
 
 初回投稿`POST /api/charts`と追記投稿`POST /api/charts/:chartId/versions`にCloudflare Turnstile Managed widgetを適用する。閲覧、DL、取り消し、削除申請、管理API、難易度表、Cron、R2 cleanupは対象外とする。Turnstileの結果だけで自動BANは行わない。

@@ -1,5 +1,56 @@
 # API仕様
 
+## CHART-MINIVIEW-01
+
+新規投稿・追記でWorkerのBMS解析に成功した場合、`measure_notes_json`をschemaVersion 3として保存する。schemaVersion 2の既存項目は維持し、`miniView`へ2048段階のレーン別bitsetをBase64で保存する。`miniView`全体は32KiB以下とする。
+
+`GET /api/charts`は完全なpayloadを除外し、versionへ次だけを追加する。
+
+```json
+{
+  "miniView": {
+    "available": true,
+    "mode": "7key-sp",
+    "url": "/api/versions/version_xxx/mini-view"
+  }
+}
+```
+
+### GET /api/versions/:versionId/mini-view
+
+認証不要の読み取り専用API。versionとchartがともに公開中で、schemaVersion 3のready payloadがある場合だけ返す。
+
+```json
+{
+  "versionId": "version_xxx",
+  "miniView": {
+    "schemaVersion": 1,
+    "mode": "7key-sp",
+    "resolution": 2048,
+    "laneOrder": ["scratch", "key1", "key2", "key3", "key4", "key5", "key6", "key7"],
+    "startMeasure": 1,
+    "endMeasure": 128,
+    "noteCount": 1200,
+    "tapCount": 1160,
+    "longNoteCount": 40,
+    "tapBits": ["..."],
+    "longActiveBits": ["..."],
+    "longStartBits": ["..."],
+    "longEndBits": ["..."],
+    "measureBits": "..."
+  }
+}
+```
+
+成功時は`Cache-Control: public, max-age=300, stale-while-revalidate=300`とpayload SHA-256由来の`ETag`を返し、`If-None-Match`一致時は304とする。
+
+| HTTP | code | 条件 |
+| ---: | --- | --- |
+| 404 | `MINIVIEW_NOT_AVAILABLE` | version/chartが非公開、存在しない、schemaVersion 2、またはunsupported |
+| 500 | `MINIVIEW_READ_FAILED` | D1読込または保存JSON解析に失敗 |
+
+ミニビューwarningは投稿レスポンスの既存warningsへ追加するが、投稿自体は成功可能とする。warning detailへBMS本文やイベント一覧は含めない。
+
 ## Turnstile投稿認証
 
 対象:

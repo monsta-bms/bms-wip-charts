@@ -1,3 +1,5 @@
+import type { StoredBmsMiniView } from "./bmsMiniView";
+
 export type BmsMetadata = {
   title?: string;
   subtitle?: string;
@@ -19,7 +21,7 @@ export type BmsMeasureNote = {
 };
 
 export type BmsMeasureNotesJson = {
-  schemaVersion: 2;
+  schemaVersion: 2 | 3;
   firstPlayableMeasure: number | null;
   lastPlayableMeasure: number | null;
   displayFirstMeasure: number | null;
@@ -28,6 +30,7 @@ export type BmsMeasureNotesJson = {
   playNotes: number;
   lnPolicy: "count_start_only";
   measures: BmsMeasureNote[];
+  miniView?: StoredBmsMiniView;
 };
 
 export type BmsStandardBlock = {

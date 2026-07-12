@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="./branch-tree-list.css?v=ui-tree-overlay-01">
     <link rel="stylesheet" href="./list-ui-refresh.css?v=ui-tree-overlay-01">
     <link rel="stylesheet" href="./progress-image-preview.css?v=ui-tree-overlay-01">
+    <link rel="stylesheet" href="./chart-miniview.css?v=chart-miniview-01">
     <link rel="stylesheet" href="./tree-progress-polish.css?v=tree-shape-fix-01">
     <link rel="stylesheet" href="./version-management-ui.css?v=version-lifecycle-24h-01">
   </head>
@@ -318,12 +319,26 @@
       </form>
     </dialog>
 
+    <dialog class="chart-miniview-dialog" id="chartMiniViewDialog" aria-labelledby="chartMiniViewDialogTitle">
+      <div class="chart-miniview-dialog-panel">
+        <div class="chart-miniview-dialog-header">
+          <h2 id="chartMiniViewDialogTitle">譜面ミニビュー</h2>
+          <button class="chart-miniview-dialog-close" type="button" data-chart-miniview-close aria-label="閉じる">×</button>
+        </div>
+        <div class="chart-miniview-dialog-canvas-wrap">
+          <canvas class="chart-miniview-dialog-canvas" id="chartMiniViewDialogCanvas" aria-hidden="true"></canvas>
+        </div>
+        <p class="chart-miniview-dialog-summary" id="chartMiniViewDialogSummary" role="status" aria-live="polite"></p>
+      </div>
+    </dialog>
+
     <script src="./progress-layer-colors.js?v=ui-tree-overlay-01"></script>
     <script src="./zip-bms-reader.js?v=zip-bms-analysis-01"></script>
     <script src="./turnstile-controller.js?v=turnstile-01"></script>
     <script src="./app.js?v=turnstile-01"></script>
     <script src="./progress-song-end-analysis.js?v=ui-tree-overlay-01"></script>
     <script src="./progress-thumbnail-list.js?v=search-pagination-01"></script>
+    <script src="./chart-miniview.js?v=chart-miniview-01"></script>
     <script src="./branch-append-ui.js?v=turnstile-01"></script>
     <script src="./progress-image-preview.js?v=ui-tree-overlay-01"></script>
     <script src="./progress-image-formdata.js?v=ui-tree-overlay-01"></script>

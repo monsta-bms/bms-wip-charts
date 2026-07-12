@@ -1,5 +1,29 @@
 # テスト手順
 
+## CHART-MINIVIEW-01
+
+- 新規7key SPの初回投稿と追記投稿で`measureNotes.schemaVersion=3`とreadyなminiViewが保存されること。
+- 単体BMSと同一BMSを1件含むZIPで同じミニビューpayloadになること。
+- UTF-8、UTF-8 BOM、CP932の7key譜面を解析できること。
+- 通常ノート、`16`スクラッチ、LNTYPE 1、LNOBJ、小節長変更が正しく描画されること。
+- RANDOM/IF/SWITCH系が`MINIVIEW_RANDOM_UNSUPPORTED` warningになること。
+- LNTYPE 2が`MINIVIEW_LNTYPE2_UNSUPPORTED` warningになること。
+- 未閉鎖・重複・競合LNが`MINIVIEW_MALFORMED_LN` warningになること。
+- 2P側、地雷、特殊チャンネル、判定が曖昧な5keyが`MINIVIEW_UNSUPPORTED_MODE` warningになること。
+- ミニビュー未対応でも投稿、progressMap、progressImage、R2/D1保存が従来通り成功すること。
+- miniView保存値が32KiB以下で、超過時は`MINIVIEW_TOO_COMPLEX`になること。
+- `GET /api/charts`に完全なbitset payloadが含まれず、available/mode/urlだけが返ること。
+- 公開versionの専用API取得、ETagによる304、schemaVersion 2と非表示version/chartの404を確認すること。
+- 既存schemaVersion 2ではミニビューなしでも一覧と進捗サムネイルが崩れないこと。
+- IntersectionObserverに入った可視行だけを取得し、初期折り畳み中は取得しないこと。
+- 展開後に初めて中間履歴行を取得し、再描画ではversionIdキャッシュを再利用すること。
+- 同時取得が最大4件で、深い分岐と20chart以上でも操作が大きく重くならないこと。
+- 小Canvasと拡大Canvasが空白にならず、devicePixelRatioが最大2であること。
+- buttonをクリックまたはEnterで開け、Escで閉じ、操作元へfocusが戻ること。
+- スマホ幅でdialogが画面外へはみ出さず、横スクロールが出ないこと。
+- 既存のツリー、折り畳み、進捗サムネイル、DL、追記投稿、お気に入りが壊れないこと。
+- Worker typecheck、Pages JavaScript構文検査、Worker dry-run、`git diff --check`が成功すること。
+
 ## TURNSTILE-01
 
 - 初回投稿で共通Turnstile controllerからtokenを取得し、投稿できること。

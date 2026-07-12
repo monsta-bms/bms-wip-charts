@@ -824,6 +824,24 @@
     return versions[fallbackIndex] || null;
   }
 
+  function ensureProgressThumbnailSlot(thumbnailCell) {
+    let slot = thumbnailCell.querySelector(":scope > .progress-thumbnail-slot");
+    if (slot) {
+      return slot;
+    }
+
+    slot = document.createElement("div");
+    slot.className = "progress-thumbnail-slot";
+    const preservedMiniView = thumbnailCell.querySelector(":scope > .chart-miniview-shell");
+    Array.from(thumbnailCell.childNodes).forEach((node) => {
+      if (node !== preservedMiniView) {
+        slot.appendChild(node);
+      }
+    });
+    thumbnailCell.insertBefore(slot, preservedMiniView || thumbnailCell.firstChild);
+    return slot;
+  }
+
   function applyStoredProgressThumbnails(data, root = listElement) {
     const charts = Array.isArray(data?.charts) ? data.charts : [];
     if (!root || charts.length === 0) {
@@ -857,15 +875,16 @@
 
         const rawImageUrl = getRawProgressImageUrl(version);
         const thumbnail = renderProgressThumbnail(version, context);
+        const progressSlot = ensureProgressThumbnailSlot(thumbnailCell);
         if (thumbnail) {
           thumbnailCell.classList.remove("is-empty");
-          thumbnailCell.innerHTML = thumbnail;
+          progressSlot.innerHTML = thumbnail;
         } else {
           thumbnailCell.classList.add("is-empty");
-          thumbnailCell.innerHTML = "";
+          progressSlot.innerHTML = "";
         }
 
-        if (rawImageUrl && !thumbnailCell.querySelector(".progress-thumbnail.has-progress-image, .progress-thumbnail.has-progress-map")) {
+        if (rawImageUrl && !progressSlot.querySelector(".progress-thumbnail.has-progress-image, .progress-thumbnail.has-progress-map")) {
           warnProgressImageNotGenerated(version, "renderProgressThumbnail did not return progress image or progress map markup.");
         }
       });
@@ -944,7 +963,7 @@
               ${rejectedBadge}
             </div>
             <div class="meta-block progress-thumbnail-block${thumbnail ? "" : " is-empty"}">
-              ${thumbnail || ""}
+              <div class="progress-thumbnail-slot">${thumbnail || ""}</div>
             </div>
             <div class="meta-block">
               <span class="meta-label">コメント</span>

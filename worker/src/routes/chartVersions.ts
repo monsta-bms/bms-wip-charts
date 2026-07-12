@@ -378,7 +378,7 @@ async function parseAppendVersionInput(
   };
 
   if (validation.isBmsText) {
-    const analyzed = analyzeUploadedBmsBytes(fileBytes);
+    const analyzed = analyzeUploadedBmsBytes(fileBytes, file.name);
     md5 = analyzed.md5;
     bmsAnalysis = analyzed.analysis;
     bmsAnalysisFailed = analyzed.analysisFailed;
@@ -675,7 +675,7 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
         });
       }
 
-      const analyzed = analyzeUploadedBmsBytes(inspection.chart.bytes);
+      const analyzed = analyzeUploadedBmsBytes(inspection.chart.bytes, inspection.chart.fileName);
       input.md5 = analyzed.md5;
       input.bmsAnalysis = analyzed.analysis;
       input.bmsAnalysisFailed = analyzed.analysisFailed;
