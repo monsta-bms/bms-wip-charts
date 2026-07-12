@@ -2,7 +2,6 @@ const API_BASE_URL = "https://bms-wip-charts-worker.monsta3228gsl.workers.dev";
 const PASSWORD_STORAGE_KEY = "bms-wip-charts-admin-password";
 
 const allowedChartExtensions = new Set([".bms", ".bme", ".bml", ".zip"]);
-const readableChartExtensions = new Set([".bms", ".bme", ".bml"]);
 
 const form = document.querySelector("#chartForm");
 const fileInput = document.querySelector("#chartFile");
@@ -331,23 +330,33 @@ function decodeBmsText(buffer) {
 }
 
 function parseBmsMeta(text) {
-  const meta = { title: "", artist: "" };
+  const meta = { title: "", subtitle: "", artist: "", subartist: "" };
   const lines = text.split(/\r?\n/);
 
   for (const rawLine of lines) {
     const line = rawLine.trim();
     const titleMatch = line.match(/^#TITLE\s+(.+)$/i);
+    const subtitleMatch = line.match(/^#SUBTITLE\s+(.+)$/i);
     const artistMatch = line.match(/^#ARTIST\s+(.+)$/i);
+    const subartistMatch = line.match(/^#SUBARTIST\s+(.+)$/i);
 
     if (titleMatch && !meta.title) {
       meta.title = titleMatch[1].trim();
+    }
+
+    if (subtitleMatch && !meta.subtitle) {
+      meta.subtitle = subtitleMatch[1].trim();
     }
 
     if (artistMatch && !meta.artist) {
       meta.artist = artistMatch[1].trim();
     }
 
-    if (meta.title && meta.artist) {
+    if (subartistMatch && !meta.subartist) {
+      meta.subartist = subartistMatch[1].trim();
+    }
+
+    if (meta.title && meta.subtitle && meta.artist && meta.subartist) {
       break;
     }
   }
@@ -1360,14 +1369,11 @@ async function fillMetaFromFile(file) {
 
   setFieldInvalid(fileInput, false);
 
-  if (!readableChartExtensions.has(extension)) {
-    clearError();
-    setProgressMapMessage("単体BMSのみ進捗マップを表示します", "unavailable");
-    return;
-  }
-
   try {
-    const buffer = await file.arrayBuffer();
+    setProgressMapMessage(extension === ".zip" ? "ZIP内の譜面を解析しています" : "譜面を解析しています", "loading");
+    const buffer = extension === ".zip"
+      ? (await window.BmsZipReader.extractSingleBms(file)).buffer
+      : await file.arrayBuffer();
     const text = decodeBmsText(buffer);
     const meta = parseBmsMeta(text);
     const analysis = analyzeBmsProgressText(text);
@@ -1377,9 +1383,17 @@ async function fillMetaFromFile(file) {
       setFieldInvalid(titleInput, false);
     }
 
+    if (meta.subtitle) {
+      subtitleInput.value = meta.subtitle;
+    }
+
     if (meta.artist) {
       artistInput.value = meta.artist;
       setFieldInvalid(artistInput, false);
+    }
+
+    if (meta.subartist) {
+      subartistInput.value = meta.subartist;
     }
 
     if (analysis.standardBlocks.length > 0) {

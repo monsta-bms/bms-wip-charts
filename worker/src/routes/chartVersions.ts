@@ -1,6 +1,7 @@
-import { analyzeBmsBuffer, BmsAnalysis, normalizeText, parseBmsMetadata } from "../utils/bms";
+import { BmsAnalysis, normalizeText } from "../utils/bms";
+import { analyzeUploadedBmsBytes } from "../utils/bmsUploadAnalysis";
 import { sanitizeFileName, validateUploadFile } from "../utils/fileValidation";
-import { hashWithSecret, md5HexFromBuffer, sha256HexFromBuffer } from "../utils/hash";
+import { hashWithSecret, sha256HexFromBuffer } from "../utils/hash";
 import { prepareAppendProgressMap } from "../utils/progressMap";
 import { buildRequestFingerprint } from "../utils/requestFingerprint";
 import { apiError, Env, errorDetail, methodNotAllowed, ok } from "../utils/response";
@@ -63,6 +64,7 @@ type AppendVersionInput = {
   md5: string | null;
   bmsAnalysis: BmsAnalysis | null;
   analysisWarnings: ApiWarning[];
+  bmsAnalysisFailed: boolean;
   parentVersionId: string;
   difficulty: string;
   level: string;
@@ -72,7 +74,9 @@ type AppendVersionInput = {
   passwordHash: string;
   parsedMetadata: {
     title: string | null;
+    subtitle: string | null;
     artist: string | null;
+    subartist: string | null;
     encoding: string | null;
   };
   metadataWarning: ApiWarning | null;
@@ -362,51 +366,30 @@ async function parseAppendVersionInput(
   let md5: string | null = null;
   let bmsAnalysis: BmsAnalysis | null = null;
   const analysisWarnings: ApiWarning[] = [];
+  let bmsAnalysisFailed = false;
   let metadataWarning: ApiWarning | null = null;
   let parsedMetadata = {
     title: null as string | null,
+    subtitle: null as string | null,
     artist: null as string | null,
+    subartist: null as string | null,
     encoding: null as string | null
   };
 
   if (validation.isBmsText) {
-    md5 = md5HexFromBuffer(fileBytes);
-
-    try {
-      const metadata = parseBmsMetadata(fileBytes);
-      parsedMetadata = {
-        title: metadata.title ?? null,
-        artist: metadata.artist ?? null,
-        encoding: metadata.encoding ?? null
-      };
-    } catch (error) {
-      console.error("[append-version-bms-metadata-parse] failed to parse BMS metadata", {
-        code: "BMS_METADATA_PARSE_FAILED",
-        fileSha256,
-        message: errorDetail(error)
-      });
-      metadataWarning = {
-        code: "BMS_METADATA_PARSE_FAILED",
-        message: "譜面情報の自動読み取りに失敗しました。",
-        detail: errorDetail(error)
-      };
-    }
-
-    try {
-      bmsAnalysis = analyzeBmsBuffer(fileBytes);
-      analysisWarnings.push(...bmsAnalysis.warnings);
-    } catch (error) {
-      console.error("[append-version-bms-analysis] failed to analyze BMS measure notes", {
-        code: "BMS_ANALYSIS_FAILED",
-        fileSha256,
-        message: errorDetail(error)
-      });
-      analysisWarnings.push({
-        code: "BMS_ANALYSIS_FAILED",
-        message: "譜面の小節解析に失敗したため、進捗グラフ情報なしで投稿します。",
-        detail: errorDetail(error)
-      });
-    }
+    const analyzed = analyzeUploadedBmsBytes(fileBytes);
+    md5 = analyzed.md5;
+    bmsAnalysis = analyzed.analysis;
+    bmsAnalysisFailed = analyzed.analysisFailed;
+    analysisWarnings.push(...analyzed.analysisWarnings);
+    metadataWarning = analyzed.metadataWarning;
+    parsedMetadata = {
+      title: analyzed.metadata.title ?? null,
+      subtitle: analyzed.metadata.subtitle ?? null,
+      artist: analyzed.metadata.artist ?? null,
+      subartist: analyzed.metadata.subartist ?? null,
+      encoding: analyzed.metadata.encoding ?? null
+    };
   }
 
   return {
@@ -419,6 +402,7 @@ async function parseAppendVersionInput(
       md5,
       bmsAnalysis,
       analysisWarnings,
+      bmsAnalysisFailed,
       parentVersionId,
       difficulty: getFormText(form, "difficulty"),
       level: getFormText(form, "level"),
@@ -632,22 +616,6 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
 
     const { chart, parent } = parentValidation.value;
 
-    if (!metadataTextMatches(input.parsedMetadata.title, chart.song_title) || !metadataTextMatches(input.parsedMetadata.artist, chart.song_artist)) {
-      console.error("[append-version-title-artist-check] BMS metadata does not match parent song", {
-        code: "TITLE_ARTIST_MISMATCH",
-        chartId,
-        parentVersionId: input.parentVersionId,
-        parsedTitle: input.parsedMetadata.title,
-        parsedArtist: input.parsedMetadata.artist
-      });
-      return failAppendVersion(request, env, context, {
-        status: 409,
-        code: "TITLE_ARTIST_MISMATCH",
-        message: "譜面ファイルの曲名またはアーティストが追記先と一致しません。",
-        detail: "Uploaded BMS #TITLE/#ARTIST does not match the target song title/artist after normalization."
-      });
-    }
-
     let existingDuplicate: ExistingVersionRow | null;
     try {
       existingDuplicate = await env.DB.prepare(`
@@ -704,6 +672,36 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
           detail: inspection.failure.detail
         });
       }
+
+      const analyzed = analyzeUploadedBmsBytes(inspection.chart.bytes);
+      input.md5 = analyzed.md5;
+      input.bmsAnalysis = analyzed.analysis;
+      input.bmsAnalysisFailed = analyzed.analysisFailed;
+      input.analysisWarnings = [...analyzed.analysisWarnings];
+      input.metadataWarning = analyzed.metadataWarning;
+      input.parsedMetadata = {
+        title: analyzed.metadata.title ?? null,
+        subtitle: analyzed.metadata.subtitle ?? null,
+        artist: analyzed.metadata.artist ?? null,
+        subartist: analyzed.metadata.subartist ?? null,
+        encoding: analyzed.metadata.encoding ?? null
+      };
+    }
+
+    if (!metadataTextMatches(input.parsedMetadata.title, chart.song_title) || !metadataTextMatches(input.parsedMetadata.artist, chart.song_artist)) {
+      console.error("[append-version-title-artist-check] BMS metadata does not match parent song", {
+        code: "TITLE_ARTIST_MISMATCH",
+        chartId,
+        parentVersionId: input.parentVersionId,
+        parsedTitle: input.parsedMetadata.title,
+        parsedArtist: input.parsedMetadata.artist
+      });
+      return failAppendVersion(request, env, context, {
+        status: 409,
+        code: "TITLE_ARTIST_MISMATCH",
+        message: "譜面ファイルの曲名またはアーティストが追記先と一致しません。",
+        detail: "Uploaded BMS #TITLE/#ARTIST does not match the target song title/artist after normalization."
+      });
     }
 
     let childCount: number;
@@ -730,13 +728,14 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
     const versionId = makeId("version");
     const fileId = makeId("file");
     const r2Key = buildSafeR2Key(chartId, branchPath, fileId, input.extension);
-    context.versionId = versionId;
 
     const preparedProgressMap = prepareAppendProgressMap({
       rawProgressMap: input.progressMapText,
       versionId,
       parentProgressMapJson: parent.progress_map_json,
-      bmsAnalysis: input.bmsAnalysis
+      bmsAnalysis: input.bmsAnalysis,
+      isZip: input.extension === ".zip",
+      analysisFailed: input.bmsAnalysisFailed
     });
     if (!preparedProgressMap.ok) {
       console.error("[append-version-progress-map] invalid progress map payload", {

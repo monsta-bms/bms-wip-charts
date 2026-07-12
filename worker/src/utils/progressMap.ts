@@ -54,6 +54,8 @@ type PrepareProgressMapParams = {
   isRejected: boolean;
   fallbackProgress: number;
   bmsAnalysis: BmsAnalysis | null;
+  isZip?: boolean;
+  analysisFailed?: boolean;
 };
 
 type PrepareAppendProgressMapParams = {
@@ -61,6 +63,8 @@ type PrepareAppendProgressMapParams = {
   versionId: string;
   parentProgressMapJson: string | null;
   bmsAnalysis: BmsAnalysis | null;
+  isZip?: boolean;
+  analysisFailed?: boolean;
 };
 
 type ProgressMapLayout = {
@@ -78,6 +82,8 @@ function failure(code: string, detail: string, status = 400): ProgressMapFailure
     INVALID_PROGRESS_MAP: "進捗マップ情報が不正です。",
     PROGRESS_MAP_OUT_OF_RANGE: "進捗マップの範囲が不正です。",
     PROGRESS_MAP_BLOCK_COUNT_MISMATCH: "進捗マップのブロック数が一致しません。",
+    ZIP_PROGRESS_MAP_MISMATCH: "ZIP内譜面と進捗マップが一致しません。",
+    ZIP_BMS_ANALYSIS_FAILED: "ZIP内譜面を解析できないため進捗マップを確認できません。",
     PROGRESS_MAP_UNCHANGED: "進捗マップに変更がありません。"
   };
 
@@ -191,7 +197,67 @@ function normalizeBlock(value: unknown, expectedIndex: number): { ok: true; valu
   };
 }
 
-function normalizeLayout(root: unknown, bmsAnalysis: BmsAnalysis | null): NormalizeLayoutResult {
+function nullableSecondsEqual(left: number | null, right: number | null): boolean {
+  if (left === null || right === null) {
+    return left === right;
+  }
+  return Math.abs(left - right) <= 0.05;
+}
+
+function buildCanonicalLayout(bmsAnalysis: BmsAnalysis): ProgressMapLayout {
+  return {
+    ok: true,
+    firstMeasure: bmsAnalysis.displayFirstMeasure,
+    lastMeasure: bmsAnalysis.displayLastMeasure,
+    targetBlockCount: bmsAnalysis.standardBlocks.length,
+    blocks: bmsAnalysis.standardBlocks.map((block) => ({ ...block }))
+  };
+}
+
+function layoutsMatchAnalysis(client: ProgressMapLayout, canonical: ProgressMapLayout): boolean {
+  if (
+    client.firstMeasure !== canonical.firstMeasure
+    || client.lastMeasure !== canonical.lastMeasure
+    || client.targetBlockCount !== canonical.targetBlockCount
+    || client.blocks.length !== canonical.blocks.length
+  ) {
+    return false;
+  }
+
+  return client.blocks.every((block, index) => {
+    const expected = canonical.blocks[index];
+    return block.index === expected.index
+      && block.startMeasure === expected.startMeasure
+      && block.endMeasure === expected.endMeasure
+      && block.playNotes === expected.playNotes
+      && nullableSecondsEqual(block.startTimeSec, expected.startTimeSec)
+      && nullableSecondsEqual(block.endTimeSec, expected.endTimeSec);
+  });
+}
+
+function layoutsShareGrid(left: ProgressMapLayout, right: ProgressMapLayout): boolean {
+  if (
+    left.firstMeasure !== right.firstMeasure
+    || left.lastMeasure !== right.lastMeasure
+    || left.targetBlockCount !== right.targetBlockCount
+    || left.blocks.length !== right.blocks.length
+  ) {
+    return false;
+  }
+
+  return left.blocks.every((block, index) => {
+    const other = right.blocks[index];
+    return block.index === other.index
+      && block.startMeasure === other.startMeasure
+      && block.endMeasure === other.endMeasure;
+  });
+}
+
+function normalizeLayout(
+  root: unknown,
+  bmsAnalysis: BmsAnalysis | null,
+  mismatchCode = "PROGRESS_MAP_BLOCK_COUNT_MISMATCH"
+): NormalizeLayoutResult {
   if (!isRecord(root)) {
     return { ok: false, failure: failure("INVALID_PROGRESS_MAP", "progressMap must be an object.") };
   }
@@ -251,13 +317,30 @@ function normalizeLayout(root: unknown, bmsAnalysis: BmsAnalysis | null): Normal
     blocks.push(normalized.value);
   }
 
-  return {
+  const clientLayout: ProgressMapLayout = {
     ok: true,
     firstMeasure,
     lastMeasure,
     targetBlockCount: root.targetBlockCount,
     blocks
   };
+
+  if (!bmsAnalysis) {
+    return clientLayout;
+  }
+
+  const canonicalLayout = buildCanonicalLayout(bmsAnalysis);
+  if (!layoutsMatchAnalysis(clientLayout, canonicalLayout)) {
+    return {
+      ok: false,
+      failure: failure(
+        mismatchCode,
+        "Client progressMap blocks do not match the Worker BMS analysis."
+      )
+    };
+  }
+
+  return canonicalLayout;
 }
 
 export function compressBlockIndexesToRanges(indexes: Iterable<number>): Array<[number, number]> {
@@ -510,14 +593,19 @@ function buildStoredProgressMapSignature(rawProgressMap: string | null): string 
 function normalizeClientProgressMap(
   rawProgressMap: string,
   versionId: string,
-  bmsAnalysis: BmsAnalysis | null
+  bmsAnalysis: BmsAnalysis | null,
+  isZip: boolean
 ): ProgressMapResult {
   const parsed = parseProgressMap(rawProgressMap);
   if (!parsed.ok) {
     return parsed;
   }
 
-  const layout = normalizeLayout(parsed.value, bmsAnalysis);
+  const layout = normalizeLayout(
+    parsed.value,
+    bmsAnalysis,
+    isZip ? "ZIP_PROGRESS_MAP_MISMATCH" : "PROGRESS_MAP_BLOCK_COUNT_MISMATCH"
+  );
   if (!layout.ok) {
     return layout;
   }
@@ -549,20 +637,48 @@ function normalizeAppendProgressMap(
   rawProgressMap: string,
   versionId: string,
   parentProgressMapJson: string | null,
-  bmsAnalysis: BmsAnalysis | null
+  bmsAnalysis: BmsAnalysis | null,
+  isZip: boolean
 ): ProgressMapResult {
   const parsed = parseProgressMap(rawProgressMap);
   if (!parsed.ok) {
     return parsed;
   }
 
-  const layout = normalizeLayout(parsed.value, bmsAnalysis);
+  const layout = normalizeLayout(
+    parsed.value,
+    bmsAnalysis,
+    isZip ? "ZIP_PROGRESS_MAP_MISMATCH" : "PROGRESS_MAP_BLOCK_COUNT_MISMATCH"
+  );
   if (!layout.ok) {
     return layout;
   }
 
   if (!isRecord(parsed.value)) {
     return { ok: false, failure: failure("INVALID_PROGRESS_MAP", "progressMap must be an object.") };
+  }
+
+  if (isZip) {
+    if (!parentProgressMapJson?.trim()) {
+      return {
+        ok: false,
+        failure: failure("ZIP_PROGRESS_MAP_MISMATCH", "Parent progressMap is missing.")
+      };
+    }
+    const parentParsed = parseProgressMap(parentProgressMapJson);
+    if (!parentParsed.ok) {
+      return {
+        ok: false,
+        failure: failure("ZIP_PROGRESS_MAP_MISMATCH", "Parent progressMap is invalid.")
+      };
+    }
+    const parentLayout = normalizeLayout(parentParsed.value, null);
+    if (!parentLayout.ok || !layoutsShareGrid(parentLayout, layout)) {
+      return {
+        ok: false,
+        failure: failure("ZIP_PROGRESS_MAP_MISMATCH", "Parent progressMap grid does not match the ZIP BMS analysis.")
+      };
+    }
   }
 
   const normalizedLayers = normalizeFollowupLayers(parsed.value, layout.targetBlockCount, versionId);
@@ -617,37 +733,29 @@ function buildFallbackLayoutFromBmsAnalysis(bmsAnalysis: BmsAnalysis | null): Pr
     };
   }
 
-  const blocks = bmsAnalysis.measureNotesJson.measures.map((measure, index) => ({
-    index,
-    startMeasure: measure.measure,
-    endMeasure: measure.measure,
-    startTimeSec: null,
-    endTimeSec: null,
-    playNotes: measure.playNotes
-  }));
-
-  return {
-    ok: true,
-    firstMeasure: bmsAnalysis.firstNoteMeasure,
-    lastMeasure: bmsAnalysis.lastNoteMeasure,
-    targetBlockCount: blocks.length,
-    blocks
-  };
+  return buildCanonicalLayout(bmsAnalysis);
 }
 
 function buildRejectedProgressMap(
   rawProgressMap: string,
   versionId: string,
-  bmsAnalysis: BmsAnalysis | null
+  bmsAnalysis: BmsAnalysis | null,
+  isZip: boolean
 ): ProgressMapResult {
   let layout: ProgressMapLayout | null = null;
 
   if (rawProgressMap.trim()) {
     const parsed = parseProgressMap(rawProgressMap);
     if (parsed.ok) {
-      const normalizedLayout = normalizeLayout(parsed.value, bmsAnalysis);
+      const normalizedLayout = normalizeLayout(
+        parsed.value,
+        bmsAnalysis,
+        isZip ? "ZIP_PROGRESS_MAP_MISMATCH" : "PROGRESS_MAP_BLOCK_COUNT_MISMATCH"
+      );
       if (normalizedLayout.ok) {
         layout = normalizedLayout;
+      } else if (isZip) {
+        return normalizedLayout;
       }
     }
   }
@@ -672,8 +780,16 @@ function buildRejectedProgressMap(
 }
 
 export function prepareProgressMap(params: PrepareProgressMapParams): ProgressMapResult {
+  const isZip = params.isZip === true;
+  if (isZip && params.analysisFailed && params.rawProgressMap.trim()) {
+    return {
+      ok: false,
+      failure: failure("ZIP_BMS_ANALYSIS_FAILED", "Worker could not analyze the ZIP BMS required to validate progressMap.")
+    };
+  }
+
   if (params.isRejected) {
-    return buildRejectedProgressMap(params.rawProgressMap, params.versionId, params.bmsAnalysis);
+    return buildRejectedProgressMap(params.rawProgressMap, params.versionId, params.bmsAnalysis, isZip);
   }
 
   if (!params.rawProgressMap.trim()) {
@@ -685,7 +801,7 @@ export function prepareProgressMap(params: PrepareProgressMapParams): ProgressMa
     };
   }
 
-  return normalizeClientProgressMap(params.rawProgressMap, params.versionId, params.bmsAnalysis);
+  return normalizeClientProgressMap(params.rawProgressMap, params.versionId, params.bmsAnalysis, isZip);
 }
 
 export function prepareAppendProgressMap(params: PrepareAppendProgressMapParams): ProgressMapResult {
@@ -696,10 +812,18 @@ export function prepareAppendProgressMap(params: PrepareAppendProgressMapParams)
     };
   }
 
+  if (params.isZip && params.analysisFailed) {
+    return {
+      ok: false,
+      failure: failure("ZIP_BMS_ANALYSIS_FAILED", "Worker could not analyze the ZIP BMS required to validate progressMap.")
+    };
+  }
+
   return normalizeAppendProgressMap(
     params.rawProgressMap,
     params.versionId,
     params.parentProgressMapJson,
-    params.bmsAnalysis
+    params.bmsAnalysis,
+    params.isZip === true
   );
 }

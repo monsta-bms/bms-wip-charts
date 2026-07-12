@@ -621,3 +621,20 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 利用者起因のZIP拒否がclient rejected投稿レート制限へ数えられ、`ZIP_INSPECTION_FAILED`は数えられないこと。
 - 単体BMS/BME/BML投稿、progressMap/progressImage、BAN、重複判定の既存動作が変わらないこと。
 - `npm.cmd run typecheck`と`wrangler deploy --dry-run`が成功すること。
+
+## ZIP-BMS-ANALYSIS-01
+
+- Store/Deflate ZIPの内部BMS/BME/BMLを初回投稿・追記投稿で解析できること。
+- UTF-8、UTF-8 BOM、CP932のTITLE/SUBTITLE/ARTIST/SUBARTISTが読めること。
+- 外側ZIPのSHA-256と内部譜面のMD5が別々に保存されること。
+- 同じBMSを単体とZIPで投稿したとき、playNotes、小節情報、標準ブロックが一致すること。
+- ZIP選択前はブラウザ用zip.jsが読み込まれず、ZIP選択時だけ遅延読込されること。
+- ZIPでも初回進捗マップUIが表示され、追記時は親格子が一致する場合だけ編集できること。
+- クライアントのblocks、playNotes、小節範囲、時刻改ざんを`ZIP_PROGRESS_MAP_MISMATCH`で拒否すること。
+- layer ranges範囲外を`PROGRESS_MAP_OUT_OF_RANGE`で拒否すること。
+- ZIP追記の親格子不一致を`ZIP_PROGRESS_MAP_MISMATCH`で拒否すること。
+- BMS解析失敗はprogressMapなしならwarning付きで投稿でき、progressMapありなら`ZIP_BMS_ANALYSIS_FAILED`になること。
+- R2 object数が採用version数と一致し、保存objectが外側ZIPのままであること。
+- ZIP利用者起因エラーが投稿失敗レート制限へ数えられ、503系は数えられないこと。
+- 単体BMS投稿、既存ZIP安全検査、BAN、重複判定、progressImageが壊れていないこと。
+- Worker typecheck、Pages JavaScript構文検査、Worker dry-run bundleが成功すること。

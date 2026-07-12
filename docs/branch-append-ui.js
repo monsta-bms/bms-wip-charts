@@ -3,7 +3,6 @@
   const parentLayerColor = "#1f7a5c";
   const thumbnailMaxCells = 96;
   const allowedExtensions = new Set([".bms", ".bme", ".bml", ".zip"]);
-  const readableExtensions = new Set([".bms", ".bme", ".bml"]);
 
   const submitPanel = document.querySelector(".submit-panel");
   const form = document.querySelector("#chartForm");
@@ -60,6 +59,7 @@
     parentPainted: new Set(),
     currentPainted: new Set(),
     layerKind: "followup",
+    fileGridMismatch: false,
     isSubmitting: false,
     isDragging: false,
     dragAnchorIndex: null,
@@ -552,6 +552,7 @@
     appendState.parentPainted = collectPaintedIndexes(parentLayers, blocks.length);
     appendState.currentPainted = new Set();
     appendState.layerKind = "followup";
+    appendState.fileGridMismatch = false;
     appendState.isDragging = false;
     appendState.dragAnchorIndex = null;
     appendState.dragMode = null;
@@ -581,7 +582,10 @@
       ...parentMap,
       schemaVersion: 2,
       blockMode: "standardized_measure",
-      targetBlockCount: parentMap.blocks.length,
+      firstMeasure: appendState.blocks[0]?.startMeasure ?? null,
+      lastMeasure: appendState.blocks[appendState.blocks.length - 1]?.endMeasure ?? null,
+      targetBlockCount: appendState.blocks.length,
+      blocks: appendState.blocks.map((block) => ({ ...block })),
       layers,
       progress: calculateProgress()
     };
@@ -812,6 +816,7 @@
     appendState.parentPainted = new Set();
     appendState.currentPainted = new Set();
     appendState.layerKind = "followup";
+    appendState.fileGridMismatch = false;
     appendState.isDragging = false;
     appendState.originalCurrentPainted = null;
 
@@ -881,17 +886,26 @@
 
     setInvalid(fileInput, false);
 
-    if (!readableExtensions.has(extension)) {
-      clearMessage();
-      return;
-    }
-
     try {
-      const buffer = await file.arrayBuffer();
+      const buffer = extension === ".zip"
+        ? (await window.BmsZipReader.extractSingleBms(file)).buffer
+        : await file.arrayBuffer();
       const text = typeof decodeBmsText === "function"
         ? decodeBmsText(buffer)
         : new TextDecoder("utf-8", { fatal: false }).decode(buffer);
       const meta = typeof parseBmsMeta === "function" ? parseBmsMeta(text) : { title: "", artist: "" };
+      const analysis = typeof analyzeBmsProgressText === "function" ? analyzeBmsProgressText(text) : null;
+      const analyzedBlocks = Array.isArray(analysis?.standardBlocks)
+        ? analysis.standardBlocks.map(normalizeBlock)
+        : [];
+      appendState.fileGridMismatch = !blocksShareGrid(appendState.parentMap?.blocks || [], analyzedBlocks);
+      if (appendState.fileGridMismatch) {
+        showText("選択した譜面の進捗ブロック格子が追記元と一致しません。");
+        return;
+      }
+
+      appendState.blocks = analyzedBlocks;
+      renderAppendProgressMap();
       const titleMatches = isCloseMetaMatch(meta.title, appendState.song?.title);
       const artistMatches = isCloseMetaMatch(meta.artist, appendState.song?.artist);
 
@@ -902,6 +916,7 @@
 
       clearMessage();
     } catch (error) {
+      appendState.fileGridMismatch = true;
       console.error("[append-file-meta-check] failed to read BMS metadata", {
         code: "APPEND_FILE_META_CHECK_FAILED",
         message: error instanceof Error ? error.message : String(error)
@@ -937,6 +952,11 @@
 
     if (appendState.currentPainted.size === 0) {
       showText("追記範囲が追加されていません。");
+      return false;
+    }
+
+    if (appendState.fileGridMismatch) {
+      showText("選択した譜面の進捗ブロック格子が追記元と一致しません。");
       return false;
     }
 
@@ -1291,5 +1311,18 @@
     renderCharts = renderChartsWithAppend;
   } catch (error) {
     window.renderCharts = renderChartsWithAppend;
+  }
+
+  function blocksShareGrid(leftBlocks, rightBlocks) {
+    if (!Array.isArray(leftBlocks) || !Array.isArray(rightBlocks) || leftBlocks.length !== rightBlocks.length) {
+      return false;
+    }
+
+    return leftBlocks.every((block, index) => {
+      const other = rightBlocks[index];
+      return Number(block.index) === Number(other.index)
+        && Number(block.startMeasure) === Number(other.startMeasure)
+        && Number(block.endMeasure) === Number(other.endMeasure);
+    });
   }
 })();

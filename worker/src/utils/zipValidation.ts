@@ -14,6 +14,7 @@ import {
   ERR_UNSUPPORTED_COMPRESSION,
   ERR_UNSUPPORTED_ENCRYPTION,
   ERR_UNSUPPORTED_FORMAT,
+  Uint8ArrayWriter,
   ZipReader,
   type FileEntry
 } from "@zip.js/zip.js/index-native.js";
@@ -75,7 +76,14 @@ export type ZipInspectionFailure = {
 };
 
 export type ZipInspectionResult =
-  | { ok: true; summary: ZipInspectionSummary }
+  | {
+    ok: true;
+    summary: ZipInspectionSummary;
+    chart: {
+      fileName: string;
+      bytes: ArrayBuffer;
+    };
+  }
   | { ok: false; failure: ZipInspectionFailure };
 
 function emptySummary(): ZipInspectionSummary {
@@ -199,32 +207,16 @@ async function verifyNoOverlappingEntries(entries: FileEntry[]): Promise<void> {
   }
 }
 
-async function verifyChartEntry(entry: FileEntry): Promise<boolean> {
-  let actualBytes = 0;
-  let exceededLimit = false;
-  const sink = new WritableStream<Uint8Array>({
-    write(chunk) {
-      actualBytes += chunk.byteLength;
-      if (actualBytes > SINGLE_CHART_MAX_BYTES) {
-        exceededLimit = true;
-        throw new Error("ZIP_CHART_OUTPUT_LIMIT");
-      }
-    }
+async function extractChartEntry(entry: FileEntry): Promise<ArrayBuffer | null> {
+  const bytes = await entry.getData(new Uint8ArrayWriter(), {
+    checkSignature: true,
+    checkOverlappingEntry: true
   });
-
-  try {
-    await entry.getData(sink, {
-      checkSignature: true,
-      checkOverlappingEntry: true
-    });
-  } catch (error) {
-    if (exceededLimit) {
-      return false;
-    }
-    throw error;
+  if (bytes.byteLength > SINGLE_CHART_MAX_BYTES || bytes.byteLength !== entry.uncompressedSize) {
+    return null;
   }
 
-  return actualBytes <= SINGLE_CHART_MAX_BYTES && actualBytes === entry.uncompressedSize;
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
 
 export async function inspectZipUpload(file: File): Promise<ZipInspectionResult> {
@@ -343,11 +335,19 @@ export async function inspectZipUpload(file: File): Promise<ZipInspectionResult>
     }
 
     await verifyNoOverlappingEntries(fileEntries);
-    if (!await verifyChartEntry(chartEntries[0])) {
+    const chartBytes = await extractChartEntry(chartEntries[0]);
+    if (!chartBytes) {
       return rejectZip("ZIP_CHART_TOO_LARGE", "ZIP内の譜面ファイルが上限を超えています。", summary);
     }
 
-    return { ok: true, summary };
+    return {
+      ok: true,
+      summary,
+      chart: {
+        fileName: chartEntries[0].filename,
+        bytes: chartBytes
+      }
+    };
   } catch (error) {
     if (isKnownInvalidZipError(error)) {
       return rejectZip("ZIP_INVALID", "ZIPを安全に読み取れませんでした。", summary);

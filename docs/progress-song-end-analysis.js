@@ -3,6 +3,7 @@
   const normalPlayNoteChannelRanges = [[11, 19], [21, 29]];
   const longNoteChannelRanges = [[51, 59], [61, 69]];
   const timeProgressChannels = new Set(["01", "02", "03", "08", "09"]);
+  const maxStandardBlocks = 5000;
 
   function isInChannelRanges(channel, ranges) {
     if (!/^\d{2}$/.test(channel)) {
@@ -246,6 +247,9 @@
     }
 
     const blockCount = Math.max(1, Math.ceil(lastBlockEndPosition - firstBlockPosition));
+    if (!Number.isSafeInteger(blockCount) || blockCount > maxStandardBlocks) {
+      throw new Error(`BMS standard block count exceeds ${maxStandardBlocks}.`);
+    }
     return Array.from({ length: blockCount }, (_, index) => {
       const startPosition = firstBlockPosition + index;
       const endPosition = Math.min(startPosition + 1, lastBlockEndPosition);

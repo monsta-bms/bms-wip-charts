@@ -958,3 +958,15 @@ Workerまたはライブラリ起因の予期しない検査失敗はHTTP 503 `Z
 ```
 
 利用者起因の上記`ZIP_*`はclient rejected投稿レート制限の対象とする。`ZIP_INSPECTION_FAILED`はserver起因のため対象外とする。
+
+## ZIP内BMS解析
+
+`POST /api/charts`と`POST /api/charts/:chartId/versions`のZIP投稿では、安全検査で取得した内部BMS/BME/BMLを単体BMSと同じWorker解析へ渡す。
+
+- `file.sha256`: 外側ZIP全体のSHA-256
+- `file.md5`: ZIP内譜面バイト列のMD5
+- `metadata`: Workerが内部譜面から読んだTITLE/SUBTITLE/ARTIST/SUBARTIST/encoding
+- `analysis`: Worker解析によるplayNotes、小節範囲、targetMeasureCount、measureNotes
+- `progressMap.blocks`: Workerが内部譜面から再生成した標準ブロック
+
+`ZIP_PROGRESS_MAP_MISMATCH`は、クライアントblocksの改ざん・不一致、またはZIP追記時の親格子不一致に対してHTTP 400で返す。`ZIP_BMS_ANALYSIS_FAILED`は、内部譜面解析に失敗し、送信されたprogressMapを検証できない場合にHTTP 400で返す。両方ともclient rejected投稿レート制限対象とする。progressMapなしの解析失敗は投稿を許可し、`BMS_ANALYSIS_FAILED` warningを返す。内部バイト取得などWorker起因障害は既存`ZIP_INSPECTION_FAILED` HTTP 503とし、レート制限対象外とする。

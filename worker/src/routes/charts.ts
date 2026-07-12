@@ -1,6 +1,7 @@
-import { analyzeBmsBuffer, BmsAnalysis, normalizeText, parseBmsMetadata } from "../utils/bms";
+import { BmsAnalysis, normalizeText } from "../utils/bms";
+import { analyzeUploadedBmsBytes } from "../utils/bmsUploadAnalysis";
 import { sanitizeFileName, validateUploadFile } from "../utils/fileValidation";
-import { hashWithSecret, md5HexFromBuffer, sha256HexFromBuffer } from "../utils/hash";
+import { hashWithSecret, sha256HexFromBuffer } from "../utils/hash";
 import { prepareProgressMap } from "../utils/progressMap";
 import { buildRequestFingerprint } from "../utils/requestFingerprint";
 import { apiError, Env, errorDetail, methodNotAllowed, ok } from "../utils/response";
@@ -131,6 +132,7 @@ type CreateChartInput = {
   md5: string | null;
   bmsAnalysis: BmsAnalysis | null;
   analysisWarnings: ApiWarning[];
+  bmsAnalysisFailed: boolean;
   title: string;
   subtitle: string;
   artist: string;
@@ -147,7 +149,9 @@ type CreateChartInput = {
   metadataWarning: ApiWarning | null;
   parsedMetadata: {
     title: string | null;
+    subtitle: string | null;
     artist: string | null;
+    subartist: string | null;
     encoding: string | null;
   };
   extension: string;
@@ -861,58 +865,36 @@ async function parseCreateChartInput(
   let md5: string | null = null;
   let bmsAnalysis: BmsAnalysis | null = null;
   const analysisWarnings: ApiWarning[] = [];
+  let bmsAnalysisFailed = false;
   let metadataWarning: ApiWarning | null = null;
   let parsedMetadata = {
     title: null as string | null,
+    subtitle: null as string | null,
     artist: null as string | null,
+    subartist: null as string | null,
     encoding: null as string | null
   };
 
   if (validation.isBmsText) {
-    md5 = md5HexFromBuffer(fileBytes);
-
-    try {
-      const metadata = parseBmsMetadata(fileBytes);
-      parsedMetadata = {
-        title: metadata.title ?? null,
-        artist: metadata.artist ?? null,
-        encoding: metadata.encoding ?? null
-      };
-    } catch (error) {
-      console.error("[bms-metadata-parse] failed to parse BMS metadata", {
-        code: "BMS_METADATA_PARSE_FAILED",
-        fileSha256,
-        message: errorDetail(error)
-      });
-
-      metadataWarning = {
-        code: "BMS_METADATA_PARSE_FAILED",
-        message: "譜面情報の自動読み取りに失敗したため、フォーム入力値を使用しました。"
-      };
-    }
-
-    try {
-      bmsAnalysis = analyzeBmsBuffer(fileBytes);
-      analysisWarnings.push(...bmsAnalysis.warnings);
-    } catch (error) {
-      console.error("[bms-analysis] failed to analyze BMS measure notes", {
-        code: "BMS_ANALYSIS_FAILED",
-        fileSha256,
-        message: errorDetail(error)
-      });
-
-      analysisWarnings.push({
-        code: "BMS_ANALYSIS_FAILED",
-        message: "譜面の小節解析に失敗したため、進捗グラフ情報なしで投稿します。",
-        detail: errorDetail(error)
-      });
-    }
+    const analyzed = analyzeUploadedBmsBytes(fileBytes);
+    md5 = analyzed.md5;
+    bmsAnalysis = analyzed.analysis;
+    bmsAnalysisFailed = analyzed.analysisFailed;
+    analysisWarnings.push(...analyzed.analysisWarnings);
+    metadataWarning = analyzed.metadataWarning;
+    parsedMetadata = {
+      title: analyzed.metadata.title ?? null,
+      subtitle: analyzed.metadata.subtitle ?? null,
+      artist: analyzed.metadata.artist ?? null,
+      subartist: analyzed.metadata.subartist ?? null,
+      encoding: analyzed.metadata.encoding ?? null
+    };
   }
 
   const title = getFormText(form, "title") || parsedMetadata.title || "";
-  const subtitle = getFormText(form, "subtitle");
+  const subtitle = getFormText(form, "subtitle") || parsedMetadata.subtitle || "";
   const artist = getFormText(form, "artist") || parsedMetadata.artist || "";
-  const subartist = getFormText(form, "subartist");
+  const subartist = getFormText(form, "subartist") || parsedMetadata.subartist || "";
   const chartName = getFormText(form, "chartName");
   const difficulty = getFormText(form, "difficulty");
   const submittedLevel = getFormText(form, "level");
@@ -924,8 +906,7 @@ async function parseCreateChartInput(
   const progressMapText = getFormText(form, "progressMap");
 
   const missingFields = [
-    ["title", title],
-    ["artist", artist],
+    ...(validation.extension === ".zip" ? [] : [["title", title], ["artist", artist]]),
     ["chartName", chartName],
     ["author", author]
   ]
@@ -954,6 +935,7 @@ async function parseCreateChartInput(
       md5,
       bmsAnalysis,
       analysisWarnings,
+      bmsAnalysisFailed,
       title,
       subtitle,
       artist,
@@ -1023,12 +1005,6 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
         detail: "File posting protection lookup failed."
       });
     }
-    const normalizedTitle = normalizeText(input.title);
-    const normalizedSubtitle = normalizeText(input.subtitle);
-    const normalizedArtist = normalizeText(input.artist);
-    const normalizedSubartist = normalizeText(input.subartist);
-    const normalizedChartName = normalizeText(input.chartName);
-
     let existingDuplicate: ExistingVersionRow | null;
     try {
       existingDuplicate = await env.DB.prepare(`
@@ -1085,7 +1061,44 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
           detail: inspection.failure.detail
         });
       }
+
+      const analyzed = analyzeUploadedBmsBytes(inspection.chart.bytes);
+      input.md5 = analyzed.md5;
+      input.bmsAnalysis = analyzed.analysis;
+      input.bmsAnalysisFailed = analyzed.analysisFailed;
+      input.analysisWarnings = [...analyzed.analysisWarnings];
+      input.metadataWarning = analyzed.metadataWarning;
+      input.parsedMetadata = {
+        title: analyzed.metadata.title ?? null,
+        subtitle: analyzed.metadata.subtitle ?? null,
+        artist: analyzed.metadata.artist ?? null,
+        subartist: analyzed.metadata.subartist ?? null,
+        encoding: analyzed.metadata.encoding ?? null
+      };
+      input.title ||= input.parsedMetadata.title ?? "";
+      input.subtitle ||= input.parsedMetadata.subtitle ?? "";
+      input.artist ||= input.parsedMetadata.artist ?? "";
+      input.subartist ||= input.parsedMetadata.subartist ?? "";
     }
+
+    const missingResolvedFields = [
+      ["title", input.title],
+      ["artist", input.artist]
+    ].filter(([, value]) => !value).map(([name]) => name);
+    if (missingResolvedFields.length > 0) {
+      return failCreateChart(request, env, context, {
+        status: 400,
+        code: "INVALID_FORM",
+        message: "必須項目が不足しています。",
+        detail: `Required fields are missing after BMS analysis: ${missingResolvedFields.join(", ")}.`
+      });
+    }
+
+    const normalizedTitle = normalizeText(input.title);
+    const normalizedSubtitle = normalizeText(input.subtitle);
+    const normalizedArtist = normalizeText(input.artist);
+    const normalizedSubartist = normalizeText(input.subartist);
+    const normalizedChartName = normalizeText(input.chartName);
 
     let existingSong: ExistingSongRow | null;
     try {
@@ -1118,7 +1131,9 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
     }
 
     const songId = existingSong?.id ?? makeId("song");
-    context.songId = songId;
+    if (existingSong) {
+      context.songId = songId;
+    }
 
     if (existingSong) {
       let existingChart: ExistingChartRow | null;
@@ -1160,15 +1175,15 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
     const versionId = makeId("version");
     const fileId = makeId("file");
     const r2Key = `charts/${chartId}/versions/root/${fileId}${input.extension}`;
-    context.chartId = chartId;
-    context.versionId = versionId;
 
     const preparedProgressMap = prepareProgressMap({
       rawProgressMap: input.progressMapText,
       versionId,
       isRejected: input.isRejected,
       fallbackProgress: input.progress,
-      bmsAnalysis: input.bmsAnalysis
+      bmsAnalysis: input.bmsAnalysis,
+      isZip: input.extension === ".zip",
+      analysisFailed: input.bmsAnalysisFailed
     });
     if (!preparedProgressMap.ok) {
       console.error("[create-chart-progress-map] invalid progress map payload", {

@@ -30,6 +30,15 @@ export type BmsMeasureNotesJson = {
   measures: BmsMeasureNote[];
 };
 
+export type BmsStandardBlock = {
+  index: number;
+  startMeasure: number;
+  endMeasure: number;
+  startTimeSec: number | null;
+  endTimeSec: number | null;
+  playNotes: number;
+};
+
 export type BmsAnalysis = {
   encoding: string | null;
   playNotes: number;
@@ -39,6 +48,7 @@ export type BmsAnalysis = {
   displayLastMeasure: number | null;
   targetMeasureCount: number;
   measureNotesJson: BmsMeasureNotesJson;
+  standardBlocks: BmsStandardBlock[];
   warnings: BmsAnalysisWarning[];
 };
 
@@ -47,6 +57,26 @@ type LongNoteEvent = {
   channel: string;
   pairIndex: number;
   pairCount: number;
+};
+
+type StandardPlayEvent = {
+  measure: number;
+  channel: string;
+  fraction: number;
+  standardPosition: number;
+  timeSec?: number;
+};
+
+type StandardLongNoteEvent = StandardPlayEvent & {
+  pairIndex: number;
+  pairCount: number;
+};
+
+type TimingEvent = {
+  kind: "bpm" | "stop";
+  measure: number;
+  fraction: number;
+  value: number;
 };
 
 const metadataKeys = new Map<string, keyof BmsMetadata>([
@@ -68,6 +98,7 @@ const longNoteChannelRanges = [
 ] as const;
 
 const timeProgressChannels = new Set(["01", "02", "03", "08", "09"]);
+const MAX_STANDARD_BLOCKS = 5000;
 
 export function normalizeText(value: string): string {
   return value
@@ -346,6 +377,7 @@ export function analyzeBmsText(text: string): BmsAnalysis {
       displayLastMeasure: null,
       targetMeasureCount: 0,
       measureNotesJson: buildMeasureNotesJson(0, null, null, null, null, []),
+      standardBlocks: [],
       warnings
     };
   }
@@ -382,8 +414,304 @@ export function analyzeBmsText(text: string): BmsAnalysis {
     displayLastMeasure,
     targetMeasureCount: measureNotesJson.targetMeasureCount,
     measureNotesJson,
+    standardBlocks: [],
     warnings
   };
+}
+
+function parsePositiveNumber(value: string): number | null {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function splitDataObjects(data: string): Array<{ objectId: string; pairIndex: number; pairCount: number }> {
+  const cleanData = data.trim();
+  const pairCount = Math.floor(cleanData.length / 2);
+  const objects: Array<{ objectId: string; pairIndex: number; pairCount: number }> = [];
+
+  for (let pairIndex = 0; pairIndex < pairCount; pairIndex += 1) {
+    const objectId = cleanData.slice(pairIndex * 2, pairIndex * 2 + 2).toUpperCase();
+    if (objectId !== "00") {
+      objects.push({ objectId, pairIndex, pairCount });
+    }
+  }
+
+  return objects;
+}
+
+function getMeasureLength(measure: number, measureLengths: Map<number, number>): number {
+  const value = measureLengths.get(measure);
+  return Number.isFinite(value) && Number(value) > 0 ? Number(value) : 1;
+}
+
+function buildMeasureStarts(maxMeasure: number, measureLengths: Map<number, number>): number[] {
+  const starts: number[] = [];
+  let position = 0;
+
+  for (let measure = 0; measure <= maxMeasure + 1; measure += 1) {
+    starts[measure] = position;
+    position += getMeasureLength(measure, measureLengths);
+  }
+
+  return starts;
+}
+
+function standardPositionFor(
+  event: { measure: number; fraction: number },
+  measureStarts: number[],
+  measureLengths: Map<number, number>
+): number {
+  return measureStarts[event.measure] + event.fraction * getMeasureLength(event.measure, measureLengths);
+}
+
+function measureForPosition(
+  position: number,
+  measureStarts: number[],
+  measureLengths: Map<number, number>,
+  maxMeasure: number
+): number {
+  for (let measure = 0; measure <= maxMeasure; measure += 1) {
+    const start = measureStarts[measure];
+    const end = start + getMeasureLength(measure, measureLengths);
+    if (position >= start && position < end) {
+      return measure;
+    }
+  }
+
+  return maxMeasure;
+}
+
+function compareStandardEvents(a: StandardPlayEvent, b: StandardPlayEvent): number {
+  return a.standardPosition - b.standardPosition || a.channel.localeCompare(b.channel);
+}
+
+function collectStandardLongNoteStarts(events: StandardLongNoteEvent[]): StandardPlayEvent[] {
+  const activeByChannel = new Map<string, boolean>();
+  const starts: StandardPlayEvent[] = [];
+
+  for (const event of [...events].sort(compareStandardEvents)) {
+    const active = activeByChannel.get(event.channel) ?? false;
+    if (!active) {
+      starts.push(event);
+    }
+    activeByChannel.set(event.channel, !active);
+  }
+
+  return starts;
+}
+
+function timingEventPriority(event: TimingEvent | (StandardPlayEvent & { kind: "note" })): number {
+  if (event.kind === "bpm") {
+    return 0;
+  }
+  if (event.kind === "stop") {
+    return 1;
+  }
+  return 2;
+}
+
+function applyTimingToStandardEvents(
+  playEvents: StandardPlayEvent[],
+  timingEvents: TimingEvent[],
+  maxMeasure: number,
+  measureLengths: Map<number, number>,
+  initialBpm: number
+): void {
+  const eventsByMeasure = new Map<number, Array<TimingEvent | (StandardPlayEvent & { kind: "note"; noteRef: StandardPlayEvent })>>();
+  const pushEvent = (measure: number, event: TimingEvent | (StandardPlayEvent & { kind: "note"; noteRef: StandardPlayEvent })) => {
+    const events = eventsByMeasure.get(measure) ?? [];
+    events.push(event);
+    eventsByMeasure.set(measure, events);
+  };
+
+  for (const event of timingEvents) {
+    pushEvent(event.measure, event);
+  }
+  for (const event of playEvents) {
+    pushEvent(event.measure, { ...event, kind: "note", noteRef: event });
+  }
+
+  let currentBpm = Number.isFinite(initialBpm) && initialBpm > 0 ? initialBpm : 130;
+  let timeSec = 0;
+
+  for (let measure = 0; measure <= maxMeasure; measure += 1) {
+    const measureLength = getMeasureLength(measure, measureLengths);
+    const events = (eventsByMeasure.get(measure) ?? [])
+      .filter((event) => Number.isFinite(event.fraction))
+      .sort((a, b) => a.fraction - b.fraction || timingEventPriority(a) - timingEventPriority(b));
+    let lastFraction = 0;
+
+    for (const event of events) {
+      const fraction = Math.min(Math.max(event.fraction, 0), 1);
+      timeSec += Math.max(0, fraction - lastFraction) * measureLength * 4 * 60 / currentBpm;
+      lastFraction = Math.max(lastFraction, fraction);
+
+      if (event.kind === "bpm" && event.value > 0) {
+        currentBpm = event.value;
+      } else if (event.kind === "stop" && event.value > 0) {
+        timeSec += (event.value / 192) * 4 * 60 / currentBpm;
+      } else if (event.kind === "note") {
+        event.noteRef.timeSec = timeSec;
+      }
+    }
+
+    timeSec += Math.max(0, 1 - lastFraction) * measureLength * 4 * 60 / currentBpm;
+  }
+}
+
+function estimateTimeForPosition(position: number, playEvents: StandardPlayEvent[]): number | null {
+  const timedEvents = playEvents
+    .filter((event) => Number.isFinite(event.standardPosition) && Number.isFinite(event.timeSec))
+    .sort(compareStandardEvents);
+  if (timedEvents.length === 0) {
+    return null;
+  }
+
+  const first = timedEvents[0];
+  const last = timedEvents[timedEvents.length - 1];
+  if (position <= first.standardPosition) {
+    return first.timeSec ?? null;
+  }
+  if (position >= last.standardPosition) {
+    return last.timeSec ?? null;
+  }
+
+  for (let index = 1; index < timedEvents.length; index += 1) {
+    const previous = timedEvents[index - 1];
+    const next = timedEvents[index];
+    if (position <= next.standardPosition) {
+      const span = next.standardPosition - previous.standardPosition;
+      if (span <= 0) {
+        return next.timeSec ?? null;
+      }
+      const ratio = (position - previous.standardPosition) / span;
+      return Number(previous.timeSec) + (Number(next.timeSec) - Number(previous.timeSec)) * ratio;
+    }
+  }
+
+  return last.timeSec ?? null;
+}
+
+function analyzeStandardBlocks(text: string): BmsStandardBlock[] {
+  const bpmDefinitions = new Map<string, number>();
+  const stopDefinitions = new Map<string, number>();
+  const measureLengths = new Map<number, number>();
+  const normalEvents: Array<Omit<StandardPlayEvent, "standardPosition">> = [];
+  const longEvents: Array<Omit<StandardLongNoteEvent, "standardPosition">> = [];
+  const timingEvents: TimingEvent[] = [];
+  const timeProgressMeasures: number[] = [];
+  let initialBpm = 130;
+
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.replace(/^\uFEFF/, "").trim();
+    const indexedBpm = line.match(/^#BPM([0-9A-Za-z]{2})\s+([0-9.]+)$/i);
+    if (indexedBpm) {
+      const value = parsePositiveNumber(indexedBpm[2]);
+      if (value !== null) bpmDefinitions.set(indexedBpm[1].toUpperCase(), value);
+      continue;
+    }
+    const baseBpm = line.match(/^#BPM\s+([0-9.]+)$/i);
+    if (baseBpm) {
+      initialBpm = parsePositiveNumber(baseBpm[1]) ?? initialBpm;
+      continue;
+    }
+    const stop = line.match(/^#STOP([0-9A-Za-z]{2})\s+([0-9.]+)$/i);
+    if (stop) {
+      const value = parsePositiveNumber(stop[2]);
+      if (value !== null) stopDefinitions.set(stop[1].toUpperCase(), value);
+      continue;
+    }
+
+    const dataMatch = line.match(/^#(\d{3})([0-9A-Za-z]{2}):(.+)$/);
+    if (!dataMatch) continue;
+    const measure = Number(dataMatch[1]);
+    const channel = dataMatch[2].toUpperCase();
+    const data = dataMatch[3].trim();
+    if (!/^\d{2}$/.test(channel)) continue;
+    if (hasTimeProgressData(channel, data)) timeProgressMeasures.push(measure);
+    if (channel === "02") {
+      const length = parsePositiveNumber(data);
+      if (length !== null) measureLengths.set(measure, length);
+      continue;
+    }
+
+    for (const pair of splitDataObjects(data)) {
+      const fraction = pair.pairCount > 0 ? pair.pairIndex / pair.pairCount : 0;
+      if (channel === "03") {
+        const value = Number.parseInt(pair.objectId, 16);
+        if (Number.isFinite(value) && value > 0) timingEvents.push({ kind: "bpm", measure, fraction, value });
+      } else if (channel === "08") {
+        const value = bpmDefinitions.get(pair.objectId);
+        if (value !== undefined) timingEvents.push({ kind: "bpm", measure, fraction, value });
+      } else if (channel === "09") {
+        const value = stopDefinitions.get(pair.objectId);
+        if (value !== undefined) timingEvents.push({ kind: "stop", measure, fraction, value });
+      } else if (isLongNoteChannel(channel)) {
+        longEvents.push({ measure, channel, fraction, pairIndex: pair.pairIndex, pairCount: pair.pairCount });
+      } else if (isNormalPlayNoteChannel(channel)) {
+        normalEvents.push({ measure, channel, fraction });
+      }
+    }
+  }
+
+  const provisionalMaxMeasure = Math.max(
+    0,
+    ...timeProgressMeasures,
+    ...normalEvents.map((event) => event.measure),
+    ...longEvents.map((event) => event.measure)
+  );
+  const measureStarts = buildMeasureStarts(provisionalMaxMeasure, measureLengths);
+  const preparedNormal = normalEvents.map((event) => ({
+    ...event,
+    standardPosition: standardPositionFor(event, measureStarts, measureLengths)
+  }));
+  const preparedLong = longEvents.map((event) => ({
+    ...event,
+    standardPosition: standardPositionFor(event, measureStarts, measureLengths)
+  }));
+  const playEvents = [...preparedNormal, ...collectStandardLongNoteStarts(preparedLong)].sort(compareStandardEvents);
+  if (playEvents.length === 0) {
+    return [];
+  }
+
+  const firstPlayableMeasure = Math.min(...playEvents.map((event) => event.measure));
+  const lastPlayableMeasure = Math.max(...playEvents.map((event) => event.measure));
+  const displayLastMeasure = Math.max(
+    lastPlayableMeasure,
+    ...timeProgressMeasures.filter((measure) => measure >= firstPlayableMeasure)
+  );
+  const maxMeasure = Math.max(provisionalMaxMeasure, displayLastMeasure);
+  const displayMeasureStarts = buildMeasureStarts(maxMeasure, measureLengths);
+  const positionedEvents = playEvents.map((event) => ({
+    ...event,
+    standardPosition: standardPositionFor(event, displayMeasureStarts, measureLengths)
+  })).sort(compareStandardEvents);
+
+  applyTimingToStandardEvents(positionedEvents, timingEvents, maxMeasure, measureLengths, initialBpm);
+  const firstPosition = displayMeasureStarts[firstPlayableMeasure];
+  const endPosition = displayMeasureStarts[displayLastMeasure] + getMeasureLength(displayLastMeasure, measureLengths);
+  for (const event of positionedEvents) {
+    if (!Number.isFinite(event.timeSec)) {
+      event.timeSec = (event.standardPosition - firstPosition) * 2;
+    }
+  }
+
+  const blockCount = Math.max(1, Math.ceil(endPosition - firstPosition));
+  if (!Number.isSafeInteger(blockCount) || blockCount > MAX_STANDARD_BLOCKS) {
+    throw new Error(`BMS standard block count exceeds ${MAX_STANDARD_BLOCKS}.`);
+  }
+  return Array.from({ length: blockCount }, (_, index) => {
+    const startPosition = firstPosition + index;
+    const blockEndPosition = Math.min(startPosition + 1, endPosition);
+    return {
+      index,
+      startMeasure: measureForPosition(startPosition, displayMeasureStarts, measureLengths, maxMeasure),
+      endMeasure: measureForPosition(blockEndPosition - 0.000001, displayMeasureStarts, measureLengths, maxMeasure),
+      startTimeSec: estimateTimeForPosition(startPosition, positionedEvents),
+      endTimeSec: estimateTimeForPosition(blockEndPosition, positionedEvents),
+      playNotes: positionedEvents.filter((event) => event.standardPosition >= startPosition && event.standardPosition < blockEndPosition).length
+    };
+  });
 }
 
 export function analyzeBmsBuffer(buffer: ArrayBuffer): BmsAnalysis {
@@ -392,6 +720,7 @@ export function analyzeBmsBuffer(buffer: ArrayBuffer): BmsAnalysis {
 
   return {
     ...analysis,
-    encoding: decoded.encoding
+    encoding: decoded.encoding,
+    standardBlocks: analyzeStandardBlocks(decoded.text)
   };
 }
