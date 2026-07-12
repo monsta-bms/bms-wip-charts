@@ -917,3 +917,44 @@ rate-limit拒否ログは既存action、`result='rejected'`, `error_code='POST_R
 ```
 
 ローカルhostでIP marker不明の場合は共通`unknown`バケットを作らず、レート制限だけをスキップする。schema、migration、index、環境変数、管理UIの追加はない。
+
+## ZIP投稿安全検査
+
+`POST /api/charts`と`POST /api/charts/:chartId/versions`で`.zip`を受け取った場合、file SHA BAN・重複判定後、R2/D1保存前に内部検査する。単体`.bms/.bme/.bml`の既存処理には適用しない。
+
+利用者起因のZIP拒否はHTTP 400で返す。
+
+```text
+ZIP_INVALID
+ZIP_ENCRYPTED
+ZIP_UNSUPPORTED_FORMAT
+ZIP_UNSUPPORTED_COMPRESSION
+ZIP_TOO_MANY_ENTRIES
+ZIP_TOO_MANY_FILES
+ZIP_UNCOMPRESSED_TOO_LARGE
+ZIP_ENTRY_TOO_LARGE
+ZIP_CHART_TOO_LARGE
+ZIP_COMPRESSION_RATIO_TOO_HIGH
+ZIP_UNSAFE_PATH
+ZIP_UNSUPPORTED_ENTRY_TYPE
+ZIP_DUPLICATE_PATH
+ZIP_AUDIO_NOT_ALLOWED
+ZIP_NESTED_ARCHIVE
+ZIP_FORBIDDEN_FILE
+ZIP_CHART_NOT_FOUND
+ZIP_MULTIPLE_CHART_FILES
+```
+
+Workerまたはライブラリ起因の予期しない検査失敗はHTTP 503 `ZIP_INSPECTION_FAILED`を返す。ZIP拒否時は譜面R2 object、song、chart、versionを作成しない。`post_logs.detail`は次の安全な要約だけを持ち、内部パスや内容を含めない。
+
+```json
+{
+  "stage": "zip_inspection",
+  "errorCode": "ZIP_AUDIO_NOT_ALLOWED",
+  "entryCount": 2,
+  "declaredUncompressedBytes": 1234,
+  "chartFileCount": 1
+}
+```
+
+利用者起因の上記`ZIP_*`はclient rejected投稿レート制限の対象とする。`ZIP_INSPECTION_FAILED`はserver起因のため対象外とする。

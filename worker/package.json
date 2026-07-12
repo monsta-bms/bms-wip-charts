@@ -12,5 +12,8 @@
     "@cloudflare/workers-types": "latest",
     "typescript": "latest",
     "wrangler": "latest"
+  },
+  "dependencies": {
+    "@zip.js/zip.js": "^2.8.26"
   }
 }

@@ -603,3 +603,21 @@ python -m http.server 8000
 同じ譜面ファイルを再投稿すると `DUPLICATE_FILE` になる。再テスト時はファイル内容を少し変更するか、テスト用D1/R2を初期化する。
 
 PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNGを優先し、画像がない・読めない場合に `progressMap` からの再描画へfallbackする。UI-LIST-THUMB-03以降は、一覧比較性を優先し、有効な `progressMap` があるversionではprogressMapベースの密度サムネイルを優先する。保存済みR2 PNGはprogressMapがない、または再描画できない場合のfallbackとして扱う。
+
+## ZIP-SAFETY-01
+
+- 正常なStore/Deflate ZIPを初回投稿・追記投稿できること。
+- ZIP内のBMS/BME/BMLが1件だけ必要で、0件と複数件を拒否すること。
+- ZIP内譜面が2MiBを超える場合、または安全に展開・CRC32確認できない場合に拒否すること。
+- 音声拡張子を大文字小文字にかかわらず拒否し、`voice.wav.txt`のように途中に含むだけなら最終`.txt`として許可すること。
+- 入れ子アーカイブ、暗号化、分割ZIP、Zip64、Store/Deflate以外、破損ZIPを拒否すること。
+- traversal、絶対パス、ドライブパス、UNC、NUL・制御文字、深度8超、240文字超を拒否すること。
+- シンボリックリンク・特殊ファイル、NFKC・小文字化後の重複パスを拒否すること。
+- 全エントリ160超、通常ファイル128超、申告展開後16MiB超、1ファイル4MiB超を拒否すること。
+- 1MiB以上の個別ファイルで100倍超、2MiB以上の全体で50倍超の圧縮率を拒否すること。
+- allowlist外の実行ファイル・スクリプト・未知拡張子を拒否すること。
+- ZIP拒否時に譜面R2 object、songs、charts、versionsが作成されないこと。
+- `post_logs.detail`にstage、errorCode、エントリ数、申告展開後合計、譜面件数だけが入り、内部パス一覧・内容・生IP/UA・Secretが入らないこと。
+- 利用者起因のZIP拒否がclient rejected投稿レート制限へ数えられ、`ZIP_INSPECTION_FAILED`は数えられないこと。
+- 単体BMS/BME/BML投稿、progressMap/progressImage、BAN、重複判定の既存動作が変わらないこと。
+- `npm.cmd run typecheck`と`wrangler deploy --dry-run`が成功すること。
