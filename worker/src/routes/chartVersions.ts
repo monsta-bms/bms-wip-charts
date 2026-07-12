@@ -4,6 +4,7 @@ import { hashWithSecret, md5HexFromBuffer, sha256HexFromBuffer } from "../utils/
 import { prepareAppendProgressMap } from "../utils/progressMap";
 import { buildRequestFingerprint } from "../utils/requestFingerprint";
 import { apiError, Env, errorDetail, methodNotAllowed, ok } from "../utils/response";
+import { buildZipInspectionLogDetail, inspectZipUpload } from "../utils/zipValidation";
 import { findActiveFileBan } from "./bans";
 
 type ApiFailure = {
@@ -675,6 +676,34 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
         message: "同じファイルは投稿できません。",
         detail: "A version with the same file_sha256 already exists."
       });
+    }
+
+    if (input.extension === ".zip") {
+      let inspection;
+      try {
+        inspection = await inspectZipUpload(input.file);
+      } catch (error) {
+        console.error("[append-version-zip-inspection] unexpected ZIP inspection failure", {
+          code: "ZIP_INSPECTION_FAILED",
+          chartId,
+          errorType: error instanceof Error ? error.name : typeof error
+        });
+        return failAppendVersion(request, env, context, {
+          status: 503,
+          code: "ZIP_INSPECTION_FAILED",
+          message: "ZIPの安全確認に失敗しました。しばらく待ってから再試行してください。",
+          detail: buildZipInspectionLogDetail("ZIP_INSPECTION_FAILED")
+        });
+      }
+
+      if (!inspection.ok) {
+        return failAppendVersion(request, env, context, {
+          status: 400,
+          code: inspection.failure.code,
+          message: inspection.failure.message,
+          detail: inspection.failure.detail
+        });
+      }
     }
 
     let childCount: number;

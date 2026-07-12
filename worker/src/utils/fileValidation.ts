@@ -9,7 +9,14 @@ export const forbiddenAudioExtensions = [
   ".aac",
   ".m4a",
   ".aiff",
-  ".aif"
+  ".aif",
+  ".oga",
+  ".opus",
+  ".wma",
+  ".ape",
+  ".alac",
+  ".mid",
+  ".midi"
 ];
 
 const allowedExtensions = new Set([".bms", ".bme", ".bml", ".zip"]);
@@ -68,7 +75,6 @@ export function validateUploadFile(file: File): FileValidationResult {
     };
   }
 
-  // TODO: Inspect ZIP entries and reject forbidden audio extensions before accepting production uploads.
   return {
     ok: true,
     extension,
