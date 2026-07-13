@@ -6,7 +6,7 @@
 
 MVPの対応レーンは1P側の通常鍵盤`11-15,18,19`、スクラッチ`16`、LNTYPE 1のLN鍵盤`51-55,58,59`、LNスクラッチ`56`とする。`#LNOBJ`も対応する。7key判定は`.bme`または6/7鍵チャンネルの実使用を根拠とし、5keyとの区別が曖昧な場合は推測表示しない。2P、10key/14key、PMS、LNTYPE 2、地雷、特殊配置、RANDOM/IF/SWITCH系、未閉鎖・競合LNはミニビュー未対応とする。
 
-`versions.measure_notes_json`は新規解析成功分からschemaVersion 3とし、schemaVersion 2の全フィールドを維持したまま`miniView`を追加する。CHART-MINIVIEW-POSITION-01以降のminiView payloadはschemaVersion 2とし、通常ノート、LN開始・終了を`measure / lane / pairIndex / pairCount / kind`単位で保持する。同じ小節・レーン・種別・分母のイベントをまとめたvarint列をBase64保存し、24分・32分・48分を含む元の分数位置を丸めない。保存する`miniView`全体は32KiB以下とし、超過時は`MINIVIEW_TOO_COMPLEX` warningとしてunsupported metadataだけを保存する。D1 migration、R2派生データ、`progressImage`は追加しない。
+`versions.measure_notes_json`は新規解析成功分からschemaVersion 3とし、schemaVersion 2の全フィールドを維持したまま`miniView`を追加する。CHART-MINIVIEW-UX-03以降のminiView payloadはschemaVersion 3とし、通常ノート、LN開始・終了を`measure / lane / pairIndex / pairCount / kind`単位で保持する。同じ小節・レーン・種別・分母のイベントをまとめたvarint列をBase64保存し、24分・32分・48分を含む元の分数位置を丸めない。初期BPMとchannel 03/08のBPM変化は同じ分数座標のtupleで追加する。保存する`miniView`全体は32KiB以下とし、超過時は`MINIVIEW_TOO_COMPLEX` warningとしてunsupported metadataだけを保存する。D1 migration、R2派生データ、`progressImage`は追加しない。
 
 一覧APIは完全なイベントpayloadを返さず、各versionの`miniView.available`、`mode`、専用取得URLだけを返す。公開中かつ精密payloadを持つversionだけ`GET /api/versions/:versionId/mini-view`でpayloadを取得できる。非表示version、非表示chart、measure notes schemaVersion 2、旧miniView payload schemaVersion 1、unsupportedは`MINIVIEW_NOT_AVAILABLE`とする。レスポンスはETagと短時間キャッシュを使用する。
 
@@ -16,7 +16,9 @@ CHART-MINIVIEW-UX-01では、進捗サムネイル全体へ単一の操作レイ
 
 CHART-MINIVIEW-UX-02では、一覧右側の常時全体ミニビューを廃止し、進捗ブロック連動の吹き出しを主表示とする。吹き出しは黒系背景、16分・1拍・小節境界の3段階グリッド、白鍵・青鍵・スクラッチ・LNの色分け、右側の小節番号帯を使用し、曲進行を下から上へ描画する。固定中に別ブロックをクリックした場合は解除を挟まず固定先を切り替え、同一ブロックの再クリック、Esc、外側操作で解除する。miniView未対応versionは進捗メタ欄へ控えめな非対応表示を出す。
 
-音楽位置は`measureStart[m] = mより前のmeasureLength合計`、`eventPosition = measureStart[measure] + pairIndex / pairCount * measureLength[measure]`で定義する。`#xxx02`省略時の小節長は1.0とし、BPM/STOPは縦位置へ反映しない。progressMap blockは同じ座標系の`startPosition/endPosition`を保持し、境界ぴったりで終了するblockへ次小節を含めない。16分線は各小節開始から0.0625、1拍線は0.25、小節線は累積小節境界に描き、0.75小節は通常小節の75%の高さとする。スクラッチ幅は通常鍵盤の1.5倍とし、通常7鍵は等幅を維持する。旧miniView payload schemaVersion 1は不正確な拡大表示へfallbackせず、ミニビュー非対応として扱う。
+CHART-MINIVIEW-UX-03では、小節開始線を`#E8E8E8`、1拍線を`#4A4A4A`、16分線を`#2C2C2C`として優先度を明確化する。ノート矩形とLN端点は数学上のイベント位置を変えず、Canvas上だけ1.5px上へオフセットする。LN本体は端点マーカー中心へ接続し、端点を明色、本体を同系暗色とする。BPMは縦座標を伸縮させず、左側の専用注釈帯へblock開始時の有効値とblock内変更を緑色で表示する。miniView payload schemaVersion 2はBPMなしで引き続き表示し、schemaVersion 1だけを非対応とする。
+
+音楽位置は`measureStart[m] = mより前のmeasureLength合計`、`eventPosition = measureStart[measure] + pairIndex / pairCount * measureLength[measure]`で定義する。`#xxx02`省略時の小節長は1.0とし、BPM/STOPは縦位置へ反映しない。progressMap blockは同じ座標系の`startPosition/endPosition`を保持し、境界ぴったりで終了するblockへ次小節を含めない。16分線は各小節開始から0.0625、1拍線は0.25、小節線は累積小節境界に描き、0.75小節は通常小節の75%の高さとする。スクラッチ幅は通常鍵盤の1.5倍とし、通常7鍵は等幅を維持する。初期BPM、channel 03の16進BPM、`#BPMxx`とchannel 08の拡張BPMを扱い、同位置ではソース上で後に解析した有効値だけを残す。旧miniView payload schemaVersion 1は不正確な拡大表示へfallbackせず、ミニビュー非対応として扱う。
 
 ミニビュー生成失敗や未対応構文は投稿拒否理由にせず、`MINIVIEW_UNSUPPORTED_MODE`、`MINIVIEW_RANDOM_UNSUPPORTED`、`MINIVIEW_LNTYPE2_UNSUPPORTED`、`MINIVIEW_MALFORMED_LN`、`MINIVIEW_TOO_COMPLEX`、`MINIVIEW_GENERATION_FAILED` warningを返す。既存schemaVersion 2は再解析せず、従来の進捗サムネイル表示を維持する。
 

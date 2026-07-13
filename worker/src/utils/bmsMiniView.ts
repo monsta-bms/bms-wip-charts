@@ -50,7 +50,7 @@ export type BmsMiniViewWarningCode =
   | "MINIVIEW_GENERATION_FAILED";
 
 export type BmsMiniViewPayload = {
-  schemaVersion: 2;
+  schemaVersion: 2 | 3;
   mode: "7key-sp";
   laneOrder: string[];
   startMeasure: number;
@@ -64,10 +64,12 @@ export type BmsMiniViewPayload = {
   eventGroupCount: number;
   eventData: string;
   measureLengths: Array<[number, number]>;
+  initialBpm?: number | null;
+  bpmEvents?: Array<[number, number, number, number]>;
 };
 
 export type StoredBmsMiniView = {
-  schemaVersion: 1 | 2;
+  schemaVersion: 1 | 2 | 3;
   status: "ready" | "unsupported";
   mode: "7key-sp" | null;
   reasonCode?: BmsMiniViewWarningCode;
@@ -111,10 +113,18 @@ type PackedMiniEvent = {
   kind: PackedEventKind;
 };
 
+type RawBpmEvent = {
+  measure: number;
+  numerator: number;
+  denominator: number;
+  bpm: number;
+  sourceOrder: number;
+};
+
 function unsupported(code: BmsMiniViewWarningCode, message: string, detail?: string): BmsMiniViewAnalysisResult {
   return {
     miniView: {
-      schemaVersion: 2,
+      schemaVersion: 3,
       status: "unsupported",
       mode: null,
       reasonCode: code
@@ -178,6 +188,36 @@ function buildMeasureStarts(maxMeasure: number, measureLengths: Map<number, numb
 
 function compareEvents(a: RawLaneEvent, b: RawLaneEvent): number {
   return Number(a.position) - Number(b.position) || a.lane - b.lane || a.objectId.localeCompare(b.objectId);
+}
+
+function greatestCommonDivisor(left: number, right: number): number {
+  let a = Math.abs(left);
+  let b = Math.abs(right);
+  while (b > 0) {
+    const remainder = a % b;
+    a = b;
+    b = remainder;
+  }
+  return a || 1;
+}
+
+function normalizeBpmEvents(events: RawBpmEvent[]): RawBpmEvent[] {
+  const finalByPosition = new Map<string, RawBpmEvent>();
+  for (const event of events.sort((left, right) => left.sourceOrder - right.sourceOrder)) {
+    const divisor = greatestCommonDivisor(event.numerator, event.denominator);
+    const numerator = event.numerator / divisor;
+    const denominator = event.denominator / divisor;
+    finalByPosition.set(`${event.measure}:${numerator}/${denominator}`, {
+      ...event,
+      numerator,
+      denominator
+    });
+  }
+  return [...finalByPosition.values()].sort((left, right) => (
+    left.measure - right.measure
+    || left.numerator / left.denominator - right.numerator / right.denominator
+    || left.sourceOrder - right.sourceOrder
+  ));
 }
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -260,6 +300,8 @@ function encodePackedEvents(events: PackedMiniEvent[]): { data: string; groupCou
 function buildPayload(
   taps: RawLaneEvent[],
   longNotes: LongInterval[],
+  initialBpm: number | null,
+  bpmEvents: RawBpmEvent[],
   measureStarts: number[],
   measureLengths: Map<number, number>,
   analysis: BmsAnalysis
@@ -305,7 +347,7 @@ function buildPayload(
     .sort(([left], [right]) => left - right);
 
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     mode: "7key-sp",
     laneOrder: [...MINI_VIEW_LANE_ORDER],
     startMeasure,
@@ -318,7 +360,11 @@ function buildPayload(
     eventEncoding: "grouped-varint-v1",
     eventGroupCount: packed.groupCount,
     eventData: packed.data,
-    measureLengths: lengthOverrides
+    measureLengths: lengthOverrides,
+    initialBpm,
+    bpmEvents: bpmEvents
+      .filter((event) => event.measure <= endMeasure)
+      .map((event) => [event.measure, event.numerator, event.denominator, event.bpm])
   };
 }
 
@@ -335,11 +381,34 @@ export function analyzeBmsMiniView(
 
     const normalEvents: RawLaneEvent[] = [];
     const longEvents: RawLaneEvent[] = [];
+    const rawBpmEvents: RawBpmEvent[] = [];
+    const bpmDefinitions = new Map<string, number>();
     const measureLengths = new Map<number, number>();
     const lnObjects = new Set<string>();
     const seenPlayableLines = new Set<string>();
     let usesExtendedKeys = false;
     let player = 1;
+    let initialBpm: number | null = null;
+    let bpmSourceOrder = 0;
+
+    for (const rawLine of lines) {
+      const line = rawLine.replace(/^\uFEFF/, "").trim();
+      const indexedBpmMatch = line.match(/^#BPM([0-9A-Za-z]{2})\s+([0-9.]+)$/i);
+      if (indexedBpmMatch) {
+        const value = Number.parseFloat(indexedBpmMatch[2]);
+        if (Number.isFinite(value) && value > 0) {
+          bpmDefinitions.set(indexedBpmMatch[1].toUpperCase(), value);
+        }
+        continue;
+      }
+      const initialBpmMatch = line.match(/^#BPM\s+([0-9.]+)$/i);
+      if (initialBpmMatch) {
+        const value = Number.parseFloat(initialBpmMatch[1]);
+        if (Number.isFinite(value) && value > 0) {
+          initialBpm = value;
+        }
+      }
+    }
 
     for (const rawLine of lines) {
       const line = rawLine.replace(/^\uFEFF/, "").trim();
@@ -382,6 +451,29 @@ export function analyzeBmsMiniView(
         const length = Number.parseFloat(data);
         if (Number.isFinite(length) && length > 0) {
           measureLengths.set(measure, length);
+        }
+        continue;
+      }
+      if (channel === "03" || channel === "08") {
+        const objects = splitObjects(data);
+        if (objects) {
+          for (const object of objects) {
+            const bpm = channel === "03"
+              ? Number.parseInt(object.objectId, 16)
+              : bpmDefinitions.get(object.objectId);
+            if (Number.isFinite(bpm) && Number(bpm) > 0) {
+              rawBpmEvents.push({
+                measure,
+                numerator: object.pairIndex,
+                denominator: object.pairCount,
+                bpm: Number(bpm),
+                sourceOrder: bpmSourceOrder++
+              });
+            }
+          }
+        }
+        if (normalEvents.length + longEvents.length + rawBpmEvents.length > MINI_VIEW_MAX_EVENTS) {
+          return unsupported("MINIVIEW_TOO_COMPLEX", "Chart miniview event count exceeds the safe limit.");
         }
         continue;
       }
@@ -431,7 +523,7 @@ export function analyzeBmsMiniView(
           usesExtendedKeys = true;
         }
       }
-      if (normalEvents.length + longEvents.length > MINI_VIEW_MAX_EVENTS) {
+      if (normalEvents.length + longEvents.length + rawBpmEvents.length > MINI_VIEW_MAX_EVENTS) {
         return unsupported("MINIVIEW_TOO_COMPLEX", "Chart miniview event count exceeds the safe limit.");
       }
     }
@@ -526,12 +618,13 @@ export function analyzeBmsMiniView(
       }
     }
 
-    const payload = buildPayload(taps, longNotes, measureStarts, measureLengths, analysis);
+    const bpmEvents = normalizeBpmEvents(rawBpmEvents);
+    const payload = buildPayload(taps, longNotes, initialBpm, bpmEvents, measureStarts, measureLengths, analysis);
     if (!payload) {
       return unsupported("MINIVIEW_GENERATION_FAILED", "Chart miniview could not build a display range.");
     }
     const miniView: StoredBmsMiniView = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       status: "ready",
       mode: "7key-sp",
       payload

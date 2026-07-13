@@ -24,7 +24,7 @@
 {
   "versionId": "version_xxx",
   "miniView": {
-    "schemaVersion": 2,
+    "schemaVersion": 3,
     "mode": "7key-sp",
     "laneOrder": ["scratch", "key1", "key2", "key3", "key4", "key5", "key6", "key7"],
     "startMeasure": 1,
@@ -37,18 +37,20 @@
     "eventEncoding": "grouped-varint-v1",
     "eventGroupCount": 123,
     "eventData": "...",
-    "measureLengths": [[3, 0.75]]
+    "measureLengths": [[3, 0.75]],
+    "initialBpm": 150,
+    "bpmEvents": [[3, 1, 4, 202.5]]
   }
 }
 ```
 
-`eventData`は同じ小節・レーン・種別・分母のイベントをまとめたvarint列で、各イベントの`pairIndex/pairCount`を丸めず復元できる。`measureLengths`は長さ1.0以外の小節だけを`[measure, length]`で保持する。`startPosition/endPosition`とprogressMap blockの同名値は小節長累積の共通座標である。旧miniView payload schemaVersion 1は`MINIVIEW_NOT_AVAILABLE`とし、一覧APIには引き続き完全payloadを含めない。
+`eventData`は同じ小節・レーン・種別・分母のイベントをまとめたvarint列で、各イベントの`pairIndex/pairCount`を丸めず復元できる。`measureLengths`は長さ1.0以外の小節だけを`[measure, length]`で保持する。`startPosition/endPosition`とprogressMap blockの同名値は小節長累積の共通座標である。schemaVersion 3の`initialBpm`は宣言された初期値またはNULL、`bpmEvents`は`[measure, numerator, denominator, bpm]`でchannel 03/08の変化を保持する。schemaVersion 2はBPM情報なしで取得可能とし、schemaVersion 1だけを`MINIVIEW_NOT_AVAILABLE`とする。一覧APIには引き続き完全payloadを含めない。
 
 成功時は`Cache-Control: public, max-age=300, stale-while-revalidate=300`とpayload SHA-256由来の`ETag`を返し、`If-None-Match`一致時は304とする。
 
 | HTTP | code | 条件 |
 | ---: | --- | --- |
-| 404 | `MINIVIEW_NOT_AVAILABLE` | version/chartが非公開、存在しない、measure notes schemaVersion 2、旧miniView payload、またはunsupported |
+| 404 | `MINIVIEW_NOT_AVAILABLE` | version/chartが非公開、存在しない、measure notes schemaVersion 2、miniView payload schemaVersion 1、またはunsupported |
 | 500 | `MINIVIEW_READ_FAILED` | D1読込または保存JSON解析に失敗 |
 
 ミニビューwarningは投稿レスポンスの既存warningsへ追加するが、投稿自体は成功可能とする。warning detailへBMS本文やイベント一覧は含めない。

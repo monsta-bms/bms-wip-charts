@@ -124,7 +124,7 @@
     const endPosition = Number(value.endPosition);
     const eventGroupCount = Number(value.eventGroupCount);
     if (
-      value.schemaVersion !== 2
+      ![2, 3].includes(value.schemaVersion)
       || value.mode !== "7key-sp"
       || !Array.isArray(value.laneOrder)
       || value.laneOrder.length !== 8
@@ -139,6 +139,7 @@
       || eventGroupCount < 0
       || typeof value.eventData !== "string"
       || !Array.isArray(value.measureLengths)
+      || (value.schemaVersion === 3 && !Array.isArray(value.bpmEvents))
     ) {
       throw new Error("Chart miniview payload is unsupported.");
     }
@@ -156,6 +157,39 @@
       geometry.lengths,
       endMeasure
     );
+    const initialBpm = value.schemaVersion === 3 ? Number(value.initialBpm) : null;
+    if (value.schemaVersion === 3 && value.initialBpm !== null && (!Number.isFinite(initialBpm) || initialBpm <= 0)) {
+      throw new Error("Chart miniview initial BPM is invalid.");
+    }
+    const bpmEvents = value.schemaVersion === 3
+      ? value.bpmEvents.map((entry) => {
+        if (!Array.isArray(entry) || entry.length !== 4) {
+          throw new Error("Chart miniview BPM event is invalid.");
+        }
+        const [measure, numerator, denominator, bpm] = entry.map(Number);
+        if (
+          !Number.isInteger(measure)
+          || measure < 0
+          || measure > endMeasure
+          || !Number.isInteger(numerator)
+          || numerator < 0
+          || !Number.isInteger(denominator)
+          || denominator <= 0
+          || numerator >= denominator
+          || !Number.isFinite(bpm)
+          || bpm <= 0
+        ) {
+          throw new Error("Chart miniview BPM event is invalid.");
+        }
+        return {
+          measure,
+          numerator,
+          denominator,
+          bpm,
+          position: geometry.starts[measure] + numerator / denominator * geometry.lengths[measure]
+        };
+      }).sort((left, right) => left.position - right.position)
+      : [];
     const tapEvents = events.filter((event) => event.kind === 0);
     const longNotes = [];
     for (let lane = 0; lane < 8; lane += 1) {
@@ -190,7 +224,9 @@
       measureLengths: geometry.lengths,
       measureStarts: geometry.starts,
       tapEvents,
-      longNotes
+      longNotes,
+      initialBpm: Number.isFinite(initialBpm) && initialBpm > 0 ? initialBpm : null,
+      bpmEvents
     };
   }
 
@@ -223,24 +259,53 @@
       return {
         laneFill: "#120808",
         noteFill: "#FF5555",
-        longFill: "#D94A4A",
-        longMarker: "#FF7777"
+        longFill: "#9F343A",
+        longMarker: "#FF5555"
       };
     }
     if (lane % 2 === 0) {
       return {
         laneFill: "#080B14",
         noteFill: "#4B74FF",
-        longFill: "#7F9BFF",
-        longMarker: "#A8B9FF"
+        longFill: "#2E4599",
+        longMarker: "#4B74FF"
       };
     }
     return {
       laneFill: "#090909",
       noteFill: "#EDEDED",
-      longFill: "#AFC3FF",
-      longMarker: "#D9E2FF"
+      longFill: "#8F999F",
+      longMarker: "#EDEDED"
     };
+  }
+
+  function formatBpm(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+      return "";
+    }
+    return Number.isInteger(number) ? String(number) : String(Number(number.toFixed(6)));
+  }
+
+  function collectVisibleBpmAnnotations(payload, rangeStart, rangeEnd) {
+    let activeBpm = payload.initialBpm;
+    for (const event of payload.bpmEvents) {
+      if (event.position <= rangeStart + 1e-9) {
+        activeBpm = event.bpm;
+      } else {
+        break;
+      }
+    }
+    const annotations = [];
+    if (Number.isFinite(activeBpm) && activeBpm > 0) {
+      annotations.push({ position: rangeStart, bpm: activeBpm, rangeStart: true });
+    }
+    for (const event of payload.bpmEvents) {
+      if (event.position > rangeStart + 1e-9 && event.position < rangeEnd - 1e-9) {
+        annotations.push({ position: event.position, bpm: event.bpm, rangeStart: false });
+      }
+    }
+    return annotations;
   }
 
   function drawPayload(canvas, payload, large = false, viewRange = null) {
@@ -264,10 +329,17 @@
     const plotY = paddingY;
     const plotWidth = Math.max(1, width - paddingX * 2);
     const plotHeight = Math.max(1, height - paddingY * 2);
+    const hasBpmAnnotations = large && (
+      (Number.isFinite(payload.initialBpm) && payload.initialBpm > 0)
+      || payload.bpmEvents.length > 0
+    );
+    const bpmBandWidth = hasBpmAnnotations ? 32 : 0;
+    const bpmBandGap = hasBpmAnnotations ? 4 : 0;
     const measureBandWidth = large ? 36 : 0;
     const measureBandGap = large ? 4 : 0;
-    const lanePlotWidth = Math.max(1, plotWidth - measureBandWidth - measureBandGap);
-    const measureBandX = plotX + lanePlotWidth + measureBandGap;
+    const lanePlotX = plotX + bpmBandWidth + bpmBandGap;
+    const lanePlotWidth = Math.max(1, plotWidth - bpmBandWidth - bpmBandGap - measureBandWidth - measureBandGap);
+    const measureBandX = lanePlotX + lanePlotWidth + measureBandGap;
     const rangeStart = Number.isFinite(Number(viewRange?.startPosition))
       ? Math.max(payload.startPosition, Number(viewRange.startPosition))
       : payload.startPosition;
@@ -280,17 +352,29 @@
     const laneUnits = [1.5, 1, 1, 1, 1, 1, 1, 1];
     const unitWidth = lanePlotWidth / 8.5;
     const laneGeometry = [];
-    let laneX = plotX;
+    let laneX = lanePlotX;
     for (const units of laneUnits) {
       const widthForLane = units * unitWidth;
       laneGeometry.push({ x: laneX, width: widthForLane });
       laneX += widthForLane;
     }
-    const yForPosition = (position) => plotY
-      + (rangeEnd - position) / (rangeEnd - rangeStart) * plotHeight;
+    const visualGap = large ? 1.5 : 0.7;
+    const eventTopInset = large ? 7 : 2.5;
+    const eventBottomInset = large ? 1.5 : 0.8;
+    const eventPlotHeight = Math.max(1, plotHeight - eventTopInset - eventBottomInset);
+    const yForPosition = (position) => plotY + eventTopInset
+      + (rangeEnd - position) / (rangeEnd - rangeStart) * eventPlotHeight;
+    const topForNote = (eventY, noteHeight) => Math.max(
+      plotY + 1,
+      Math.min(plotY + plotHeight - noteHeight - 1, eventY - visualGap - noteHeight)
+    );
 
     context.fillStyle = "#050505";
     context.fillRect(0, 0, width, height);
+    if (hasBpmAnnotations) {
+      context.fillStyle = "#08120B";
+      context.fillRect(plotX, plotY, bpmBandWidth, plotHeight);
+    }
     for (let lane = 0; lane < 8; lane += 1) {
       context.fillStyle = getLanePalette(lane).laneFill;
       context.fillRect(laneGeometry[lane].x, plotY, laneGeometry[lane].width, plotHeight);
@@ -333,18 +417,18 @@
           context.lineWidth = division % 4 === 0 ? 0.9 : 0.65;
           const y = yForPosition(position);
           context.beginPath();
-          context.moveTo(plotX, y);
-          context.lineTo(plotX + lanePlotWidth, y);
+          context.moveTo(lanePlotX, y);
+          context.lineTo(lanePlotX + lanePlotWidth, y);
           context.stroke();
         }
       }
       if (item.start >= rangeStart - 1e-9 && item.start <= rangeEnd + 1e-9) {
         const startY = yForPosition(item.start);
-        context.strokeStyle = "#BDBDBD";
-        context.lineWidth = large ? 1.2 : 0.7;
+        context.strokeStyle = "#E8E8E8";
+        context.lineWidth = large ? 1.3 : 0.8;
         context.beginPath();
-        context.moveTo(plotX, startY);
-        context.lineTo(plotX + (large ? plotWidth : lanePlotWidth), startY);
+        context.moveTo(lanePlotX, startY);
+        context.lineTo(lanePlotX + lanePlotWidth + (large ? measureBandGap + measureBandWidth : 0), startY);
         context.stroke();
       }
       if (large && measurePixelHeight >= 14) {
@@ -362,17 +446,17 @@
     const finalVisibleBoundary = visibleMeasures.at(-1)?.end;
     if (Number.isFinite(finalVisibleBoundary) && finalVisibleBoundary <= rangeEnd + 1e-9) {
       const finalY = yForPosition(finalVisibleBoundary);
-      context.strokeStyle = "#BDBDBD";
-      context.lineWidth = large ? 1.2 : 0.7;
+      context.strokeStyle = "#E8E8E8";
+      context.lineWidth = large ? 1.3 : 0.8;
       context.beginPath();
-      context.moveTo(plotX, finalY);
-      context.lineTo(plotX + (large ? plotWidth : lanePlotWidth), finalY);
+      context.moveTo(lanePlotX, finalY);
+      context.lineTo(lanePlotX + lanePlotWidth + (large ? measureBandGap + measureBandWidth : 0), finalY);
       context.stroke();
     }
 
     context.save();
     context.beginPath();
-    context.rect(plotX + 1, plotY + 1, Math.max(1, lanePlotWidth - 2), Math.max(1, plotHeight - 2));
+    context.rect(lanePlotX + 1, plotY + 1, Math.max(1, lanePlotWidth - 2), Math.max(1, plotHeight - 2));
     context.clip();
     for (const longNote of payload.longNotes) {
       if (longNote.end.position <= rangeStart || longNote.start.position >= rangeEnd) {
@@ -384,13 +468,20 @@
       const end = Math.min(longNote.end.position, rangeEnd);
       const yStart = yForPosition(start);
       const yEnd = yForPosition(end);
+      const markerHeight = large ? 4.5 : 1.7;
+      const startCenter = longNote.start.position >= rangeStart
+        ? topForNote(yStart, markerHeight) + markerHeight / 2
+        : yStart;
+      const endCenter = longNote.end.position < rangeEnd
+        ? topForNote(yEnd, markerHeight) + markerHeight / 2
+        : yEnd;
       const longWidth = geometry.width * (longNote.lane === 0 ? 0.82 : 0.68);
       context.fillStyle = palette.longFill;
       context.fillRect(
         geometry.x + (geometry.width - longWidth) / 2,
-        Math.min(yStart, yEnd),
+        Math.min(startCenter, endCenter),
         Math.max(2, longWidth),
-        Math.max(3, Math.abs(yEnd - yStart))
+        Math.max(3, Math.abs(endCenter - startCenter))
       );
     }
 
@@ -405,7 +496,7 @@
       context.fillStyle = getLanePalette(event.lane).noteFill;
       context.fillRect(
         geometry.x + (geometry.width - noteWidth) / 2,
-        Math.max(plotY + 1, Math.min(plotY + plotHeight - noteHeight - 1, y - noteHeight / 2)),
+        topForNote(y, noteHeight),
         noteWidth,
         noteHeight
       );
@@ -422,7 +513,7 @@
         context.fillStyle = getLanePalette(event.lane).longMarker;
         context.fillRect(
           geometry.x + (geometry.width - markerWidth) / 2,
-          Math.max(plotY + 1, Math.min(plotY + plotHeight - markerHeight - 1, y - markerHeight / 2)),
+          topForNote(y, markerHeight),
           markerWidth,
           markerHeight
         );
@@ -430,9 +521,31 @@
     }
     context.restore();
 
+    if (hasBpmAnnotations) {
+      const annotations = collectVisibleBpmAnnotations(payload, rangeStart, rangeEnd);
+      context.font = "700 10px system-ui, sans-serif";
+      context.textAlign = "right";
+      context.textBaseline = "middle";
+      for (const annotation of annotations) {
+        const exactY = yForPosition(annotation.position);
+        const labelY = Math.max(plotY + 7, Math.min(plotY + plotHeight - 7, exactY));
+        context.strokeStyle = annotation.rangeStart ? "#75E387" : "#3DBB58";
+        context.lineWidth = annotation.rangeStart ? 1.4 : 1;
+        context.beginPath();
+        context.moveTo(plotX + bpmBandWidth - 7, exactY);
+        context.lineTo(lanePlotX, exactY);
+        context.stroke();
+        context.fillStyle = "#67DF7B";
+        context.fillText(formatBpm(annotation.bpm), plotX + bpmBandWidth - 3, labelY);
+      }
+      context.strokeStyle = "#31523A";
+      context.lineWidth = 1;
+      context.strokeRect(plotX + 0.5, plotY + 0.5, Math.max(0, bpmBandWidth - 1), Math.max(0, plotHeight - 1));
+    }
+
     context.strokeStyle = "#D0D0D0";
     context.lineWidth = 1;
-    context.strokeRect(plotX + 0.5, plotY + 0.5, Math.max(0, lanePlotWidth - 1), Math.max(0, plotHeight - 1));
+    context.strokeRect(lanePlotX + 0.5, plotY + 0.5, Math.max(0, lanePlotWidth - 1), Math.max(0, plotHeight - 1));
     if (large) {
       context.strokeRect(measureBandX + 0.5, plotY + 0.5, Math.max(0, measureBandWidth - 1), Math.max(0, plotHeight - 1));
     }
