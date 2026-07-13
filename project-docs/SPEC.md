@@ -18,6 +18,8 @@ CHART-MINIVIEW-UX-02では、一覧右側の常時全体ミニビューを廃止
 
 CHART-MINIVIEW-UX-03では、小節開始線を`#E8E8E8`、1拍線を`#4A4A4A`、16分線を`#2C2C2C`として優先度を明確化する。ノート矩形とLN端点は数学上のイベント位置を変えず、Canvas上だけ1.5px上へオフセットする。LN本体は端点マーカー中心へ接続し、端点を明色、本体を同系暗色とする。BPMは縦座標を伸縮させず、左側の専用注釈帯へblock開始時の有効値とblock内変更を緑色で表示する。miniView payload schemaVersion 2はBPMなしで引き続き表示し、schemaVersion 1だけを非対応とする。
 
+CHART-MINIVIEW-UX-04では、拡大Canvasの通常ノートとLN端点を少し厚くし、数学上のイベント位置を維持したまま視覚オフセットを0.9pxへ弱める。block開始時点の有効BPMは吹き出し上部の情報欄へ表示し、左側の緑色注釈帯はblock内部でBPMが変化する場合だけ表示する。block開始境界上のBPM変更は開始時BPMとして扱い、block終了境界上の変更は次blockへ送る。
+
 音楽位置は`measureStart[m] = mより前のmeasureLength合計`、`eventPosition = measureStart[measure] + pairIndex / pairCount * measureLength[measure]`で定義する。`#xxx02`省略時の小節長は1.0とし、BPM/STOPは縦位置へ反映しない。progressMap blockは同じ座標系の`startPosition/endPosition`を保持し、境界ぴったりで終了するblockへ次小節を含めない。16分線は各小節開始から0.0625、1拍線は0.25、小節線は累積小節境界に描き、0.75小節は通常小節の75%の高さとする。スクラッチ幅は通常鍵盤の1.5倍とし、通常7鍵は等幅を維持する。初期BPM、channel 03の16進BPM、`#BPMxx`とchannel 08の拡張BPMを扱い、同位置ではソース上で後に解析した有効値だけを残す。旧miniView payload schemaVersion 1は不正確な拡大表示へfallbackせず、ミニビュー非対応として扱う。
 
 ミニビュー生成失敗や未対応構文は投稿拒否理由にせず、`MINIVIEW_UNSUPPORTED_MODE`、`MINIVIEW_RANDOM_UNSUPPORTED`、`MINIVIEW_LNTYPE2_UNSUPPORTED`、`MINIVIEW_MALFORMED_LN`、`MINIVIEW_TOO_COMPLEX`、`MINIVIEW_GENERATION_FAILED` warningを返す。既存schemaVersion 2は再解析せず、従来の進捗サムネイル表示を維持する。

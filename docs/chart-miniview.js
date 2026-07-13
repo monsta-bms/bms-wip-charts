@@ -287,7 +287,7 @@
     return Number.isInteger(number) ? String(number) : String(Number(number.toFixed(6)));
   }
 
-  function collectVisibleBpmAnnotations(payload, rangeStart, rangeEnd) {
+  function collectBpmDisplayData(payload, rangeStart, rangeEnd) {
     let activeBpm = payload.initialBpm;
     for (const event of payload.bpmEvents) {
       if (event.position <= rangeStart + 1e-9) {
@@ -297,15 +297,15 @@
       }
     }
     const annotations = [];
-    if (Number.isFinite(activeBpm) && activeBpm > 0) {
-      annotations.push({ position: rangeStart, bpm: activeBpm, rangeStart: true });
-    }
     for (const event of payload.bpmEvents) {
       if (event.position > rangeStart + 1e-9 && event.position < rangeEnd - 1e-9) {
-        annotations.push({ position: event.position, bpm: event.bpm, rangeStart: false });
+        annotations.push({ position: event.position, bpm: event.bpm });
       }
     }
-    return annotations;
+    return {
+      currentBpm: Number.isFinite(activeBpm) && activeBpm > 0 ? activeBpm : null,
+      annotations
+    };
   }
 
   function drawPayload(canvas, payload, large = false, viewRange = null) {
@@ -329,17 +329,6 @@
     const plotY = paddingY;
     const plotWidth = Math.max(1, width - paddingX * 2);
     const plotHeight = Math.max(1, height - paddingY * 2);
-    const hasBpmAnnotations = large && (
-      (Number.isFinite(payload.initialBpm) && payload.initialBpm > 0)
-      || payload.bpmEvents.length > 0
-    );
-    const bpmBandWidth = hasBpmAnnotations ? 32 : 0;
-    const bpmBandGap = hasBpmAnnotations ? 4 : 0;
-    const measureBandWidth = large ? 36 : 0;
-    const measureBandGap = large ? 4 : 0;
-    const lanePlotX = plotX + bpmBandWidth + bpmBandGap;
-    const lanePlotWidth = Math.max(1, plotWidth - bpmBandWidth - bpmBandGap - measureBandWidth - measureBandGap);
-    const measureBandX = lanePlotX + lanePlotWidth + measureBandGap;
     const rangeStart = Number.isFinite(Number(viewRange?.startPosition))
       ? Math.max(payload.startPosition, Number(viewRange.startPosition))
       : payload.startPosition;
@@ -349,6 +338,15 @@
     if (!(rangeEnd > rangeStart)) {
       throw new Error("Chart miniview display range is invalid.");
     }
+    const bpmDisplay = collectBpmDisplayData(payload, rangeStart, rangeEnd);
+    const hasBpmAnnotations = large && bpmDisplay.annotations.length > 0;
+    const bpmBandWidth = hasBpmAnnotations ? 32 : 0;
+    const bpmBandGap = hasBpmAnnotations ? 4 : 0;
+    const measureBandWidth = large ? 36 : 0;
+    const measureBandGap = large ? 4 : 0;
+    const lanePlotX = plotX + bpmBandWidth + bpmBandGap;
+    const lanePlotWidth = Math.max(1, plotWidth - bpmBandWidth - bpmBandGap - measureBandWidth - measureBandGap);
+    const measureBandX = lanePlotX + lanePlotWidth + measureBandGap;
     const laneUnits = [1.5, 1, 1, 1, 1, 1, 1, 1];
     const unitWidth = lanePlotWidth / 8.5;
     const laneGeometry = [];
@@ -358,7 +356,7 @@
       laneGeometry.push({ x: laneX, width: widthForLane });
       laneX += widthForLane;
     }
-    const visualGap = large ? 1.5 : 0.7;
+    const visualGap = large ? 0.9 : 0.5;
     const eventTopInset = large ? 7 : 2.5;
     const eventBottomInset = large ? 1.5 : 0.8;
     const eventPlotHeight = Math.max(1, plotHeight - eventTopInset - eventBottomInset);
@@ -368,6 +366,8 @@
       plotY + 1,
       Math.min(plotY + plotHeight - noteHeight - 1, eventY - visualGap - noteHeight)
     );
+    const noteHeightForLane = (lane) => large ? (lane === 0 ? 5 : 3.8) : 1.5;
+    const markerHeightForLane = (lane) => large ? (lane === 0 ? 5.4 : 4.8) : 1.8;
 
     context.fillStyle = "#050505";
     context.fillRect(0, 0, width, height);
@@ -468,7 +468,7 @@
       const end = Math.min(longNote.end.position, rangeEnd);
       const yStart = yForPosition(start);
       const yEnd = yForPosition(end);
-      const markerHeight = large ? 4.5 : 1.7;
+      const markerHeight = markerHeightForLane(longNote.lane);
       const startCenter = longNote.start.position >= rangeStart
         ? topForNote(yStart, markerHeight) + markerHeight / 2
         : yStart;
@@ -491,7 +491,7 @@
       }
       const geometry = laneGeometry[event.lane];
       const noteWidth = Math.max(2, geometry.width * (event.lane === 0 ? 0.92 : 0.8));
-      const noteHeight = large ? (event.lane === 0 ? 4.2 : 3.2) : 1.4;
+      const noteHeight = noteHeightForLane(event.lane);
       const y = yForPosition(event.position);
       context.fillStyle = getLanePalette(event.lane).noteFill;
       context.fillRect(
@@ -508,7 +508,7 @@
         }
         const geometry = laneGeometry[event.lane];
         const markerWidth = Math.max(2, geometry.width * (event.lane === 0 ? 0.94 : 0.82));
-        const markerHeight = large ? 4.5 : 1.7;
+        const markerHeight = markerHeightForLane(event.lane);
         const y = yForPosition(event.position);
         context.fillStyle = getLanePalette(event.lane).longMarker;
         context.fillRect(
@@ -522,15 +522,14 @@
     context.restore();
 
     if (hasBpmAnnotations) {
-      const annotations = collectVisibleBpmAnnotations(payload, rangeStart, rangeEnd);
       context.font = "700 10px system-ui, sans-serif";
       context.textAlign = "right";
       context.textBaseline = "middle";
-      for (const annotation of annotations) {
+      for (const annotation of bpmDisplay.annotations) {
         const exactY = yForPosition(annotation.position);
         const labelY = Math.max(plotY + 7, Math.min(plotY + plotHeight - 7, exactY));
-        context.strokeStyle = annotation.rangeStart ? "#75E387" : "#3DBB58";
-        context.lineWidth = annotation.rangeStart ? 1.4 : 1;
+        context.strokeStyle = "#3DBB58";
+        context.lineWidth = 1;
         context.beginPath();
         context.moveTo(plotX + bpmBandWidth - 7, exactY);
         context.lineTo(lanePlotX, exactY);
@@ -819,7 +818,9 @@
         rangePreviewLabel.textContent = `小節 ${viewRange.startMeasure}-${viewRange.endMeasure}`;
       }
       if (rangePreviewMeta) {
-        rangePreviewMeta.textContent = `block ${blockIndex + 1}/${ranges.length} · 7key SP`;
+        const bpmDisplay = collectBpmDisplayData(payload, viewRange.startPosition, viewRange.endPosition);
+        const bpmText = bpmDisplay.currentBpm === null ? "" : ` · BPM ${formatBpm(bpmDisplay.currentBpm)}`;
+        rangePreviewMeta.textContent = `block ${blockIndex + 1}/${ranges.length} · 7key SP${bpmText}`;
       }
       paintRowVersion(versionId, payload);
       positionRangePreview(target);
