@@ -341,8 +341,8 @@
     }
     const bpmDisplay = collectBpmDisplayData(payload, rangeStart, rangeEnd);
     const hasBpmAnnotations = large && bpmDisplay.annotations.length > 0;
-    const bpmBandWidth = hasBpmAnnotations ? 32 : 0;
-    const bpmBandGap = hasBpmAnnotations ? 4 : 0;
+    const bpmBandWidth = large ? 44 : 0;
+    const bpmBandGap = large ? 4 : 0;
     let measureBandWidth = 0;
     if (large) {
       const measureLabelCandidates = [
@@ -383,7 +383,7 @@
 
     context.fillStyle = "#050505";
     context.fillRect(0, 0, width, height);
-    if (hasBpmAnnotations) {
+    if (large) {
       context.fillStyle = "#08120B";
       context.fillRect(plotX, plotY, bpmBandWidth, plotHeight);
     }
@@ -550,6 +550,8 @@
         context.fillStyle = "#67DF7B";
         context.fillText(formatBpm(annotation.bpm), plotX + bpmBandWidth - 3, labelY);
       }
+    }
+    if (large) {
       context.strokeStyle = "#31523A";
       context.lineWidth = 1;
       context.strokeRect(plotX + 0.5, plotY + 0.5, Math.max(0, bpmBandWidth - 1), Math.max(0, plotHeight - 1));
