@@ -69,7 +69,7 @@ button.progress-thumbnail-block-navigator[data-preview-mode="fixed"]::after {
   padding: 10px;
   pointer-events: none;
   position: fixed;
-  width: min(300px, calc(100vw - 16px));
+  width: min(340px, calc(100vw - 16px));
   z-index: 1200;
 }
 
@@ -115,13 +115,16 @@ button.progress-thumbnail-block-navigator[data-preview-mode="fixed"]::after {
 .chart-miniview-range-header {
   align-items: baseline;
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   justify-content: space-between;
 }
 
 .chart-miniview-range-label {
   color: #F2F2F2;
+  flex: 0 0 auto;
   font-size: 0.9rem;
+  white-space: nowrap;
 }
 
 .chart-miniview-range-meta,
@@ -130,11 +133,17 @@ button.progress-thumbnail-block-navigator[data-preview-mode="fixed"]::after {
   font-size: 0.72rem;
 }
 
+.chart-miniview-range-meta {
+  margin-left: auto;
+  text-align: right;
+  white-space: nowrap;
+}
+
 .chart-miniview-range-canvas {
   background: #050505;
   display: block;
   height: min(56vh, 340px);
-  width: 278px;
+  width: 318px;
 }
 
 .chart-miniview-range-hint {

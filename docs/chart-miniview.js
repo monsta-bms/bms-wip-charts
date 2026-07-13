@@ -298,7 +298,8 @@
     }
     const annotations = [];
     for (const event of payload.bpmEvents) {
-      if (event.position > rangeStart + 1e-9 && event.position < rangeEnd - 1e-9) {
+      const isAtRangeStart = Math.abs(event.position - rangeStart) <= 1e-9;
+      if ((isAtRangeStart || event.position > rangeStart + 1e-9) && event.position < rangeEnd - 1e-9) {
         annotations.push({ position: event.position, bpm: event.bpm });
       }
     }
@@ -342,7 +343,18 @@
     const hasBpmAnnotations = large && bpmDisplay.annotations.length > 0;
     const bpmBandWidth = hasBpmAnnotations ? 32 : 0;
     const bpmBandGap = hasBpmAnnotations ? 4 : 0;
-    const measureBandWidth = large ? 36 : 0;
+    let measureBandWidth = 0;
+    if (large) {
+      const measureLabelCandidates = [
+        String(viewRange?.startMeasure ?? payload.startMeasure),
+        String(viewRange?.endMeasure ?? payload.endMeasure)
+      ];
+      context.save();
+      context.font = "700 12px system-ui, sans-serif";
+      const measuredMeasureLabelWidth = Math.max(...measureLabelCandidates.map((label) => context.measureText(label).width));
+      context.restore();
+      measureBandWidth = Math.max(36, Math.ceil(measuredMeasureLabelWidth + 14));
+    }
     const measureBandGap = large ? 4 : 0;
     const lanePlotX = plotX + bpmBandWidth + bpmBandGap;
     const lanePlotWidth = Math.max(1, plotWidth - bpmBandWidth - bpmBandGap - measureBandWidth - measureBandGap);
@@ -527,12 +539,13 @@
       context.textBaseline = "middle";
       for (const annotation of bpmDisplay.annotations) {
         const exactY = yForPosition(annotation.position);
-        const labelY = Math.max(plotY + 7, Math.min(plotY + plotHeight - 7, exactY));
+        const lineY = Math.max(plotY + 1, Math.min(plotY + plotHeight - 1, exactY));
+        const labelY = Math.max(plotY + 7, Math.min(plotY + plotHeight - 7, exactY - 3));
         context.strokeStyle = "#3DBB58";
         context.lineWidth = 1;
         context.beginPath();
-        context.moveTo(plotX + bpmBandWidth - 7, exactY);
-        context.lineTo(lanePlotX, exactY);
+        context.moveTo(plotX + bpmBandWidth - 7, lineY);
+        context.lineTo(lanePlotX, lineY);
         context.stroke();
         context.fillStyle = "#67DF7B";
         context.fillText(formatBpm(annotation.bpm), plotX + bpmBandWidth - 3, labelY);
