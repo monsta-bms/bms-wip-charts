@@ -23,6 +23,7 @@
   let rangePreviewPinned = false;
   let rangePreviewRequestId = 0;
   let positionedRangeTarget = null;
+  let formRangePlacementSide = "";
   const formMiniViewState = {
     payload: null,
     blocks: []
@@ -739,9 +740,63 @@
     const previewWidth = rangePreview.offsetWidth;
     const previewHeight = rangePreview.offsetHeight;
     const margin = 8;
-    const gap = 10;
+    const gap = target === formMiniViewNavigator ? 14 : 10;
     let left;
     let top;
+
+    rangePreview.style.removeProperty("--range-arrow-left");
+    rangePreview.style.removeProperty("--range-arrow-top");
+
+    if (target === formMiniViewNavigator) {
+      const ranges = getProgressBlockRanges(target);
+      const selectedIndex = Math.max(0, Math.min(ranges.length - 1, activeRangeIndex));
+      const blockCenterX = ranges.length > 0
+        ? rect.left + rect.width * (selectedIndex + 0.5) / ranges.length
+        : rect.left + rect.width / 2;
+      const anchorY = rect.top + rect.height / 2;
+
+      if (viewportWidth <= 700) {
+        left = blockCenterX - previewWidth / 2;
+        const below = rect.bottom + gap;
+        const placeBelow = below + previewHeight <= viewportHeight - margin;
+        top = placeBelow ? below : rect.top - previewHeight - gap;
+        rangePreview.dataset.placement = placeBelow ? "below" : "above";
+        left = Math.max(margin, Math.min(viewportWidth - previewWidth - margin, left));
+        const arrowLeft = Math.max(12, Math.min(previewWidth - 24, blockCenterX - left - 6));
+        rangePreview.style.setProperty("--range-arrow-left", `${arrowLeft}px`);
+      } else {
+        const fitsRight = blockCenterX + gap + previewWidth <= viewportWidth - margin;
+        const fitsLeft = blockCenterX - gap - previewWidth >= margin;
+        const blockRatio = ranges.length > 0 ? (selectedIndex + 0.5) / ranges.length : 0.5;
+        let side = formRangePlacementSide;
+        if (side === "right" && (!fitsRight || (blockRatio >= 0.62 && fitsLeft))) {
+          side = fitsLeft ? "left" : "";
+        } else if (side === "left" && (!fitsLeft || (blockRatio <= 0.38 && fitsRight))) {
+          side = fitsRight ? "right" : "";
+        }
+        if (!side) {
+          const preferredSide = blockRatio < 0.5 ? "right" : "left";
+          side = preferredSide === "right"
+            ? (fitsRight || !fitsLeft ? "right" : "left")
+            : (fitsLeft || !fitsRight ? "left" : "right");
+        }
+        formRangePlacementSide = side;
+        left = side === "right"
+          ? blockCenterX + gap
+          : blockCenterX - previewWidth - gap;
+        top = anchorY - previewHeight / 2;
+        rangePreview.dataset.placement = side;
+        left = Math.max(margin, Math.min(viewportWidth - previewWidth - margin, left));
+        top = Math.max(margin, Math.min(viewportHeight - previewHeight - margin, top));
+        const arrowTop = Math.max(12, Math.min(previewHeight - 24, anchorY - top - 6));
+        rangePreview.style.setProperty("--range-arrow-top", `${arrowTop}px`);
+      }
+
+      rangePreview.style.left = `${left}px`;
+      rangePreview.style.top = `${Math.max(margin, Math.min(viewportHeight - previewHeight - margin, top))}px`;
+      positionedRangeTarget = target;
+      return;
+    }
 
     if (viewportWidth <= 700) {
       left = Math.max(margin, Math.min(viewportWidth - previewWidth - margin, rect.left + rect.width / 2 - previewWidth / 2));
@@ -777,8 +832,11 @@
     }
     if (rangePreview) {
       rangePreview.hidden = true;
+      rangePreview.style.removeProperty("--range-arrow-left");
+      rangePreview.style.removeProperty("--range-arrow-top");
     }
     positionedRangeTarget = null;
+    formRangePlacementSide = "";
     activeRangeTarget = null;
     activeRangeIndex = -1;
     rangePreviewPinned = false;
@@ -824,8 +882,8 @@
       `進捗ブロック ${blockIndex + 1}/${ranges.length}、小節 ${block.startMeasure}-${block.endMeasure} の譜面範囲をプレビュー`
     );
     rangePreview.hidden = false;
-    if (targetChanged) {
-      positionRangePreview(target);
+    if (targetChanged || isFormPreview) {
+      positionRangePreview(target, isFormPreview);
     }
     if (unchanged) {
       return;
