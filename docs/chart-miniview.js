@@ -20,6 +20,7 @@
   let activeRangeIndex = -1;
   let rangePreviewPinned = false;
   let rangePreviewRequestId = 0;
+  let positionedRangeTarget = null;
 
   if (!listElement) {
     return;
@@ -346,8 +347,8 @@
     let measureBandWidth = 0;
     if (large) {
       const measureLabelCandidates = [
-        String(viewRange?.startMeasure ?? payload.startMeasure),
-        String(viewRange?.endMeasure ?? payload.endMeasure)
+        String(payload.startMeasure),
+        String(payload.endMeasure)
       ];
       context.save();
       context.font = "700 12px system-ui, sans-serif";
@@ -716,8 +717,11 @@
     };
   }
 
-  function positionRangePreview(target) {
+  function positionRangePreview(target, force = false) {
     if (!rangePreview || rangePreview.hidden || !target?.isConnected) {
+      return;
+    }
+    if (!force && positionedRangeTarget === target) {
       return;
     }
     const rect = target.getBoundingClientRect();
@@ -749,6 +753,7 @@
 
     rangePreview.style.left = `${Math.max(margin, Math.min(viewportWidth - previewWidth - margin, left))}px`;
     rangePreview.style.top = `${Math.max(margin, Math.min(viewportHeight - previewHeight - margin, top))}px`;
+    positionedRangeTarget = target;
   }
 
   function closeRangePreview(force = false) {
@@ -764,6 +769,7 @@
     if (rangePreview) {
       rangePreview.hidden = true;
     }
+    positionedRangeTarget = null;
     activeRangeTarget = null;
     activeRangeIndex = -1;
     rangePreviewPinned = false;
@@ -784,7 +790,8 @@
     if (!rangePreview || !rangePreviewCanvas) {
       return;
     }
-    const unchanged = activeRangeTarget === target && activeRangeIndex === blockIndex && !rangePreview.hidden;
+    const targetChanged = activeRangeTarget !== target || rangePreview.hidden;
+    const unchanged = !targetChanged && activeRangeIndex === blockIndex;
     activeRangeTarget?.removeAttribute("aria-describedby");
     if (activeRangeTarget && activeRangeTarget !== target) {
       delete activeRangeTarget.dataset.previewActive;
@@ -803,7 +810,9 @@
       `進捗ブロック ${blockIndex + 1}/${ranges.length}、小節 ${block.startMeasure}-${block.endMeasure} の譜面範囲をプレビュー`
     );
     rangePreview.hidden = false;
-    positionRangePreview(target);
+    if (targetChanged) {
+      positionRangePreview(target);
+    }
     if (unchanged) {
       return;
     }
@@ -838,7 +847,6 @@
         rangePreviewMeta.textContent = `block ${blockIndex + 1}/${ranges.length} · 7key SP${bpmText}`;
       }
       paintRowVersion(versionId, payload);
-      positionRangePreview(target);
     } catch (error) {
       if (requestId !== rangePreviewRequestId) {
         return;
@@ -1103,7 +1111,7 @@
   });
   window.addEventListener("scroll", () => {
     if (activeRangeTarget) {
-      positionRangePreview(activeRangeTarget);
+      positionRangePreview(activeRangeTarget, true);
     }
   }, true);
 
@@ -1119,7 +1127,7 @@
         }
       });
       if (activeRangeTarget) {
-        positionRangePreview(activeRangeTarget);
+        positionRangePreview(activeRangeTarget, true);
       }
     }, 120);
   });

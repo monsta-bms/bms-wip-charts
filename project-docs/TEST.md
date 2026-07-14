@@ -65,6 +65,10 @@
 - BPM変更なし→なし、なし→あり、あり→なし、あり→ありのblock移動で、鍵盤領域の左端・レーン幅・右側小節番号帯・吹き出し全体幅が変わらないこと。
 - BPM変更なしblockは左帯の背景と枠だけを表示し、緑文字やマーカーを表示しないこと。
 - BPM変更ありblockは固定された左帯へ従来の正確なY位置とclampで変更値を表示し、現在BPMは上部情報欄だけへ表示すること。
+- 同じ進捗サムネイル内のblock切替では`positionRangePreview()`を再実行せず、target変更、再表示、scroll、resize時だけ再配置すること。
+- BPM変更なし・ありを10回以上往復し、吹き出しとCanvasの`getBoundingClientRect()`、`lanePlotX/lanePlotWidth`がCSS pixel単位で完全一致すること。
+- headerが20px、hintが15pxの固定高となり、BPM値・block番号・小節番号の変化で吹き出し高さが変わらないこと。
+- 右側小節番号帯がversion全体の最大桁幅で固定され、2桁、3桁、4桁小節を切り替えても鍵盤領域と番号帯が動かないこと。
 - `_Untimecapsel_ReMeMBeR.bms`で初期150、小節12先頭202、小節48先頭101、小節54先頭202となり、小節49開始時の表示が101になること。
 - Worker typecheck、Pages JavaScript構文検査、Worker dry-run、`git diff --check`が成功すること。
 
