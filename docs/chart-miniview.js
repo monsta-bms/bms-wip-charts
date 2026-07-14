@@ -1,5 +1,7 @@
 (() => {
   const listElement = document.querySelector("#chartList");
+  const formMiniViewNavigator = document.querySelector("#formMiniViewNavigator");
+  const formMiniViewStatus = document.querySelector("#formMiniViewStatus");
   const dialog = document.querySelector("#chartMiniViewDialog");
   const dialogCanvas = document.querySelector("#chartMiniViewDialogCanvas");
   const dialogTitle = document.querySelector("#chartMiniViewDialogTitle");
@@ -21,6 +23,10 @@
   let rangePreviewPinned = false;
   let rangePreviewRequestId = 0;
   let positionedRangeTarget = null;
+  const formMiniViewState = {
+    payload: null,
+    blocks: []
+  };
 
   if (!listElement) {
     return;
@@ -674,6 +680,9 @@
   }
 
   function getProgressBlockRanges(target) {
+    if (target === formMiniViewNavigator) {
+      return formMiniViewState.blocks;
+    }
     const versionId = target?.dataset?.versionId || "";
     const ranges = window.getProgressThumbnailBlockRanges?.(versionId);
     return Array.isArray(ranges) ? ranges : [];
@@ -778,10 +787,11 @@
   async function showRangePreview(target, blockIndex) {
     const ranges = getProgressBlockRanges(target);
     const block = ranges[blockIndex];
-    const row = target.closest(".version-row");
-    const versionId = target.dataset.versionId || "";
-    const url = row?.dataset.miniviewUrl || "";
-    if (!block || !row || row.hidden || !versionId || !url) {
+    const isFormPreview = target === formMiniViewNavigator;
+    const row = isFormPreview ? null : target.closest(".version-row");
+    const versionId = isFormPreview ? "" : target.dataset.versionId || "";
+    const url = isFormPreview ? "" : row?.dataset.miniviewUrl || "";
+    if (!block || (isFormPreview ? !formMiniViewState.payload : (!row || row.hidden || !versionId || !url))) {
       closeRangePreview(true);
       return;
     }
@@ -804,6 +814,10 @@
     target.dataset.previewMode = rangePreviewPinned ? "fixed" : "hover";
     target.style.setProperty("--selected-block-index", String(blockIndex));
     target.style.setProperty("--progress-block-count", String(ranges.length));
+    if (isFormPreview) {
+      target.style.setProperty("--form-preview-block-left", `${blockIndex / ranges.length * 100}%`);
+      target.style.setProperty("--form-preview-block-width", `${100 / ranges.length}%`);
+    }
     target.setAttribute("aria-describedby", rangePreview.id);
     target.setAttribute(
       "aria-label",
@@ -828,7 +842,9 @@
     const requestId = ++rangePreviewRequestId;
 
     try {
-      const payload = await requestPayload(versionId, url, target, true);
+      const payload = isFormPreview
+        ? formMiniViewState.payload
+        : await requestPayload(versionId, url, target, true);
       if (requestId !== rangePreviewRequestId || activeRangeTarget !== target || activeRangeIndex !== blockIndex) {
         return;
       }
@@ -846,7 +862,9 @@
         const bpmText = bpmDisplay.currentBpm === null ? "" : ` · BPM ${formatBpm(bpmDisplay.currentBpm)}`;
         rangePreviewMeta.textContent = `block ${blockIndex + 1}/${ranges.length} · 7key SP${bpmText}`;
       }
-      paintRowVersion(versionId, payload);
+      if (!isFormPreview) {
+        paintRowVersion(versionId, payload);
+      }
     } catch (error) {
       if (requestId !== rangePreviewRequestId) {
         return;
@@ -857,6 +875,83 @@
       rangePreview.dataset.state = "error";
     }
   }
+
+  function setFormMiniViewStatus(message = "") {
+    if (!formMiniViewStatus) {
+      return;
+    }
+    formMiniViewStatus.textContent = message;
+    formMiniViewStatus.hidden = !message;
+  }
+
+  function clearFormMiniView(message = "") {
+    if (activeRangeTarget === formMiniViewNavigator) {
+      closeRangePreview(true);
+    }
+    formMiniViewState.payload = null;
+    formMiniViewState.blocks = [];
+    if (formMiniViewNavigator) {
+      formMiniViewNavigator.hidden = true;
+      formMiniViewNavigator.dataset.selectedBlock = "0";
+      delete formMiniViewNavigator.dataset.previewActive;
+      delete formMiniViewNavigator.dataset.previewMode;
+      formMiniViewNavigator.style.removeProperty("--form-preview-block-left");
+      formMiniViewNavigator.style.removeProperty("--form-preview-block-width");
+    }
+    setFormMiniViewStatus(message);
+  }
+
+  function setFormMiniViewLoading() {
+    clearFormMiniView("ミニビュー解析中");
+  }
+
+  function setFormMiniViewUnavailable(message = "ミニビュー非対応") {
+    clearFormMiniView(message);
+  }
+
+  function setFormMiniViewAnalysis(miniView, blocks) {
+    if (miniView?.status !== "ready" || !miniView.payload || !Array.isArray(blocks) || blocks.length === 0) {
+      setFormMiniViewUnavailable();
+      return false;
+    }
+    try {
+      const payload = normalizePayload(miniView.payload);
+      const normalizedBlocks = blocks.map((block, index) => ({
+        ...block,
+        index,
+        startPosition: Number(block?.startPosition),
+        endPosition: Number(block?.endPosition)
+      }));
+      if (normalizedBlocks.some((block) => !Number.isFinite(block.startPosition) || !Number.isFinite(block.endPosition) || block.endPosition <= block.startPosition)) {
+        throw new Error("Form miniview block range is invalid.");
+      }
+      if (activeRangeTarget === formMiniViewNavigator) {
+        closeRangePreview(true);
+      }
+      formMiniViewState.payload = payload;
+      formMiniViewState.blocks = normalizedBlocks;
+      if (formMiniViewNavigator) {
+        formMiniViewNavigator.hidden = false;
+        formMiniViewNavigator.dataset.selectedBlock = "0";
+      }
+      setFormMiniViewStatus("");
+      return true;
+    } catch (error) {
+      console.warn("[form-miniview] local payload is unavailable", {
+        code: "FORM_MINIVIEW_PAYLOAD_INVALID",
+        message: error instanceof Error ? error.message : String(error)
+      });
+      setFormMiniViewUnavailable();
+      return false;
+    }
+  }
+
+  window.BmsFormMiniView = Object.freeze({
+    clear: () => clearFormMiniView(),
+    setLoading: setFormMiniViewLoading,
+    setUnavailable: setFormMiniViewUnavailable,
+    setAnalysis: setFormMiniViewAnalysis
+  });
 
   function queueLoad(button) {
     const versionId = button.dataset.versionId || "";
@@ -971,10 +1066,10 @@
   }
 
   function getBlockNavigator(event) {
-    return event.target?.closest?.("[data-progress-block-navigator]") || null;
+    return event.target?.closest?.("[data-progress-block-navigator], [data-form-miniview-navigator]") || null;
   }
 
-  listElement.addEventListener("pointerover", (event) => {
+  document.addEventListener("pointerover", (event) => {
     const target = getBlockNavigator(event);
     if (!target) {
       return;
@@ -989,7 +1084,7 @@
     }
   });
 
-  listElement.addEventListener("pointermove", (event) => {
+  document.addEventListener("pointermove", (event) => {
     const target = getBlockNavigator(event);
     if (!target) {
       return;
@@ -1004,7 +1099,7 @@
     }
   });
 
-  listElement.addEventListener("pointerout", (event) => {
+  document.addEventListener("pointerout", (event) => {
     const target = getBlockNavigator(event);
     if (!target || target.contains(event.relatedTarget)) {
       return;
@@ -1014,7 +1109,7 @@
     }
   });
 
-  listElement.addEventListener("focusin", (event) => {
+  document.addEventListener("focusin", (event) => {
     const target = getBlockNavigator(event);
     if (!target) {
       return;
@@ -1026,7 +1121,7 @@
     }
   });
 
-  listElement.addEventListener("focusout", (event) => {
+  document.addEventListener("focusout", (event) => {
     const target = getBlockNavigator(event);
     if (!target) {
       return;
@@ -1038,7 +1133,7 @@
     }, 0);
   });
 
-  listElement.addEventListener("keydown", (event) => {
+  document.addEventListener("keydown", (event) => {
     const target = getBlockNavigator(event);
     if (!target) {
       return;
@@ -1062,7 +1157,7 @@
     showRangePreview(target, next);
   });
 
-  listElement.addEventListener("click", (event) => {
+  document.addEventListener("click", (event) => {
     const rangeTarget = getBlockNavigator(event);
     if (rangeTarget) {
       event.preventDefault();

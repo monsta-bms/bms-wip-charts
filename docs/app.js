@@ -46,6 +46,7 @@ const loadMoreChartsButton = document.querySelector("#loadMoreChartsButton");
 
 let isSubmitting = false;
 let lastValidManualDifficulty = "";
+let initialFileAnalysisRevision = 0;
 
 const chartPageSize = 20;
 const maxChartSearchLength = 100;
@@ -1024,6 +1025,7 @@ function setProgressMapMessage(message, state = "empty") {
 }
 
 function resetProgressMap(message = "譜面ファイル選択後に進捗マップを表示します") {
+  window.BmsFormMiniView?.clear();
   setProgressMapMessage(message, "empty");
 }
 
@@ -1365,7 +1367,7 @@ function applyRejectedProgressMapState() {
   updateProgressFromMap();
 }
 
-async function fillMetaFromFile(file) {
+async function fillMetaFromFile(file, analysisRevision) {
   const extension = getExtension(file.name);
   resetProgressMap();
 
@@ -1380,12 +1382,18 @@ async function fillMetaFromFile(file) {
 
   try {
     setProgressMapMessage(extension === ".zip" ? "ZIP内の譜面を解析しています" : "譜面を解析しています", "loading");
-    const buffer = extension === ".zip"
-      ? (await window.BmsZipReader.extractSingleBms(file)).buffer
-      : await file.arrayBuffer();
-    const text = decodeBmsText(buffer);
+    window.BmsFormMiniView?.setLoading();
+    const localAnalysis = await window.BmsLocalChartAnalysis.analyze(file, analyzeBmsProgressText);
+    if (
+      analysisRevision !== initialFileAnalysisRevision
+      || fileInput.files?.[0] !== file
+      || document.querySelector(".submit-panel")?.classList.contains("is-append-mode")
+    ) {
+      return;
+    }
+    const text = localAnalysis.text;
     const meta = parseBmsMeta(text);
-    const analysis = analyzeBmsProgressText(text);
+    const analysis = localAnalysis.progressAnalysis;
 
     if (meta.title) {
       titleInput.value = meta.title;
@@ -1407,12 +1415,22 @@ async function fillMetaFromFile(file) {
 
     if (analysis.standardBlocks.length > 0) {
       initializeProgressMap(analysis);
+      if (localAnalysis.miniView?.status === "ready") {
+        window.BmsFormMiniView?.setAnalysis(localAnalysis.miniView, analysis.standardBlocks);
+      } else {
+        window.BmsFormMiniView?.setUnavailable("ミニビュー非対応");
+      }
     } else {
+      window.BmsFormMiniView?.setUnavailable("ミニビュー非対応");
       setProgressMapMessage("プレイノートを検出できませんでした", "unavailable");
     }
 
     clearError();
   } catch (error) {
+    if (analysisRevision !== initialFileAnalysisRevision || fileInput.files?.[0] !== file) {
+      return;
+    }
+    window.BmsFormMiniView?.clear();
     console.error("[file-meta-read] failed to read chart metadata", {
       code: "TITLE_ARTIST_PARSE_FAILED",
       message: error instanceof Error ? error.message : String(error)
@@ -1912,6 +1930,12 @@ async function submitChart() {
 
 fileInput.addEventListener("change", () => {
   const file = fileInput.files?.[0];
+  const revision = ++initialFileAnalysisRevision;
+  window.BmsFormMiniView?.clear();
+
+  if (document.querySelector(".submit-panel")?.classList.contains("is-append-mode")) {
+    return;
+  }
 
   if (!file) {
     setFieldInvalid(fileInput, false);
@@ -1920,7 +1944,7 @@ fileInput.addEventListener("change", () => {
     return;
   }
 
-  fillMetaFromFile(file);
+  fillMetaFromFile(file, revision);
 });
 
 for (const field of requiredFieldChecks) {

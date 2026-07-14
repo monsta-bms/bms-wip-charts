@@ -60,6 +60,7 @@
     currentPainted: new Set(),
     layerKind: "followup",
     fileGridMismatch: false,
+    fileAnalysisRevision: 0,
     isSubmitting: false,
     isDragging: false,
     dragAnchorIndex: null,
@@ -757,6 +758,8 @@
     appendState.parentVersion = parentVersion;
     appendState.chartId = chartId;
     appendState.parentVersionId = parentVersionId;
+    appendState.fileAnalysisRevision += 1;
+    window.BmsFormMiniView?.clear();
 
     submitPanel?.classList.add("is-append-mode");
     if (submitTitle) {
@@ -823,6 +826,8 @@
     appendState.currentPainted = new Set();
     appendState.layerKind = "followup";
     appendState.fileGridMismatch = false;
+    appendState.fileAnalysisRevision += 1;
+    window.BmsFormMiniView?.clear();
     appendState.isDragging = false;
     appendState.originalCurrentPainted = null;
 
@@ -876,6 +881,8 @@
   }
 
   async function handleAppendFileChange(file) {
+    const analysisRevision = ++appendState.fileAnalysisRevision;
+    window.BmsFormMiniView?.clear();
     if (!file) {
       setInvalid(fileInput, false);
       clearMessage();
@@ -893,25 +900,35 @@
     setInvalid(fileInput, false);
 
     try {
-      const buffer = extension === ".zip"
-        ? (await window.BmsZipReader.extractSingleBms(file)).buffer
-        : await file.arrayBuffer();
-      const text = typeof decodeBmsText === "function"
-        ? decodeBmsText(buffer)
-        : new TextDecoder("utf-8", { fatal: false }).decode(buffer);
+      window.BmsFormMiniView?.setLoading();
+      const localAnalysis = await window.BmsLocalChartAnalysis.analyze(file, analyzeBmsProgressText);
+      if (
+        analysisRevision !== appendState.fileAnalysisRevision
+        || !appendState.active
+        || fileInput.files?.[0] !== file
+      ) {
+        return;
+      }
+      const text = localAnalysis.text;
       const meta = typeof parseBmsMeta === "function" ? parseBmsMeta(text) : { title: "", artist: "" };
-      const analysis = typeof analyzeBmsProgressText === "function" ? analyzeBmsProgressText(text) : null;
+      const analysis = localAnalysis.progressAnalysis;
       const analyzedBlocks = Array.isArray(analysis?.standardBlocks)
         ? analysis.standardBlocks.map(normalizeBlock)
         : [];
       appendState.fileGridMismatch = !blocksShareGrid(appendState.parentMap?.blocks || [], analyzedBlocks);
       if (appendState.fileGridMismatch) {
+        window.BmsFormMiniView?.setUnavailable("block格子不一致のためミニビュー非表示");
         showText("選択した譜面の進捗ブロック格子が追記元と一致しません。");
         return;
       }
 
       appendState.blocks = analyzedBlocks;
       renderAppendProgressMap();
+      if (localAnalysis.miniView?.status === "ready") {
+        window.BmsFormMiniView?.setAnalysis(localAnalysis.miniView, analyzedBlocks);
+      } else {
+        window.BmsFormMiniView?.setUnavailable("ミニビュー非対応");
+      }
       const titleMatches = isCloseMetaMatch(meta.title, appendState.song?.title);
       const artistMatches = isCloseMetaMatch(meta.artist, appendState.song?.artist);
 
@@ -922,7 +939,15 @@
 
       clearMessage();
     } catch (error) {
+      if (
+        analysisRevision !== appendState.fileAnalysisRevision
+        || !appendState.active
+        || fileInput.files?.[0] !== file
+      ) {
+        return;
+      }
       appendState.fileGridMismatch = true;
+      window.BmsFormMiniView?.clear();
       console.error("[append-file-meta-check] failed to read BMS metadata", {
         code: "APPEND_FILE_META_CHECK_FAILED",
         message: error instanceof Error ? error.message : String(error)

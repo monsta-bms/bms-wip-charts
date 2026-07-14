@@ -1,5 +1,22 @@
 # テスト手順
 
+## POST-FORM-MINIVIEW-01
+
+- 初回投稿フォームで単体BMS/BME/BMLを選択すると、進捗解析と同じファイル内容からローカルminiViewが1回だけ生成されること。
+- Store/Deflate ZIPでは内部の唯一のBMS/BME/BMLを1回だけ展開し、進捗解析とminiView解析が同じbuffer・内部ファイル名を使うこと。
+- 7key SPの白鍵、青鍵、赤皿、LNOBJ、LNTYPE 1、変拍子、小節線、拍線、細分線、小節番号、初期BPM、block開始時BPM、block内BPM変更が一覧の吹き出しと同じルールで表示されること。
+- 密度グラフ側のhover/focus/tapで対応blockの吹き出しが表示され、クリック固定、別blockへの直接切替、左右キー、Home、End、Escが動作すること。
+- 進捗編集blockのclick・drag塗りが従来どおり動作し、ミニビュー固定操作が発生しないこと。
+- BPM変更の有無、2桁・3桁・4桁小節のblock切替で、吹き出し外枠、Canvas、鍵盤領域、BPM帯44px、小節番号帯のCSS pixel位置が変わらないこと。
+- 追記フォームでは親versionではなく今回選択した新ファイルのminiViewを表示し、親progress layerは従来どおり維持されること。
+- 追記元と新ファイルのblock格子が一致する場合だけpreviewが有効になり、不一致時はpreviewが無効かつ既存の投稿拒否表示が維持されること。
+- ファイル変更・解除、初回/追記切替、追記キャンセル、投稿成功後reset、フォームを閉じた場合にpayload、hover、固定状態、吹き出しが破棄されること。
+- 解析中に別ファイルへ変更した場合やZIP解析中にモードを切り替えた場合、古いrevisionの解析結果が後から表示されないこと。
+- RANDOM系、LNTYPE 2、7key判定不能、2P、地雷・特殊レーン、不正LN、重複レーン行、イベント数・payload上限超過は空Canvasではなく「ミニビュー非対応」となり、投稿自体は妨げないこと。
+- Pages生成payloadとWorker生成payloadで、status、mode、表示小節、音楽位置、tap/LN件数、eventData、measureLengths、BPM情報が同じfixtureに対して一致すること。
+- ローカルminiView payloadがFormDataへ追加されず、Worker API、D1、R2、Secret、Turnstile、投稿レート制限の仕様が変わらないこと。
+- 一覧ミニビュー、初回投稿、追記投稿、検索、ページング、お気に入りの回帰がないこと。
+
 ## CHART-MINIVIEW-01
 
 - 新規7key SPの初回投稿と追記投稿で`measureNotes.schemaVersion=3`とreadyなminiViewが保存されること。

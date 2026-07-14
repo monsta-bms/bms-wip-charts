@@ -1,5 +1,15 @@
 # BMS WIP Charts 仕様書
 
+## POST-FORM-MINIVIEW-01 投稿フォームのローカル譜面ミニビュー
+
+初回投稿と追記投稿では、選択中の単体BMS/BME/BMLまたはZIP内の唯一のBMS/BME/BMLをブラウザ内で1回だけ読み込み、既存の進捗解析とローカルminiView生成で同じdecoded textを共有する。ZIPは既存の安全なブラウザ抽出処理が返したbufferと内部ファイル名を再利用し、hoverごとの再読込・再展開・Workerへの事前送信は行わない。
+
+ローカルminiViewはWorkerのschemaVersion 3と同じ7key SP判定、正確な分数イベント、変拍子、LNOBJ/LNTYPE 1、BPM、50,000イベント、32KiB payload上限を使用する。クライアント生成payloadは表示専用のメモリデータであり、FormData、D1、R2へ保存しない。投稿時の正データと検証結果は従来どおりWorkerがアップロードファイルを再解析した結果とする。miniView未対応や生成失敗だけを理由に投稿を拒否しない。
+
+フォームの密度Canvasには読み取り専用navigatorを重ね、hover/focus/tap、クリック固定・直接切替、左右キー、Home、End、Escを一覧と同じ吹き出しCanvasへ接続する。進捗を塗る編集blockは別領域のまま維持し、ミニビュー固定操作を割り当てない。追記時は今回選択した新ファイルを表示し、親progressMapとのblock格子が一致する場合だけpreviewを有効化する。
+
+ファイル変更、選択解除、初回・追記モード切替、ZIP解析失敗、未対応譜面、追記キャンセル、投稿成功後のresetではローカルpayloadと吹き出し状態を破棄する。非同期解析はフォームごとの単調増加revisionで世代管理し、古いファイルの完了結果を現在のフォームへ反映しない。
+
 ## CHART-MINIVIEW-01 譜面ミニビュー
 
 新規の初回投稿・追記投稿について、WorkerがBMS本体を解析して7key SP譜面のコンパクトなミニビューを生成する。単体BMSはアップロードされた本体、ZIPは安全検査で展開済みの唯一のBMS/BME/BMLバイト列を利用する。ブラウザ生成値は保存せず、Worker生成結果を正データとする。R2へ派生画像・JSONは保存しない。

@@ -1,3 +1,48 @@
+.density-chart-wrap {
+  position: relative;
+}
+
+.form-miniview-navigator {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  cursor: crosshair;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  position: absolute;
+  width: 100%;
+}
+
+.form-miniview-navigator:focus-visible {
+  box-shadow: inset 0 0 0 2px #176f61;
+  outline: none;
+}
+
+.form-miniview-navigator[data-preview-active="true"]::after {
+  background: rgba(17, 111, 97, 0.08);
+  border: 1px solid #176f61;
+  bottom: 0;
+  content: "";
+  left: var(--form-preview-block-left, 0%);
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  width: var(--form-preview-block-width, 0%);
+}
+
+.form-miniview-navigator[data-preview-mode="fixed"]::after {
+  background: rgba(17, 111, 97, 0.16);
+  border-width: 2px;
+}
+
+.form-miniview-status {
+  color: #61706c;
+  font-size: 0.78rem;
+  margin: 0;
+}
+
 .thumbnail-cell.has-chart-miniview,
 .progress-thumbnail-block.has-chart-miniview {
   align-items: stretch;

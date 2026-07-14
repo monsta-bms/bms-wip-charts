@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="./branch-tree-list.css?v=ui-tree-overlay-01">
     <link rel="stylesheet" href="./list-ui-refresh.css?v=ui-tree-overlay-01">
     <link rel="stylesheet" href="./progress-image-preview.css?v=ui-tree-overlay-01">
-    <link rel="stylesheet" href="./chart-miniview.css?v=chart-miniview-ux-07">
+    <link rel="stylesheet" href="./chart-miniview.css?v=post-form-miniview-01">
     <link rel="stylesheet" href="./tree-progress-polish.css?v=tree-shape-fix-01">
     <link rel="stylesheet" href="./version-management-ui.css?v=version-lifecycle-24h-01">
   </head>
@@ -150,10 +150,19 @@
                     <div class="progress-map-visual" id="progressMapGraphWrap" hidden>
                       <div class="density-chart-wrap" aria-label="標準化ブロックごとのプレイノート密度">
                         <canvas class="progress-map-canvas" id="progressMapCanvas" width="720" height="120"></canvas>
+                        <button
+                          class="form-miniview-navigator"
+                          id="formMiniViewNavigator"
+                          type="button"
+                          data-form-miniview-navigator
+                          aria-label="進捗ブロックに対応する譜面ミニビュー"
+                          hidden
+                        ></button>
                       </div>
                       <div class="progress-block-layer" id="progressMapBlocks" role="group" aria-label="作成済みにする標準化ブロック"></div>
                       <div class="progress-block-label-layer" id="progressMapLabels" aria-hidden="true" hidden></div>
                     </div>
+                    <p class="form-miniview-status" id="formMiniViewStatus" role="status" aria-live="polite" hidden></p>
                     <div class="progress-map-summary" id="progressMapSummary" aria-live="polite" hidden></div>
                     <div class="progress-map-tooltip" id="progressMapTooltip" role="tooltip" hidden></div>
                     <div class="progress-map-popover" id="progressMapPopover" role="dialog" aria-live="polite" hidden></div>
@@ -334,12 +343,13 @@
 
     <script src="./progress-layer-colors.js?v=ui-tree-overlay-01"></script>
     <script src="./zip-bms-reader.js?v=zip-bms-analysis-01"></script>
+    <script src="./local-bms-analysis.js?v=post-form-miniview-01"></script>
     <script src="./turnstile-controller.js?v=turnstile-01"></script>
-    <script src="./app.js?v=chart-miniview-position-01"></script>
+    <script src="./app.js?v=post-form-miniview-01"></script>
     <script src="./progress-song-end-analysis.js?v=chart-miniview-position-01"></script>
     <script src="./progress-thumbnail-list.js?v=chart-miniview-position-01"></script>
-    <script src="./chart-miniview.js?v=chart-miniview-ux-07"></script>
-    <script src="./branch-append-ui.js?v=chart-miniview-position-01"></script>
+    <script src="./chart-miniview.js?v=post-form-miniview-01"></script>
+    <script src="./branch-append-ui.js?v=post-form-miniview-01"></script>
     <script src="./progress-image-preview.js?v=chart-miniview-position-01"></script>
     <script src="./progress-image-formdata.js?v=ui-tree-overlay-01"></script>
     <script src="./branch-tree-list.js?v=search-pagination-01"></script>
