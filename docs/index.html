@@ -4,34 +4,47 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="turnstile-sitekey" content="0x4AAAAAAD0OJhR8c4dKkDrk">
-    <title>BMS差分共有</title>
-    <link rel="stylesheet" href="./style.css?v=origin-url-01">
+    <title>リサイクルセンター</title>
+    <link rel="stylesheet" href="./style.css?v=ui-refresh-01-phase1">
+    <link rel="stylesheet" href="./site-header.css?v=ui-refresh-01-phase1">
     <link rel="stylesheet" href="./branch-tree-list.css?v=ui-tree-overlay-01">
     <link rel="stylesheet" href="./list-ui-refresh.css?v=ui-tree-overlay-01">
     <link rel="stylesheet" href="./progress-image-preview.css?v=ui-tree-overlay-01">
     <link rel="stylesheet" href="./chart-miniview.css?v=post-form-miniview-01">
     <link rel="stylesheet" href="./tree-progress-polish.css?v=tree-shape-fix-01">
     <link rel="stylesheet" href="./version-management-ui.css?v=version-lifecycle-24h-01">
+    <link rel="stylesheet" href="./post-form-ui.css?v=ui-refresh-01-phase1">
   </head>
-  <body>
+  <body id="top">
     <div class="page-shell">
-      <header class="site-header">
-        <div>
-          <p class="site-label">BMS WIP Charts</p>
-          <h1>BMS差分共有</h1>
-        </div>
+      <header class="site-header" data-site-header data-current-page="home">
+        <a class="site-brand-fallback" href="./index.html#top">リサイクルセンター</a>
       </header>
 
       <main>
+        <h1 class="visually-hidden">リサイクルセンター</h1>
         <section class="notice" id="errorBox" role="alert" aria-live="polite" hidden></section>
 
-        <section class="panel submit-panel" aria-labelledby="submitTitle">
-          <div class="section-heading">
-            <h2 id="submitTitle">投稿フォーム</h2>
-            <span class="version-badge" id="formModeBadge">初回投稿 ver1.0</span>
+        <section class="panel submit-panel" id="post" aria-labelledby="submitTitle">
+          <div class="section-heading post-form-launcher">
+            <div class="post-form-heading">
+              <h2 id="submitTitle">投稿フォーム</h2>
+              <p class="post-form-draft-summary" id="postFormDraftSummary" aria-live="polite" hidden></p>
+            </div>
+            <div class="post-form-launcher-actions">
+              <span class="version-badge" id="formModeBadge">初回投稿 ver1.0</span>
+              <button
+                class="post-form-toggle"
+                id="postFormToggle"
+                type="button"
+                aria-expanded="false"
+                aria-controls="postFormBody"
+              >＋ 差分を投稿する</button>
+            </div>
           </div>
 
-          <form id="chartForm" novalidate>
+          <div class="post-form-body" id="postFormBody" hidden>
+            <form id="chartForm" novalidate>
             <p class="required-note"><span class="required-mark">*</span>項目は入力必須。</p>
 
             <div class="append-context" id="appendContext" hidden>
@@ -204,6 +217,9 @@
                 </div>
               </fieldset>
 
+            </div>
+
+            <div class="post-form-footer">
               <fieldset class="form-section comment-section">
                 <legend class="form-section-title">コメント</legend>
                 <label class="field">
@@ -212,22 +228,25 @@
                   <span class="field-help">音源ファイルはアップロードせず、音源URLはコメント欄に記入してください。</span>
                 </label>
               </fieldset>
-            </div>
 
-            <div class="turnstile-control" aria-label="投稿認証">
-              <div class="turnstile-widget" id="turnstileWidget"></div>
-              <p class="turnstile-status" id="turnstileStatus" role="status" aria-live="polite" hidden></p>
-              <button class="secondary turnstile-retry" id="turnstileRetryButton" type="button" hidden>認証を再読み込み</button>
-            </div>
+              <div class="post-submit-rail">
+                <div class="turnstile-control" aria-label="投稿認証">
+                  <div class="turnstile-widget" id="turnstileWidget"></div>
+                  <p class="turnstile-status" id="turnstileStatus" role="status" aria-live="polite" hidden></p>
+                  <button class="secondary turnstile-retry" id="turnstileRetryButton" type="button" hidden>認証を再読み込み</button>
+                </div>
 
-            <div class="form-actions">
-              <button class="secondary" id="cancelAppendButton" type="button" hidden>追記をやめる</button>
-              <button id="submitButton" type="submit">投稿する</button>
+                <div class="form-actions">
+                  <button class="secondary" id="cancelAppendButton" type="button" hidden>追記をやめる</button>
+                  <button id="submitButton" type="submit">投稿する</button>
+                </div>
+              </div>
             </div>
-          </form>
+            </form>
+          </div>
         </section>
 
-        <section class="list-section" aria-labelledby="listTitle">
+        <section class="list-section" id="list" aria-labelledby="listTitle">
           <div class="section-heading">
             <h2 id="listTitle">投稿一覧</h2>
             <div class="list-toolbar" aria-label="投稿一覧フィルタ">
@@ -341,6 +360,7 @@
       </div>
     </dialog>
 
+    <script src="./site-header.js?v=ui-refresh-01-phase1"></script>
     <script src="./progress-layer-colors.js?v=ui-tree-overlay-01"></script>
     <script src="./zip-bms-reader.js?v=zip-bms-analysis-01"></script>
     <script src="./local-bms-analysis.js?v=post-form-miniview-01"></script>
@@ -356,5 +376,6 @@
     <script src="./tree-progress-polish.js?v=tree-shape-fix-01"></script>
     <script src="./favorites-list.js?v=search-pagination-01"></script>
     <script src="./version-management-ui.js?v=version-lifecycle-24h-01"></script>
+    <script src="./post-form-ui.js?v=ui-refresh-01-phase1"></script>
   </body>
 </html>
