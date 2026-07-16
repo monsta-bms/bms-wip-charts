@@ -534,7 +534,7 @@
     const badges = [];
 
     if (isWithdrawn(version)) {
-      badges.push(`<span class="withdrawn-badge">取り消し済み</span>`);
+      badges.push(`<span class="withdrawn-badge">取り下げ済み</span>`);
     } else {
       if (isRejected(version)) {
         badges.push(`<span class="rejected-badge compact">没譜面</span>`);

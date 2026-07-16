@@ -6,7 +6,7 @@
     <meta name="turnstile-sitekey" content="0x4AAAAAAD0OJhR8c4dKkDrk">
     <title>リサイクルセンター</title>
     <link rel="stylesheet" href="./style.css?v=ui-refresh-01-phase1">
-    <link rel="stylesheet" href="./site-header.css?v=ui-refresh-01-phase1">
+    <link rel="stylesheet" href="./site-header.css?v=recycle-ux-02a">
     <link rel="stylesheet" href="./branch-tree-list.css?v=ui-tree-overlay-01">
     <link rel="stylesheet" href="./list-ui-refresh.css?v=ui-tree-overlay-01">
     <link rel="stylesheet" href="./progress-image-preview.css?v=ui-tree-overlay-01">
@@ -22,7 +22,28 @@
       </header>
 
       <main>
-        <h1 class="visually-hidden">リサイクルセンター</h1>
+        <section class="recycle-overview" aria-labelledby="recycleOverviewTitle">
+          <div class="recycle-overview-copy">
+            <p class="work-ticket-label">持ち込み案内</p>
+            <h1 id="recycleOverviewTitle">
+              作りかけ、続き募集中、なんか没。
+              <span>そんなBMS差分を持ち込む場所です。</span>
+            </h1>
+            <p class="recycle-overview-description">
+              未完成の譜面は、ほかの人が続きを作ったり、分岐させたり、なんかいじったりできます。
+            </p>
+            <p class="recycle-overview-note">
+              <strong>アカウント登録は不要です。</strong>
+              <span>音源ファイルはアップロードできません。</span>
+            </p>
+          </div>
+          <nav class="recycle-overview-actions" aria-label="主要な操作">
+            <a class="recycle-cta recycle-cta-primary" href="./index.html#post">差分を投稿する</a>
+            <a class="recycle-cta" href="./index.html#list">投稿一覧を見る</a>
+            <a class="recycle-cta" href="./guide.html">概要＆使い方</a>
+          </nav>
+        </section>
+
         <section class="notice" id="errorBox" role="alert" aria-live="polite" hidden></section>
 
         <section class="panel submit-panel" id="post" aria-labelledby="submitTitle">
@@ -203,7 +224,7 @@
                     <label class="field">
                       <span class="field-label">管理パスワード <span class="required-mark">*</span></span>
                       <input id="password" name="password" type="password" autocomplete="current-password" required>
-                      <span class="field-help">取り消し・削除申請に使います。公開されません。忘れると投稿者側で操作できません。</span>
+                      <span class="field-help">取り下げ・削除申請に使います。公開されず、再発行できません。なくさないように保管してください。</span>
                     </label>
 
                     <label class="field checkbox-field save-password-field">
@@ -312,23 +333,23 @@
         <label class="field">
           <span class="field-label">管理パスワード <span class="required-mark">*</span></span>
           <input id="versionManagementPassword" type="password" autocomplete="current-password" required>
-          <span class="field-help">投稿時の管理パスワードを入力してください。公開・ログ保存はされません。</span>
+          <span class="field-help">投稿時の管理パスワードを入力してください。公開されず、再発行できません。</span>
         </label>
 
         <section class="version-management-action" aria-labelledby="withdrawActionTitle">
-          <h3 id="withdrawActionTitle">取り消し</h3>
+          <h3 id="withdrawActionTitle">取り下げ</h3>
           <p id="versionWithdrawDescription">対象の状態を確認しています。</p>
           <label class="version-management-confirm">
             <input id="versionWithdrawConfirm" type="checkbox">
             <span>操作後はこの画面から復旧できないことを確認しました。</span>
           </label>
           <div class="version-management-buttons">
-            <button class="version-withdraw-button" id="versionWithdrawButton" type="button">取り消す</button>
+            <button class="version-withdraw-button" id="versionWithdrawButton" type="button">取り下げる</button>
           </div>
         </section>
 
         <section class="version-management-action" aria-labelledby="deleteRequestActionTitle">
-          <h3 id="deleteRequestActionTitle">削除</h3>
+          <h3 id="deleteRequestActionTitle">削除申請</h3>
           <p id="versionDeleteDescription">対象の状態を確認しています。</p>
           <label class="field">
             <span class="field-label">申請理由（任意）</span>
@@ -336,7 +357,7 @@
             <span class="field-help">500文字以内。</span>
           </label>
           <div class="version-management-buttons">
-            <button class="version-delete-request-button" id="versionDeleteRequestButton" type="button">削除する</button>
+            <button class="version-delete-request-button" id="versionDeleteRequestButton" type="button">削除を申請</button>
           </div>
         </section>
 
@@ -360,7 +381,7 @@
       </div>
     </dialog>
 
-    <script src="./site-header.js?v=ui-refresh-01-phase1"></script>
+    <script src="./site-header.js?v=recycle-ux-02a"></script>
     <script src="./progress-layer-colors.js?v=ui-tree-overlay-01"></script>
     <script src="./zip-bms-reader.js?v=zip-bms-analysis-01"></script>
     <script src="./local-bms-analysis.js?v=post-form-miniview-01"></script>
@@ -372,10 +393,10 @@
     <script src="./branch-append-ui.js?v=post-form-miniview-01"></script>
     <script src="./progress-image-preview.js?v=chart-miniview-position-01"></script>
     <script src="./progress-image-formdata.js?v=ui-tree-overlay-01"></script>
-    <script src="./branch-tree-list.js?v=search-pagination-01"></script>
+    <script src="./branch-tree-list.js?v=recycle-ux-02a"></script>
     <script src="./tree-progress-polish.js?v=tree-shape-fix-01"></script>
     <script src="./favorites-list.js?v=search-pagination-01"></script>
-    <script src="./version-management-ui.js?v=version-lifecycle-24h-01"></script>
+    <script src="./version-management-ui.js?v=recycle-ux-02a"></script>
     <script src="./post-form-ui.js?v=ui-refresh-01-phase1"></script>
   </body>
 </html>

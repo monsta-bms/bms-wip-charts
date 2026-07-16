@@ -99,19 +99,19 @@
     descendantsValue.textContent = state.hasDescendants ? "あり" : "なし";
 
     if (within24Hours && !state.hasDescendants) {
-      withdrawDescription.textContent = "この投稿は24時間以内で、派生版がありません。取り消すと一覧から直ちに非表示になります。譜面ファイルと進捗画像は保持されます。";
-      deleteDescription.textContent = "この投稿は24時間以内で、派生版がありません。削除操作を行うと一覧から直ちに非表示になります。物理削除や削除申請の作成は行いません。";
+      withdrawDescription.textContent = "この版は投稿から24時間以内で、公開中の追記版がありません。取り下げると一覧から非表示になります。譜面ファイルと進捗画像はすぐには整理されません。";
+      deleteDescription.textContent = "この版は投稿から24時間以内で、公開中の追記版がありません。削除すると一覧から非表示になります。この場合、管理者確認待ちの削除申請は作成されません。";
       return;
     }
 
     if (within24Hours) {
-      withdrawDescription.textContent = "この投稿は24時間以内ですが、派生版があるため即時非表示にはなりません。DLのみ停止し、追記投稿は引き続き可能です。";
-      deleteDescription.textContent = "派生版があるため即時非表示にはせず、DLを停止して削除申請を記録します。追記投稿は引き続き可能です。";
+      withdrawDescription.textContent = "この版は投稿から24時間以内ですが、公開中の追記版があるため一覧に履歴を残します。ダウンロードを停止しても、追記投稿は引き続き可能です。";
+      deleteDescription.textContent = "公開中の追記版があるため一覧に履歴を残し、ダウンロードを停止して削除申請を受け付けます。追記投稿は引き続き可能です。";
       return;
     }
 
-    withdrawDescription.textContent = "この投稿は24時間を経過しています。取り消しではDLのみ停止し、追記投稿は引き続き可能です。";
-    deleteDescription.textContent = "この投稿は24時間を経過しています。DLを停止し、管理確認待ちの削除申請として受け付けます。追記投稿は引き続き可能です。";
+    withdrawDescription.textContent = "この版は投稿から24時間を経過しています。取り下げるとダウンロードを停止し、追記投稿は引き続き可能です。";
+    deleteDescription.textContent = "この版は投稿から24時間を経過しています。ダウンロードを停止し、管理者確認待ちの削除申請として受け付けます。追記投稿は引き続き可能です。";
   }
 
   function readSavedPassword() {
@@ -147,7 +147,7 @@
   function describeState() {
     const values = [];
     if (state.withdrawn) {
-      values.push("取り消し済み");
+      values.push("取り下げ済み");
     }
     if (state.deleteRequested) {
       values.push("削除申請中");
@@ -189,7 +189,7 @@
     setMessage("");
     setSubmitting(false);
 
-    withdrawButton.textContent = state.withdrawn ? "取り消し済み" : "取り消す";
+    withdrawButton.textContent = state.withdrawn ? "取り下げ済み" : "取り下げる";
     deleteRequestButton.textContent = deleteActionLabel();
     if (typeof dialog.showModal === "function") {
       dialog.showModal();
@@ -213,7 +213,7 @@
   function buildOutcomeMessage(body, action) {
     const outcome = body?.outcome;
     if (outcome === "immediate_hidden") {
-      return "24時間以内の投稿で派生版がないため、一覧から即時非表示にしました。譜面ファイルと進捗画像は保持されています。";
+      return "投稿から24時間以内で公開中の追記版がないため、一覧から取り下げました。譜面ファイルと進捗画像はすぐには整理されません。";
     }
 
     if (outcome === "download_blocked") {
@@ -226,7 +226,7 @@
       return "削除申請として受け付けました。DLを停止し、後日管理確認後に処理されます。追記投稿は引き続き可能です。";
     }
 
-    return action === "withdraw" ? "取り消しを受け付けました。" : "削除申請を受け付けました。";
+    return action === "withdraw" ? "取り下げを受け付けました。" : "削除申請を受け付けました。";
   }
 
   async function requestLifecycle(action) {
@@ -238,7 +238,7 @@
     }
 
     if (action === "withdraw" && !withdrawConfirm.checked) {
-      setMessage("取り消し内容を確認し、確認欄にチェックしてください。");
+      setMessage("取り下げ内容を確認し、確認欄にチェックしてください。");
       withdrawConfirm.focus();
       return;
     }
@@ -286,7 +286,7 @@
         state.deleteRequested = true;
       }
       stateValue.textContent = describeState();
-      withdrawButton.textContent = state.withdrawn ? "取り消し済み" : "取り消す";
+      withdrawButton.textContent = state.withdrawn ? "取り下げ済み" : "取り下げる";
       deleteRequestButton.textContent = deleteActionLabel();
       setMessage(buildOutcomeMessage(body, action), "success");
       if (typeof loadCharts === "function") {

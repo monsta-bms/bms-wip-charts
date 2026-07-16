@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>概要＆使い方 | リサイクルセンター</title>
     <link rel="stylesheet" href="./style.css?v=ui-refresh-01-phase1">
-    <link rel="stylesheet" href="./site-header.css?v=ui-refresh-01-phase1">
+    <link rel="stylesheet" href="./site-header.css?v=recycle-ux-02a">
   </head>
   <body id="top">
     <div class="page-shell">
@@ -15,111 +15,173 @@
 
       <main class="content-page">
         <header class="content-page-header">
+          <p class="work-ticket-label">概要</p>
           <h1>概要＆使い方</h1>
-          <p class="content-page-lead">
-            リサイクルセンターは、制作途中または完成したBMS差分譜面を共有し、版の分岐と制作進捗を確認できる場所です。
-            音源は配布せず、差分譜面とその制作情報を扱います。
+          <p class="content-page-lead">リサイクルセンターは、こんな譜面を大歓迎する場所です。</p>
+          <ul class="welcome-list">
+            <li>制作途中で飽きちゃった譜面</li>
+            <li>誰か続き作ってくれー、となった譜面</li>
+            <li>完成したはいいが、なんか没になった譜面</li>
+          </ul>
+          <p>
+            未完成の譜面は、ほかの人が続きを作ったり、分岐させたり、なんかいじったりしてくれます。
+            完成しているけど公開場所に困った譜面や、没にするにはちょっと惜しい譜面も歓迎です。
           </p>
+          <p class="content-page-note">音源ファイルはアップロードできません。BMS差分譜面と制作情報を共有します。</p>
         </header>
 
         <section class="content-section" aria-labelledby="quickUseTitle">
+          <p class="work-ticket-label">最短手順</p>
           <h2 id="quickUseTitle">すぐ使う</h2>
           <div class="quick-use-grid">
             <article class="quick-use-item">
               <h3>新規投稿</h3>
               <ol>
-                <li>差分ファイルを選ぶ</li>
-                <li>曲・差分情報と進捗を確認する</li>
-                <li>管理パスワードを設定して投稿する</li>
+                <li>BMS・BME・BML、または対応ZIPを選ぶ</li>
+                <li>曲情報、差分名、作者、難易度を確認する</li>
+                <li>進捗範囲と管理パスワードを設定して投稿する</li>
               </ol>
               <a href="./index.html#post">投稿フォームを開く</a>
             </article>
 
             <article class="quick-use-item">
-              <h3>追記投稿</h3>
+              <h3>続きを作る</h3>
               <ol>
                 <li>投稿一覧で追記元の版を探す</li>
                 <li>「追記投稿」を選ぶ</li>
-                <li>新しい差分ファイルと追加進捗を送る</li>
+                <li>新しい譜面と今回作業した範囲を送る</li>
               </ol>
               <a href="./index.html#list">投稿一覧を見る</a>
             </article>
 
             <article class="quick-use-item">
-              <h3>難易度表を見る</h3>
+              <h3>探す・ダウンロードする</h3>
               <ol>
-                <li>利用する表を選ぶ</li>
-                <li>公開中の完成譜面を確認する</li>
-                <li>各譜面の差分ファイルを取得する</li>
+                <li>曲名、作者、差分名などで検索する</li>
+                <li>難易度、進捗、版ツリーを確認する</li>
+                <li>対象の版をダウンロード、または追記する</li>
               </ol>
-              <a href="https://bms-wip-charts-worker.monsta3228gsl.workers.dev/difficulty-tables/rc-star">RC★</a>
-              <span aria-hidden="true"> / </span>
-              <a href="https://bms-wip-charts-worker.monsta3228gsl.workers.dev/difficulty-tables/rc-double-star">RC★★</a>
+              <a href="./index.html#list">投稿を探す</a>
             </article>
           </div>
         </section>
 
         <section class="content-section" aria-labelledby="featureGuideTitle">
-          <h2 id="featureGuideTitle">各機能の概要</h2>
+          <p class="work-ticket-label">案内索引</p>
+          <h2 id="featureGuideTitle">機能の概要</h2>
           <nav class="guide-index" aria-label="各機能の概要">
             <a href="#posting">投稿・追記</a>
             <a href="#progress">進捗マップとミニビュー</a>
             <a href="#difficulty">難易度表</a>
             <a href="#management">取り下げ・削除</a>
+            <a href="#safety">安全に利用するために</a>
           </nav>
         </section>
 
         <section class="content-section guide-anchor" id="posting" aria-labelledby="postingTitle">
-          <h2 id="postingTitle">投稿・追記の使い方</h2>
+          <p class="work-ticket-label">持ち込み・引き継ぎ</p>
+          <h2 id="postingTitle">投稿・追記</h2>
+          <h3>新規投稿</h3>
           <p>
-            初回投稿では、BMS・BME・BMLまたはZIPを選び、差分名、作者、想定難易度、進捗、管理パスワードを入力します。
-            ZIPは安全検査を行い、内部に譜面ファイルが1件だけある場合に受け付けます。音声ファイルを含むZIPは投稿できません。
+            BMS・BME・BML、または対応ZIPを選び、読み取られた曲情報を確認します。
+            難易度、差分名、作者、進捗範囲、管理パスワードを入力すれば投稿できます。アカウント登録は不要です。
           </p>
+          <h3>追記投稿</h3>
           <p>
-            追記は投稿一覧の各版から開始します。追記元の曲・差分情報と進捗レイヤーを引き継ぎ、今回選んだ新しい譜面と追加した範囲を登録します。
-            公開停止中など、状態によって追記できない版もあります。
+            投稿一覧から対象の版を選び、新しく作った譜面ファイルと今回作業した範囲を追加します。
+            同じ版から複数の人が続きを作った場合は、分岐版として登録されることがあります。
           </p>
           <p><a href="./index.html#post">新規投稿を始める</a> / <a href="./index.html#list">追記元を探す</a></p>
         </section>
 
         <section class="content-section guide-anchor" id="progress" aria-labelledby="progressTitle">
+          <p class="work-ticket-label">作業状況</p>
           <h2 id="progressTitle">進捗マップとミニビュー</h2>
           <p>
-            進捗マップは、譜面全体を標準化したブロックに分け、作成済み範囲と追記者ごとの担当範囲を色で示します。
-            密度グラフではブロックごとのノーツ量を確認でき、編集レールではクリックやドラッグで進捗を指定できます。
+            進捗マップは、譜面を小さな範囲に分け、どこまで作られているか、誰がどの範囲を追加したかを色で示します。
+            密度グラフではノーツ量を、進捗レールでは作業済みの範囲を確認できます。
           </p>
           <p>
-            対応する7key SP譜面では、進捗ブロックにポインターを合わせるかフォーカスすると、白鍵・青鍵・スクラッチ・LN・BPM変化をローカルの譜面ミニビューで確認できます。
-            ミニビュー非対応でも投稿自体は妨げません。
+            対応する7key SP譜面では、進捗ブロックにポインターを合わせるかフォーカスすると、その範囲の譜面ミニビューを確認できます。
+            ミニビューが使えない譜面でも投稿はできます。
           </p>
         </section>
 
         <section class="content-section guide-anchor" id="difficulty" aria-labelledby="difficultyTitle">
+          <p class="work-ticket-label">完成譜面</p>
           <h2 id="difficultyTitle">難易度表について</h2>
           <p>
-            RC★とRC★★は、完成しており、公開中かつダウンロード可能な譜面を配信する読み取り専用の難易度表です。
-            取り下げ済み、非表示、ファイル削除済みなどの譜面は掲載されません。原曲配布URLが登録されている場合は表にも含まれます。
+            RC★とRC★★では、完成しており、公開中でダウンロードできる譜面を確認できます。
+            取り下げられた譜面や、ダウンロードを停止している譜面は掲載されません。
           </p>
           <p>
-            <a href="https://bms-wip-charts-worker.monsta3228gsl.workers.dev/difficulty-tables/rc-star">RC★を開く</a> / 
+            <a href="https://bms-wip-charts-worker.monsta3228gsl.workers.dev/difficulty-tables/rc-star">RC★を開く</a> /
             <a href="https://bms-wip-charts-worker.monsta3228gsl.workers.dev/difficulty-tables/rc-double-star">RC★★を開く</a>
           </p>
         </section>
 
         <section class="content-section guide-anchor" id="management" aria-labelledby="managementTitle">
+          <p class="work-ticket-label">版の管理</p>
           <h2 id="managementTitle">取り下げ・削除</h2>
-          <p>
-            投稿時の管理パスワードを使い、各版の管理画面から取り下げまたは削除申請を行えます。
-            取り下げるとダウンロードと追記が停止します。投稿後の経過時間や公開中の子版の有無によって、即時に非表示となる場合と一覧に状態を残す場合があります。
+          <div class="guide-info-grid">
+            <article class="guide-info-block">
+              <h3>取り下げ</h3>
+              <p>投稿から24時間以内で、まだ公開中の追記版がない版は、一覧から取り下げられます。</p>
+              <p>
+                24時間を過ぎた版や、すでに公開中の追記版がある版は、続きを作っている人への配慮から、
+                ダウンロードを止めても追記機能が残る場合があります。
+              </p>
+            </article>
+            <article class="guide-info-block">
+              <h3>削除申請</h3>
+              <p>削除申請は管理者が確認します。</p>
+              <p>
+                承認後も、分岐や制作履歴を保つため、記録はすぐには消しません。
+                不要になった譜面ファイルは、条件を満たしたあとに整理します。
+              </p>
+            </article>
+          </div>
+          <p class="guide-callout">
+            投稿時に設定した管理パスワードを使って、各版の管理画面から取り下げや削除申請ができます。
+            管理パスワードは公開されず、再発行もできません。なくさないように保管してください。
           </p>
-          <p>
-            削除申請は管理者の確認対象です。承認後も履歴管理のためデータ行をすぐ物理削除せず、条件を満たした譜面ファイルのみ後日整理します。
-            管理パスワードは公開されないため、紛失しないよう保管してください。
-          </p>
+        </section>
+
+        <section class="content-section guide-anchor" id="safety" aria-labelledby="safetyTitle">
+          <p class="work-ticket-label">安全案内</p>
+          <h2 id="safetyTitle">安全に利用するために</h2>
+          <div class="guide-safety-list">
+            <section aria-labelledby="passwordSafetyTitle">
+              <h3 id="passwordSafetyTitle">管理パスワード</h3>
+              <p>
+                サーバー側では、管理パスワードそのものではなく、照合用のハッシュを扱います。
+                パスワードは一般公開されませんが、再発行はできません。
+              </p>
+              <p>
+                「この端末に保存」を選ぶと、このブラウザ内へパスワードが保存されます。
+                共有端末では保存しないでください。
+              </p>
+            </section>
+            <section aria-labelledby="sourceInfoTitle">
+              <h3 id="sourceInfoTitle">投稿元情報の扱い</h3>
+              <p>
+                連続投稿や荒らしへの対策として、投稿時のIPアドレスとブラウザ情報を確認しています。
+                これらはそのまま保存せず、サイト専用の秘密情報を使ったハッシュ値として記録します。
+              </p>
+              <p>記録した情報は一般公開されず、投稿制限や不正利用への対応に使います。</p>
+            </section>
+            <section aria-labelledby="postingProtectionTitle">
+              <h3 id="postingProtectionTitle">Bot・連続投稿対策</h3>
+              <p>
+                Cloudflare Turnstile、短時間の連続投稿制限、管理者による投稿制限を組み合わせています。
+                通常の閲覧やダウンロードに認証は必要ありません。
+              </p>
+            </section>
+          </div>
         </section>
       </main>
     </div>
 
-    <script src="./site-header.js?v=ui-refresh-01-phase1"></script>
+    <script src="./site-header.js?v=recycle-ux-02a"></script>
   </body>
 </html>
