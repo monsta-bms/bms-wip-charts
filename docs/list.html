@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>投稿一覧 | リサイクルセンター</title>
+    <link rel="stylesheet" href="./style.css?v=ui-refresh-01-phase1">
+    <link rel="stylesheet" href="./site-header.css?v=recycle-ux-02a">
+    <link rel="stylesheet" href="./list.css?v=recycle-list-01">
+  </head>
+  <body id="top">
+    <div class="page-shell">
+      <header class="site-header" data-site-header data-current-page="list">
+        <a class="site-brand-fallback" href="./index.html#top">リサイクルセンター</a>
+      </header>
+
+      <main class="compact-list-page">
+        <header class="compact-list-header">
+          <h1>投稿一覧</h1>
+          <p>公開中の版を、日付や進捗と一緒にコンパクトに表示します。</p>
+        </header>
+
+        <section class="compact-search" aria-labelledby="compactSearchHeading">
+          <h2 id="compactSearchHeading">検索</h2>
+          <form id="compactSearchForm" class="compact-search-form" role="search">
+            <label for="compactSearchInput">曲名・アーティスト・差分名・差分作者</label>
+            <div class="compact-search-controls">
+              <input
+                id="compactSearchInput"
+                name="q"
+                type="search"
+                maxlength="100"
+                autocomplete="off"
+                placeholder="曲名・アーティスト・差分名・差分作者"
+              >
+              <button type="submit">検索</button>
+              <button id="compactSearchClear" class="secondary" type="button">クリア</button>
+            </div>
+          </form>
+          <p id="compactListSummary" class="compact-list-summary" aria-live="polite">一覧を読み込んでいます。</p>
+        </section>
+
+        <section class="compact-results" aria-labelledby="compactResultsHeading">
+          <h2 id="compactResultsHeading" class="visually-hidden">検索結果</h2>
+          <div class="compact-list-head" aria-hidden="true">
+            <span>日付</span>
+            <span>タイトル</span>
+            <span>難易度</span>
+            <span>作者</span>
+            <span>進捗</span>
+          </div>
+          <div id="compactVersionList" class="compact-version-list" aria-busy="true">
+            <p class="compact-list-state">読み込み中...</p>
+          </div>
+          <p id="compactListFeedback" class="compact-list-feedback" role="status" aria-live="polite" hidden></p>
+          <div class="compact-load-more">
+            <button id="compactLoadMore" class="secondary" type="button" hidden>さらに読み込む</button>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./site-header.js?v=recycle-list-01"></script>
+    <script src="./list.js?v=recycle-list-01"></script>
+  </body>
+</html>

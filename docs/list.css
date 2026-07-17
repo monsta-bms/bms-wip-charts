@@ -1,0 +1,316 @@
+.compact-list-page {
+  width: 100%;
+  margin: 0;
+  padding: 28px 0 56px;
+}
+
+.compact-list-header {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+  padding: 0 4px 18px;
+  border-bottom: 1px solid #cfd9dd;
+}
+
+.compact-list-header h1,
+.compact-search h2 {
+  margin: 0;
+  letter-spacing: 0;
+}
+
+.compact-list-header h1 {
+  font-size: 1.6rem;
+}
+
+.compact-list-header p {
+  margin: 0;
+  color: #5f6f7b;
+}
+
+.compact-search {
+  padding: 22px 4px 18px;
+  border-bottom: 1px solid #d8e0e3;
+}
+
+.compact-search h2 {
+  margin-bottom: 10px;
+  font-size: 1rem;
+}
+
+.compact-search-form label {
+  display: block;
+  margin-bottom: 6px;
+  color: #52636f;
+  font-size: 0.85rem;
+}
+
+.compact-search-controls {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) auto auto;
+  gap: 8px;
+  max-width: 900px;
+}
+
+.compact-search-controls input,
+.compact-search-controls button,
+.compact-load-more button {
+  min-height: 44px;
+}
+
+.compact-search-controls input {
+  min-width: 0;
+}
+
+.compact-list-summary {
+  margin: 10px 0 0;
+  color: #52636f;
+  font-size: 0.87rem;
+}
+
+.compact-results {
+  padding-top: 18px;
+}
+
+.compact-list-head,
+.compact-version-row {
+  display: grid;
+  grid-template-columns: 112px minmax(300px, 1fr) 100px minmax(130px, 180px) 82px;
+  gap: 14px;
+  align-items: center;
+}
+
+.compact-list-head {
+  padding: 8px 12px;
+  border-top: 1px solid #aebbc1;
+  border-bottom: 1px solid #aebbc1;
+  background: #f1f4f5;
+  color: #53636e;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.compact-version-list {
+  border-bottom: 1px solid #aebbc1;
+}
+
+.compact-version-row {
+  min-height: 62px;
+  padding: 9px 12px;
+  border-bottom: 1px solid #d8e0e3;
+  background: #fff;
+}
+
+.compact-version-row:nth-child(even) {
+  background: #fafbfb;
+}
+
+.compact-version-row:last-child {
+  border-bottom: 0;
+}
+
+.compact-date,
+.compact-difficulty,
+.compact-author,
+.compact-progress {
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.compact-date {
+  color: #5d6c76;
+  font-size: 0.85rem;
+}
+
+.compact-title-cell {
+  min-width: 0;
+}
+
+.compact-title-link {
+  display: block;
+  color: #16262d;
+  text-decoration: none;
+}
+
+.compact-title-link:hover .compact-song-title,
+.compact-title-link:focus-visible .compact-song-title {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.compact-title-link:focus-visible {
+  outline: 2px solid #27745f;
+  outline-offset: 3px;
+}
+
+.compact-song-title,
+.compact-version-title {
+  display: block;
+  min-width: 0;
+}
+
+.compact-song-title {
+  overflow: hidden;
+  color: #16262d;
+  font-size: 0.96rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compact-version-title {
+  margin-top: 2px;
+  overflow: hidden;
+  color: #63717a;
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compact-difficulty,
+.compact-progress {
+  font-weight: 700;
+}
+
+.compact-author > span:last-child {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compact-progress {
+  color: #176d57;
+  text-align: right;
+}
+
+.compact-field-label {
+  display: none;
+}
+
+.compact-list-state {
+  margin: 0;
+  padding: 34px 16px;
+  color: #61717a;
+  text-align: center;
+}
+
+.compact-list-error {
+  color: #8d3434;
+}
+
+.compact-list-feedback {
+  margin: 12px 0 0;
+  color: #5d6d77;
+  font-size: 0.86rem;
+  text-align: center;
+}
+
+.compact-load-more {
+  display: flex;
+  justify-content: center;
+  padding-top: 16px;
+}
+
+.compact-load-more button {
+  min-width: 180px;
+}
+
+@media (max-width: 760px) {
+  .compact-list-page {
+    padding-top: 20px;
+  }
+
+  .compact-list-header {
+    display: block;
+    padding-bottom: 15px;
+  }
+
+  .compact-list-header h1 {
+    font-size: 1.35rem;
+  }
+
+  .compact-list-header p {
+    margin-top: 7px;
+    font-size: 0.88rem;
+  }
+
+  .compact-search {
+    padding-inline: 0;
+  }
+
+  .compact-list-head {
+    display: none;
+  }
+
+  .compact-version-list {
+    border-top: 1px solid #aebbc1;
+  }
+
+  .compact-version-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "date difficulty"
+      "title title"
+      "author progress";
+    gap: 7px 14px;
+    min-height: 0;
+    padding: 12px 10px;
+  }
+
+  .compact-date {
+    grid-area: date;
+  }
+
+  .compact-title-cell {
+    grid-area: title;
+  }
+
+  .compact-difficulty {
+    grid-area: difficulty;
+    text-align: right;
+  }
+
+  .compact-author {
+    grid-area: author;
+  }
+
+  .compact-progress {
+    grid-area: progress;
+  }
+
+  .compact-song-title,
+  .compact-version-title,
+  .compact-author > span:last-child {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .compact-field-label {
+    display: inline;
+    margin-right: 0.4em;
+    color: #6a7881;
+    font-size: 0.74rem;
+    font-weight: 400;
+  }
+}
+
+@media (max-width: 460px) {
+  .compact-search-controls {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .compact-search-controls input {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compact-list-page *,
+  .compact-list-page *::before,
+  .compact-list-page *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -23,7 +23,7 @@
     { key: "rc-double-star", label: "RC\u2605\u2605", href: `${workerBaseUrl}/difficulty-tables/rc-double-star` },
     { key: "guide", label: "\u6982\u8981\uff06\u4f7f\u3044\u65b9", href: pageUrl("guide.html") },
     { key: "post", label: "\u6295\u7a3f", href: pageUrl("index.html#post") },
-    { key: "list", label: "\u6295\u7a3f\u4e00\u89a7", href: pageUrl("index.html#list") },
+    { key: "list", label: "\u6295\u7a3f\u4e00\u89a7", href: pageUrl("list.html") },
     { key: "changelog", label: "\u66f4\u65b0\u5c65\u6b74", href: pageUrl("changelog.html") }
   ];
 
