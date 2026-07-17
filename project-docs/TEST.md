@@ -159,6 +159,42 @@ https://monsta-bms.github.io/bms-wip-charts/
 - PC幅とスマホ幅で検索フォームと「さらに読み込む」を操作できること。
 - Workerの`npm.cmd run typecheck`が成功すること。
 
+## LIST-DATA-02A-B 確認項目
+
+version単位の独立投稿一覧APIとフィルターを確認する:
+
+- `GET /api/versions`が公開versionを1件1itemで返し、`pageSize=20`でversion単位にページングすること。
+- `charts.is_hidden=1`, `versions.is_hidden=1`, `collapsed_by_completion=1`のversionが返らないこと。
+- 取り下げ、削除申請中、DL停止の公開versionは返り、状態フラグが正しいこと。
+- `status=incomplete`が`progress<100`かつ非没、`complete`が`progress=100`かつ非没、`rejected`が没譜面だけを返すこと。
+- `sort=new`が`versions.created_at DESC, versions.id DESC`、`sort=updated`が`charts.updated_at DESC, versions.created_at DESC, versions.id DESC`であること。
+- 曲名、サブタイトル、アーティスト、サブアーティスト、差分名、そのversion作者を検索できること。
+- 日本語検索と、`%`, `_`, `\\`を通常文字として扱う検索が動作すること。
+- SELECTとCOUNTの公開・検索・状態条件が一致し、`total`がversion件数になること。
+- `versionLabel`が`BASE`, `1`, `1-2`などの数字パスになること。
+- `isNew`と`newUntil`がchart初回公開から168時間で判定され、追記日時で延長されないこと。
+- `serverTime`が返ること。
+- 不正な`q`, `sort`, `status`, `page`, `pageSize`が`INVALID_QUERY_PARAM`になること。
+- `POST /api/versions/query`が最大200件のversion IDを重複除去して検索すること。
+- お気に入りqueryでも検索、並び順、状態、ページングが通常一覧と一致すること。
+- 非公開または存在しないお気に入りがitemsから除外され、`unavailableFavoriteCount`へ加算されること。
+- 検索・状態だけで除外された公開お気に入りは`unavailableFavoriteCount`へ加算されないこと。
+- お気に入りID 0件で空一覧を返し、D1エラーにならないこと。
+- 不正body、文字列以外のID、200件超過が`INVALID_FAVORITE_QUERY`になること。
+- お気に入りqueryレスポンスが`Cache-Control: no-store`であること。
+- `list.html`が日付、タイトル、難易度、作者、進捗を1version1行で表示すること。
+- 件数表示がversion件数であり、chart件数と混在しないこと。
+- 並び順、状態、お気に入りの変更で1ページ目へ戻ること。
+- `q`, `sort`, `status`, `favorites`, `page`がURLへ保存され、再読込と戻る・進むで復元されること。
+- 古いリクエストが新しい結果を上書きしないこと。
+- 前へ、ページ番号、次へが動作し、1ページだけの場合はページ操作を隠すこと。
+- ページ取得失敗時に直前の行を残し、再試行できること。
+- お気に入り0件、非公開化されたお気に入り、検索結果なし、API失敗を区別して表示すること。
+- NEW、没譜面、取り下げ、削除申請中、DL停止の小さい状態表示が主情報を圧迫しないこと。
+- 1366pxでタイトル列が過度に広がらず、長いタイトルは最大2行、差分名と版は1行になること。
+- 320px, 390px, 760pxで横スクロールがなく、フィルターとページ操作が使えること。
+- トップの詳細一覧、ツリー、進捗サムネイル、miniView、お気に入り★、投稿・追記が壊れていないこと。
+
 ## VERSION-LIFECYCLE-24H-01 確認項目
 
 投稿から24時間以内/以後で分岐する取り消し・削除MVPを確認する:

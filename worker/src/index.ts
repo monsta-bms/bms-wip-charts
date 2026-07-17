@@ -8,6 +8,7 @@ import {
 } from "./routes/difficultyTables";
 import { handleFileRoute } from "./routes/files";
 import { handleVersionLifecycleRoute } from "./routes/versionLifecycle";
+import { handlePublicVersionListRoute } from "./routes/versionList";
 import { runScheduledR2Cleanup } from "./routes/r2Cleanup";
 import { enforcePreMultipartPostingProtection } from "./routes/postingProtection";
 import {
@@ -127,6 +128,14 @@ async function routeRequest(request: Request, env: Env): Promise<Response> {
     }
 
     return response;
+  }
+
+  if (path === "/api/versions") {
+    return handlePublicVersionListRoute(request, env, false);
+  }
+
+  if (path === "/api/versions/query") {
+    return handlePublicVersionListRoute(request, env, true);
   }
 
   const versionLifecycleMatch = path.match(/^\/api\/versions\/([^/]+)\/(withdraw|delete-request)$/);

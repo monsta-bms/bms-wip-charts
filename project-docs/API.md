@@ -292,6 +292,104 @@ versionレスポンスには以下を含める。
 }
 ```
 
+### GET /api/versions
+
+独立投稿一覧 `list.html` 用に、公開versionを1行1件で取得する。トップの詳細一覧が使用する `GET /api/charts` とはページング単位が異なる。
+
+公開条件:
+
+- `charts.is_hidden = 0`
+- `versions.is_hidden = 0`
+- `COALESCE(versions.collapsed_by_completion, 0) = 0`
+
+`withdrawn`, `deleteRequested`, `downloadBlocked` は、`is_hidden=0` である限り状態つきで返す。
+
+クエリ:
+
+| name | default | 内容 |
+| --- | ---: | --- |
+| `q` | 空 | 最大100文字。曲名、サブタイトル、アーティスト、サブアーティスト、差分名、そのversionの作者を部分一致検索する。`%`, `_`, `\\` は文字として扱う。 |
+| `sort` | `new` | `new`: version投稿日時順。`updated`: chart更新日時、version投稿日時順。 |
+| `status` | `all` | `all`, `incomplete`, `complete`, `rejected`。 |
+| `page` | `1` | 1始まりのversionページ番号。 |
+| `pageSize` | `20` | version件数。最大100。 |
+
+状態条件:
+
+- `incomplete`: `progress < 100 AND is_rejected = 0`
+- `complete`: `progress = 100 AND is_rejected = 0`
+- `rejected`: `is_rejected = 1`
+
+レスポンス例:
+
+```json
+{
+  "items": [
+    {
+      "versionId": "version_xxx",
+      "chartId": "chart_xxx",
+      "createdAt": "2026-07-17 01:02:03",
+      "chartCreatedAt": "2026-07-10 00:00:00",
+      "chartUpdatedAt": "2026-07-17 01:02:03",
+      "rootCreatedAt": "2026-07-10 00:00:00",
+      "title": "曲名",
+      "subtitle": "",
+      "artist": "artist",
+      "subartist": "",
+      "chartName": "差分名",
+      "difficulty": "★12",
+      "author": "author",
+      "progress": 60,
+      "isRejected": false,
+      "withdrawn": false,
+      "deleteRequested": false,
+      "downloadBlocked": false,
+      "branchPath": "root/a/b",
+      "versionLabel": "1-2",
+      "isNew": true,
+      "newUntil": "2026-07-17 00:00:00"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "pageSize": 20,
+    "total": 1,
+    "hasNext": false
+  },
+  "serverTime": "2026-07-17 01:02:03"
+}
+```
+
+`isNew` はchartの初回公開日時から168時間以内かをD1時刻で判定する。追記によってNEW期間は延長しない。COUNTとSELECTは同じ公開・検索・状態条件を使用する。
+
+### POST /api/versions/query
+
+独立投稿一覧の「お気に入りのみ」で使用する。認証不要。`localStorage` のversion IDだけを受け取り、Workerが公開状態を再確認する。共有キャッシュは禁止し、レスポンスは `Cache-Control: no-store` とする。
+
+request:
+
+```json
+{
+  "favoriteVersionIds": ["version_xxx"],
+  "q": "",
+  "sort": "new",
+  "status": "all",
+  "page": 1,
+  "pageSize": 20
+}
+```
+
+- `favoriteVersionIds` は文字列配列、重複除去後のversion ID単位、最大200件。
+- 非公開または存在しないversionは `items` へ返さず、`unavailableFavoriteCount` に含める。
+- 検索や状態で除外された公開お気に入りは `unavailableFavoriteCount` には含めない。
+- レスポンスのitemとpaginationは `GET /api/versions` と同じ形式。
+
+主なエラー:
+
+- `INVALID_QUERY_PARAM`: GETクエリ不正、HTTP 400。
+- `INVALID_FAVORITE_QUERY`: POST bodyまたはお気に入りID不正、HTTP 400。
+- `VERSION_LIST_QUERY_FAILED`: D1読取り失敗、HTTP 500。SQLや内部detailは返さない。
+
 ### POST /api/charts
 
 初回投稿を受け付ける。

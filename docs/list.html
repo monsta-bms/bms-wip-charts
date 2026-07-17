@@ -6,7 +6,7 @@
     <title>投稿一覧 | リサイクルセンター</title>
     <link rel="stylesheet" href="./style.css?v=ui-refresh-01-phase1">
     <link rel="stylesheet" href="./site-header.css?v=recycle-ux-02a">
-    <link rel="stylesheet" href="./list.css?v=recycle-list-01">
+    <link rel="stylesheet" href="./list.css?v=list-data-02ab">
   </head>
   <body id="top">
     <div class="page-shell">
@@ -37,6 +37,28 @@
               <button id="compactSearchClear" class="secondary" type="button">クリア</button>
             </div>
           </form>
+          <div class="compact-filter-controls" aria-label="一覧の表示条件">
+            <label>
+              <span>並び順</span>
+              <select id="compactSortSelect">
+                <option value="new">新着順</option>
+                <option value="updated">更新順</option>
+              </select>
+            </label>
+            <label>
+              <span>状態</span>
+              <select id="compactStatusSelect">
+                <option value="all">すべて</option>
+                <option value="incomplete">未完成</option>
+                <option value="complete">完成</option>
+                <option value="rejected">没譜面</option>
+              </select>
+            </label>
+            <label class="compact-favorite-filter">
+              <input id="compactFavoriteOnly" type="checkbox">
+              <span>お気に入りのみ</span>
+            </label>
+          </div>
           <p id="compactListSummary" class="compact-list-summary" aria-live="polite">一覧を読み込んでいます。</p>
         </section>
 
@@ -53,14 +75,15 @@
             <p class="compact-list-state">読み込み中...</p>
           </div>
           <p id="compactListFeedback" class="compact-list-feedback" role="status" aria-live="polite" hidden></p>
-          <div class="compact-load-more">
-            <button id="compactLoadMore" class="secondary" type="button" hidden>さらに読み込む</button>
+          <div class="compact-retry-row">
+            <button id="compactListRetry" class="secondary" type="button" hidden>再試行</button>
           </div>
+          <nav id="compactPagination" class="compact-pagination" aria-label="投稿一覧のページ" hidden></nav>
         </section>
       </main>
     </div>
 
     <script src="./site-header.js?v=recycle-list-01"></script>
-    <script src="./list.js?v=recycle-list-01"></script>
+    <script src="./list.js?v=list-data-02ab"></script>
   </body>
 </html>
