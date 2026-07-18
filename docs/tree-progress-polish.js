@@ -405,22 +405,23 @@
     if (!chartList) {
       return;
     }
+    const interactionRoot = document.querySelector("#list") || chartList;
 
-    chartList.dataset.treeProgressPolishMounted = "true";
+    interactionRoot.dataset.treeProgressPolishMounted = "true";
     const observer = new MutationObserver((mutations) => {
       if (shouldIgnoreMutations(mutations)) {
         return;
       }
       scheduleRefresh();
     });
-    observer.observe(chartList, {
+    observer.observe(interactionRoot, {
       childList: true,
       subtree: true,
       attributes: true,
       attributeFilter: ["hidden", "class", "data-depth", "data-branch-path", "data-intermediate-group-count"]
     });
 
-    chartList.addEventListener("click", (event) => {
+    interactionRoot.addEventListener("click", (event) => {
       if (event.target.closest(".intermediate-toggle-button")) {
         window.setTimeout(scheduleRefresh, 0);
         window.setTimeout(scheduleRefresh, 80);

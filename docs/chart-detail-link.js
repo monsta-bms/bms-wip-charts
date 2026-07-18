@@ -114,10 +114,16 @@
     }, 4000);
   }
 
-  function scheduleDetailMounts() {
-    window.scheduleProgressImageThumbnailMount?.(section);
-    window.scheduleChartMiniViewMount?.(section);
+  function scheduleDetailMounts(data = null) {
+    if (data && typeof window.mountChartUi === "function") {
+      window.mountChartUi(data, cardSlot, { reason: "selected-detail" });
+      return;
+    }
+    window.scheduleProgressImageThumbnailMount?.(cardSlot);
+    window.scheduleChartMiniViewMount?.(cardSlot);
+    window.refreshBranchTreeOverlays?.(cardSlot);
     window.scheduleBranchTreeOverlayRefresh?.();
+    window.BmsRecentActivity?.refresh?.(cardSlot);
   }
 
   function renderChartsWithSelectedSection(data) {
@@ -154,6 +160,7 @@
 
     cardSlot.appendChild(renderedCard);
     chartList.replaceChildren(preservedList);
+    scheduleDetailMounts(data);
     detailReady = true;
     shouldFocusTarget = true;
     setStatus(successMessage, { success: Boolean(successMessage) });
@@ -172,6 +179,7 @@
 
   async function loadDetail(options = {}) {
     const postSuccess = options.postSuccess === true;
+    const managementRefresh = options.managementRefresh === true;
     setStatus(postSuccess ? successMessage : "指定された投稿を読み込んでいます。", {
       loading: true,
       success: postSuccess && Boolean(successMessage)
@@ -185,6 +193,12 @@
       });
       const body = await readResponse(response);
       if (!response.ok) {
+        if (response.status === 404 && managementRefresh) {
+          detailReady = false;
+          cardSlot.replaceChildren();
+          setStatus("管理操作後、この投稿は公開一覧から非表示になりました。", { success: true });
+          return true;
+        }
         if (response.status === 404 && !postSuccess) {
           detailReady = false;
           cardSlot.replaceChildren();
@@ -202,8 +216,22 @@
         throw { code: "CHART_DETAIL_INVALID_RESPONSE", name: "ChartDetailResponseError" };
       }
 
+      const selectedVersionVisible = (Array.isArray(charts[0]?.versions) ? charts[0].versions : [])
+        .some((version) => String(version?.id || version?.versionId || "") === selection.versionId);
+      if (!selectedVersionVisible) {
+        detailReady = false;
+        cardSlot.replaceChildren();
+        setStatus(
+          managementRefresh
+            ? "管理操作後、この版は公開一覧から非表示になりました。"
+            : "指定された版は公開一覧に表示されていません。",
+          managementRefresh ? { success: true } : { error: true }
+        );
+        return managementRefresh;
+      }
+
+      window.BmsRecentActivity?.setServerTime?.(body?.serverTime);
       renderDetailCard(body);
-      scheduleDetailMounts();
       await focusTargetVersion();
       return true;
     } catch (error) {
@@ -276,13 +304,22 @@
     await window.loadCharts?.({ selectedChartId: selection.chartId });
   }
 
+  async function refreshAfterManagement({ chartId } = {}) {
+    if (!detailRequested || String(chartId || "") !== selection.chartId) {
+      return true;
+    }
+    successMessage = "";
+    return loadDetail({ managementRefresh: true });
+  }
+
   window.BmsChartDetail = {
     getSelection: () => ({
       chartId: detailRequested ? selection.chartId : "",
       versionId: detailRequested ? selection.versionId : ""
     }),
     reloadFromUrl,
-    showCreatedVersion
+    showCreatedVersion,
+    refreshAfterManagement
   };
 
   updateBackLink();

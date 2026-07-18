@@ -12,12 +12,15 @@ import { findActiveFileBan } from "./bans";
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 200;
 const MAX_SEARCH_QUERY_LENGTH = 100;
+const MAX_CHART_ID_LENGTH = 160;
+const CHART_ID_PATTERN = /^[A-Za-z0-9_-]+$/u;
 
 type ListParams = {
   page: number;
   pageSize: number;
   q: string;
   normalizedQuery: string;
+  excludeChartId: string;
   offset: number;
 };
 
@@ -267,6 +270,19 @@ function parseListParams(url: URL): ParseResult {
     };
   }
 
+  const excludeChartId = (url.searchParams.get("excludeChartId") ?? "").trim();
+  if (excludeChartId && (
+    Array.from(excludeChartId).length > MAX_CHART_ID_LENGTH
+    || !CHART_ID_PATTERN.test(excludeChartId)
+  )) {
+    return {
+      ok: false,
+      code: "INVALID_QUERY_PARAM",
+      message: "クエリパラメータが不正です。",
+      detail: `excludeChartId must be ${MAX_CHART_ID_LENGTH} characters or less and contain only letters, numbers, underscores, or hyphens.`
+    };
+  }
+
   return {
     ok: true,
     value: {
@@ -274,6 +290,7 @@ function parseListParams(url: URL): ParseResult {
       pageSize: pageSize.value,
       q,
       normalizedQuery: normalizeText(q),
+      excludeChartId,
       offset
     }
   };
@@ -595,6 +612,11 @@ function buildVisibleChartFilter(params: ListParams): { sql: string; bindings: s
   ];
   const bindings: string[] = [];
 
+  if (params.excludeChartId) {
+    conditions.push("charts.id <> ?");
+    bindings.push(params.excludeChartId);
+  }
+
   if (params.q) {
     const normalizedPattern = `%${escapeLikePattern(params.normalizedQuery)}%`;
     const authorPattern = `%${escapeLikePattern(params.q)}%`;
@@ -655,16 +677,28 @@ async function selectVisibleChartRows(env: Env, params: ListParams): Promise<Cha
   return result.results ?? [];
 }
 
-async function selectVisibleChartCount(env: Env, params: ListParams): Promise<number> {
+async function selectVisibleChartCount(
+  env: Env,
+  params: ListParams
+): Promise<{ total: number; serverTime: string }> {
   const filter = buildVisibleChartFilter(params);
   const row = await env.DB.prepare(`
-    SELECT COUNT(*) AS total
+    SELECT COUNT(*) AS total, CURRENT_TIMESTAMP AS server_time
     FROM charts
     INNER JOIN songs ON songs.id = charts.song_id
     WHERE ${filter.sql}
-  `).bind(...filter.bindings).first<{ total: number }>();
+  `).bind(...filter.bindings).first<{ total: number; server_time: string }>();
 
-  return Number(row?.total ?? 0);
+  return {
+    total: Number(row?.total ?? 0),
+    serverTime: row?.server_time ?? new Date().toISOString()
+  };
+}
+
+async function selectServerTime(env: Env): Promise<string> {
+  const row = await env.DB.prepare("SELECT CURRENT_TIMESTAMP AS server_time")
+    .first<{ server_time: string }>();
+  return row?.server_time ?? new Date().toISOString();
 }
 
 async function selectVisibleChartById(env: Env, chartId: string): Promise<ChartRow | null> {
@@ -798,7 +832,7 @@ async function handleChartList(request: Request, env: Env): Promise<Response> {
 
   try {
     const chartRowsWithLookahead = await selectVisibleChartRows(env, params);
-    const total = await selectVisibleChartCount(env, params);
+    const countResult = await selectVisibleChartCount(env, params);
     const hasNext = chartRowsWithLookahead.length > params.pageSize;
     const chartRows = chartRowsWithLookahead.slice(0, params.pageSize);
     const chartIds = chartRows.map((row) => row.chart_id);
@@ -819,12 +853,14 @@ async function handleChartList(request: Request, env: Env): Promise<Response> {
       pagination: {
         page: params.page,
         pageSize: params.pageSize,
-        total,
+        total: countResult.total,
         hasNext
       },
       query: {
-        q: params.q
-      }
+        q: params.q,
+        excludeChartId: params.excludeChartId
+      },
+      serverTime: countResult.serverTime
     });
   } catch (error) {
     console.error("[charts-list-d1-read] failed to read chart list from D1", {
@@ -855,7 +891,7 @@ export async function handleChartDetailRoute(
     return methodNotAllowed(request, env, request.method);
   }
 
-  if (!chartId || Array.from(chartId).length > 160 || !/^[A-Za-z0-9_-]+$/u.test(chartId)) {
+  if (!chartId || Array.from(chartId).length > MAX_CHART_ID_LENGTH || !CHART_ID_PATTERN.test(chartId)) {
     return apiError(
       request,
       env,
@@ -880,8 +916,10 @@ export async function handleChartDetailRoute(
     }
 
     const versionRows = await selectVisibleVersionRows(env, [chartRow.chart_id]);
+    const serverTime = await selectServerTime(env);
     return ok(request, env, {
-      charts: [buildChartEntry(chartRow, versionRows)]
+      charts: [buildChartEntry(chartRow, versionRows)],
+      serverTime
     }, {
       headers: {
         "Cache-Control": "no-cache"

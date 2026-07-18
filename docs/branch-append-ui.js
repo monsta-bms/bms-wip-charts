@@ -43,6 +43,7 @@
   const submitButton = document.querySelector("#submitButton");
   const cancelAppendButton = document.querySelector("#cancelAppendButton");
   const chartList = document.querySelector("#chartList");
+  const chartInteractionRoot = document.querySelector("#list") || chartList;
 
   const appendState = {
     active: false,
@@ -805,7 +806,12 @@
       cancelAppendButton.hidden = false;
     }
     clearMessage();
-    submitPanel?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (typeof window.BmsPostFormUi?.open === "function") {
+      window.BmsPostFormUi.open();
+    } else {
+      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      submitPanel?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+    }
   }
 
   function exitAppendMode({ resetForm = true } = {}) {
@@ -1226,7 +1232,7 @@
     return null;
   }
 
-  chartList?.addEventListener("click", (event) => {
+  chartInteractionRoot?.addEventListener("click", (event) => {
     const button = event.target.closest(".append-version-button");
     if (!button) {
       return;

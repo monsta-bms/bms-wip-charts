@@ -38,12 +38,14 @@ const submitButton = document.querySelector("#submitButton");
 const errorBox = document.querySelector("#errorBox");
 const chartList = document.querySelector("#chartList");
 const chartListFeedback = document.querySelector("#chartListFeedback");
+const chartListPagination = document.querySelector("#chartListPagination");
+const loadMoreChartsButton = document.querySelector("#loadMoreChartsButton");
 
 let isSubmitting = false;
 let lastValidManualDifficulty = "";
 let initialFileAnalysisRevision = 0;
 
-const recentChartCount = 6;
+const recentChartCount = 10;
 const maxDifficultyNumber = 25;
 const densityCanvasHeight = 120;
 const defaultBpm = 130;
@@ -87,7 +89,8 @@ const chartListState = {
   loadingMore: false,
   loadMoreFailed: false,
   requestSequence: 0,
-  abortController: null
+  abortController: null,
+  selectedChartId: ""
 };
 
 const requiredFieldChecks = [
@@ -1593,8 +1596,181 @@ function setChartListFeedback(message = "") {
   chartListFeedback.hidden = !message;
 }
 
+const recentActivityClock = {
+  serverTimeMs: null,
+  capturedAt: 0
+};
+const recentActivityWarnings = new Set();
+
+function parseApiTimestamp(value) {
+  const source = String(value || "").trim();
+  if (!source) {
+    return null;
+  }
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(source)
+    ? `${source.replace(" ", "T")}Z`
+    : source;
+  const date = new Date(normalized);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+function setRecentActivityServerTime(value) {
+  const date = parseApiTimestamp(value);
+  if (!date) {
+    if (value && !recentActivityWarnings.has("INVALID_SERVER_TIME")) {
+      recentActivityWarnings.add("INVALID_SERVER_TIME");
+      console.warn("[recent-activity] invalid API server time", {
+        code: "INVALID_SERVER_TIME"
+      });
+    }
+    return false;
+  }
+  recentActivityClock.serverTimeMs = date.getTime();
+  recentActivityClock.capturedAt = performance.now();
+  return true;
+}
+
+function getRecentActivityNow() {
+  if (!Number.isFinite(recentActivityClock.serverTimeMs)) {
+    return null;
+  }
+  return recentActivityClock.serverTimeMs + Math.max(0, performance.now() - recentActivityClock.capturedAt);
+}
+
+function formatAbsolutePostedAt(date) {
+  return new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).format(date);
+}
+
+function getRecentActivityLabel(createdAt) {
+  const now = getRecentActivityNow();
+  const created = parseApiTimestamp(createdAt);
+  if (!created) {
+    const warningKey = `INVALID_VERSION_TIMESTAMP:${createdAt}`;
+    if (createdAt && !recentActivityWarnings.has(warningKey)) {
+      recentActivityWarnings.add(warningKey);
+      console.warn("[recent-activity] invalid version timestamp was ignored", {
+        code: "INVALID_VERSION_TIMESTAMP"
+      });
+    }
+    return null;
+  }
+  if (now === null) {
+    return null;
+  }
+
+  const ageMs = now - created.getTime();
+  if (ageMs < 0) {
+    const warningKey = `FUTURE_VERSION_TIMESTAMP:${createdAt}`;
+    if (!recentActivityWarnings.has(warningKey)) {
+      recentActivityWarnings.add(warningKey);
+      console.warn("[recent-activity] future version timestamp was ignored", {
+        code: "FUTURE_VERSION_TIMESTAMP"
+      });
+    }
+    return null;
+  }
+
+  const hours = Math.floor(ageMs / (60 * 60 * 1000));
+  if (hours < 1) {
+    return "1時間未満";
+  }
+  if (hours < 24) {
+    return `${hours}時間前`;
+  }
+  if (hours < 192) {
+    return `${Math.floor(hours / 24)}日前`;
+  }
+  return null;
+}
+
+function refreshRecentActivityBadges(root = document) {
+  root.querySelectorAll?.(".recent-activity-badge[data-created-at]").forEach((badge) => {
+    const createdAt = badge.dataset.createdAt || "";
+    const created = parseApiTimestamp(createdAt);
+    const label = getRecentActivityLabel(createdAt);
+    if (!created || !label) {
+      badge.hidden = true;
+      badge.textContent = "";
+      badge.removeAttribute("title");
+      badge.removeAttribute("aria-label");
+      return;
+    }
+
+    const absolute = formatAbsolutePostedAt(created);
+    badge.hidden = false;
+    badge.textContent = label;
+    badge.title = `投稿日時 ${absolute}`;
+    badge.setAttribute("aria-label", `${label}、投稿日時 ${absolute}`);
+  });
+}
+
+function mountChartUi(data, root = chartList, options = {}) {
+  if (!root) {
+    return;
+  }
+  if (data && options.applyStoredThumbnails !== false) {
+    window.applyStoredProgressThumbnails?.(data, root);
+  }
+  if (data && options.mountFavorites !== false) {
+    window.mountFavoriteButtons?.(data, root);
+  }
+  window.scheduleProgressImageThumbnailMount?.(root);
+  window.scheduleChartMiniViewMount?.(root);
+  window.refreshBranchTreeOverlays?.(root);
+  window.scheduleBranchTreeOverlayRefresh?.();
+  refreshRecentActivityBadges(root);
+  root.dispatchEvent(new CustomEvent("chart-ui:mounted", {
+    bubbles: true,
+    detail: {
+      root,
+      data: data || null,
+      reason: options.reason || "render"
+    }
+  }));
+}
+
+window.BmsRecentActivity = {
+  setServerTime: setRecentActivityServerTime,
+  refresh: refreshRecentActivityBadges
+};
+window.mountChartUi = mountChartUi;
+
 function updateChartListControls() {
-  // Full-list search, filtering, and pagination live on list.html.
+  if (!chartListPagination || !loadMoreChartsButton) {
+    return;
+  }
+
+  chartListPagination.hidden = false;
+  if (chartListState.loading || chartListState.loadingMore) {
+    loadMoreChartsButton.textContent = "読み込み中…";
+    loadMoreChartsButton.disabled = true;
+    chartListPagination.setAttribute("aria-busy", "true");
+    return;
+  }
+
+  chartListPagination.setAttribute("aria-busy", "false");
+  if (chartListState.loadMoreFailed) {
+    loadMoreChartsButton.textContent = "再試行";
+    loadMoreChartsButton.disabled = false;
+    return;
+  }
+
+  if (chartListState.hasNext) {
+    loadMoreChartsButton.textContent = `さらに${recentChartCount}件読み込む`;
+    loadMoreChartsButton.disabled = false;
+    return;
+  }
+
+  loadMoreChartsButton.textContent = "すべて表示しました";
+  loadMoreChartsButton.disabled = true;
 }
 
 function renderLoading() {
@@ -1668,6 +1844,23 @@ function renderCharts(data) {
   }).join("");
 }
 
+function appendRenderedCharts(data) {
+  const preserved = document.createDocumentFragment();
+  while (chartList.firstChild) {
+    preserved.appendChild(chartList.firstChild);
+  }
+
+  renderCharts(data);
+  mountChartUi(data, chartList, { reason: "append-new-cards" });
+  const additions = document.createDocumentFragment();
+  while (chartList.firstChild) {
+    additions.appendChild(chartList.firstChild);
+  }
+  chartList.appendChild(preserved);
+  chartList.appendChild(additions);
+  mountChartUi(null, chartList, { reason: "append-complete" });
+}
+
 function rerenderCurrentChartList() {
   const renderData = {
     charts: chartListState.charts,
@@ -1680,6 +1873,7 @@ function rerenderCurrentChartList() {
     query: { q: chartListState.query }
   };
   renderCharts(renderData);
+  mountChartUi(renderData, chartList, { reason: "rerender" });
   updateChartListControls();
   return renderData;
 }
@@ -1687,31 +1881,41 @@ function rerenderCurrentChartList() {
 window.rerenderCurrentChartList = rerenderCurrentChartList;
 
 async function loadCharts(options = {}) {
+  const append = options.append === true;
   const selectedChartId = String(options.selectedChartId ?? getSelectedChartId());
-  const requestPageSize = selectedChartId ? recentChartCount + 1 : recentChartCount;
-  chartListState.abortController?.abort();
-  chartListState.query = "";
-  chartListState.page = 0;
-  chartListState.total = 0;
-  chartListState.hasNext = false;
-  chartListState.charts = [];
-  chartListState.loadMoreFailed = false;
-  renderLoading();
+  if (append && (chartListState.loading || chartListState.loadingMore || !chartListState.hasNext)) {
+    return null;
+  }
 
-  const targetPage = 1;
+  chartListState.abortController?.abort();
+  if (!append) {
+    chartListState.query = "";
+    chartListState.page = 0;
+    chartListState.total = 0;
+    chartListState.hasNext = false;
+    chartListState.charts = [];
+    chartListState.selectedChartId = selectedChartId;
+    renderLoading();
+  }
+  chartListState.loadMoreFailed = false;
+
+  const targetPage = append ? chartListState.page + 1 : 1;
   const requestSequence = chartListState.requestSequence + 1;
   const abortController = new AbortController();
   chartListState.requestSequence = requestSequence;
   chartListState.abortController = abortController;
-  chartListState.loading = true;
-  chartListState.loadingMore = false;
+  chartListState.loading = !append;
+  chartListState.loadingMore = append;
   setChartListFeedback("");
   updateChartListControls();
 
   const searchParams = new URLSearchParams({
-    page: "1",
-    pageSize: String(requestPageSize)
+    page: String(targetPage),
+    pageSize: String(recentChartCount)
   });
+  if (selectedChartId) {
+    searchParams.set("excludeChartId", selectedChartId);
+  }
 
   try {
     const data = await apiRequest(`/api/charts?${searchParams.toString()}`, {
@@ -1721,20 +1925,29 @@ async function loadCharts(options = {}) {
       return null;
     }
 
-    const nextCharts = Array.isArray(data?.charts) ? data.charts : [];
-    chartListState.charts = nextCharts
-      .filter((entry) => !selectedChartId || getChartEntryId(entry) !== selectedChartId)
-      .slice(0, recentChartCount);
+    setRecentActivityServerTime(data?.serverTime);
+    const existingIds = new Set(chartListState.charts.map(getChartEntryId));
+    const nextCharts = (Array.isArray(data?.charts) ? data.charts : [])
+      .filter((entry) => {
+        const chartId = getChartEntryId(entry);
+        return chartId
+          && (!selectedChartId || chartId !== selectedChartId)
+          && (!append || !existingIds.has(chartId));
+      });
+
+    chartListState.charts = append
+      ? [...chartListState.charts, ...nextCharts]
+      : nextCharts;
     chartListState.page = Number(data?.pagination?.page) || targetPage;
     chartListState.total = Number.isFinite(Number(data?.pagination?.total))
       ? Number(data.pagination.total)
       : chartListState.charts.length;
-    chartListState.hasNext = false;
+    chartListState.hasNext = data?.pagination?.hasNext === true;
     chartListState.loadMoreFailed = false;
 
     const renderData = {
       ...data,
-      charts: chartListState.charts,
+      charts: append ? nextCharts : chartListState.charts,
       pagination: {
         ...data?.pagination,
         page: chartListState.page,
@@ -1744,9 +1957,16 @@ async function loadCharts(options = {}) {
       },
       query: { q: "" }
     };
-    renderCharts(renderData);
+    if (append) {
+      if (nextCharts.length > 0) {
+        appendRenderedCharts(renderData);
+      }
+    } else {
+      renderCharts(renderData);
+      mountChartUi(renderData, chartList, { reason: "initial" });
+    }
 
-    setChartListFeedback("");
+    setChartListFeedback(`${chartListState.charts.length}件表示`);
     return renderData;
   } catch (error) {
     if (error?.name === "AbortError" || requestSequence !== chartListState.requestSequence) {
@@ -1759,8 +1979,13 @@ async function loadCharts(options = {}) {
       message: error?.detail || error?.message || String(error)
     });
 
-    chartList.innerHTML = `<div class="list-status">最近の投稿を読み込めませんでした。</div>`;
-    setChartListFeedback("一覧の取得に失敗しました。");
+    chartListState.loadMoreFailed = true;
+    if (!append) {
+      chartList.innerHTML = `<div class="list-status">最近の投稿を読み込めませんでした。</div>`;
+      setChartListFeedback("一覧の取得に失敗しました。再試行できます。");
+    } else {
+      setChartListFeedback("追加の投稿を読み込めませんでした。表示中の投稿はそのままです。");
+    }
     return null;
   } finally {
     if (requestSequence === chartListState.requestSequence) {
@@ -1770,7 +1995,7 @@ async function loadCharts(options = {}) {
       updateChartListControls();
       window.dispatchEvent(new CustomEvent("chart-list-load-settled", {
         detail: {
-          append: false,
+          append,
           page: targetPage,
           chartCount: chartListState.charts.length
         }
@@ -1780,6 +2005,20 @@ async function loadCharts(options = {}) {
 }
 
 window.loadCharts = loadCharts;
+
+loadMoreChartsButton?.addEventListener("click", () => {
+  const append = chartListState.page > 0 && chartListState.charts.length > 0;
+  void loadCharts({
+    append,
+    selectedChartId: chartListState.selectedChartId || getSelectedChartId()
+  });
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    refreshRecentActivityBadges(document.querySelector("#list") || document);
+  }
+});
 
 function buildChartFormData() {
   const file = fileInput.files?.[0];

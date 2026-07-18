@@ -437,9 +437,12 @@ MVPではサムネイルクリックによる拡大表示は実装しない。�
 
 ### トップの最近の投稿
 
-- トップページは全件探索用UIを持たず、`GET /api/charts?page=1&pageSize=6`で`charts.updated_at DESC, charts.id ASC`順の最近6chartだけを詳細カード表示する。検索、件数、お気に入りのみ、追加読み込みは独立投稿一覧`list.html`へ集約する。
-- 詳細表示中は7chartを取得し、選択中chartをchart IDで除外してから先頭6chartを表示する。選択中カードと最近一覧に同じchart/version DOMを重複させない。
-- chartカード内の版ツリー、進捗サムネイル、miniView、DL、追記、お気に入り、管理操作、コメントは維持する。
+- トップページは全件探索用の検索・フィルターを持たず、`GET /api/charts?page=1&pageSize=10`で`charts.updated_at DESC, charts.id ASC`順の最近10chartを詳細カード表示する。
+- 一覧下部の操作領域は常時表示し、`さらに10件読み込む`, `読み込み中…`, `すべて表示しました`, `再試行`を状態に応じて切り替える。追加取得失敗時は表示済みカードを残す。
+- 追加取得はchart IDで重複排除し、AbortControllerと世代番号で古い応答を無視する。
+- 詳細表示中は`excludeChartId`で選択中chartをAPIの一覧とCOUNTから除外し、各ページを10chartのまま維持する。選択中カードと最近一覧に同じchart/version DOMを重複させない。
+- chartカード内の版ツリー、進捗サムネイル、miniView、DL、追記、お気に入り、管理操作、コメントは維持する。選択中カードも`#list`の共通イベント委譲と描画後mountを使用する。
+- 各chartの最新公開version投稿日時を基準に、D1の`serverTime`との差が1時間未満、1〜23時間、1〜7日の場合だけ相対時刻を表示する。8日以上、未来日時、不正日時は表示しない。タブ再表示時に更新し、頻繁なtimer更新は行わない。
 
 ### chart検索API
 
@@ -470,13 +473,14 @@ MVPではサムネイルクリックによる拡大表示は実装しない。�
 - 戻る・進むではURL条件を復元して再取得し、通信中の古い応答はAbortControllerと世代番号で無視する。
 - ページ取得失敗時は直前の行を消さず、失敗表示と再試行導線を出す。
 - タイトルは`index.html?chartId=<chartId>&versionId=<versionId>#list`へリンクし、同名曲や同一chart内の別versionを曖昧な検索に頼らず特定する。
-- トップは`GET /api/charts/:chartId`で対象chartを取得し、「選択中の投稿」として既存詳細カードを表示する。その下には選択chartを除いた最近の6chartを表示する。
+- トップは`GET /api/charts/:chartId`で対象chartを取得し、「選択中の投稿」として既存詳細カードを表示する。その下には`excludeChartId`で選択chartを除いた最近の10chartを表示し、10件ずつ追加取得できる。
 - 詳細APIは公開chartと公開versionだけを返すが、対象ツリーの復元用に`collapsed_by_completion=1`の中間履歴を含める。`is_hidden=1`のchart/versionは返さない。
 - 指定versionが中間履歴にある場合は、そのversionを含む履歴グループだけを展開する。無関係な履歴グループは折り畳み状態を維持する。
 - 描画後の共通mountと折り畳み処理を待って対象行を再取得し、中央へスクロールしてfocusする。`prefers-reduced-motion: reduce`では即時スクロールとし、対象行はレイアウトを動かさない枠と「選択中」表示で4秒間強調する。
 - chartが見つからない場合、chart内に指定versionがない場合、API失敗を区別して案内する。API失敗時は再試行でき、不正な片側パラメータや長すぎるIDでも通常一覧を壊さない。
 - 初回投稿・追記投稿の成功後はレスポンスの`chartId`/`versionId`を使い、フォームとローカルminiViewをresetし、保存対象の作者・管理パスワードを復元して未送信判定を解除する。Turnstileをresetしてフォームを閉じた後、`history.replaceState`で詳細URLへ更新し、同じ詳細コントローラーで取得・履歴展開・focus・一時強調する。
 - 投稿API成功後の詳細再取得に失敗しても投稿成功は取り消さず、再試行導線を表示して二重投稿を防ぐ。
+- 選択中カードの取り消し・削除申請後は、管理APIの成功と表示再取得の成否を分離する。対象versionが非公開になった場合はカードを残さず状態文を表示し、最近一覧も再取得する。
 - OFFSET方式は維持する。件数増加時のcursorページングは後続フェーズとする。
 
 ### お気に入り★

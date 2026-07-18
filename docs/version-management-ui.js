@@ -3,9 +3,10 @@
   const passwordStorageKey = "bms-wip-charts-admin-password";
   const reasonMaxLength = 500;
   const chartList = document.querySelector("#chartList");
+  const chartInteractionRoot = document.querySelector("#list") || chartList;
   const dialog = document.querySelector("#versionManagementDialog");
 
-  if (!chartList || !dialog) {
+  if (!chartList || !chartInteractionRoot || !dialog) {
     return;
   }
 
@@ -288,11 +289,53 @@
       stateValue.textContent = describeState();
       withdrawButton.textContent = state.withdrawn ? "取り下げ済み" : "取り下げる";
       deleteRequestButton.textContent = deleteActionLabel();
-      setMessage(buildOutcomeMessage(body, action), "success");
-      if (typeof loadCharts === "function") {
-        await loadCharts();
-      }
+      const outcomeMessage = buildOutcomeMessage(body, action);
+      setMessage(outcomeMessage, "success");
       setSubmitting(false);
+
+      const refreshFailures = [];
+      try {
+        const detailResult = await window.BmsChartDetail?.refreshAfterManagement?.({
+          chartId: state.chartId,
+          versionId: state.versionId,
+          outcome: body?.outcome || ""
+        });
+        if (detailResult === false) {
+          refreshFailures.push("selected-detail");
+        }
+      } catch (refreshError) {
+        refreshFailures.push("selected-detail");
+        console.warn("[version-management-refresh] selected detail refresh failed", {
+          code: "SELECTED_DETAIL_REFRESH_FAILED",
+          chartId: state.chartId,
+          versionId: state.versionId,
+          errorType: refreshError instanceof Error ? refreshError.name : typeof refreshError
+        });
+      }
+
+      try {
+        if (typeof loadCharts === "function") {
+          const listResult = await loadCharts({
+            selectedChartId: window.BmsChartDetail?.getSelection?.().chartId || ""
+          });
+          if (!listResult) {
+            refreshFailures.push("recent-list");
+          }
+        }
+      } catch (refreshError) {
+        refreshFailures.push("recent-list");
+        console.warn("[version-management-refresh] recent list refresh failed", {
+          code: "RECENT_LIST_REFRESH_FAILED",
+          chartId: state.chartId,
+          versionId: state.versionId,
+          errorType: refreshError instanceof Error ? refreshError.name : typeof refreshError
+        });
+      }
+
+      if (refreshFailures.length > 0) {
+        setMessage(`${outcomeMessage}\n操作は完了しましたが、表示の更新に失敗しました。ページを再読み込みしてください。`, "success");
+      }
+      return;
     } catch (error) {
       const code = error?.code || "REQUEST_FAILED";
       const errorMessage = error?.message || "管理操作に失敗しました。";
@@ -308,7 +351,7 @@
     }
   }
 
-  chartList.addEventListener("click", (event) => {
+  chartInteractionRoot.addEventListener("click", (event) => {
     const button = event.target.closest(".version-management-button");
     if (!button) {
       return;
@@ -332,4 +375,3 @@
   });
   form.addEventListener("submit", (event) => event.preventDefault());
 })();
-

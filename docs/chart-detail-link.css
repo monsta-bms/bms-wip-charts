@@ -51,6 +51,42 @@
   text-underline-offset: 0.18em;
 }
 
+.top-recent-pagination {
+  display: flex;
+  justify-content: center;
+  min-height: 48px;
+  padding: 14px 0 2px;
+}
+
+.top-recent-pagination button {
+  min-width: 190px;
+}
+
+.top-recent-pagination button:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.recent-activity-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  margin-inline-start: 5px;
+  padding: 1px 5px;
+  border: 1px solid #9fc4b9;
+  border-radius: 3px;
+  background: #eef7f4;
+  color: #176556;
+  font-size: 0.67rem;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.recent-activity-badge[hidden] {
+  display: none;
+}
+
 .selected-chart-retry {
   margin: 0 16px 14px;
 }

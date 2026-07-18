@@ -1,5 +1,6 @@
 (() => {
   const listElement = document.querySelector("#chartList");
+  const interactionRoot = document.querySelector("#list") || listElement;
   const completedCollapseReason = "superseded_by_completed_descendant";
   const expandedIntermediateGroups = new Set();
   let latestCharts = [];
@@ -102,10 +103,14 @@
     }).format(date)}`;
   }
 
-  function renderLifecycleMeta(version) {
+  function renderLifecycleMeta(version, options = {}) {
     const postedAt = formatPostedAt(version);
+    const createdAt = String(version?.createdAt || version?.created_at || "");
+    const recentBadge = options.isLatest && createdAt
+      ? `<span class="recent-activity-badge" data-created-at="${html(createdAt)}" hidden></span>`
+      : "";
     if (!isWithin24Hours(version)) {
-      return `<span class="version-posted-at">${html(postedAt)}</span>`;
+      return `<span class="version-posted-at">${html(postedAt)}</span>${recentBadge}`;
     }
 
     const tooltip = hasChildVersions(version)
@@ -114,6 +119,7 @@
     return `
       <span class="version-posted-at">${html(postedAt)}</span>
       <span class="within-24h-badge" title="${html(tooltip)}">24h以内</span>
+      ${recentBadge}
     `;
   }
 
@@ -760,7 +766,7 @@
             <span class="version-state-badges">${renderStateBadges(node, progress)}</span>
           </span>
           <span class="version-parent-line" title="${html(titleText)}">${html(parentText)}</span>
-          <span class="version-lifecycle-line">${renderLifecycleMeta(version)}</span>
+          <span class="version-lifecycle-line">${renderLifecycleMeta(version, { isLatest: options.isLatest })}</span>
         </span>
       `;
     }
@@ -901,7 +907,7 @@
     }
   }
 
-  listElement.addEventListener("click", (event) => {
+  interactionRoot.addEventListener("click", (event) => {
     const appendButton = event.target.closest(".append-version-button");
     if (appendButton) {
       window.setTimeout(() => updateAppendContextLabels(appendButton), 0);
@@ -945,6 +951,14 @@
 
       const list = group.querySelector(".version-list");
       const versions = Array.isArray(entry.versions) ? entry.versions : [];
+      group.dataset.chartId = getChartId(entry);
+      const latestVersion = versions
+        .slice()
+        .sort((left, right) => {
+          const timeDiff = getCreatedAtTime(right) - getCreatedAtTime(left);
+          return timeDiff || String(getVersionId(right)).localeCompare(String(getVersionId(left)));
+        })[0];
+      const latestVersionKey = getVersionId(latestVersion);
       const rows = Array.from(list?.querySelectorAll(":scope > .version-row") || []);
       if (!list || versions.length === 0 || rows.length === 0) {
         return;
@@ -971,9 +985,13 @@
         const groupId = getCollapseGroupId(node, treeNodes);
         const collapsible = intermediateGroups.has(groupId) && intermediateGroups.get(groupId)?.includes(node);
         const expanded = groupId ? expandedIntermediateGroups.has(groupId) : false;
+        const commonOptions = {
+          entry,
+          isLatest: getVersionId(node.version) === latestVersionKey
+        };
         enhanceRow(row, node, collapsible
-          ? { collapsedGroupId: groupId, expanded, entry }
-          : { entry });
+          ? { ...commonOptions, collapsedGroupId: groupId, expanded }
+          : commonOptions);
 
         if (collapsible) {
           collapsedKeys.add(getNodeKey(node.version));

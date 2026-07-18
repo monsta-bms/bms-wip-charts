@@ -245,6 +245,7 @@ D1から投稿一覧を取得する。
 | `page` | `1` | 1始まりのページ番号。 |
 | `pageSize` | `100` | chart件数。最大 `200`。 |
 | `q` | 空 | 最大100文字の部分一致検索語。前後空白を除去し、NFKC・小文字化して検索する。`%`と`_`は文字として扱う。 |
+| `excludeChartId` | 空 | 指定した公開chartを一覧と`total`から除外する。トップの「選択中の投稿」と最近一覧の重複防止に使用する。英数字、`_`, `-`のみ、最大160文字。 |
 
 検索対象は曲名、サブタイトル、アーティスト、サブアーティスト、差分名、公開中versionの作者とする。検索結果の単位はchartであり、いずれかに一致したchartについて公開中versionをすべて返す。
 
@@ -287,10 +288,14 @@ versionレスポンスには以下を含める。
     "hasNext": false
   },
   "query": {
-    "q": ""
-  }
+    "q": "",
+    "excludeChartId": ""
+  },
+  "serverTime": "2026-07-18 03:04:05"
 }
 ```
+
+`serverTime`はD1の`CURRENT_TIMESTAMP`（UTC）であり、トップの相対時刻表示の基準にする。`excludeChartId`を指定した場合、一覧SELECTとCOUNTの両方へ同じ除外条件を適用する。
 
 ### GET /api/charts/:chartId
 
@@ -306,7 +311,8 @@ versionレスポンスには以下を含める。
       "chart": {},
       "versions": []
     }
-  ]
+  ],
+  "serverTime": "2026-07-18 03:04:05"
 }
 ```
 
@@ -319,7 +325,7 @@ versionレスポンスには以下を含める。
 
 存在しないchartと非公開chartは、情報を区別せずHTTP 404 `CHART_NOT_FOUND`を返す。IDが空、不正文字を含む、160文字を超える、またはURL encodingが不正な場合はHTTP 400 `INVALID_CHART_ID`とする。GET以外はHTTP 405 `METHOD_NOT_ALLOWED`とする。
 
-レスポンスは`Cache-Control: no-cache`とし、追記、取り下げ、削除申請、DL停止、非公開化が再検証されるようにする。既存のCORS方針を適用する。D1取得または整形に失敗した場合はHTTP 500 `CHART_DETAIL_QUERY_FAILED`を返し、SQLや内部例外を公開しない。
+レスポンスは`Cache-Control: no-cache`とし、追記、取り下げ、削除申請、DL停止、非公開化が再検証されるようにする。`serverTime`はD1の`CURRENT_TIMESTAMP`（UTC）を返す。既存のCORS方針を適用する。D1取得または整形に失敗した場合はHTTP 500 `CHART_DETAIL_QUERY_FAILED`を返し、SQLや内部例外を公開しない。
 
 ### GET /api/versions
 

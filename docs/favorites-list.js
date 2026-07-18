@@ -1,5 +1,6 @@
 (() => {
   const listElement = document.querySelector("#chartList");
+  const interactionRoot = document.querySelector("#list") || listElement;
   const filterButton = document.querySelector("#favoriteFilterToggle");
   const storageKey = "bms-wip-charts:favorites:v1";
   const completedCollapseReason = "superseded_by_completed_descendant";
@@ -364,10 +365,10 @@
     return map;
   }
 
-  function mountFavorites(renderData) {
+  function mountFavorites(renderData, root = listElement) {
     const favorites = readFavorites();
     const entries = Array.isArray(renderData?.charts) ? renderData.charts : [];
-    const groups = Array.from(listElement.querySelectorAll(".chart-group"));
+    const groups = Array.from(root.querySelectorAll(".chart-group"));
 
     entries.forEach((entry, chartIndex) => {
       const group = groups[chartIndex];
@@ -440,7 +441,7 @@
     renderWithFavorites(latestData);
   }
 
-  listElement.addEventListener("click", (event) => {
+  interactionRoot.addEventListener("click", (event) => {
     const button = event.target.closest(".favorite-version-button");
     if (!button) {
       return;
@@ -473,7 +474,7 @@
       return;
     }
 
-    listElement.querySelectorAll(".favorite-version-button").forEach((candidate) => {
+    interactionRoot.querySelectorAll(".favorite-version-button").forEach((candidate) => {
       if (candidate.dataset.versionId === versionId) {
         setButtonState(candidate, hasFavorite(favorites, versionId));
       }
@@ -498,6 +499,8 @@
   } catch (error) {
     window.renderCharts = renderWithFavorites;
   }
+
+  window.mountFavoriteButtons = mountFavorites;
 
   injectStyles();
   updateFilterButton();

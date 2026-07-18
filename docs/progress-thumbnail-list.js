@@ -1,6 +1,7 @@
 (() => {
   const thumbnailMaxCells = 96;
   const listElement = document.querySelector("#chartList");
+  const interactionRoot = document.querySelector("#list") || listElement;
   let progressThumbnailMountFrame = 0;
   let progressThumbnailObserver = null;
   let progressThumbnailBridgeInstalled = false;
@@ -1104,8 +1105,8 @@
   ensureProgressImageThumbnailStyle();
   installProgressThumbnailObserver();
 
-  if (listElement) {
-    listElement.addEventListener("error", handleProgressImageError, true);
+  if (interactionRoot) {
+    interactionRoot.addEventListener("error", handleProgressImageError, true);
   }
 
   window.renderProgressThumbnail = renderProgressThumbnail;
