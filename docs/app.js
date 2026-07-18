@@ -37,19 +37,13 @@ const savePasswordInput = document.querySelector("#savePassword");
 const submitButton = document.querySelector("#submitButton");
 const errorBox = document.querySelector("#errorBox");
 const chartList = document.querySelector("#chartList");
-const chartSearchForm = document.querySelector("#chartSearchForm");
-const chartSearchInput = document.querySelector("#chartSearchInput");
-const chartSearchClearButton = document.querySelector("#chartSearchClearButton");
-const chartSearchSummary = document.querySelector("#chartSearchSummary");
 const chartListFeedback = document.querySelector("#chartListFeedback");
-const loadMoreChartsButton = document.querySelector("#loadMoreChartsButton");
 
 let isSubmitting = false;
 let lastValidManualDifficulty = "";
 let initialFileAnalysisRevision = 0;
 
-const chartPageSize = 20;
-const maxChartSearchLength = 100;
+const recentChartCount = 6;
 const maxDifficultyNumber = 25;
 const densityCanvasHeight = 120;
 const defaultBpm = 130;
@@ -83,9 +77,9 @@ const progressMapState = {
 };
 
 const chartListState = {
-  query: readChartQueryFromUrl(),
+  query: "",
   page: 0,
-  pageSize: chartPageSize,
+  pageSize: recentChartCount,
   total: 0,
   hasNext: false,
   charts: [],
@@ -1577,54 +1571,17 @@ function buildDownloadUrl(downloadUrl) {
   return new URL(downloadUrl, API_BASE_URL).toString();
 }
 
-function normalizeChartQuery(value) {
-  return Array.from(String(value ?? "").trim()).slice(0, maxChartSearchLength).join("");
-}
-
-function readChartQueryFromUrl() {
-  return normalizeChartQuery(new URL(window.location.href).searchParams.get("q") || "");
-}
-
-function updateChartSearchUrl(query, replace = false) {
-  const url = new URL(window.location.href);
-  if (query) {
-    url.searchParams.set("q", query);
-  } else {
-    url.searchParams.delete("q");
-  }
-
-  const method = replace ? "replaceState" : "pushState";
-  window.history[method]({ q: query }, "", url);
-}
-
 function getChartEntryId(entry) {
   return String(entry?.chart?.id || entry?.chartId || "");
 }
 
-function mergeChartEntries(currentEntries, nextEntries) {
-  const merged = [...currentEntries];
-  const indexById = new Map();
-  merged.forEach((entry, index) => {
-    const chartId = getChartEntryId(entry);
-    if (chartId) {
-      indexById.set(chartId, index);
-    }
-  });
+function getSelectedChartId() {
+  const controllerSelection = window.BmsChartDetail?.getSelection?.();
+  if (controllerSelection?.chartId) {
+    return String(controllerSelection.chartId);
+  }
 
-  nextEntries.forEach((entry) => {
-    const chartId = getChartEntryId(entry);
-    if (chartId && indexById.has(chartId)) {
-      merged[indexById.get(chartId)] = entry;
-      return;
-    }
-
-    if (chartId) {
-      indexById.set(chartId, merged.length);
-    }
-    merged.push(entry);
-  });
-
-  return merged;
+  return String(new URL(window.location.href).searchParams.get("chartId") || "");
 }
 
 function setChartListFeedback(message = "") {
@@ -1637,33 +1594,7 @@ function setChartListFeedback(message = "") {
 }
 
 function updateChartListControls() {
-  if (chartSearchInput && document.activeElement !== chartSearchInput) {
-    chartSearchInput.value = chartListState.query;
-  }
-
-  if (chartSearchClearButton) {
-    chartSearchClearButton.disabled = !chartSearchInput?.value.trim();
-  }
-
-  if (chartSearchSummary) {
-    if (chartListState.loading && !chartListState.loadingMore) {
-      chartSearchSummary.textContent = chartListState.query ? "検索中です。" : "一覧を読み込んでいます。";
-    } else if (chartListState.query) {
-      chartSearchSummary.textContent = `「${chartListState.query}」の検索結果 ${chartListState.total}件（${chartListState.charts.length}件表示）`;
-    } else {
-      chartSearchSummary.textContent = `全${chartListState.total}件中 ${chartListState.charts.length}件表示`;
-    }
-  }
-
-  if (loadMoreChartsButton) {
-    loadMoreChartsButton.hidden = chartListState.charts.length === 0 || !chartListState.hasNext;
-    loadMoreChartsButton.disabled = chartListState.loading;
-    loadMoreChartsButton.textContent = chartListState.loadingMore
-      ? "読み込み中"
-      : chartListState.loadMoreFailed
-        ? "再試行"
-        : "さらに読み込む";
-  }
+  // Full-list search, filtering, and pagination live on list.html.
 }
 
 function renderLoading() {
@@ -1756,39 +1687,31 @@ function rerenderCurrentChartList() {
 window.rerenderCurrentChartList = rerenderCurrentChartList;
 
 async function loadCharts(options = {}) {
-  const append = options.append === true;
-  if (append && (chartListState.loading || !chartListState.hasNext)) {
-    return null;
-  }
+  const selectedChartId = String(options.selectedChartId ?? getSelectedChartId());
+  const requestPageSize = selectedChartId ? recentChartCount + 1 : recentChartCount;
+  chartListState.abortController?.abort();
+  chartListState.query = "";
+  chartListState.page = 0;
+  chartListState.total = 0;
+  chartListState.hasNext = false;
+  chartListState.charts = [];
+  chartListState.loadMoreFailed = false;
+  renderLoading();
 
-  if (!append) {
-    chartListState.abortController?.abort();
-    chartListState.query = normalizeChartQuery(options.query ?? chartListState.query);
-    chartListState.page = 0;
-    chartListState.total = 0;
-    chartListState.hasNext = false;
-    chartListState.charts = [];
-    chartListState.loadMoreFailed = false;
-    renderLoading();
-  }
-
-  const targetPage = append ? chartListState.page + 1 : 1;
+  const targetPage = 1;
   const requestSequence = chartListState.requestSequence + 1;
   const abortController = new AbortController();
   chartListState.requestSequence = requestSequence;
   chartListState.abortController = abortController;
   chartListState.loading = true;
-  chartListState.loadingMore = append;
-  setChartListFeedback(append ? "追加分を読み込んでいます。" : "");
+  chartListState.loadingMore = false;
+  setChartListFeedback("");
   updateChartListControls();
 
   const searchParams = new URLSearchParams({
-    page: String(targetPage),
-    pageSize: String(chartListState.pageSize)
+    page: "1",
+    pageSize: String(requestPageSize)
   });
-  if (chartListState.query) {
-    searchParams.set("q", chartListState.query);
-  }
 
   try {
     const data = await apiRequest(`/api/charts?${searchParams.toString()}`, {
@@ -1799,14 +1722,14 @@ async function loadCharts(options = {}) {
     }
 
     const nextCharts = Array.isArray(data?.charts) ? data.charts : [];
-    chartListState.charts = append
-      ? mergeChartEntries(chartListState.charts, nextCharts)
-      : nextCharts;
+    chartListState.charts = nextCharts
+      .filter((entry) => !selectedChartId || getChartEntryId(entry) !== selectedChartId)
+      .slice(0, recentChartCount);
     chartListState.page = Number(data?.pagination?.page) || targetPage;
     chartListState.total = Number.isFinite(Number(data?.pagination?.total))
       ? Number(data.pagination.total)
       : chartListState.charts.length;
-    chartListState.hasNext = data?.pagination?.hasNext === true;
+    chartListState.hasNext = false;
     chartListState.loadMoreFailed = false;
 
     const renderData = {
@@ -1815,20 +1738,13 @@ async function loadCharts(options = {}) {
       pagination: {
         ...data?.pagination,
         page: chartListState.page,
-        pageSize: chartListState.pageSize,
+        pageSize: recentChartCount,
         total: chartListState.total,
         hasNext: chartListState.hasNext
       },
-      query: { q: chartListState.query }
+      query: { q: "" }
     };
     renderCharts(renderData);
-
-    if (chartListState.charts.length === 0 && chartListState.query) {
-      const status = chartList.querySelector(".list-status");
-      if (status) {
-        status.textContent = `「${chartListState.query}」に一致する投稿はありません。`;
-      }
-    }
 
     setChartListFeedback("");
     return renderData;
@@ -1839,19 +1755,12 @@ async function loadCharts(options = {}) {
 
     console.error("[api-charts-list] failed to load charts", {
       code: error?.code || "CHARTS_LIST_FAILED",
-      append,
       page: targetPage,
       message: error?.detail || error?.message || String(error)
     });
 
-    if (append) {
-      chartListState.loadMoreFailed = true;
-      setChartListFeedback("追加分を読み込めませんでした。再試行してください。");
-    } else {
-      chartList.innerHTML = `<div class="list-status">一覧を読み込めませんでした。</div>`;
-      setChartListFeedback("初回取得に失敗しました。");
-      showError(error);
-    }
+    chartList.innerHTML = `<div class="list-status">最近の投稿を読み込めませんでした。</div>`;
+    setChartListFeedback("一覧の取得に失敗しました。");
     return null;
   } finally {
     if (requestSequence === chartListState.requestSequence) {
@@ -1861,7 +1770,7 @@ async function loadCharts(options = {}) {
       updateChartListControls();
       window.dispatchEvent(new CustomEvent("chart-list-load-settled", {
         detail: {
-          append,
+          append: false,
           page: targetPage,
           chartCount: chartListState.charts.length
         }
@@ -1869,6 +1778,8 @@ async function loadCharts(options = {}) {
     }
   }
 }
+
+window.loadCharts = loadCharts;
 
 function buildChartFormData() {
   const file = fileInput.files?.[0];
@@ -1920,7 +1831,7 @@ async function submitChart() {
         detail: "Turnstile token is unavailable."
       };
     }
-    await apiRequest("/api/charts", {
+    const created = await apiRequest("/api/charts", {
       method: "POST",
       headers: {
         "X-Turnstile-Token": turnstileToken
@@ -1928,19 +1839,33 @@ async function submitChart() {
       body: buildChartFormData()
     });
 
+    const savedAuthor = authorInput.value.trim();
     const savedPassword = passwordInput.value;
     const shouldRestorePassword = savePasswordInput.checked;
     form.reset();
     clearRequiredFieldIndicators();
     resetDifficultySelector();
     resetProgressMap();
+    window.BmsFormMiniView?.clear();
     progressInput.value = "100";
+    authorInput.value = savedAuthor;
     if (shouldRestorePassword) {
       passwordInput.value = savedPassword;
       savePasswordInput.checked = true;
     }
     applyRejectedProgressState();
-    await loadCharts();
+    window.BmsTurnstile?.reset();
+    window.BmsPostFormUi?.markClean?.();
+    window.BmsPostFormUi?.close?.();
+    if (window.BmsChartDetail?.showCreatedVersion) {
+      await window.BmsChartDetail.showCreatedVersion({
+        chartId: created?.chartId,
+        versionId: created?.versionId,
+        message: "投稿しました。"
+      });
+    } else {
+      await loadCharts({ selectedChartId: created?.chartId });
+    }
   } catch (error) {
     console.error("[api-chart-create] failed to create chart", {
       code: error?.code || "CHART_CREATE_FAILED",
@@ -2113,50 +2038,10 @@ form.addEventListener("submit", (event) => {
   submitChart();
 });
 
-chartSearchForm?.addEventListener("submit", (event) => {
-  event.preventDefault();
-  const query = normalizeChartQuery(chartSearchInput?.value || "");
-  if (chartSearchInput) {
-    chartSearchInput.value = query;
-  }
-  updateChartSearchUrl(query, query === chartListState.query);
-  loadCharts({ query });
-});
-
-chartSearchInput?.addEventListener("input", () => {
-  if (chartSearchClearButton) {
-    chartSearchClearButton.disabled = !chartSearchInput.value.trim();
-  }
-});
-
-chartSearchClearButton?.addEventListener("click", () => {
-  if (chartSearchInput) {
-    chartSearchInput.value = "";
-    chartSearchInput.focus();
-  }
-  updateChartSearchUrl("", chartListState.query === "");
-  loadCharts({ query: "" });
-});
-
-loadMoreChartsButton?.addEventListener("click", () => {
-  loadCharts({ append: true });
-});
-
-window.addEventListener("popstate", () => {
-  const query = readChartQueryFromUrl();
-  if (chartSearchInput) {
-    chartSearchInput.value = query;
-  }
-  loadCharts({ query });
-});
-
 loadSavedPassword();
 resetDifficultySelector();
 resetProgressMap();
 applyRejectedProgressState();
-if (chartSearchInput) {
-  chartSearchInput.value = chartListState.query;
-}
 updateChartListControls();
 
 const startInitialChartLoad = async () => {
@@ -2171,7 +2056,7 @@ const startInitialChartLoad = async () => {
       });
     }
   }
-  return loadCharts({ query: chartListState.query });
+  return loadCharts({ selectedChartId: getSelectedChartId() });
 };
 if (document.readyState === "complete") {
   window.setTimeout(startInitialChartLoad, 0);

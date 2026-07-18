@@ -13,7 +13,7 @@
   padding: 0 16px 12px;
 }
 
-.selected-chart-heading h3 {
+.selected-chart-heading h2 {
   margin: 0;
   font-size: 1.05rem;
 }
@@ -33,6 +33,22 @@
 
 .selected-chart-status.is-error {
   color: #8b3434;
+}
+
+.selected-chart-status.is-success {
+  color: #155f51;
+  font-weight: 700;
+}
+
+.recent-chart-heading {
+  align-items: baseline;
+}
+
+.recent-chart-all-link {
+  color: #176556;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-underline-offset: 0.18em;
 }
 
 .selected-chart-retry {
@@ -98,6 +114,13 @@
   .selected-chart-section .version-row.is-detail-target::after {
     top: 4px;
     right: 5px;
+  }
+
+  .recent-chart-heading {
+    align-items: baseline;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px 14px;
   }
 }
 

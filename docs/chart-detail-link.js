@@ -13,22 +13,24 @@
     return;
   }
 
-  const params = new URL(window.location.href).searchParams;
-  const rawChartId = params.get("chartId");
-  const rawVersionId = params.get("versionId");
-  const detailRequested = params.has("chartId") || params.has("versionId");
   const maxIdLength = 160;
   const validIdPattern = /^[A-Za-z0-9_-]+$/;
   const baseRenderCharts = renderCharts;
+  let selection = readSelectionFromUrl();
+  let detailRequested = selection.paramsPresent;
   let detailReady = false;
   let shouldFocusTarget = false;
   let highlightTimer = 0;
+  let successMessage = "";
 
-  const returnUrl = new URL(window.location.href);
-  returnUrl.searchParams.delete("chartId");
-  returnUrl.searchParams.delete("versionId");
-  returnUrl.hash = "list";
-  backLink.href = returnUrl.toString();
+  function readSelectionFromUrl() {
+    const url = new URL(window.location.href);
+    return {
+      chartId: url.searchParams.get("chartId") || "",
+      versionId: url.searchParams.get("versionId") || "",
+      paramsPresent: url.searchParams.has("chartId") || url.searchParams.has("versionId")
+    };
+  }
 
   function isValidId(value) {
     return typeof value === "string"
@@ -37,12 +39,31 @@
       && validIdPattern.test(value);
   }
 
+  function hasValidSelection() {
+    return isValidId(selection.chartId) && isValidId(selection.versionId);
+  }
+
+  function updateBackLink() {
+    const returnUrl = new URL(window.location.href);
+    returnUrl.searchParams.delete("chartId");
+    returnUrl.searchParams.delete("versionId");
+    returnUrl.hash = "list";
+    backLink.href = returnUrl.toString();
+  }
+
+  function updateDetailUrl(historyMode = "replace") {
+    const url = new URL(window.location.href);
+    url.searchParams.set("chartId", selection.chartId);
+    url.searchParams.set("versionId", selection.versionId);
+    url.hash = "list";
+    const method = historyMode === "push" ? "pushState" : "replaceState";
+    window.history[method]({ chartId: selection.chartId, versionId: selection.versionId }, "", url);
+    updateBackLink();
+  }
+
   function insertSection() {
     if (!detailRequested) {
       return;
-    }
-    if (chartList.firstElementChild !== section) {
-      chartList.prepend(section);
     }
     section.hidden = false;
   }
@@ -51,6 +72,7 @@
     status.textContent = message;
     status.hidden = !message;
     status.classList.toggle("is-error", options.error === true);
+    status.classList.toggle("is-success", options.success === true);
     retryButton.hidden = options.retry !== true;
     section.setAttribute("aria-busy", options.loading === true ? "true" : "false");
     insertSection();
@@ -62,7 +84,7 @@
 
   function findTargetRow() {
     return Array.from(cardSlot.querySelectorAll(".version-row[data-version-id]"))
-      .find((row) => row.dataset.versionId === rawVersionId) || null;
+      .find((row) => row.dataset.versionId === selection.versionId) || null;
   }
 
   async function focusTargetVersion() {
@@ -71,7 +93,7 @@
     }
     shouldFocusTarget = false;
 
-    let row = window.revealChartVersionRow?.(cardSlot, rawVersionId) || findTargetRow();
+    let row = window.revealChartVersionRow?.(cardSlot, selection.versionId) || findTargetRow();
     await nextFrame();
     await nextFrame();
     row = row?.isConnected ? row : findTargetRow();
@@ -112,7 +134,6 @@
   }
 
   function preserveCurrentList() {
-    section.remove();
     const fragment = document.createDocumentFragment();
     while (chartList.firstChild) {
       fragment.appendChild(chartList.firstChild);
@@ -135,9 +156,9 @@
     chartList.replaceChildren(preservedList);
     detailReady = true;
     shouldFocusTarget = true;
-    setStatus("");
+    setStatus(successMessage, { success: Boolean(successMessage) });
     section.dispatchEvent(new CustomEvent("chart-detail:rendered", {
-      detail: { chartId: rawChartId, hasVersionId: Boolean(rawVersionId) }
+      detail: { chartId: selection.chartId, versionId: selection.versionId }
     }));
   }
 
@@ -150,21 +171,25 @@
   }
 
   async function loadDetail(options = {}) {
-    setStatus("指定された投稿を読み込んでいます。", { loading: true });
+    const postSuccess = options.postSuccess === true;
+    setStatus(postSuccess ? successMessage : "指定された投稿を読み込んでいます。", {
+      loading: true,
+      success: postSuccess && Boolean(successMessage)
+    });
     retryButton.disabled = true;
 
     try {
-      const response = await fetch(new URL(`/api/charts/${encodeURIComponent(rawChartId)}`, API_BASE_URL), {
+      const response = await fetch(new URL(`/api/charts/${encodeURIComponent(selection.chartId)}`, API_BASE_URL), {
         headers: { Accept: "application/json" },
         cache: "no-cache"
       });
       const body = await readResponse(response);
       if (!response.ok) {
-        if (response.status === 404) {
+        if (response.status === 404 && !postSuccess) {
           detailReady = false;
           cardSlot.replaceChildren();
           setStatus("指定された投稿は見つかりませんでした。\n非公開または取り下げ済みの可能性があります。", { error: true });
-          return;
+          return false;
         }
         throw {
           code: body?.code || "CHART_DETAIL_LOAD_FAILED",
@@ -178,43 +203,113 @@
       }
 
       renderDetailCard(body);
-      if (options.rerenderList === true) {
-        window.rerenderCurrentChartList?.();
-      }
+      scheduleDetailMounts();
+      await focusTargetVersion();
+      return true;
     } catch (error) {
       detailReady = false;
       cardSlot.replaceChildren();
-      setStatus("指定された投稿を読み込めませんでした。", { error: true, retry: true });
+      setStatus(
+        postSuccess
+          ? "投稿は完了しましたが、表示を更新できませんでした。再試行してください。"
+          : "指定された投稿を読み込めませんでした。",
+        { error: true, retry: true }
+      );
       console.warn("[chart-detail-load] failed to load selected chart", {
         code: error?.code || "CHART_DETAIL_LOAD_FAILED",
-        chartId: rawChartId,
-        hasVersionId: Boolean(rawVersionId),
+        chartId: selection.chartId,
+        hasVersionId: Boolean(selection.versionId),
+        postSuccess,
         errorType: error?.name || typeof error
       });
+      return false;
     } finally {
       retryButton.disabled = false;
       section.setAttribute("aria-busy", "false");
     }
   }
 
-  if (!detailRequested) {
-    return;
+  async function showCreatedVersion({ chartId, versionId, message = "投稿しました。" } = {}) {
+    if (!isValidId(chartId) || !isValidId(versionId)) {
+      console.warn("[chart-detail-created] success response did not contain usable IDs", {
+        code: "INVALID_CREATED_VERSION_IDS",
+        hasChartId: Boolean(chartId),
+        hasVersionId: Boolean(versionId)
+      });
+      return false;
+    }
+
+    selection = { chartId: String(chartId), versionId: String(versionId), paramsPresent: true };
+    detailRequested = true;
+    detailReady = false;
+    successMessage = message;
+    updateDetailUrl("replace");
+    insertSection();
+
+    const loaded = await loadDetail({ postSuccess: true });
+    await window.loadCharts?.({ selectedChartId: selection.chartId });
+    return loaded;
   }
 
-  if (!isValidId(rawChartId) || !isValidId(rawVersionId)) {
+  async function reloadFromUrl() {
+    selection = readSelectionFromUrl();
+    detailRequested = selection.paramsPresent;
+    detailReady = false;
+    shouldFocusTarget = false;
+    successMessage = "";
+    cardSlot.replaceChildren();
+
+    if (!detailRequested) {
+      section.hidden = true;
+      await window.loadCharts?.({ selectedChartId: "" });
+      return;
+    }
+
+    updateBackLink();
+    if (!hasValidSelection()) {
+      setStatus("指定された投稿を開けませんでした。URLを確認してください。", { error: true });
+      await window.loadCharts?.({ selectedChartId: "" });
+      return;
+    }
+
+    await loadDetail();
+    await window.loadCharts?.({ selectedChartId: selection.chartId });
+  }
+
+  window.BmsChartDetail = {
+    getSelection: () => ({
+      chartId: detailRequested ? selection.chartId : "",
+      versionId: detailRequested ? selection.versionId : ""
+    }),
+    reloadFromUrl,
+    showCreatedVersion
+  };
+
+  updateBackLink();
+  if (!detailRequested) {
+    section.hidden = true;
+    window.chartDetailInitialRenderPromise = Promise.resolve();
+  } else if (!hasValidSelection()) {
     setStatus("指定された投稿を開けませんでした。URLを確認してください。", { error: true });
     console.warn("[chart-detail-params] invalid detail link parameters", {
       code: "INVALID_CHART_DETAIL_PARAMS",
-      hasChartId: Boolean(rawChartId),
-      hasVersionId: Boolean(rawVersionId)
+      hasChartId: Boolean(selection.chartId),
+      hasVersionId: Boolean(selection.versionId)
     });
     window.chartDetailInitialRenderPromise = Promise.resolve();
   } else {
     window.chartDetailInitialRenderPromise = loadDetail();
   }
 
-  retryButton.addEventListener("click", () => {
-    void loadDetail({ rerenderList: true });
+  retryButton.addEventListener("click", async () => {
+    const loaded = await loadDetail({ postSuccess: Boolean(successMessage) });
+    if (loaded) {
+      await window.loadCharts?.({ selectedChartId: selection.chartId });
+    }
+  });
+
+  window.addEventListener("popstate", () => {
+    void reloadFromUrl();
   });
 
   window.addEventListener("chart-list-load-settled", () => {

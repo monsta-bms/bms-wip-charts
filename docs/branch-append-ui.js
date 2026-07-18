@@ -1032,16 +1032,29 @@
           detail: "Turnstile token is unavailable."
         };
       }
-      await callApi(`/api/charts/${encodeURIComponent(appendState.chartId)}/versions`, {
+      const created = await callApi(`/api/charts/${encodeURIComponent(appendState.chartId)}/versions`, {
         method: "POST",
         headers: {
           "X-Turnstile-Token": turnstileToken
         },
         body: buildAppendFormData()
       });
+      const savedAuthor = authorInput?.value.trim() || "";
       exitAppendMode({ resetForm: true });
-      if (typeof loadCharts === "function") {
-        await loadCharts();
+      if (authorInput) {
+        authorInput.value = savedAuthor;
+      }
+      window.BmsTurnstile?.reset();
+      window.BmsPostFormUi?.markClean?.();
+      window.BmsPostFormUi?.close?.();
+      if (window.BmsChartDetail?.showCreatedVersion) {
+        await window.BmsChartDetail.showCreatedVersion({
+          chartId: created?.chartId,
+          versionId: created?.versionId,
+          message: "追記を投稿しました。"
+        });
+      } else if (typeof loadCharts === "function") {
+        await loadCharts({ selectedChartId: created?.chartId });
       }
     } catch (error) {
       console.error("[api-chart-version-append] failed to append version", {

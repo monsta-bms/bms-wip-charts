@@ -103,6 +103,24 @@
     summary.hidden = !summary.textContent || !body.hidden;
   }
 
+  function markClean() {
+    Array.from(form.elements).forEach((control) => {
+      if (!control || control.type === "file" || control.type === "button"
+        || control.type === "submit" || control.type === "reset") {
+        return;
+      }
+
+      if (control.type === "checkbox" || control.type === "radio") {
+        control.defaultChecked = control.checked;
+      } else if ("defaultValue" in control) {
+        control.defaultValue = control.value;
+      }
+    });
+    lastFormActionAt = 0;
+    manuallyCollapsed = false;
+    updateSummary();
+  }
+
   function setOpen(open, { focusToggle = false } = {}) {
     const shouldOpen = Boolean(open) || isAppendMode();
     body.hidden = !shouldOpen;
@@ -230,6 +248,7 @@
       }
     },
     isDirty,
+    markClean,
     open: openAndReveal,
     updateSummary
   };
