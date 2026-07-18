@@ -454,14 +454,18 @@ MVPではサムネイルクリックによる拡大表示は実装しない。�
 `list.html` は大量の公開版を簡潔に確認するページとし、トップの詳細カード一覧とは別のversion単位APIを使用する。
 
 - `GET /api/versions` は公開versionを1件ずつ返す。`charts.is_hidden=0`, `versions.is_hidden=0`, `collapsed_by_completion=0`を共通条件とする。
-- 一覧の通常行は日付、タイトル、難易度、作者、進捗を主情報とする。曲名の下に `[差分名] / 数字パス版ラベル` を表示する。
+- 一覧の通常行は日付、タイトル、難易度、作者、コメント、進捗の6列とする。曲名の下に `[差分名] / 数字パス版ラベル` を表示する。タイトルを主列、進捗を64px固定列として扱う。
+- コメントは`versions.comment`をtrimし、連続空白を1個へ畳んだ80 Unicode code pointまでの`commentPreview`だけを返す。80文字超過時だけ`…`を付け、全文・HTML・リンク化は一覧で扱わない。
 - `withdrawn`, `deleteRequested`, `downloadBlocked` は公開状態なら小さい状態ラベルを表示する。管理非表示versionと完成版に置き換えられた中間履歴は表示しない。
 - 検索対象は曲名、サブタイトル、アーティスト、サブアーティスト、差分名、そのversionの作者とする。
 - 並び順は `new`（version投稿日時順）と `updated`（chart更新日時を優先し、その中でversion投稿日時順）を提供する。
 - 状態は `all`, `incomplete`, `complete`, `rejected` を提供する。未完成・完成は非没譜面だけを対象とする。
+- 状態と並び順はネイティブradioのフィルターパネルで選択し、変更時に即再取得する。
+- 期間は`dateFrom`, `dateTo`の片側または両側指定とし、適用操作まで一覧へ反映しない。`sort=new`ではversion投稿日時、`sort=updated`ではchart更新日時を固定JST（UTC+9）の開始含む・翌日開始未満で絞る。
+- 今日・今週・今月・今年のショートカットはAPIの`serverTime`をJSTへ変換して算出し、端末時計や端末timezoneを基準にしない。
 - `POST /api/versions/query` はlocalStorageのversion IDを最大200件受け取り、公開状態を再検証してお気に入りを完全にページングする。見つからないIDは自動削除せず件数だけ返す。
 - NEWはchartの初回公開日時から168時間以内とし、Worker/D1の時刻で判定する。追記ではNEWへ戻さない。
-- 1ページ20versionのページ番号方式とし、`q`, `sort`, `status`, `favorites`, `page` をURLへ保持する。条件変更は1ページ目へ戻す。
+- 1ページ20versionのページ番号方式とし、`q`, `sort`, `status`, `favorites`, `dateFrom`, `dateTo`, `page` をURLへ保持する。条件変更は1ページ目へ戻す。
 - 戻る・進むではURL条件を復元して再取得し、通信中の古い応答はAbortControllerと世代番号で無視する。
 - ページ取得失敗時は直前の行を消さず、失敗表示と再試行導線を出す。
 - 対象versionを正確に開く詳細ルートはこのフェーズでは追加しないため、タイトルを曖昧な検索リンクとして扱わない。

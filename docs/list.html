@@ -6,7 +6,7 @@
     <title>投稿一覧 | リサイクルセンター</title>
     <link rel="stylesheet" href="./style.css?v=ui-refresh-01-phase1">
     <link rel="stylesheet" href="./site-header.css?v=recycle-ux-02a">
-    <link rel="stylesheet" href="./list.css?v=list-data-02ab">
+    <link rel="stylesheet" href="./list.css?v=list-ux-03a">
   </head>
   <body id="top">
     <div class="page-shell">
@@ -22,42 +22,79 @@
 
         <section class="compact-search" aria-labelledby="compactSearchHeading">
           <h2 id="compactSearchHeading">検索</h2>
-          <form id="compactSearchForm" class="compact-search-form" role="search">
-            <label for="compactSearchInput">曲名・アーティスト・差分名・差分作者</label>
-            <div class="compact-search-controls">
-              <input
-                id="compactSearchInput"
-                name="q"
-                type="search"
-                maxlength="100"
-                autocomplete="off"
-                placeholder="曲名・アーティスト・差分名・差分作者"
-              >
-              <button type="submit">検索</button>
-              <button id="compactSearchClear" class="secondary" type="button">クリア</button>
+          <div class="compact-filter-panel">
+            <form id="compactSearchForm" class="compact-search-form" role="search">
+              <label for="compactSearchInput">曲名・アーティスト・差分名・差分作者</label>
+              <div class="compact-search-controls">
+                <input
+                  id="compactSearchInput"
+                  name="q"
+                  type="search"
+                  maxlength="100"
+                  autocomplete="off"
+                  placeholder="曲名・アーティスト・差分名・差分作者"
+                >
+                <button type="submit">検索</button>
+                <button id="compactSearchClear" class="secondary" type="button">クリア</button>
+              </div>
+            </form>
+
+            <div class="compact-filter-groups">
+              <div class="compact-filter-row">
+                <span class="compact-filter-label" aria-hidden="true">状態</span>
+                <fieldset class="compact-filter-fieldset">
+                  <legend class="visually-hidden">状態</legend>
+                  <div class="compact-radio-group compact-status-options">
+                    <label class="compact-radio-choice"><input type="radio" name="compactStatus" value="all"><span>すべて</span></label>
+                    <label class="compact-radio-choice"><input type="radio" name="compactStatus" value="complete"><span>完成</span></label>
+                    <label class="compact-radio-choice"><input type="radio" name="compactStatus" value="incomplete"><span>未完成</span></label>
+                    <label class="compact-radio-choice"><input type="radio" name="compactStatus" value="rejected"><span>没譜面</span></label>
+                  </div>
+                </fieldset>
+              </div>
+
+              <div class="compact-filter-row">
+                <span class="compact-filter-label" aria-hidden="true">基準</span>
+                <fieldset class="compact-filter-fieldset">
+                  <legend class="visually-hidden">並び順と期間の基準</legend>
+                  <div class="compact-radio-group compact-sort-options">
+                    <label class="compact-radio-choice"><input type="radio" name="compactSort" value="new"><span>新着順</span></label>
+                    <label class="compact-radio-choice"><input type="radio" name="compactSort" value="updated"><span>更新順</span></label>
+                  </div>
+                </fieldset>
+              </div>
+
+              <div class="compact-filter-row compact-date-filter-row">
+                <span id="compactDateFilterLabel" class="compact-filter-label">期間</span>
+                <div class="compact-date-filter" role="group" aria-labelledby="compactDateFilterLabel">
+                  <div class="compact-date-controls">
+                    <label><span>開始日</span><input id="compactDateFrom" type="date" aria-describedby="compactDateError"></label>
+                    <span class="compact-date-separator">から</span>
+                    <label><span>終了日</span><input id="compactDateTo" type="date" aria-describedby="compactDateError"></label>
+                    <button id="compactDateApply" class="secondary" type="button">適用</button>
+                  </div>
+                  <p id="compactDateError" class="compact-date-error" role="alert" hidden></p>
+                  <div id="compactDateShortcuts" class="compact-date-shortcuts" aria-label="期間のショートカット">
+                    <button class="secondary" type="button" data-date-shortcut="today">今日</button>
+                    <button class="secondary" type="button" data-date-shortcut="week">今週</button>
+                    <button class="secondary" type="button" data-date-shortcut="month">今月</button>
+                    <button class="secondary" type="button" data-date-shortcut="year">今年</button>
+                    <button class="secondary" type="button" data-date-shortcut="none">指定なし</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="compact-filter-row">
+                <span class="compact-filter-label" aria-hidden="true">その他</span>
+                <fieldset class="compact-filter-fieldset">
+                  <legend class="visually-hidden">その他の条件</legend>
+                  <label class="compact-favorite-filter">
+                    <input id="compactFavoriteOnly" type="checkbox">
+                    <span>お気に入りのみ</span>
+                  </label>
+                </fieldset>
+              </div>
             </div>
-          </form>
-          <div class="compact-filter-controls" aria-label="一覧の表示条件">
-            <label>
-              <span>並び順</span>
-              <select id="compactSortSelect">
-                <option value="new">新着順</option>
-                <option value="updated">更新順</option>
-              </select>
-            </label>
-            <label>
-              <span>状態</span>
-              <select id="compactStatusSelect">
-                <option value="all">すべて</option>
-                <option value="incomplete">未完成</option>
-                <option value="complete">完成</option>
-                <option value="rejected">没譜面</option>
-              </select>
-            </label>
-            <label class="compact-favorite-filter">
-              <input id="compactFavoriteOnly" type="checkbox">
-              <span>お気に入りのみ</span>
-            </label>
           </div>
           <p id="compactListSummary" class="compact-list-summary" aria-live="polite">一覧を読み込んでいます。</p>
         </section>
@@ -65,10 +102,11 @@
         <section class="compact-results" aria-labelledby="compactResultsHeading">
           <h2 id="compactResultsHeading" class="visually-hidden">検索結果</h2>
           <div class="compact-list-head" aria-hidden="true">
-            <span>日付</span>
+            <span id="compactDateHeading">投稿日</span>
             <span>タイトル</span>
             <span>難易度</span>
             <span>作者</span>
+            <span>コメント</span>
             <span>進捗</span>
           </div>
           <div id="compactVersionList" class="compact-version-list" aria-busy="true">
@@ -84,6 +122,6 @@
     </div>
 
     <script src="./site-header.js?v=recycle-list-01"></script>
-    <script src="./list.js?v=list-data-02ab"></script>
+    <script src="./list.js?v=list-ux-03a"></script>
   </body>
 </html>

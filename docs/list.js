@@ -15,8 +15,14 @@
   const searchForm = document.getElementById("compactSearchForm");
   const searchInput = document.getElementById("compactSearchInput");
   const searchClearButton = document.getElementById("compactSearchClear");
-  const sortSelect = document.getElementById("compactSortSelect");
-  const statusSelect = document.getElementById("compactStatusSelect");
+  const sortInputs = [...document.querySelectorAll('input[name="compactSort"]')];
+  const statusInputs = [...document.querySelectorAll('input[name="compactStatus"]')];
+  const dateFromInput = document.getElementById("compactDateFrom");
+  const dateToInput = document.getElementById("compactDateTo");
+  const dateApplyButton = document.getElementById("compactDateApply");
+  const dateError = document.getElementById("compactDateError");
+  const dateShortcuts = document.getElementById("compactDateShortcuts");
+  const dateHeading = document.getElementById("compactDateHeading");
   const favoriteOnlyInput = document.getElementById("compactFavoriteOnly");
   const summary = document.getElementById("compactListSummary");
   const list = document.getElementById("compactVersionList");
@@ -25,7 +31,8 @@
   const pagination = document.getElementById("compactPagination");
   const results = document.querySelector(".compact-results");
 
-  if (!searchForm || !searchInput || !searchClearButton || !sortSelect || !statusSelect
+  if (!searchForm || !searchInput || !searchClearButton || sortInputs.length === 0 || statusInputs.length === 0
+    || !dateFromInput || !dateToInput || !dateApplyButton || !dateError || !dateShortcuts || !dateHeading
     || !favoriteOnlyInput || !summary || !list || !feedback || !retryButton || !pagination) {
     return;
   }
@@ -33,6 +40,11 @@
   const initialLocationState = readLocationState();
   const state = {
     ...initialLocationState,
+    draftDateFrom: initialLocationState.dateFrom,
+    draftDateTo: initialLocationState.dateTo,
+    activeDateShortcut: "",
+    dateError: initialLocationState.dateError,
+    serverTime: "",
     items: [],
     total: 0,
     hasNext: false,
@@ -67,15 +79,62 @@
     return Number.isSafeInteger(page) && page > 0 ? page : 1;
   }
 
+  function isLeapYear(year) {
+    return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  }
+
+  function daysInMonth(year, month) {
+    if (month === 2) {
+      return isLeapYear(year) ? 29 : 28;
+    }
+    return [4, 6, 9, 11].includes(month) ? 30 : 31;
+  }
+
+  function isValidDateOnly(value) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
+    if (!match) {
+      return false;
+    }
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    return year >= 1 && month >= 1 && month <= 12 && day >= 1 && day <= daysInMonth(year, month);
+  }
+
+  function parseLocationDate(params, name) {
+    const rawValue = params.get(name);
+    if (rawValue === null || rawValue === "") {
+      return { value: "", invalid: false };
+    }
+    return isValidDateOnly(rawValue)
+      ? { value: rawValue, invalid: false }
+      : { value: "", invalid: true };
+  }
+
   function readLocationState() {
     const params = new URL(window.location.href).searchParams;
     const sort = params.get("sort") || "new";
     const status = params.get("status") || "all";
+    const parsedDateFrom = parseLocationDate(params, "dateFrom");
+    const parsedDateTo = parseLocationDate(params, "dateTo");
+    let dateFrom = parsedDateFrom.value;
+    let dateTo = parsedDateTo.value;
+    let dateErrorMessage = parsedDateFrom.invalid || parsedDateTo.invalid
+      ? "URLの日付指定を読み込めなかったため解除しました。"
+      : "";
+    if (dateFrom && dateTo && dateFrom > dateTo) {
+      dateFrom = "";
+      dateTo = "";
+      dateErrorMessage = "開始日は終了日以前にしてください。期間指定を解除しました。";
+    }
     return {
       query: normalizeQuery(params.get("q") || ""),
       sort: validSorts.has(sort) ? sort : "new",
       status: validStatuses.has(status) ? status : "all",
       favoriteOnly: ["1", "true"].includes((params.get("favorites") || "").toLowerCase()),
+      dateFrom,
+      dateTo,
+      dateError: dateErrorMessage,
       page: parsePage(params.get("page"))
     };
   }
@@ -93,12 +152,16 @@
     setOrDelete("sort", state.sort, "new");
     setOrDelete("status", state.status, "all");
     setOrDelete("favorites", state.favoriteOnly ? "1" : "");
+    setOrDelete("dateFrom", state.dateFrom);
+    setOrDelete("dateTo", state.dateTo);
     setOrDelete("page", state.page > 1 ? String(state.page) : "");
     const historyState = {
       q: state.query,
       sort: state.sort,
       status: state.status,
       favorites: state.favoriteOnly,
+      dateFrom: state.dateFrom,
+      dateTo: state.dateTo,
       page: state.page
     };
     window.history[options.replace ? "replaceState" : "pushState"](historyState, "", url);
@@ -163,6 +226,52 @@
     };
   }
 
+  function formatDateOnly(year, month, day) {
+    return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
+
+  function addDaysToDateOnly(value, amount) {
+    const [year, month, day] = value.split("-").map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day + amount));
+    return formatDateOnly(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate());
+  }
+
+  function getServerJstToday() {
+    const serverDate = parseCreatedAt(state.serverTime);
+    if (!serverDate) {
+      return "";
+    }
+    const shifted = new Date(serverDate.getTime() + (9 * 60 * 60 * 1000));
+    return formatDateOnly(shifted.getUTCFullYear(), shifted.getUTCMonth() + 1, shifted.getUTCDate());
+  }
+
+  function buildDateShortcutRange(shortcut) {
+    if (shortcut === "none") {
+      return { dateFrom: "", dateTo: "" };
+    }
+    const today = getServerJstToday();
+    if (!today) {
+      return null;
+    }
+    const [year, month] = today.split("-").map(Number);
+    if (shortcut === "today") {
+      return { dateFrom: today, dateTo: today };
+    }
+    if (shortcut === "month") {
+      return { dateFrom: formatDateOnly(year, month, 1), dateTo: today };
+    }
+    if (shortcut === "year") {
+      return { dateFrom: formatDateOnly(year, 1, 1), dateTo: today };
+    }
+    if (shortcut === "week") {
+      const [currentYear, currentMonth, currentDay] = today.split("-").map(Number);
+      const dayOfWeek = new Date(Date.UTC(currentYear, currentMonth - 1, currentDay)).getUTCDay();
+      const daysSinceMonday = (dayOfWeek + 6) % 7;
+      return { dateFrom: addDaysToDateOnly(today, -daysSinceMonday), dateTo: today };
+    }
+    return null;
+  }
+
   function buildStateBadges(item) {
     const badges = [];
     if (item.isNew === true) {
@@ -191,15 +300,17 @@
     const versionLabel = String(item.versionLabel || "版不明").trim();
     const difficulty = String(item.difficulty || "未入力").trim();
     const author = String(item.author || "未入力").trim();
+    const commentPreview = item.hasComment === true ? String(item.commentPreview || "") : "";
+    const hasComment = Boolean(commentPreview);
     const rawProgress = Number(item.progress);
     const progress = Number.isFinite(rawProgress) ? Math.max(0, Math.min(100, Math.round(rawProgress))) : 0;
-    const createdAt = formatCreatedAt(item.createdAt);
+    const displayedAt = formatCreatedAt(state.sort === "updated" ? item.chartUpdatedAt : item.createdAt);
     const stateBadges = buildStateBadges(item);
     const fullLabel = `${fullTitle} [${chartName}] / ${versionLabel}`;
 
     return `
-      <article class="compact-version-row" data-version-id="${escapeHtml(item.versionId || "")}">
-        <time class="compact-date" datetime="${escapeHtml(createdAt.datetime)}" title="${escapeHtml(createdAt.full)}">${escapeHtml(createdAt.short)}</time>
+      <article class="compact-version-row${hasComment ? " has-comment" : ""}" data-version-id="${escapeHtml(item.versionId || "")}">
+        <time class="compact-date" datetime="${escapeHtml(displayedAt.datetime)}" title="${escapeHtml(displayedAt.full)}">${escapeHtml(displayedAt.short)}</time>
         <div class="compact-title-cell" title="${escapeHtml(fullLabel)}">
           <div class="compact-title-line">
             <span class="compact-song-title">${escapeHtml(fullTitle)}</span>
@@ -209,9 +320,25 @@
         </div>
         <div class="compact-difficulty"><span class="compact-field-label">難易度</span><span>${escapeHtml(difficulty)}</span></div>
         <div class="compact-author"><span class="compact-field-label">作者</span><span title="${escapeHtml(author)}">${escapeHtml(author)}</span></div>
+        <div class="compact-comment"${hasComment ? "" : " aria-hidden=\"true\""}></div>
         <div class="compact-progress"><span class="compact-field-label">進捗</span><span>${escapeHtml(progress)}%</span></div>
       </article>
     `;
+  }
+
+  function applyCommentText() {
+    const rows = [...list.querySelectorAll(".compact-version-row")];
+    rows.forEach((row, index) => {
+      const comment = row.querySelector(".compact-comment");
+      const item = state.items[index];
+      if (!comment || !item || item.hasComment !== true) {
+        return;
+      }
+      const preview = String(item.commentPreview || "");
+      comment.textContent = preview;
+      comment.title = preview;
+      comment.setAttribute("aria-label", `コメント: ${preview}`);
+    });
   }
 
   function setFeedback(message) {
@@ -224,7 +351,7 @@
       if (state.favoriteIdCount === 0) {
         return "お気に入りはありません。";
       }
-      if (state.query || state.status !== "all") {
+      if (state.query || state.status !== "all" || state.dateFrom || state.dateTo) {
         return "条件に一致する公開中のお気に入りはありません。";
       }
       return "公開中のお気に入りはありません。";
@@ -232,7 +359,7 @@
     if (state.query) {
       return `「${escapeHtml(state.query)}」に一致する投稿はありません。`;
     }
-    if (state.status !== "all") {
+    if (state.status !== "all" || state.dateFrom || state.dateTo) {
       return "この状態に一致する投稿はありません。";
     }
     return "投稿はまだありません。";
@@ -263,7 +390,9 @@
     const end = start + state.items.length - 1;
     const queryPrefix = state.query ? `「${state.query}」: ` : "";
     if (state.favoriteOnly) {
-      const conditionPrefix = state.query || state.status !== "all" ? "条件に一致する" : "";
+      const conditionPrefix = state.query || state.status !== "all" || state.dateFrom || state.dateTo
+        ? "条件に一致する"
+        : "";
       const unavailable = state.unavailableFavoriteCount > 0
         ? ` / 見つからないお気に入り ${state.unavailableFavoriteCount}件`
         : "";
@@ -317,12 +446,26 @@
       searchInput.value = state.query;
     }
     searchClearButton.disabled = !searchInput.value.trim();
-    sortSelect.value = state.sort;
-    statusSelect.value = state.status;
+    sortInputs.forEach((input) => {
+      input.checked = input.value === state.sort;
+    });
+    statusInputs.forEach((input) => {
+      input.checked = input.value === state.status;
+    });
+    dateFromInput.value = state.draftDateFrom;
+    dateToInput.value = state.draftDateTo;
+    dateHeading.textContent = state.sort === "updated" ? "更新日" : "投稿日";
     favoriteOnlyInput.checked = state.favoriteOnly;
-    sortSelect.disabled = state.loading;
-    statusSelect.disabled = state.loading;
-    favoriteOnlyInput.disabled = state.loading;
+    dateError.textContent = state.dateError;
+    dateError.hidden = !state.dateError;
+    const hasDateError = Boolean(state.dateError);
+    dateFromInput.setAttribute("aria-invalid", hasDateError ? "true" : "false");
+    dateToInput.setAttribute("aria-invalid", hasDateError ? "true" : "false");
+    const hasServerClock = Boolean(getServerJstToday());
+    dateShortcuts.querySelectorAll("button[data-date-shortcut]").forEach((button) => {
+      button.disabled = !hasServerClock;
+      button.setAttribute("aria-pressed", button.dataset.dateShortcut === state.activeDateShortcut ? "true" : "false");
+    });
   }
 
   function renderCurrent() {
@@ -338,6 +481,7 @@
       list.innerHTML = `<p class="compact-list-state${errorClass}">${message}</p>`;
     } else {
       list.innerHTML = state.items.map(renderRow).join("");
+      applyCommentText();
     }
     retryButton.hidden = !state.errorCode;
     retryButton.disabled = state.loading;
@@ -373,6 +517,8 @@
             q: state.query,
             sort: state.sort,
             status: state.status,
+            dateFrom: state.dateFrom || null,
+            dateTo: state.dateTo || null,
             page: state.page,
             pageSize: PAGE_SIZE
           })
@@ -388,6 +534,12 @@
     });
     if (state.query) {
       params.set("q", state.query);
+    }
+    if (state.dateFrom) {
+      params.set("dateFrom", state.dateFrom);
+    }
+    if (state.dateTo) {
+      params.set("dateTo", state.dateTo);
     }
     return {
       url: `${API_BASE_URL}/api/versions?${params.toString()}`,
@@ -444,6 +596,7 @@
       state.items = [...itemMap.values()];
       state.total = total;
       state.hasNext = data?.pagination?.hasNext === true;
+      state.serverTime = String(data?.serverTime || state.serverTime || "");
       state.unavailableFavoriteCount = Math.max(0, Number(data?.unavailableFavoriteCount) || 0);
       state.errorCode = "";
       state.loading = false;
@@ -460,6 +613,8 @@
         page: state.page,
         sort: state.sort,
         status: state.status,
+        hasDateFrom: Boolean(state.dateFrom),
+        hasDateTo: Boolean(state.dateTo),
         favoriteOnly: state.favoriteOnly
       });
       setFeedback(state.items.length > 0
@@ -480,6 +635,30 @@
     Object.assign(state, changes, { page: 1 });
     updateLocation();
     loadVersions();
+  }
+
+  function validateDraftDateRange() {
+    const dateFrom = String(state.draftDateFrom || "");
+    const dateTo = String(state.draftDateTo || "");
+    if ((dateFrom && !isValidDateOnly(dateFrom)) || (dateTo && !isValidDateOnly(dateTo))) {
+      return { ok: false, message: "日付はYYYY-MM-DD形式で入力してください。" };
+    }
+    if (dateFrom && dateTo && dateFrom > dateTo) {
+      return { ok: false, message: "開始日は終了日以前にしてください。" };
+    }
+    return { ok: true, dateFrom, dateTo };
+  }
+
+  function applyDraftDateRange(activeShortcut = "") {
+    const validated = validateDraftDateRange();
+    if (!validated.ok) {
+      state.dateError = validated.message;
+      syncControls();
+      return;
+    }
+    state.dateError = "";
+    state.activeDateShortcut = activeShortcut;
+    applyFilterChange({ dateFrom: validated.dateFrom, dateTo: validated.dateTo });
   }
 
   function scrollToResults() {
@@ -507,12 +686,46 @@
     searchInput.focus();
   });
 
-  sortSelect.addEventListener("change", () => {
-    applyFilterChange({ sort: validSorts.has(sortSelect.value) ? sortSelect.value : "new" });
+  sortInputs.forEach((input) => input.addEventListener("change", () => {
+    if (input.checked) {
+      applyFilterChange({ sort: validSorts.has(input.value) ? input.value : "new" });
+    }
+  }));
+
+  statusInputs.forEach((input) => input.addEventListener("change", () => {
+    if (input.checked) {
+      applyFilterChange({ status: validStatuses.has(input.value) ? input.value : "all" });
+    }
+  }));
+
+  const handleDateDraftInput = () => {
+    state.draftDateFrom = dateFromInput.value;
+    state.draftDateTo = dateToInput.value;
+    state.activeDateShortcut = "";
+    state.dateError = "";
+    syncControls();
+  };
+
+  dateFromInput.addEventListener("input", handleDateDraftInput);
+  dateToInput.addEventListener("input", handleDateDraftInput);
+  dateApplyButton.addEventListener("click", () => {
+    applyDraftDateRange();
   });
 
-  statusSelect.addEventListener("change", () => {
-    applyFilterChange({ status: validStatuses.has(statusSelect.value) ? statusSelect.value : "all" });
+  dateShortcuts.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-date-shortcut]");
+    if (!button || button.disabled) {
+      return;
+    }
+    const shortcut = button.dataset.dateShortcut || "";
+    const range = buildDateShortcutRange(shortcut);
+    if (!range) {
+      return;
+    }
+    state.draftDateFrom = range.dateFrom;
+    state.draftDateTo = range.dateTo;
+    state.dateError = "";
+    applyDraftDateRange(shortcut);
   });
 
   favoriteOnlyInput.addEventListener("change", () => {
@@ -539,7 +752,13 @@
   });
 
   window.addEventListener("popstate", () => {
-    Object.assign(state, readLocationState());
+    const locationState = readLocationState();
+    Object.assign(state, locationState, {
+      draftDateFrom: locationState.dateFrom,
+      draftDateTo: locationState.dateTo,
+      activeDateShortcut: "",
+      dateError: locationState.dateError
+    });
     syncControls();
     loadVersions();
   });

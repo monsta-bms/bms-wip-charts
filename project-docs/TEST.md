@@ -174,18 +174,28 @@ version単位の独立投稿一覧APIとフィルターを確認する:
 - `versionLabel`が`BASE`, `1`, `1-2`などの数字パスになること。
 - `isNew`と`newUntil`がchart初回公開から168時間で判定され、追記日時で延長されないこと。
 - `serverTime`が返ること。
+- コメントなしは`hasComment=false`かつ空preview、コメントありはtrim・空白正規化された`commentPreview`になること。
+- コメントpreviewが80 Unicode code point以内では省略記号なし、81以上では絵文字を壊さず80 code pointと`…`になること。
+- コメント本文、HTML要素、リンクが一覧DOMへ挿入されず、previewが`textContent`で表示されること。
+- `dateFrom`だけ、`dateTo`だけ、両方の期間検索ができ、JST 00:00の開始を含み、終了日の翌JST 00:00を含まないこと。
+- `sort=new`の期間が`versions.created_at`、`sort=updated`の期間が`charts.updated_at`へ適用され、COUNTとSELECTで一致すること。
+- 存在しない日付、厳密な`YYYY-MM-DD`でない値、前後空白、`dateFrom > dateTo`がGETでは`INVALID_QUERY_PARAM`、お気に入りPOSTでは`INVALID_FAVORITE_QUERY`になること。
 - 不正な`q`, `sort`, `status`, `page`, `pageSize`が`INVALID_QUERY_PARAM`になること。
 - `POST /api/versions/query`が最大200件のversion IDを重複除去して検索すること。
 - お気に入りqueryでも検索、並び順、状態、ページングが通常一覧と一致すること。
+- お気に入りqueryでも`dateFrom`, `dateTo`とJST境界が通常一覧と一致すること。
 - 非公開または存在しないお気に入りがitemsから除外され、`unavailableFavoriteCount`へ加算されること。
 - 検索・状態だけで除外された公開お気に入りは`unavailableFavoriteCount`へ加算されないこと。
 - お気に入りID 0件で空一覧を返し、D1エラーにならないこと。
 - 不正body、文字列以外のID、200件超過が`INVALID_FAVORITE_QUERY`になること。
 - お気に入りqueryレスポンスが`Cache-Control: no-store`であること。
-- `list.html`が日付、タイトル、難易度、作者、進捗を1version1行で表示すること。
+- `list.html`が日付、タイトル、難易度、作者、コメント、進捗を1version1行で表示すること。
+- PCでは6列が整列し、コメントは1行省略、進捗は64px固定中央揃えになること。スマホではコメントありの行だけコメント段が追加され、横スクロールが出ないこと。
+- 状態・並び順がネイティブradioで選べ、期間入力は適用前に一覧へ反映されないこと。
+- 今日・今週・今月・今年の期間がAPI `serverTime`のJST日付から算出され、端末timezoneを変えても同じになること。
 - 件数表示がversion件数であり、chart件数と混在しないこと。
 - 並び順、状態、お気に入りの変更で1ページ目へ戻ること。
-- `q`, `sort`, `status`, `favorites`, `page`がURLへ保存され、再読込と戻る・進むで復元されること。
+- `q`, `sort`, `status`, `favorites`, `dateFrom`, `dateTo`, `page`がURLへ保存され、再読込と戻る・進むで復元されること。
 - 古いリクエストが新しい結果を上書きしないこと。
 - 前へ、ページ番号、次へが動作し、1ページだけの場合はページ操作を隠すこと。
 - ページ取得失敗時に直前の行を残し、再試行できること。

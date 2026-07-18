@@ -6,6 +6,7 @@ const MAX_PAGE_SIZE = 100;
 const MAX_QUERY_LENGTH = 100;
 const MAX_FAVORITE_VERSION_IDS = 200;
 const MAX_VERSION_ID_LENGTH = 160;
+const MAX_COMMENT_PREVIEW_CODE_POINTS = 80;
 
 type VersionListSort = "new" | "updated";
 type VersionListStatus = "all" | "incomplete" | "complete" | "rejected";
@@ -19,6 +20,10 @@ type VersionListParams = {
   pageSize: number;
   offset: number;
   favoriteVersionIds: string[] | null;
+  dateFrom: string | null;
+  dateTo: string | null;
+  dateFromUtc: string | null;
+  dateToExclusiveUtc: string | null;
 };
 
 type VersionListRow = {
@@ -35,6 +40,7 @@ type VersionListRow = {
   difficulty: string | null;
   level: string | null;
   author: string;
+  comment: string | null;
   progress: number;
   is_rejected: number;
   withdrawn_at: string | null;
@@ -67,6 +73,8 @@ type VersionListBody = {
   q?: unknown;
   sort?: unknown;
   status?: unknown;
+  dateFrom?: unknown;
+  dateTo?: unknown;
   page?: unknown;
   pageSize?: unknown;
 };
@@ -117,8 +125,76 @@ function parsePositiveInteger(
   return { ok: true, value: parsed };
 }
 
+function isLeapYear(year: number): boolean {
+  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+}
+
+function daysInMonth(year: number, month: number): number {
+  if (month === 2) {
+    return isLeapYear(year) ? 29 : 28;
+  }
+  return [4, 6, 9, 11].includes(month) ? 30 : 31;
+}
+
+function parseDateOnly(value: unknown, fieldName: string): { ok: true; value: string | null } | { ok: false; detail: string } {
+  if (value === null || value === undefined || value === "") {
+    return { ok: true, value: null };
+  }
+  if (typeof value !== "string") {
+    return { ok: false, detail: `${fieldName} must be a YYYY-MM-DD string.` };
+  }
+
+  const source = value.trim();
+  if (source !== value) {
+    return { ok: false, detail: `${fieldName} must use YYYY-MM-DD without surrounding whitespace.` };
+  }
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(source);
+  if (!match) {
+    return { ok: false, detail: `${fieldName} must use YYYY-MM-DD.` };
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (year < 1 || month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) {
+    return { ok: false, detail: `${fieldName} must be a real calendar date.` };
+  }
+  return { ok: true, value: source };
+}
+
+function previousCalendarDate(value: string): string {
+  let [year, month, day] = value.split("-").map(Number);
+  if (day > 1) {
+    day -= 1;
+  } else if (month > 1) {
+    month -= 1;
+    day = daysInMonth(year, month);
+  } else {
+    year -= 1;
+    month = 12;
+    day = 31;
+  }
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function jstDateStartAsUtc(value: string): string {
+  return `${previousCalendarDate(value)} 15:00:00`;
+}
+
+function jstDateEndExclusiveAsUtc(value: string): string {
+  return `${value} 15:00:00`;
+}
+
 function parseCommonParams(
-  values: { q: unknown; sort: unknown; status: unknown; page: unknown; pageSize: unknown },
+  values: {
+    q: unknown;
+    sort: unknown;
+    status: unknown;
+    dateFrom: unknown;
+    dateTo: unknown;
+    page: unknown;
+    pageSize: unknown;
+  },
   favoriteVersionIds: string[] | null,
   favoriteQuery: boolean
 ): ParseResult {
@@ -139,6 +215,18 @@ function parseCommonParams(
   const status = String(values.status ?? "all").trim() || "all";
   if (!["all", "incomplete", "complete", "rejected"].includes(status)) {
     return invalidParam("status must be all, incomplete, complete, or rejected.", favoriteQuery);
+  }
+
+  const dateFrom = parseDateOnly(values.dateFrom, "dateFrom");
+  if (!dateFrom.ok) {
+    return invalidParam(dateFrom.detail, favoriteQuery);
+  }
+  const dateTo = parseDateOnly(values.dateTo, "dateTo");
+  if (!dateTo.ok) {
+    return invalidParam(dateTo.detail, favoriteQuery);
+  }
+  if (dateFrom.value && dateTo.value && dateFrom.value > dateTo.value) {
+    return invalidParam("dateFrom must be on or before dateTo.", favoriteQuery);
   }
 
   const page = parsePositiveInteger(values.page, "page", 1);
@@ -166,7 +254,11 @@ function parseCommonParams(
       page: page.value,
       pageSize: pageSize.value,
       offset,
-      favoriteVersionIds
+      favoriteVersionIds,
+      dateFrom: dateFrom.value,
+      dateTo: dateTo.value,
+      dateFromUtc: dateFrom.value ? jstDateStartAsUtc(dateFrom.value) : null,
+      dateToExclusiveUtc: dateTo.value ? jstDateEndExclusiveAsUtc(dateTo.value) : null
     }
   };
 }
@@ -176,6 +268,8 @@ function parseGetParams(url: URL): ParseResult {
     q: url.searchParams.get("q"),
     sort: url.searchParams.get("sort"),
     status: url.searchParams.get("status"),
+    dateFrom: url.searchParams.get("dateFrom"),
+    dateTo: url.searchParams.get("dateTo"),
     page: url.searchParams.get("page"),
     pageSize: url.searchParams.get("pageSize")
   }, null, false);
@@ -230,6 +324,8 @@ async function parsePostParams(request: Request): Promise<ParseResult> {
     q: body.q,
     sort: body.sort,
     status: body.status,
+    dateFrom: body.dateFrom,
+    dateTo: body.dateTo,
     page: body.page,
     pageSize: body.pageSize
   }, favoriteVersionIds.value, true);
@@ -245,6 +341,16 @@ function buildVersionFilter(params: VersionListParams): { sql: string; bindings:
     conditions.push("versions.progress = 100", "versions.is_rejected = 0");
   } else if (params.status === "rejected") {
     conditions.push("versions.is_rejected = 1");
+  }
+
+  const dateColumn = params.sort === "updated" ? "charts.updated_at" : "versions.created_at";
+  if (params.dateFromUtc) {
+    conditions.push(`${dateColumn} >= ?`);
+    bindings.push(params.dateFromUtc);
+  }
+  if (params.dateToExclusiveUtc) {
+    conditions.push(`${dateColumn} < ?`);
+    bindings.push(params.dateToExclusiveUtc);
   }
 
   if (params.q) {
@@ -302,7 +408,22 @@ function buildVersionPathLabel(branchPath: string): string {
   return segments.length === 0 ? "BASE" : segments.map(branchSegmentToNumber).join("-");
 }
 
+function buildCommentPreview(comment: string | null): { commentPreview: string; hasComment: boolean } {
+  const normalized = String(comment ?? "").trim().replace(/\s+/gu, " ");
+  const codePoints = Array.from(normalized);
+  if (codePoints.length === 0) {
+    return { commentPreview: "", hasComment: false };
+  }
+  return {
+    commentPreview: codePoints.length > MAX_COMMENT_PREVIEW_CODE_POINTS
+      ? `${codePoints.slice(0, MAX_COMMENT_PREVIEW_CODE_POINTS).join("")}…`
+      : normalized,
+    hasComment: true
+  };
+}
+
 function mapVersionRow(row: VersionListRow) {
+  const comment = buildCommentPreview(row.comment);
   return {
     versionId: row.version_id,
     chartId: row.chart_id,
@@ -317,6 +438,7 @@ function mapVersionRow(row: VersionListRow) {
     chartName: row.chart_name,
     difficulty: row.difficulty || row.level || null,
     author: row.author,
+    ...comment,
     progress: row.progress,
     isRejected: row.is_rejected === 1,
     withdrawn: row.withdrawn_at !== null || row.download_block_reason === "withdrawn",
@@ -363,6 +485,7 @@ async function selectVersionList(env: Env, params: VersionListParams): Promise<{
       versions.difficulty AS difficulty,
       versions.level AS level,
       versions.author AS author,
+      versions.comment AS comment,
       versions.progress AS progress,
       versions.is_rejected AS is_rejected,
       versions.withdrawn_at AS withdrawn_at,
@@ -443,6 +566,8 @@ async function handleVersionList(request: Request, env: Env, favoriteQuery: bool
       page: params.page,
       pageSize: params.pageSize,
       favoriteCount: params.favoriteVersionIds?.length ?? 0,
+      hasDateFrom: params.dateFrom !== null,
+      hasDateTo: params.dateTo !== null,
       errorType: error instanceof Error ? error.name : typeof error
     });
     return apiError(

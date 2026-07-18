@@ -311,8 +311,12 @@ versionレスポンスには以下を含める。
 | `q` | 空 | 最大100文字。曲名、サブタイトル、アーティスト、サブアーティスト、差分名、そのversionの作者を部分一致検索する。`%`, `_`, `\\` は文字として扱う。 |
 | `sort` | `new` | `new`: version投稿日時順。`updated`: chart更新日時、version投稿日時順。 |
 | `status` | `all` | `all`, `incomplete`, `complete`, `rejected`。 |
+| `dateFrom` | 空 | `YYYY-MM-DD`。指定日のJST 00:00以降を対象にする。片側指定可。 |
+| `dateTo` | 空 | `YYYY-MM-DD`。指定日の翌JST 00:00未満を対象にする。片側指定可。 |
 | `page` | `1` | 1始まりのversionページ番号。 |
 | `pageSize` | `20` | version件数。最大100。 |
+
+日付は実在する暦日を厳密に検証し、`dateFrom > dateTo`は拒否する。`sort=new`では`versions.created_at`、`sort=updated`では`charts.updated_at`へ同じ期間条件を適用する。境界は固定JST（UTC+9）で計算し、開始を含み、終了日の翌日00:00を含まない。
 
 状態条件:
 
@@ -339,6 +343,8 @@ versionレスポンスには以下を含める。
       "chartName": "差分名",
       "difficulty": "★12",
       "author": "author",
+      "commentPreview": "短いコメントの先頭だけを返す",
+      "hasComment": true,
       "progress": 60,
       "isRejected": false,
       "withdrawn": false,
@@ -374,6 +380,8 @@ request:
   "q": "",
   "sort": "new",
   "status": "all",
+  "dateFrom": "2026-07-01",
+  "dateTo": "2026-07-31",
   "page": 1,
   "pageSize": 20
 }
@@ -382,6 +390,7 @@ request:
 - `favoriteVersionIds` は文字列配列、重複除去後のversion ID単位、最大200件。
 - 非公開または存在しないversionは `items` へ返さず、`unavailableFavoriteCount` に含める。
 - 検索や状態で除外された公開お気に入りは `unavailableFavoriteCount` には含めない。
+- `dateFrom`, `dateTo`の検証・JST境界・`sort`との対応は `GET /api/versions` と同じ。
 - レスポンスのitemとpaginationは `GET /api/versions` と同じ形式。
 
 主なエラー:
