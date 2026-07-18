@@ -473,6 +473,12 @@
       return;
     }
 
+    listElement.querySelectorAll(".favorite-version-button").forEach((candidate) => {
+      if (candidate.dataset.versionId === versionId) {
+        setButtonState(candidate, hasFavorite(favorites, versionId));
+      }
+    });
+
     if (favoriteOnly) {
       rerenderLatest();
       return;

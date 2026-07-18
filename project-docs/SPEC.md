@@ -468,7 +468,13 @@ MVPではサムネイルクリックによる拡大表示は実装しない。�
 - 1ページ20versionのページ番号方式とし、`q`, `sort`, `status`, `favorites`, `dateFrom`, `dateTo`, `page` をURLへ保持する。条件変更は1ページ目へ戻す。
 - 戻る・進むではURL条件を復元して再取得し、通信中の古い応答はAbortControllerと世代番号で無視する。
 - ページ取得失敗時は直前の行を消さず、失敗表示と再試行導線を出す。
-- 対象versionを正確に開く詳細ルートはこのフェーズでは追加しないため、タイトルを曖昧な検索リンクとして扱わない。
+- タイトルは`index.html?chartId=<chartId>&versionId=<versionId>#list`へリンクし、同名曲や同一chart内の別versionを曖昧な検索に頼らず特定する。
+- トップは`GET /api/charts/:chartId`で対象chartを取得し、通常一覧の上に「選択中の投稿」として既存詳細カードを表示する。下側の通常一覧は維持する。
+- 詳細APIは公開chartと公開versionだけを返すが、対象ツリーの復元用に`collapsed_by_completion=1`の中間履歴を含める。`is_hidden=1`のchart/versionは返さない。
+- 指定versionが中間履歴にある場合は、そのversionを含む履歴グループだけを展開する。無関係な履歴グループは折り畳み状態を維持する。
+- 描画後の共通mountと折り畳み処理を待って対象行を再取得し、中央へスクロールしてfocusする。`prefers-reduced-motion: reduce`では即時スクロールとし、対象行はレイアウトを動かさない枠と「選択中」表示で4秒間強調する。
+- chartが見つからない場合、chart内に指定versionがない場合、API失敗を区別して案内する。API失敗時は再試行でき、不正な片側パラメータや長すぎるIDでも通常一覧を壊さない。
+- 詳細カードと通常一覧に同じversionがある場合も、DOM IDを共有せず、進捗サムネイル、miniView、お気に入り、管理UIを各領域へmountする。
 - OFFSET方式は維持する。件数増加時のcursorページングは後続フェーズとする。
 
 ### お気に入り★

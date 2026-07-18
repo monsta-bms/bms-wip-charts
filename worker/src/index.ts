@@ -1,7 +1,7 @@
 import { handleAdminRoute } from "./routes/admin";
 import { handleChartVersionsRoute } from "./routes/chartVersions";
 import { handleChartMiniViewRoute } from "./routes/chartMiniView";
-import { handleChartsRoute } from "./routes/charts";
+import { handleChartDetailRoute, handleChartsRoute } from "./routes/charts";
 import {
   handleDifficultyTableRoute,
   isDifficultyTablePath
@@ -127,6 +127,36 @@ async function routeRequest(request: Request, env: Env): Promise<Response> {
       return addProgressImagesToChartsResponse(request, env, response);
     }
 
+    return response;
+  }
+
+  const chartDetailMatch = path.match(/^\/api\/charts\/([^/]+)$/);
+  if (chartDetailMatch) {
+    let chartId: string;
+    try {
+      chartId = decodeURIComponent(chartDetailMatch[1]);
+    } catch {
+      return apiError(
+        request,
+        env,
+        400,
+        "INVALID_CHART_ID",
+        "投稿IDが不正です。",
+        "chartId contains invalid URL encoding."
+      );
+    }
+
+    const response = await handleChartDetailRoute(request, env, chartId);
+    if (request.method === "GET") {
+      const enrichedResponse = await addProgressImagesToChartsResponse(request, env, response);
+      const headers = new Headers(enrichedResponse.headers);
+      headers.set("Cache-Control", "no-cache");
+      return new Response(enrichedResponse.body, {
+        status: enrichedResponse.status,
+        statusText: enrichedResponse.statusText,
+        headers
+      });
+    }
     return response;
   }
 

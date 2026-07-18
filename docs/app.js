@@ -1737,6 +1737,24 @@ function renderCharts(data) {
   }).join("");
 }
 
+function rerenderCurrentChartList() {
+  const renderData = {
+    charts: chartListState.charts,
+    pagination: {
+      page: chartListState.page,
+      pageSize: chartListState.pageSize,
+      total: chartListState.total,
+      hasNext: chartListState.hasNext
+    },
+    query: { q: chartListState.query }
+  };
+  renderCharts(renderData);
+  updateChartListControls();
+  return renderData;
+}
+
+window.rerenderCurrentChartList = rerenderCurrentChartList;
+
 async function loadCharts(options = {}) {
   const append = options.append === true;
   if (append && (chartListState.loading || !chartListState.hasNext)) {
@@ -1841,6 +1859,13 @@ async function loadCharts(options = {}) {
       chartListState.loadingMore = false;
       chartListState.abortController = null;
       updateChartListControls();
+      window.dispatchEvent(new CustomEvent("chart-list-load-settled", {
+        detail: {
+          append,
+          page: targetPage,
+          chartCount: chartListState.charts.length
+        }
+      }));
     }
   }
 }
@@ -2134,7 +2159,20 @@ if (chartSearchInput) {
 }
 updateChartListControls();
 
-const startInitialChartLoad = () => loadCharts({ query: chartListState.query });
+const startInitialChartLoad = async () => {
+  const detailRender = window.chartDetailInitialRenderPromise;
+  if (detailRender && typeof detailRender.then === "function") {
+    try {
+      await detailRender;
+    } catch (error) {
+      console.warn("[chart-detail-before-list] detail preparation did not complete normally", {
+        code: "CHART_DETAIL_PREPARE_FAILED",
+        errorType: error instanceof Error ? error.name : typeof error
+      });
+    }
+  }
+  return loadCharts({ query: chartListState.query });
+};
 if (document.readyState === "complete") {
   window.setTimeout(startInitialChartLoad, 0);
 } else {

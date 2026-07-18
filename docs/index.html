@@ -14,6 +14,7 @@
     <link rel="stylesheet" href="./tree-progress-polish.css?v=tree-shape-fix-01">
     <link rel="stylesheet" href="./version-management-ui.css?v=version-lifecycle-24h-01">
     <link rel="stylesheet" href="./post-form-ui.css?v=ui-refresh-01-phase1">
+    <link rel="stylesheet" href="./chart-detail-link.css?v=chart-detail-link-04">
   </head>
   <body id="top">
     <div class="page-shell">
@@ -284,7 +285,17 @@
             <p id="chartSearchSummary" aria-live="polite"></p>
             <p id="chartListFeedback" role="status" aria-live="polite" hidden></p>
           </div>
-          <div class="chart-list" id="chartList"></div>
+          <div class="chart-list" id="chartList">
+            <section class="selected-chart-section" id="selectedChartSection" aria-labelledby="selectedChartTitle" hidden>
+              <div class="selected-chart-heading">
+                <h3 id="selectedChartTitle">選択中の投稿</h3>
+                <a id="selectedChartBackLink" href="./index.html#list">通常の投稿一覧へ戻る</a>
+              </div>
+              <p class="selected-chart-status" id="selectedChartStatus" role="status" aria-live="polite" hidden></p>
+              <button class="secondary selected-chart-retry" id="selectedChartRetry" type="button" hidden>再試行</button>
+              <div class="selected-chart-card-slot" id="selectedChartCardSlot"></div>
+            </section>
+          </div>
           <div class="chart-list-pagination">
             <button class="secondary" id="loadMoreChartsButton" type="button" hidden>さらに読み込む</button>
           </div>
@@ -398,5 +409,6 @@
     <script src="./favorites-list.js?v=search-pagination-01"></script>
     <script src="./version-management-ui.js?v=recycle-ux-02a"></script>
     <script src="./post-form-ui.js?v=ui-refresh-01-phase1"></script>
+    <script src="./chart-detail-link.js?v=chart-detail-link-04"></script>
   </body>
 </html>

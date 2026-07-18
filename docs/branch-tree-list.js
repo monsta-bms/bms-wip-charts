@@ -832,6 +832,26 @@
     window.scheduleChartMiniViewMount?.(list);
   }
 
+  function revealVersionRow(root, versionId) {
+    const targetId = String(versionId || "");
+    if (!root || !targetId) {
+      return null;
+    }
+
+    const row = Array.from(root.querySelectorAll(".version-row[data-version-id]"))
+      .find((candidate) => candidate.dataset.versionId === targetId) || null;
+    if (!row) {
+      return null;
+    }
+
+    const groupId = row.dataset.collapsedGroupId || "";
+    if (row.hidden && groupId) {
+      expandedIntermediateGroups.add(groupId);
+      setIntermediateGroupExpanded(row.closest(".version-list"), groupId, true);
+    }
+    return row;
+  }
+
   function getChartId(entry) {
     const chart = entry?.chart || {};
     return chart.id || chart.chartId || entry?.chartId || "";
@@ -907,7 +927,14 @@
 
   function enhanceTreeDisplay(data) {
     const charts = Array.isArray(data?.charts) ? data.charts : [];
-    latestCharts = charts;
+    const nextChartIds = new Set(charts.map(getChartId));
+    latestCharts = [
+      ...charts,
+      ...latestCharts.filter((entry) => {
+        const chartId = getChartId(entry);
+        return chartId && !nextChartIds.has(chartId);
+      })
+    ];
     const chartGroups = Array.from(listElement.querySelectorAll(".chart-group"));
 
     charts.forEach((entry, chartIndex) => {
@@ -1002,4 +1029,6 @@
   } catch (error) {
     window.renderCharts = renderChartsAsTree;
   }
+
+  window.revealChartVersionRow = revealVersionRow;
 })();

@@ -667,6 +667,36 @@ async function selectVisibleChartCount(env: Env, params: ListParams): Promise<nu
   return Number(row?.total ?? 0);
 }
 
+async function selectVisibleChartById(env: Env, chartId: string): Promise<ChartRow | null> {
+  return env.DB.prepare(`
+    SELECT
+      songs.id AS song_id,
+      songs.title AS song_title,
+      songs.subtitle AS song_subtitle,
+      songs.artist AS song_artist,
+      songs.subartist AS song_subartist,
+      songs.created_at AS song_created_at,
+      songs.updated_at AS song_updated_at,
+      charts.id AS chart_id,
+      charts.chart_name AS chart_name,
+      charts.is_hidden AS chart_is_hidden,
+      charts.hidden_reason AS chart_hidden_reason,
+      charts.created_at AS chart_created_at,
+      charts.updated_at AS chart_updated_at
+    FROM charts
+    INNER JOIN songs ON songs.id = charts.song_id
+    WHERE charts.id = ?
+      AND charts.is_hidden = 0
+      AND EXISTS (
+        SELECT 1
+        FROM versions
+        WHERE versions.chart_id = charts.id
+          AND versions.is_hidden = 0
+      )
+    LIMIT 1
+  `).bind(chartId).first<ChartRow>();
+}
+
 async function selectVisibleVersionRows(env: Env, chartIds: string[]): Promise<VersionRow[]> {
   if (chartIds.length === 0) {
     return [];
@@ -812,6 +842,65 @@ async function handleChartList(request: Request, env: Env): Promise<Response> {
       "D1_QUERY_FAILED",
       "投稿一覧の取得に失敗しました。",
       `D1 read failed in charts-list-d1-read: ${errorDetail(error)}`
+    );
+  }
+}
+
+export async function handleChartDetailRoute(
+  request: Request,
+  env: Env,
+  chartId: string
+): Promise<Response> {
+  if (request.method !== "GET") {
+    return methodNotAllowed(request, env, request.method);
+  }
+
+  if (!chartId || Array.from(chartId).length > 160 || !/^[A-Za-z0-9_-]+$/u.test(chartId)) {
+    return apiError(
+      request,
+      env,
+      400,
+      "INVALID_CHART_ID",
+      "投稿IDが不正です。",
+      "chartId must be a non-empty path value no longer than 160 characters."
+    );
+  }
+
+  try {
+    const chartRow = await selectVisibleChartById(env, chartId);
+    if (!chartRow) {
+      return apiError(
+        request,
+        env,
+        404,
+        "CHART_NOT_FOUND",
+        "指定された投稿は見つかりませんでした。",
+        "The chart does not exist or is not public."
+      );
+    }
+
+    const versionRows = await selectVisibleVersionRows(env, [chartRow.chart_id]);
+    return ok(request, env, {
+      charts: [buildChartEntry(chartRow, versionRows)]
+    }, {
+      headers: {
+        "Cache-Control": "no-cache"
+      }
+    });
+  } catch (error) {
+    console.error("[chart-detail-d1-read] failed to read chart detail from D1", {
+      code: "CHART_DETAIL_QUERY_FAILED",
+      chartId,
+      message: errorDetail(error)
+    });
+
+    return apiError(
+      request,
+      env,
+      500,
+      "CHART_DETAIL_QUERY_FAILED",
+      "指定された投稿を読み込めませんでした。",
+      "D1 read failed while loading public chart detail."
     );
   }
 }

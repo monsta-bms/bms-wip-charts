@@ -307,13 +307,17 @@
     const displayedAt = formatCreatedAt(state.sort === "updated" ? item.chartUpdatedAt : item.createdAt);
     const stateBadges = buildStateBadges(item);
     const fullLabel = `${fullTitle} [${chartName}] / ${versionLabel}`;
+    const detailUrl = new URL("./index.html", document.baseURI);
+    detailUrl.searchParams.set("chartId", String(item.chartId || ""));
+    detailUrl.searchParams.set("versionId", String(item.versionId || ""));
+    detailUrl.hash = "list";
 
     return `
       <article class="compact-version-row${hasComment ? " has-comment" : ""}" data-version-id="${escapeHtml(item.versionId || "")}">
         <time class="compact-date" datetime="${escapeHtml(displayedAt.datetime)}" title="${escapeHtml(displayedAt.full)}">${escapeHtml(displayedAt.short)}</time>
         <div class="compact-title-cell" title="${escapeHtml(fullLabel)}">
           <div class="compact-title-line">
-            <span class="compact-song-title">${escapeHtml(fullTitle)}</span>
+            <a class="compact-song-title compact-detail-link" href="${escapeHtml(detailUrl.toString())}">${escapeHtml(fullTitle)}</a>
             <span class="compact-state-badges">${stateBadges}</span>
           </div>
           <span class="compact-version-title">[${escapeHtml(chartName)}] / ${escapeHtml(versionLabel)}</span>

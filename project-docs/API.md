@@ -292,6 +292,35 @@ versionレスポンスには以下を含める。
 }
 ```
 
+### GET /api/charts/:chartId
+
+独立投稿一覧から指定されたchartをトップの詳細カードで開くため、公開中のchartを1件取得する。レスポンスのchart objectとversion objectは`GET /api/charts`と同じ整形処理を使用する。
+
+レスポンス例:
+
+```json
+{
+  "charts": [
+    {
+      "song": {},
+      "chart": {},
+      "versions": []
+    }
+  ]
+}
+```
+
+公開条件:
+
+- `charts.is_hidden = 0`
+- `versions.is_hidden = 0`
+- 詳細ツリーの復元に必要な`collapsed_by_completion = 1`の中間履歴も`versions`へ含める。
+- 取り下げ、削除申請中、DL停止、没譜面は、公開状態である限り状態つきで返す。
+
+存在しないchartと非公開chartは、情報を区別せずHTTP 404 `CHART_NOT_FOUND`を返す。IDが空、不正文字を含む、160文字を超える、またはURL encodingが不正な場合はHTTP 400 `INVALID_CHART_ID`とする。GET以外はHTTP 405 `METHOD_NOT_ALLOWED`とする。
+
+レスポンスは`Cache-Control: no-cache`とし、追記、取り下げ、削除申請、DL停止、非公開化が再検証されるようにする。既存のCORS方針を適用する。D1取得または整形に失敗した場合はHTTP 500 `CHART_DETAIL_QUERY_FAILED`を返し、SQLや内部例外を公開しない。
+
 ### GET /api/versions
 
 独立投稿一覧 `list.html` 用に、公開versionを1行1件で取得する。トップの詳細一覧が使用する `GET /api/charts` とはページング単位が異なる。

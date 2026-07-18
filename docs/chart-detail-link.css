@@ -1,0 +1,108 @@
+.selected-chart-section {
+  margin: 0 0 20px;
+  padding: 16px 0 20px;
+  border-block: 1px solid #b7cbc5;
+  background: #f3f8f6;
+}
+
+.selected-chart-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 16px 12px;
+}
+
+.selected-chart-heading h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.selected-chart-heading a {
+  color: #176556;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-underline-offset: 0.18em;
+}
+
+.selected-chart-status {
+  margin: 0 16px 12px;
+  color: #52636d;
+  white-space: pre-line;
+}
+
+.selected-chart-status.is-error {
+  color: #8b3434;
+}
+
+.selected-chart-retry {
+  margin: 0 16px 14px;
+}
+
+.selected-chart-card-slot > .chart-group {
+  margin-inline: 16px;
+}
+
+.selected-chart-section .version-row {
+  scroll-margin-top: 104px;
+}
+
+.selected-chart-section .version-row:focus {
+  outline: 2px solid #176f60;
+  outline-offset: -3px;
+}
+
+.selected-chart-section .version-row.is-detail-target {
+  position: relative;
+  box-shadow: inset 4px 0 0 #23806f, inset 0 0 0 1px #79a99f;
+  background: #e9f6f1;
+}
+
+.selected-chart-section .version-row.is-detail-target::after {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  padding: 2px 6px;
+  border: 1px solid #79a99f;
+  border-radius: 3px;
+  background: #fff;
+  color: #155f51;
+  content: "選択中";
+  font-size: 0.68rem;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+@media (max-width: 760px) {
+  .selected-chart-section {
+    margin-bottom: 14px;
+    padding-block: 14px;
+  }
+
+  .selected-chart-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+    padding-inline: 12px;
+  }
+
+  .selected-chart-status,
+  .selected-chart-retry {
+    margin-inline: 12px;
+  }
+
+  .selected-chart-card-slot > .chart-group {
+    margin-inline: 0;
+  }
+
+  .selected-chart-section .version-row.is-detail-target::after {
+    top: 4px;
+    right: 5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .selected-chart-section .version-row {
+    scroll-behavior: auto;
+  }
+}

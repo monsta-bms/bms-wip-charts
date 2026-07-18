@@ -205,6 +205,29 @@ version単位の独立投稿一覧APIとフィルターを確認する:
 - 320px, 390px, 760pxで横スクロールがなく、フィルターとページ操作が使えること。
 - トップの詳細一覧、ツリー、進捗サムネイル、miniView、お気に入り★、投稿・追記が壊れていないこと。
 
+## CHART-DETAIL-LINK-04 確認項目
+
+独立投稿一覧から指定chart/versionを正確に開く導線を確認する:
+
+- `GET /api/charts/:chartId`が公開chartを1件だけ、`GET /api/charts`と同じchart/version形式で返すこと。
+- 詳細APIが公開中のBASE、子版、深い分岐、完成版、没譜面、取り下げ、DL停止、削除申請中を状態つきで返すこと。
+- `collapsed_by_completion=1`の中間履歴を返し、`versions.is_hidden=1`は返さないこと。
+- 非存在chartと`charts.is_hidden=1`が同じHTTP 404 `CHART_NOT_FOUND`になること。
+- 空ID、不正文字、160文字超過、不正URL encodingがHTTP 400 `INVALID_CHART_ID`になること。
+- GET以外がHTTP 405となり、`/api/charts/:chartId/versions`など既存routeを詳細routeが奪わないこと。
+- CORSが既存方針と一致し、成功・404レスポンスが`Cache-Control: no-cache`であること。
+- D1失敗が`CHART_DETAIL_QUERY_FAILED`となり、SQLや内部例外を返さないこと。
+- `list.html`のタイトルリンクが`index.html?chartId=<chartId>&versionId=<versionId>#list`形式で、BASE、子版、深い分岐、同名曲の別chartを区別すること。
+- 新しいタブ、URL再読み込み、ブラウザの戻る操作で動作し、戻った`list.html`の検索・状態・並び順・期間・お気に入り・ページがURLから復元されること。
+- トップの通常一覧より上に「選択中の投稿」が表示され、通常一覧が消えないこと。
+- 指定versionだけを正確に特定し、中間履歴ならその履歴グループだけを展開すること。無関係な折り畳み履歴を展開しないこと。
+- 対象行がsticky headerに隠れない中央位置へスクロールされ、focusされ、3～5秒だけ枠と文字で強調されること。
+- `prefers-reduced-motion: reduce`でsmooth scrollを使用しないこと。
+- chartなし、versionなし、API失敗、不正または片側だけのパラメータを区別し、通常一覧を壊さないこと。
+- API失敗時に再試行でき、内部detailやID検証内容を利用者へ表示しないこと。
+- 選択中カードと通常一覧の両方でツリー、折り畳み、進捗サムネイル、miniView、お気に入り、管理UIが動作すること。
+- 320px、390px、760px、1366px、1920pxで横スクロールが発生せず、選択中カードと戻る導線を操作できること。
+
 ## VERSION-LIFECYCLE-24H-01 確認項目
 
 投稿から24時間以内/以後で分岐する取り消し・削除MVPを確認する:

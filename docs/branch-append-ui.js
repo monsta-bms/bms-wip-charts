@@ -1114,7 +1114,14 @@
 
   function renderChartsWithAppend(data) {
     const charts = Array.isArray(data?.charts) ? data.charts : [];
-    appendState.charts = charts;
+    const nextChartIds = new Set(charts.map((entry) => String(entry?.chart?.id || entry?.chartId || "")));
+    appendState.charts = [
+      ...charts,
+      ...appendState.charts.filter((entry) => {
+        const chartId = String(entry?.chart?.id || entry?.chartId || "");
+        return chartId && !nextChartIds.has(chartId);
+      })
+    ];
 
     if (!chartList) {
       return;
