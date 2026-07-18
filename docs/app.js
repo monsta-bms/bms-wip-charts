@@ -21,6 +21,8 @@ const authorInput = document.querySelector("#author");
 const originUrlInput = document.querySelector("#originUrl");
 const progressInput = document.querySelector("#progress");
 const progressMap = document.querySelector("#progressMap");
+const progressMapHeader = document.querySelector("#progressMapHeader");
+const progressControls = document.querySelector("#progressControls");
 const progressMapStatus = document.querySelector("#progressMapStatus");
 const progressMapGraphWrap = document.querySelector("#progressMapGraphWrap");
 const progressMapCanvas = document.querySelector("#progressMapCanvas");
@@ -1012,6 +1014,13 @@ function setProgressMapMessage(message, state = "empty") {
   progressMap.dataset.state = state;
   progressMapStatus.textContent = message;
   progressMapStatus.hidden = false;
+  if (progressMapHeader) {
+    progressMapHeader.hidden = true;
+  }
+  if (progressControls) {
+    progressControls.hidden = true;
+  }
+  completeProgressButton.hidden = true;
   progressMapGraphWrap.hidden = true;
   progressMapSummary.hidden = true;
   progressMapBlocks.innerHTML = "";
@@ -1117,7 +1126,9 @@ function updateProgressSummary(progressValue = calculateMapProgress()) {
 function updateCompleteButtonState() {
   const progressValue = Number(progressInput.value);
   const hasMap = Boolean(progressMapState.analysis && progressMapState.analysis.standardBlocks.length > 0);
-  completeProgressButton.disabled = !hasMap || isRejectedInput.checked || !Number.isFinite(progressValue) || progressValue < 80 || progressValue >= 100;
+  const canShow = hasMap && !isRejectedInput.checked && Number.isFinite(progressValue) && progressValue < 100;
+  completeProgressButton.hidden = !canShow;
+  completeProgressButton.disabled = !canShow || progressValue < 80;
 }
 
 function updateProgressBlockClasses() {
@@ -1233,6 +1244,12 @@ function renderProgressMap() {
   }
 
   progressMap.dataset.state = "ready";
+  if (progressMapHeader) {
+    progressMapHeader.hidden = false;
+  }
+  if (progressControls) {
+    progressControls.hidden = false;
+  }
   progressMapStatus.hidden = true;
   progressMapGraphWrap.hidden = false;
   progressMapSummary.hidden = false;
@@ -1368,16 +1385,27 @@ async function fillMetaFromFile(file, analysisRevision) {
   const extension = getExtension(file.name);
   resetProgressMap();
 
-  if (!allowedChartExtensions.has(extension)) {
-    showTextError("投稿対象は .bms .bme .bml .zip のみです。");
+  const fileValidation = window.BmsPostFileUi?.validateFile?.(file);
+  if (fileValidation && !fileValidation.valid) {
     fileInput.value = "";
     setFieldInvalid(fileInput, true);
+    window.BmsPostFileUi?.setError?.(fileValidation.message, file);
+    clearError();
+    return;
+  }
+
+  if (!allowedChartExtensions.has(extension)) {
+    fileInput.value = "";
+    setFieldInvalid(fileInput, true);
+    window.BmsPostFileUi?.setError?.("投稿できるのは .bms / .bme / .bml / .zip です。", file);
+    clearError();
     return;
   }
 
   setFieldInvalid(fileInput, false);
 
   try {
+    window.BmsPostFileUi?.setAnalyzing?.(file);
     setProgressMapMessage(extension === ".zip" ? "ZIP内の譜面を解析しています" : "譜面を解析しています", "loading");
     window.BmsFormMiniView?.setLoading();
     const localAnalysis = await window.BmsLocalChartAnalysis.analyze(file, analyzeBmsProgressText);
@@ -1422,6 +1450,13 @@ async function fillMetaFromFile(file, analysisRevision) {
       setProgressMapMessage("プレイノートを検出できませんでした", "unavailable");
     }
 
+    window.BmsPostFileUi?.setReady?.({
+      file,
+      sourceFileName: localAnalysis.sourceFileName,
+      blockCount: analysis.standardBlocks.length,
+      miniViewAvailable: localAnalysis.miniView?.status === "ready"
+    });
+
     clearError();
   } catch (error) {
     if (analysisRevision !== initialFileAnalysisRevision || fileInput.files?.[0] !== file) {
@@ -1437,8 +1472,18 @@ async function fillMetaFromFile(file, analysisRevision) {
       message: error instanceof Error ? error.message : String(error)
     });
     setProgressMapMessage("BMS解析に失敗しました", "unavailable");
-    showTextError("譜面情報の読み取りに失敗しました。曲名とアーティストは手入力してください。");
+    window.BmsPostFileUi?.setError?.("譜面情報を読み取れませんでした。ファイルの内容を確認してください。", file);
+    clearError();
   }
+}
+
+function clearInitialFileMetadata() {
+  titleInput.value = "";
+  subtitleInput.value = "";
+  artistInput.value = "";
+  subartistInput.value = "";
+  setFieldInvalid(titleInput, false);
+  setFieldInvalid(artistInput, false);
 }
 
 function isValidProgress(value) {
@@ -2146,8 +2191,11 @@ fileInput.addEventListener("change", () => {
     return;
   }
 
+  clearInitialFileMetadata();
+
   if (!file) {
     setFieldInvalid(fileInput, false);
+    window.BmsPostFileUi?.setEmpty?.();
     resetProgressMap();
     clearError();
     return;

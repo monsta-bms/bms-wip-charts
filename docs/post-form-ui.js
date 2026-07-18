@@ -13,14 +13,182 @@
   const savePasswordInput = document.querySelector("#savePassword");
   const progressMap = document.querySelector("#progressMap");
   const errorBox = document.querySelector("#errorBox");
+  const launcher = document.querySelector(".post-form-launcher");
+  const launcherDropCopy = document.querySelector("#postFormLauncherDropCopy");
+  const fileDropControl = document.querySelector("#chartFileDropControl");
+  const fileDropZone = document.querySelector("#chartFileDropZone");
+  const fileDropPrimary = document.querySelector("#chartFileDropPrimary");
+  const fileDropFileName = document.querySelector("#chartFileDropFileName");
+  const fileDropInternalName = document.querySelector("#chartFileDropInternalName");
+  const fileDropHelp = document.querySelector("#chartFileDropHelp");
+  const fileDropActions = document.querySelector("#chartFileDropActions");
+  const fileChangeButton = document.querySelector("#chartFileChangeButton");
+  const fileClearButton = document.querySelector("#chartFileClearButton");
+  const fileDropError = document.querySelector("#chartFileDropError");
 
   if (!panel || !form || !body || !toggle || !summary) {
     return;
   }
 
   const passwordStorageKey = "bms-wip-charts-admin-password";
+  const allowedFileExtensions = new Set([".bms", ".bme", ".bml", ".zip"]);
+  const bmsFileLimit = 2 * 1024 * 1024;
+  const zipFileLimit = 5 * 1024 * 1024;
   let manuallyCollapsed = false;
   let lastFormActionAt = 0;
+  let launcherDragDepth = 0;
+  let dropZoneDragDepth = 0;
+  let dropStateBeforeDrag = "empty";
+  let dropDetailBeforeDrag = {};
+  let lastDropDetail = {};
+
+  function isFileDrag(event) {
+    return Array.from(event?.dataTransfer?.types || []).includes("Files");
+  }
+
+  function getFileExtension(fileName) {
+    const normalized = String(fileName || "").toLowerCase();
+    const dotIndex = normalized.lastIndexOf(".");
+    return dotIndex >= 0 ? normalized.slice(dotIndex) : "";
+  }
+
+  function validateSelectedFile(file) {
+    if (!(file instanceof File)) {
+      return { valid: false, code: "FILE_NOT_SELECTED", message: "譜面ファイルを選択してください。" };
+    }
+
+    const extension = getFileExtension(file.name);
+    if (!allowedFileExtensions.has(extension)) {
+      return { valid: false, code: "INVALID_FILE_TYPE", message: "投稿できるのは .bms / .bme / .bml / .zip です。" };
+    }
+
+    const limit = extension === ".zip" ? zipFileLimit : bmsFileLimit;
+    if (file.size > limit) {
+      return {
+        valid: false,
+        code: "FILE_TOO_LARGE",
+        message: extension === ".zip" ? "ZIPは5MB以下にしてください。" : "BMSファイルは2MB以下にしてください。"
+      };
+    }
+
+    return { valid: true, extension };
+  }
+
+  function formatFileSize(size) {
+    if (!Number.isFinite(size) || size < 0) {
+      return "";
+    }
+    if (size < 1024 * 1024) {
+      return `${Math.max(1, Math.round(size / 1024))}KB`;
+    }
+    return `${(size / (1024 * 1024)).toFixed(1)}MB`;
+  }
+
+  function setDropState(state, detail = {}) {
+    if (!fileDropControl || !fileDropPrimary || !fileDropHelp) {
+      return;
+    }
+
+    if (state !== "drag") {
+      lastDropDetail = detail;
+    }
+    const selectedFile = detail.file || fileInput?.files?.[0] || null;
+    fileDropControl.dataset.state = state;
+    fileDropControl.setAttribute("aria-busy", state === "analyzing" ? "true" : "false");
+    fileDropFileName.hidden = true;
+    fileDropInternalName.hidden = true;
+    fileDropActions.hidden = true;
+    fileDropError.hidden = true;
+    fileDropError.textContent = "";
+
+    if (state === "drag") {
+      fileDropPrimary.textContent = "ここに離してください";
+      fileDropHelp.textContent = ".bms / .bme / .bml / .zip";
+      return;
+    }
+
+    if (state === "analyzing") {
+      fileDropPrimary.textContent = "解析中…";
+      fileDropFileName.textContent = selectedFile?.name || "選択したファイル";
+      fileDropFileName.hidden = false;
+      fileDropHelp.textContent = "譜面情報と進捗ブロックを確認しています";
+      return;
+    }
+
+    if (state === "ready") {
+      const blockCount = Number.isInteger(detail.blockCount) ? detail.blockCount : 0;
+      const sourceFileName = String(detail.sourceFileName || "").trim();
+      fileDropPrimary.textContent = "解析済み";
+      fileDropFileName.textContent = selectedFile?.name || "選択したファイル";
+      fileDropFileName.hidden = false;
+      if (sourceFileName && sourceFileName !== selectedFile?.name) {
+        fileDropInternalName.textContent = `ZIP内: ${sourceFileName}`;
+        fileDropInternalName.hidden = false;
+      }
+      fileDropHelp.textContent = [
+        blockCount > 0 ? `${blockCount} blocks` : "進捗マップなし",
+        selectedFile ? formatFileSize(selectedFile.size) : "",
+        detail.miniViewAvailable === false ? "ミニビュー非対応" : ""
+      ].filter(Boolean).join(" / ");
+      fileDropActions.hidden = false;
+      return;
+    }
+
+    if (state === "error") {
+      fileDropPrimary.textContent = selectedFile ? "ファイルを確認できませんでした" : "ファイルを選択できませんでした";
+      if (selectedFile) {
+        fileDropFileName.textContent = selectedFile.name;
+        fileDropFileName.hidden = false;
+        fileDropActions.hidden = false;
+      }
+      fileDropHelp.textContent = "別のファイルを選択するか、内容を確認してください";
+      fileDropError.textContent = detail.message || "ファイルを解析できませんでした。";
+      fileDropError.hidden = false;
+      return;
+    }
+
+    fileDropControl.dataset.state = "empty";
+    fileDropPrimary.textContent = "クリックまたはドロップ";
+    fileDropHelp.innerHTML = ".bms / .bme / .bml / .zip<br>最大5MB（BMS単体は2MB）";
+  }
+
+  function assignDroppedFile(file) {
+    const validation = validateSelectedFile(file);
+    if (!validation.valid) {
+      console.warn("[post-file-drop] rejected", { code: validation.code });
+      setOpen(true);
+      setDropState("error", { file: fileInput?.files?.[0] || file, message: validation.message });
+      return;
+    }
+
+    try {
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      fileInput.files = transfer.files;
+      fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+    } catch (_error) {
+      console.warn("[post-file-drop] assignment failed", { code: "FILE_ASSIGN_FAILED" });
+      setOpen(true);
+      setDropState("error", { message: "ファイルを選択欄へ反映できませんでした。クリックして選択してください。" });
+    }
+  }
+
+  function handleFileDrop(event) {
+    if (!isFileDrag(event)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const files = Array.from(event.dataTransfer?.files || []);
+    if (files.length !== 1) {
+      console.warn("[post-file-drop] rejected", { code: "FILE_COUNT_INVALID", count: files.length });
+      setOpen(true);
+      setDropState("error", { message: "譜面ファイルは1件だけドロップしてください。" });
+      return;
+    }
+    setOpen(true);
+    assignDroppedFile(files[0]);
+  }
 
   function getStoredPassword() {
     try {
@@ -142,6 +310,82 @@
     }
   }
 
+  fileDropZone?.addEventListener("click", () => fileInput?.click());
+  fileChangeButton?.addEventListener("click", () => fileInput?.click());
+  fileClearButton?.addEventListener("click", () => {
+    if (!fileInput) {
+      return;
+    }
+    fileInput.value = "";
+    setDropState("empty");
+    fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+    updateSummary();
+    fileDropZone?.focus();
+  });
+
+  fileDropZone?.addEventListener("dragenter", (event) => {
+    if (!isFileDrag(event)) return;
+    event.preventDefault();
+    if (dropZoneDragDepth === 0) {
+      dropStateBeforeDrag = fileDropControl?.dataset.state || "empty";
+      dropDetailBeforeDrag = lastDropDetail;
+    }
+    dropZoneDragDepth += 1;
+    setDropState("drag");
+  });
+  fileDropZone?.addEventListener("dragover", (event) => {
+    if (!isFileDrag(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  });
+  fileDropZone?.addEventListener("dragleave", (event) => {
+    if (!isFileDrag(event)) return;
+    dropZoneDragDepth = Math.max(0, dropZoneDragDepth - 1);
+    if (dropZoneDragDepth === 0) {
+      setDropState(dropStateBeforeDrag, dropDetailBeforeDrag);
+    }
+  });
+  fileDropZone?.addEventListener("drop", (event) => {
+    dropZoneDragDepth = 0;
+    handleFileDrop(event);
+  });
+
+  launcher?.addEventListener("dragenter", (event) => {
+    if (!body.hidden || !isFileDrag(event)) return;
+    event.preventDefault();
+    launcherDragDepth += 1;
+    panel.classList.add("is-file-dragover");
+    if (launcherDropCopy) launcherDropCopy.hidden = false;
+  });
+  launcher?.addEventListener("dragover", (event) => {
+    if (!body.hidden || !isFileDrag(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  });
+  launcher?.addEventListener("dragleave", (event) => {
+    if (!isFileDrag(event)) return;
+    launcherDragDepth = Math.max(0, launcherDragDepth - 1);
+    if (launcherDragDepth === 0) {
+      panel.classList.remove("is-file-dragover");
+      if (launcherDropCopy) launcherDropCopy.hidden = true;
+    }
+  });
+  launcher?.addEventListener("drop", (event) => {
+    launcherDragDepth = 0;
+    panel.classList.remove("is-file-dragover");
+    if (launcherDropCopy) launcherDropCopy.hidden = true;
+    if (body.hidden) {
+      handleFileDrop(event);
+    }
+  });
+
+  document.addEventListener("dragover", (event) => {
+    if (isFileDrag(event)) event.preventDefault();
+  });
+  document.addEventListener("drop", (event) => {
+    if (isFileDrag(event)) event.preventDefault();
+  });
+
   function openAndReveal() {
     setOpen(true);
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -169,6 +413,13 @@
     lastFormActionAt = fileInput.files?.length ? Date.now() : 0;
     manuallyCollapsed = false;
     setOpen(true);
+    if (fileDropControl?.dataset.state === "error") {
+      // The parser already supplied a user-safe error for this selection.
+    } else if (fileInput.files?.[0]) {
+      setDropState("analyzing", { file: fileInput.files[0] });
+    } else {
+      setDropState("empty");
+    }
     updateSummary();
   });
 
@@ -185,6 +436,7 @@
   form.addEventListener("reset", () => {
     lastFormActionAt = 0;
     window.setTimeout(() => {
+      setDropState("empty");
       manuallyCollapsed = false;
       setOpen(isAppendMode() || isDirty());
       updateSummary();
@@ -251,6 +503,14 @@
     markClean,
     open: openAndReveal,
     updateSummary
+  };
+
+  window.BmsPostFileUi = {
+    setAnalyzing: (file) => setDropState("analyzing", { file }),
+    setEmpty: () => setDropState("empty"),
+    setError: (message, file = fileInput?.files?.[0]) => setDropState("error", { file, message }),
+    setReady: (detail = {}) => setDropState("ready", detail),
+    validateFile: validateSelectedFile
   };
 
   if (window.location.hash.toLowerCase() === "#post" || isAppendMode() || isDirty()) {

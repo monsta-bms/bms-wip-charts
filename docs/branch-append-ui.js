@@ -27,6 +27,8 @@
   const authorInput = document.querySelector("#author");
   const progressInput = document.querySelector("#progress");
   const progressMap = document.querySelector("#progressMap");
+  const progressMapHeader = document.querySelector("#progressMapHeader");
+  const progressControls = document.querySelector("#progressControls");
   const progressMapStatus = document.querySelector("#progressMapStatus");
   const progressMapGraphWrap = document.querySelector("#progressMapGraphWrap");
   const progressMapCanvas = document.querySelector("#progressMapCanvas");
@@ -515,6 +517,7 @@
     }
 
     if (completeProgressButton) {
+      completeProgressButton.hidden = progress >= 100;
       completeProgressButton.disabled = progress < 80 || progress >= 100;
     }
   }
@@ -526,6 +529,8 @@
 
     progressMap.dataset.state = "ready";
     progressMap.classList.remove("is-locked");
+    if (progressMapHeader) progressMapHeader.hidden = false;
+    if (progressControls) progressControls.hidden = false;
     progressMapStatus.hidden = true;
     progressMapGraphWrap.hidden = false;
     hideAppendFloatingInfo();
@@ -544,7 +549,7 @@
     updateAppendProgressSummary();
   }
 
-  function initializeAppendProgressMap(progressMapValue) {
+  function initializeAppendProgressMap(progressMapValue, { render = true } = {}) {
     const parsedMap = parseProgressMap(progressMapValue);
     if (!isUsableProgressMap(parsedMap)) {
       return false;
@@ -565,7 +570,9 @@
     appendState.dragAnchorIndex = null;
     appendState.dragMode = null;
     appendState.originalCurrentPainted = null;
-    renderAppendProgressMap();
+    if (render) {
+      renderAppendProgressMap();
+    }
     return true;
   }
 
@@ -800,7 +807,11 @@
 
     setAppendFieldMode(true);
     setDifficultyValue(parentVersion.difficulty || "");
-    initializeAppendProgressMap(parentMap);
+    initializeAppendProgressMap(parentMap, { render: false });
+    if (typeof resetProgressMap === "function") {
+      resetProgressMap();
+    }
+    window.BmsPostFileUi?.setEmpty?.();
     setAppendSubmitting(false);
     if (cancelAppendButton) {
       cancelAppendButton.hidden = false;
@@ -834,6 +845,7 @@
     appendState.fileGridMismatch = false;
     appendState.fileAnalysisRevision += 1;
     window.BmsFormMiniView?.clear();
+    window.BmsPostFileUi?.setEmpty?.();
     appendState.isDragging = false;
     appendState.originalCurrentPainted = null;
 
@@ -891,6 +903,24 @@
     window.BmsFormMiniView?.clear();
     if (!file) {
       setInvalid(fileInput, false);
+      appendState.currentPainted = new Set();
+      appendState.fileGridMismatch = false;
+      if (typeof resetProgressMap === "function") {
+        resetProgressMap();
+      }
+      window.BmsPostFileUi?.setEmpty?.();
+      clearMessage();
+      return;
+    }
+
+    const fileValidation = window.BmsPostFileUi?.validateFile?.(file);
+    if (fileValidation && !fileValidation.valid) {
+      fileInput.value = "";
+      setInvalid(fileInput, true);
+      if (typeof resetProgressMap === "function") {
+        resetProgressMap();
+      }
+      window.BmsPostFileUi?.setError?.(fileValidation.message, file);
       clearMessage();
       return;
     }
@@ -899,13 +929,18 @@
     if (!allowedExtensions.has(extension)) {
       fileInput.value = "";
       setInvalid(fileInput, true);
-      showText("投稿対象は .bms .bme .bml .zip のみです。");
+      window.BmsPostFileUi?.setError?.("投稿できるのは .bms / .bme / .bml / .zip です。", file);
+      clearMessage();
       return;
     }
 
     setInvalid(fileInput, false);
 
     try {
+      window.BmsPostFileUi?.setAnalyzing?.(file);
+      if (typeof setProgressMapMessage === "function") {
+        setProgressMapMessage(extension === ".zip" ? "ZIP内の譜面を解析しています" : "譜面を解析しています", "loading");
+      }
       window.BmsFormMiniView?.setLoading();
       const localAnalysis = await window.BmsLocalChartAnalysis.analyze(file, analyzeBmsProgressText);
       if (
@@ -924,7 +959,11 @@
       appendState.fileGridMismatch = !blocksShareGrid(appendState.parentMap?.blocks || [], analyzedBlocks);
       if (appendState.fileGridMismatch) {
         window.BmsFormMiniView?.setUnavailable("block格子不一致のためミニビュー非表示");
-        showText("選択した譜面の進捗ブロック格子が追記元と一致しません。");
+        if (typeof setProgressMapMessage === "function") {
+          setProgressMapMessage("選択した譜面の進捗ブロック格子が追記元と一致しません", "unavailable");
+        }
+        window.BmsPostFileUi?.setError?.("追記元と進捗ブロックの構成が一致しません。", file);
+        clearMessage();
         return;
       }
 
@@ -935,6 +974,12 @@
       } else {
         window.BmsFormMiniView?.setUnavailable("ミニビュー非対応");
       }
+      window.BmsPostFileUi?.setReady?.({
+        file,
+        sourceFileName: localAnalysis.sourceFileName,
+        blockCount: analyzedBlocks.length,
+        miniViewAvailable: localAnalysis.miniView?.status === "ready"
+      });
       const titleMatches = isCloseMetaMatch(meta.title, appendState.song?.title);
       const artistMatches = isCloseMetaMatch(meta.artist, appendState.song?.artist);
 
@@ -954,11 +999,15 @@
       }
       appendState.fileGridMismatch = true;
       window.BmsFormMiniView?.clear();
+      if (typeof setProgressMapMessage === "function") {
+        setProgressMapMessage("BMS解析に失敗しました", "unavailable");
+      }
+      window.BmsPostFileUi?.setError?.("譜面情報を読み取れませんでした。ファイルの内容を確認してください。", file);
       console.error("[append-file-meta-check] failed to read BMS metadata", {
         code: "APPEND_FILE_META_CHECK_FAILED",
         message: error instanceof Error ? error.message : String(error)
       });
-      showText("譜面情報の読み取りに失敗しました。追記先との一致判定はAPI側で行います。");
+      clearMessage();
     }
   }
 

@@ -704,10 +704,4 @@
     renderProgressImagePreview,
     buildProgressMapFromVisibleEditor
   };
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", mountPreviewUi, { once: true });
-  } else {
-    mountPreviewUi();
-  }
 })();

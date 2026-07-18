@@ -9,11 +9,10 @@
     <link rel="stylesheet" href="./site-header.css?v=recycle-ux-02a">
     <link rel="stylesheet" href="./branch-tree-list.css?v=ui-tree-overlay-01">
     <link rel="stylesheet" href="./list-ui-refresh.css?v=ui-tree-overlay-01">
-    <link rel="stylesheet" href="./progress-image-preview.css?v=ui-tree-overlay-01">
     <link rel="stylesheet" href="./chart-miniview.css?v=post-form-miniview-01">
     <link rel="stylesheet" href="./tree-progress-polish.css?v=tree-shape-fix-01">
     <link rel="stylesheet" href="./version-management-ui.css?v=version-lifecycle-24h-01">
-    <link rel="stylesheet" href="./post-form-ui.css?v=ui-refresh-01-phase1">
+    <link rel="stylesheet" href="./post-form-ui.css?v=post-form-ux-08">
     <link rel="stylesheet" href="./chart-detail-link.css?v=top-detail-recency-08">
   </head>
   <body id="top">
@@ -63,11 +62,12 @@
                 aria-controls="postFormBody"
               >＋ 差分を投稿する</button>
             </div>
+            <p class="post-form-launcher-drop-copy" id="postFormLauncherDropCopy" hidden>ここにファイルをドロップ</p>
           </div>
 
           <div class="post-form-body" id="postFormBody" hidden>
             <form id="chartForm" novalidate>
-            <p class="required-note"><span class="required-mark">*</span>項目は入力必須。</p>
+            <p class="required-note">「<span class="required-mark">*</span>」は必須項目です。</p>
 
             <div class="append-context" id="appendContext" hidden>
               <div class="append-context-title" id="appendContextTitle">追記投稿</div>
@@ -94,12 +94,36 @@
 
             <div class="form-sections">
               <fieldset class="form-section file-info-section">
-                <legend class="form-section-title">譜面ファイル</legend>
-                <label class="field">
-                  <span class="field-label">譜面ファイル <span class="required-mark">*</span></span>
-                  <input id="chartFile" name="file" type="file" accept=".bms,.bme,.bml,.zip" required>
-                  <span class="field-help">対応形式: .bms / .bme / .bml / .zip。音源ファイルはアップロードできません。</span>
-                </label>
+                <legend class="form-section-title">譜面ファイル <span class="required-mark">*</span></legend>
+                <div class="file-drop-control" id="chartFileDropControl" data-state="empty">
+                  <input
+                    class="visually-hidden-file-input"
+                    id="chartFile"
+                    name="file"
+                    type="file"
+                    accept=".bms,.bme,.bml,.zip"
+                    aria-describedby="chartFileDropHelp chartFileDropError"
+                    required
+                  >
+                  <button
+                    class="file-drop-zone"
+                    id="chartFileDropZone"
+                    type="button"
+                    aria-label="譜面ファイルを選択、またはここへドロップ"
+                    aria-describedby="chartFileDropHelp chartFileDropError"
+                  >
+                    <span class="file-drop-primary" id="chartFileDropPrimary">クリックまたはドロップ</span>
+                    <span class="file-drop-file-name" id="chartFileDropFileName" hidden></span>
+                    <span class="file-drop-internal-name" id="chartFileDropInternalName" hidden></span>
+                    <span class="file-drop-details" id="chartFileDropHelp">.bms / .bme / .bml / .zip<br>最大5MB（BMS単体は2MB）</span>
+                    <span class="file-drop-note">音源ファイルはアップロードできません</span>
+                  </button>
+                  <div class="file-drop-actions" id="chartFileDropActions" hidden>
+                    <button class="secondary" id="chartFileChangeButton" type="button">変更</button>
+                    <button class="secondary" id="chartFileClearButton" type="button">解除</button>
+                  </div>
+                  <p class="file-drop-error" id="chartFileDropError" role="alert" hidden></p>
+                </div>
               </fieldset>
 
               <fieldset class="form-section song-info-section">
@@ -123,6 +147,12 @@
                   <label class="field">
                     <span class="field-label">サブアーティスト</span>
                     <input id="subartist" name="subartist" type="text" autocomplete="off">
+                  </label>
+
+                  <label class="field origin-url-field">
+                    <span class="field-label">原曲配布URL（任意）</span>
+                    <input id="originUrl" name="originUrl" type="url" maxlength="2048" inputmode="url" autocomplete="url" placeholder="https://example.com/original-song">
+                    <span class="field-help">リンク先の内容・安全性・永続性はサイト側では確認しません。</span>
                   </label>
                 </div>
               </fieldset>
@@ -164,21 +194,15 @@
                     <span class="field-label">差分作者（別名義可） <span class="required-mark">*</span></span>
                     <input id="author" name="author" type="text" autocomplete="off" placeholder="例: tester / anonymous" required>
                   </label>
-
-                  <label class="field origin-url-field">
-                    <span class="field-label">原曲配布URL（任意）</span>
-                    <input id="originUrl" name="originUrl" type="url" maxlength="2048" inputmode="url" autocomplete="url" placeholder="https://example.com/original-song">
-                    <span class="field-help">リンク先の内容・安全性・永続性はサイト側では確認しません。</span>
-                  </label>
                 </div>
               </fieldset>
 
-              <fieldset class="form-section management-section">
-                <legend class="form-section-title">進捗・管理</legend>
+              <fieldset class="form-section progress-section">
+                <legend class="form-section-title">進捗</legend>
                 <div class="progress-map-field">
-                  <div class="progress-map-header">
+                  <div class="progress-map-header" id="progressMapHeader" hidden>
                     <span class="field-label">進捗マップ</span>
-                    <button class="secondary progress-complete-button" id="completeProgressButton" type="button" disabled>完成版にする</button>
+                    <button class="secondary progress-complete-button" id="completeProgressButton" type="button" disabled hidden>完成版にする</button>
                   </div>
                   <div class="progress-map" id="progressMap" data-state="empty">
                     <p class="progress-map-status" id="progressMapStatus">譜面ファイル選択後に進捗マップを表示します</p>
@@ -204,7 +228,7 @@
                   </div>
                 </div>
 
-                <div class="management-grid">
+                <div class="progress-controls" id="progressControls" hidden>
                   <div class="management-column">
                     <label class="field">
                       <span class="field-label">進捗度 <span class="required-mark">*</span></span>
@@ -220,7 +244,12 @@
                       </span>
                     </label>
                   </div>
+                </div>
+              </fieldset>
 
+              <fieldset class="form-section submission-section">
+                <legend class="form-section-title">管理・コメント・投稿</legend>
+                <div class="post-form-footer">
                   <div class="management-column">
                     <label class="field">
                       <span class="field-label">管理パスワード <span class="required-mark">*</span></span>
@@ -236,33 +265,30 @@
                       </span>
                     </label>
                   </div>
+
+                  <div class="comment-column">
+                    <span class="submission-subtitle" id="commentSectionLabel">コメント</span>
+                    <label class="field" aria-labelledby="commentSectionLabel">
+                      <span class="visually-hidden">コメント</span>
+                      <textarea id="comment" name="comment" rows="4" placeholder="音源URL、作業メモ、注意点など"></textarea>
+                      <span class="field-help">音源ファイルはアップロードせず、音源URLはコメント欄に記入してください。</span>
+                    </label>
+                  </div>
+
+                  <div class="post-submit-rail">
+                    <div class="turnstile-control" aria-label="投稿認証">
+                      <div class="turnstile-widget" id="turnstileWidget"></div>
+                      <p class="turnstile-status" id="turnstileStatus" role="status" aria-live="polite" hidden></p>
+                      <button class="secondary turnstile-retry" id="turnstileRetryButton" type="button" hidden>認証を再読み込み</button>
+                    </div>
+
+                    <div class="form-actions">
+                      <button class="secondary" id="cancelAppendButton" type="button" hidden>追記をやめる</button>
+                      <button id="submitButton" type="submit">投稿する</button>
+                    </div>
+                  </div>
                 </div>
               </fieldset>
-
-            </div>
-
-            <div class="post-form-footer">
-              <fieldset class="form-section comment-section">
-                <legend class="form-section-title">コメント</legend>
-                <label class="field">
-                  <span class="field-label">コメント</span>
-                  <textarea id="comment" name="comment" rows="4" placeholder="音源URL、作業メモ、注意点など"></textarea>
-                  <span class="field-help">音源ファイルはアップロードせず、音源URLはコメント欄に記入してください。</span>
-                </label>
-              </fieldset>
-
-              <div class="post-submit-rail">
-                <div class="turnstile-control" aria-label="投稿認証">
-                  <div class="turnstile-widget" id="turnstileWidget"></div>
-                  <p class="turnstile-status" id="turnstileStatus" role="status" aria-live="polite" hidden></p>
-                  <button class="secondary turnstile-retry" id="turnstileRetryButton" type="button" hidden>認証を再読み込み</button>
-                </div>
-
-                <div class="form-actions">
-                  <button class="secondary" id="cancelAppendButton" type="button" hidden>追記をやめる</button>
-                  <button id="submitButton" type="submit">投稿する</button>
-                </div>
-              </div>
             </div>
             </form>
           </div>
@@ -386,18 +412,18 @@
     <script src="./zip-bms-reader.js?v=zip-bms-analysis-01"></script>
     <script src="./local-bms-analysis.js?v=post-form-miniview-01"></script>
     <script src="./turnstile-controller.js?v=turnstile-01"></script>
-    <script src="./app.js?v=top-detail-recency-08"></script>
+    <script src="./app.js?v=post-form-ux-08"></script>
     <script src="./progress-song-end-analysis.js?v=chart-miniview-position-01"></script>
     <script src="./progress-thumbnail-list.js?v=top-detail-recency-07"></script>
     <script src="./chart-miniview.js?v=post-form-miniview-01"></script>
-    <script src="./branch-append-ui.js?v=top-detail-recency-07"></script>
-    <script src="./progress-image-preview.js?v=chart-miniview-position-01"></script>
+    <script src="./branch-append-ui.js?v=post-form-ux-08"></script>
+    <script src="./progress-image-preview.js?v=post-form-ux-08"></script>
     <script src="./progress-image-formdata.js?v=ui-tree-overlay-01"></script>
     <script src="./branch-tree-list.js?v=top-detail-recency-07"></script>
     <script src="./tree-progress-polish.js?v=top-detail-recency-07"></script>
     <script src="./favorites-list.js?v=top-detail-recency-07"></script>
     <script src="./version-management-ui.js?v=top-detail-recency-07"></script>
-    <script src="./post-form-ui.js?v=top-recent-success-05"></script>
+    <script src="./post-form-ui.js?v=post-form-ux-08"></script>
     <script src="./chart-detail-link.js?v=top-detail-recency-07"></script>
   </body>
 </html>
