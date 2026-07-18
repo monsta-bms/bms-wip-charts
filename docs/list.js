@@ -45,6 +45,7 @@
     activeDateShortcut: "",
     dateError: initialLocationState.dateError,
     serverTime: "",
+    serverTimeCapturedAt: 0,
     items: [],
     total: 0,
     hasNext: false,
@@ -55,6 +56,7 @@
     requestSequence: 0,
     abortController: null
   };
+  const relativeTimeWarnings = new Set();
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -226,6 +228,84 @@
     };
   }
 
+  function getServerNow() {
+    const serverDate = parseCreatedAt(state.serverTime);
+    if (!serverDate) {
+      if (state.serverTime && !relativeTimeWarnings.has("INVALID_SERVER_TIME")) {
+        relativeTimeWarnings.add("INVALID_SERVER_TIME");
+        console.warn("[compact-version-list] invalid API server time", {
+          code: "INVALID_SERVER_TIME"
+        });
+      }
+      return null;
+    }
+    return serverDate.getTime() + Math.max(0, performance.now() - state.serverTimeCapturedAt);
+  }
+
+  function getRelativeTimeLabel(createdAt) {
+    const created = parseCreatedAt(createdAt);
+    if (!created) {
+      const warningKey = `INVALID_VERSION_TIMESTAMP:${createdAt}`;
+      if (createdAt && !relativeTimeWarnings.has(warningKey)) {
+        relativeTimeWarnings.add(warningKey);
+        console.warn("[compact-version-list] invalid version timestamp was ignored", {
+          code: "INVALID_VERSION_TIMESTAMP"
+        });
+      }
+      return "";
+    }
+
+    const now = getServerNow();
+    if (now === null) {
+      return "";
+    }
+    const ageMs = now - created.getTime();
+    if (ageMs < 0) {
+      const warningKey = `FUTURE_VERSION_TIMESTAMP:${createdAt}`;
+      if (!relativeTimeWarnings.has(warningKey)) {
+        relativeTimeWarnings.add(warningKey);
+        console.warn("[compact-version-list] future version timestamp was ignored", {
+          code: "FUTURE_VERSION_TIMESTAMP"
+        });
+      }
+      return "";
+    }
+
+    const hours = Math.floor(ageMs / (60 * 60 * 1000));
+    if (hours < 1) {
+      return "1時間未満";
+    }
+    if (hours < 24) {
+      return `${hours}時間前`;
+    }
+    if (hours < 192) {
+      return `${Math.floor(hours / 24)}日前`;
+    }
+    return "";
+  }
+
+  function renderRelativeTimeBadge(createdAt) {
+    const source = String(createdAt || "");
+    if (!source) {
+      return "";
+    }
+    const label = getRelativeTimeLabel(source);
+    const absolute = formatCreatedAt(source).full;
+    return `<span class="compact-relative-time-badge" data-created-at="${escapeHtml(source)}" title="版の投稿日時: ${escapeHtml(absolute)}" aria-label="${escapeHtml(label ? `${label}、版の投稿日時: ${absolute}` : `版の投稿日時: ${absolute}`)}"${label ? "" : " hidden"}>${escapeHtml(label)}</span>`;
+  }
+
+  function refreshRelativeTimeBadges() {
+    list.querySelectorAll(".compact-relative-time-badge[data-created-at]").forEach((badge) => {
+      const createdAt = badge.dataset.createdAt || "";
+      const label = getRelativeTimeLabel(createdAt);
+      const absolute = formatCreatedAt(createdAt).full;
+      badge.hidden = !label;
+      badge.textContent = label;
+      badge.title = `版の投稿日時: ${absolute}`;
+      badge.setAttribute("aria-label", label ? `${label}、版の投稿日時: ${absolute}` : `版の投稿日時: ${absolute}`);
+    });
+  }
+
   function formatDateOnly(year, month, day) {
     return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   }
@@ -305,6 +385,7 @@
     const rawProgress = Number(item.progress);
     const progress = Number.isFinite(rawProgress) ? Math.max(0, Math.min(100, Math.round(rawProgress))) : 0;
     const displayedAt = formatCreatedAt(state.sort === "updated" ? item.chartUpdatedAt : item.createdAt);
+    const relativeTimeBadge = renderRelativeTimeBadge(item.createdAt);
     const stateBadges = buildStateBadges(item);
     const fullLabel = `${fullTitle} [${chartName}] / ${versionLabel}`;
     const detailUrl = new URL("./index.html", document.baseURI);
@@ -314,7 +395,10 @@
 
     return `
       <article class="compact-version-row${hasComment ? " has-comment" : ""}" data-version-id="${escapeHtml(item.versionId || "")}">
-        <time class="compact-date" datetime="${escapeHtml(displayedAt.datetime)}" title="${escapeHtml(displayedAt.full)}">${escapeHtml(displayedAt.short)}</time>
+        <div class="compact-date-cell">
+          <time class="compact-date" datetime="${escapeHtml(displayedAt.datetime)}" title="${escapeHtml(displayedAt.full)}">${escapeHtml(displayedAt.short)}</time>
+          ${relativeTimeBadge}
+        </div>
         <div class="compact-title-cell" title="${escapeHtml(fullLabel)}">
           <div class="compact-title-line">
             <a class="compact-song-title compact-detail-link" href="${escapeHtml(detailUrl.toString())}">${escapeHtml(fullTitle)}</a>
@@ -486,6 +570,7 @@
     } else {
       list.innerHTML = state.items.map(renderRow).join("");
       applyCommentText();
+      refreshRelativeTimeBadges();
     }
     retryButton.hidden = !state.errorCode;
     retryButton.disabled = state.loading;
@@ -601,6 +686,7 @@
       state.total = total;
       state.hasNext = data?.pagination?.hasNext === true;
       state.serverTime = String(data?.serverTime || state.serverTime || "");
+      state.serverTimeCapturedAt = performance.now();
       state.unavailableFavoriteCount = Math.max(0, Number(data?.unavailableFavoriteCount) || 0);
       state.errorCode = "";
       state.loading = false;
@@ -772,6 +858,12 @@
       state.page = 1;
       updateLocation({ replace: true });
       loadVersions();
+    }
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) {
+      refreshRelativeTimeBadges();
     }
   });
 

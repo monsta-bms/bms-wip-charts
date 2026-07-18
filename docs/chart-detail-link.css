@@ -67,6 +67,37 @@
   opacity: 0.72;
 }
 
+.appended-batch-boundary {
+  display: flex;
+  align-items: center;
+  align-self: center;
+  gap: 8px;
+  height: 6px;
+  min-height: 6px;
+  line-height: 0;
+  margin-block: -11px;
+  padding-inline: 4px;
+  color: #6f9f93;
+  pointer-events: none;
+}
+
+.appended-batch-boundary::before,
+.appended-batch-boundary::after {
+  height: 1px;
+  flex: 1 1 auto;
+  background: #b7d0ca;
+  content: "";
+}
+
+.appended-batch-boundary-mark {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border: 1px solid #6f9f93;
+  background: #f4f9f7;
+  transform: rotate(45deg);
+}
+
 .recent-activity-badge {
   display: inline-flex;
   align-items: center;

@@ -1845,6 +1845,12 @@ function renderCharts(data) {
 }
 
 function appendRenderedCharts(data) {
+  const previousCardCount = chartList.querySelectorAll(":scope > .chart-group").length;
+  chartList.querySelectorAll(":scope > .appended-batch-boundary").forEach((boundary) => boundary.remove());
+  chartList.querySelectorAll(":scope > .appended-batch-start").forEach((card) => {
+    card.classList.remove("appended-batch-start");
+  });
+
   const preserved = document.createDocumentFragment();
   while (chartList.firstChild) {
     preserved.appendChild(chartList.firstChild);
@@ -1852,11 +1858,25 @@ function appendRenderedCharts(data) {
 
   renderCharts(data);
   mountChartUi(data, chartList, { reason: "append-new-cards" });
+  const addedCards = Array.from(chartList.querySelectorAll(":scope > .chart-group"));
+  const firstAddedCard = addedCards[0] || null;
+  const batchBoundary = firstAddedCard ? document.createElement("div") : null;
+  if (firstAddedCard && batchBoundary) {
+    firstAddedCard.classList.add("appended-batch-start");
+    batchBoundary.className = "appended-batch-boundary";
+    batchBoundary.dataset.appendedAfter = String(previousCardCount);
+    batchBoundary.dataset.appendedCount = String(addedCards.length);
+    batchBoundary.setAttribute("aria-hidden", "true");
+    batchBoundary.innerHTML = '<span class="appended-batch-boundary-mark"></span>';
+  }
   const additions = document.createDocumentFragment();
   while (chartList.firstChild) {
     additions.appendChild(chartList.firstChild);
   }
   chartList.appendChild(preserved);
+  if (batchBoundary) {
+    chartList.appendChild(batchBoundary);
+  }
   chartList.appendChild(additions);
   mountChartUi(null, chartList, { reason: "append-complete" });
 }
