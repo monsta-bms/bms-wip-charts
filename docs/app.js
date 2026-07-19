@@ -1,5 +1,4 @@
 const API_BASE_URL = "https://bms-wip-charts-worker.monsta3228gsl.workers.dev";
-const PASSWORD_STORAGE_KEY = "bms-wip-charts-admin-password";
 
 const allowedChartExtensions = new Set([".bms", ".bme", ".bml", ".zip"]);
 
@@ -41,6 +40,7 @@ const completeProgressButton = document.querySelector("#completeProgressButton")
 const commentInput = document.querySelector("#comment");
 const isRejectedInput = document.querySelector("#isRejected");
 const passwordInput = document.querySelector("#password");
+const saveAuthorInput = document.querySelector("#saveAuthor");
 const savePasswordInput = document.querySelector("#savePassword");
 const submitButton = document.querySelector("#submitButton");
 const errorBox = document.querySelector("#errorBox");
@@ -1593,37 +1593,6 @@ function applyRejectedProgressState() {
   progressInput.removeAttribute("aria-readonly");
 }
 
-function loadSavedPassword() {
-  try {
-    const savedPassword = localStorage.getItem(PASSWORD_STORAGE_KEY);
-    if (savedPassword) {
-      passwordInput.value = savedPassword;
-      savePasswordInput.checked = true;
-    }
-  } catch (error) {
-    console.error("[password-storage-load] failed to load saved password", {
-      code: "LOCAL_STORAGE_READ_FAILED",
-      message: error instanceof Error ? error.message : String(error)
-    });
-  }
-}
-
-function persistPasswordPreference() {
-  try {
-    if (savePasswordInput.checked && passwordInput.value) {
-      localStorage.setItem(PASSWORD_STORAGE_KEY, passwordInput.value);
-      return;
-    }
-
-    localStorage.removeItem(PASSWORD_STORAGE_KEY);
-  } catch (error) {
-    console.error("[password-storage-save] failed to save password preference", {
-      code: "LOCAL_STORAGE_WRITE_FAILED",
-      message: error instanceof Error ? error.message : String(error)
-    });
-  }
-}
-
 async function readJsonResponse(response) {
   const text = await response.text();
   if (!text) {
@@ -2171,7 +2140,6 @@ async function submitChart() {
   clearError();
 
   try {
-    persistPasswordPreference();
     const turnstileToken = await window.BmsTurnstile?.getToken();
     if (!turnstileToken) {
       throw {
@@ -2188,20 +2156,19 @@ async function submitChart() {
       body: buildChartFormData()
     });
 
-    const savedAuthor = authorInput.value.trim();
-    const savedPassword = passwordInput.value;
-    const shouldRestorePassword = savePasswordInput.checked;
+    window.BmsPostPreferences?.commitAfterSuccess?.({
+      author: authorInput.value.trim(),
+      password: passwordInput.value,
+      saveAuthor: Boolean(saveAuthorInput?.checked),
+      savePassword: Boolean(savePasswordInput?.checked)
+    });
     form.reset();
+    window.BmsPostPreferences?.restore?.();
     clearRequiredFieldIndicators();
     resetDifficultySelector();
     resetProgressMap();
     window.BmsFormMiniView?.clear();
     progressInput.value = "100";
-    authorInput.value = savedAuthor;
-    if (shouldRestorePassword) {
-      passwordInput.value = savedPassword;
-      savePasswordInput.checked = true;
-    }
     applyRejectedProgressState();
     window.BmsTurnstile?.reset();
     window.BmsPostFormUi?.markClean?.();
@@ -2402,14 +2369,11 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-savePasswordInput.addEventListener("change", persistPasswordPreference);
-
 form.addEventListener("submit", (event) => {
   event.preventDefault();
   submitChart();
 });
 
-loadSavedPassword();
 resetDifficultySelector();
 resetProgressMap();
 applyRejectedProgressState();

@@ -42,6 +42,7 @@
   const commentInput = document.querySelector("#comment");
   const isRejectedInput = document.querySelector("#isRejected");
   const passwordInput = document.querySelector("#password");
+  const saveAuthorInput = document.querySelector("#saveAuthor");
   const savePasswordInput = document.querySelector("#savePassword");
   const submitButton = document.querySelector("#submitButton");
   const cancelAppendButton = document.querySelector("#cancelAppendButton");
@@ -807,6 +808,7 @@
     if (fileInput) fileInput.value = "";
     if (authorInput) authorInput.value = "";
     if (commentInput) commentInput.value = "";
+    window.BmsPostPreferences?.restore?.();
 
     setAppendFieldMode(true);
     setDifficultyValue(parentVersion.difficulty || "");
@@ -829,9 +831,6 @@
   }
 
   function exitAppendMode({ resetForm = true } = {}) {
-    const savedPassword = passwordInput?.value || "";
-    const shouldRestorePassword = Boolean(savePasswordInput?.checked);
-
     appendState.active = false;
     appendState.entry = null;
     appendState.song = null;
@@ -875,13 +874,11 @@
         progressInput.readOnly = false;
         progressInput.classList.remove("readonly-input");
       }
-      if (shouldRestorePassword && passwordInput && savePasswordInput) {
-        passwordInput.value = savedPassword;
-        savePasswordInput.checked = true;
-      }
+      window.BmsPostPreferences?.restore?.();
       if (typeof applyRejectedProgressState === "function") {
         applyRejectedProgressState();
       }
+      window.BmsPostFormUi?.markClean?.();
     }
 
     setAppendSubmitting(false);
@@ -1079,9 +1076,6 @@
     setAppendSubmitting(true);
 
     try {
-      if (typeof persistPasswordPreference === "function") {
-        persistPasswordPreference();
-      }
       const turnstileToken = await window.BmsTurnstile?.getToken();
       if (!turnstileToken) {
         throw {
@@ -1097,11 +1091,13 @@
         },
         body: buildAppendFormData()
       });
-      const savedAuthor = authorInput?.value.trim() || "";
+      window.BmsPostPreferences?.commitAfterSuccess?.({
+        author: authorInput?.value.trim() || "",
+        password: passwordInput?.value || "",
+        saveAuthor: Boolean(saveAuthorInput?.checked),
+        savePassword: Boolean(savePasswordInput?.checked)
+      });
       exitAppendMode({ resetForm: true });
-      if (authorInput) {
-        authorInput.value = savedAuthor;
-      }
       window.BmsTurnstile?.reset();
       window.BmsPostFormUi?.markClean?.();
       window.BmsPostFormUi?.close?.();

@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="./chart-miniview.css?v=post-form-miniview-01">
     <link rel="stylesheet" href="./tree-progress-polish.css?v=tree-shape-fix-01">
     <link rel="stylesheet" href="./version-management-ui.css?v=version-lifecycle-24h-01">
-    <link rel="stylesheet" href="./post-form-ui.css?v=post-form-ux-10">
+    <link rel="stylesheet" href="./post-form-ui.css?v=post-form-ux-11">
     <link rel="stylesheet" href="./chart-detail-link.css?v=top-detail-recency-08">
   </head>
   <body id="top">
@@ -207,11 +207,21 @@
 
                   <section class="diff-group author-details-group" aria-labelledby="authorDetailsHeading">
                     <h3 class="diff-group-title" id="authorDetailsHeading">作者情報</h3>
-                    <label class="field compact-text-field">
-                      <span class="field-label">差分作者（別名義可） <span class="required-mark">*</span></span>
-                      <input id="author" name="author" type="text" autocomplete="off" placeholder="例: tester / anonymous" required>
-                      <span class="field-help">一覧に表示する作者名です。別名義でも構いません。</span>
-                    </label>
+                    <div class="author-field-stack">
+                      <label class="field compact-text-field">
+                        <span class="field-label">差分作者（別名義可） <span class="required-mark">*</span></span>
+                        <input id="author" name="author" type="text" autocomplete="off" placeholder="例: tester / anonymous" required>
+                        <span class="field-help">一覧に表示する作者名です。別名義でも構いません。</span>
+                      </label>
+
+                      <label class="field checkbox-field save-author-field">
+                        <input id="saveAuthor" type="checkbox" aria-describedby="saveAuthorHelp">
+                        <span class="checkbox-copy">
+                          <span class="checkbox-title">差分作者をこの端末に保存</span>
+                          <span class="field-help" id="saveAuthorHelp">投稿成功後に保存します。</span>
+                        </span>
+                      </label>
+                    </div>
                   </section>
                 </div>
               </fieldset>
@@ -296,6 +306,11 @@
                           <span class="field-help">この端末に保存します。共有PCではOFFにしてください。</span>
                         </span>
                       </label>
+
+                      <div class="post-preferences-actions">
+                        <button class="secondary post-preferences-clear" id="clearPostPreferences" type="button">保存情報を削除</button>
+                        <p class="post-preferences-status" id="postPreferencesStatus" role="status" aria-live="polite" hidden></p>
+                      </div>
                     </div>
 
                     <div class="turnstile-control" aria-label="投稿認証">
@@ -434,18 +449,19 @@
     <script src="./zip-bms-reader.js?v=zip-bms-analysis-01"></script>
     <script src="./local-bms-analysis.js?v=post-form-miniview-01"></script>
     <script src="./turnstile-controller.js?v=turnstile-01"></script>
-    <script src="./app.js?v=post-form-ux-09a"></script>
+    <script src="./post-form-preferences.js?v=post-form-ux-11"></script>
+    <script src="./app.js?v=post-form-ux-11"></script>
     <script src="./progress-song-end-analysis.js?v=chart-miniview-position-01"></script>
     <script src="./progress-thumbnail-list.js?v=top-detail-recency-07"></script>
     <script src="./chart-miniview.js?v=post-form-miniview-01"></script>
-    <script src="./branch-append-ui.js?v=post-form-ux-09a"></script>
+    <script src="./branch-append-ui.js?v=post-form-ux-11"></script>
     <script src="./progress-image-preview.js?v=post-form-ux-09a"></script>
     <script src="./progress-image-formdata.js?v=ui-tree-overlay-01"></script>
     <script src="./branch-tree-list.js?v=top-detail-recency-07"></script>
     <script src="./tree-progress-polish.js?v=top-detail-recency-07"></script>
     <script src="./favorites-list.js?v=top-detail-recency-07"></script>
-    <script src="./version-management-ui.js?v=top-detail-recency-07"></script>
-    <script src="./post-form-ui.js?v=post-form-ux-10"></script>
+    <script src="./version-management-ui.js?v=post-form-ux-11"></script>
+    <script src="./post-form-ui.js?v=post-form-ux-11"></script>
     <script src="./chart-detail-link.js?v=top-detail-recency-07"></script>
   </body>
 </html>

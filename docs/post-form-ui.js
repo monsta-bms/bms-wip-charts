@@ -10,6 +10,7 @@
   const difficultyInput = document.querySelector("#difficulty");
   const authorInput = document.querySelector("#author");
   const passwordInput = document.querySelector("#password");
+  const saveAuthorInput = document.querySelector("#saveAuthor");
   const savePasswordInput = document.querySelector("#savePassword");
   const progressMap = document.querySelector("#progressMap");
   const errorBox = document.querySelector("#errorBox");
@@ -31,7 +32,6 @@
     return;
   }
 
-  const passwordStorageKey = "bms-wip-charts-admin-password";
   const allowedFileExtensions = new Set([".bms", ".bme", ".bml", ".zip"]);
   const bmsFileLimit = 2 * 1024 * 1024;
   const zipFileLimit = 5 * 1024 * 1024;
@@ -132,8 +132,12 @@
       if (sourceFileName && sourceFileName !== selectedFile?.name) {
         fileDropInternalName.textContent = `ZIP内: ${sourceFileName}`;
         fileDropInternalName.title = sourceFileName;
-        fileDropInternalName.hidden = false;
+        fileDropInternalName.removeAttribute("aria-hidden");
+      } else {
+        fileDropInternalName.textContent = "";
+        fileDropInternalName.setAttribute("aria-hidden", "true");
       }
+      fileDropInternalName.hidden = false;
       fileDropHelp.textContent = [
         blockCount > 0 ? `${blockCount} blocks` : "進捗マップなし",
         selectedFile ? formatFileSize(selectedFile.size) : "",
@@ -200,11 +204,11 @@
   }
 
   function getStoredPassword() {
-    try {
-      return window.localStorage.getItem(passwordStorageKey) || "";
-    } catch (_error) {
-      return "";
-    }
+    return window.BmsPostPreferences?.getStoredPassword?.() || "";
+  }
+
+  function getStoredAuthor() {
+    return window.BmsPostPreferences?.getStoredAuthor?.() || "";
   }
 
   function isAppendMode() {
@@ -216,8 +220,16 @@
       return false;
     }
 
-    if (control === savePasswordInput) {
+    if (control === saveAuthorInput || control === savePasswordInput) {
       return false;
+    }
+
+    if (control === authorInput) {
+      const storedAuthor = getStoredAuthor();
+      if (storedAuthor && saveAuthorInput?.checked && control.value === storedAuthor) {
+        return false;
+      }
+      return control.value !== control.defaultValue;
     }
 
     if (control === passwordInput) {
@@ -227,7 +239,7 @@
         && savePasswordInput?.checked
         && control.value === storedPassword
       );
-      return Boolean(control.value) && !isRestoredPassword;
+      return isRestoredPassword ? false : control.value !== control.defaultValue;
     }
 
     if (control.type === "file") {

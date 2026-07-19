@@ -1,6 +1,5 @@
 (() => {
   const apiBaseUrl = window.API_BASE_URL || "https://bms-wip-charts-worker.monsta3228gsl.workers.dev";
-  const passwordStorageKey = "bms-wip-charts-admin-password";
   const reasonMaxLength = 500;
   const chartList = document.querySelector("#chartList");
   const chartInteractionRoot = document.querySelector("#list") || chartList;
@@ -116,14 +115,7 @@
   }
 
   function readSavedPassword() {
-    try {
-      return localStorage.getItem(passwordStorageKey) || "";
-    } catch (error) {
-      console.warn("[version-management-password] failed to read saved password", {
-        message: error instanceof Error ? error.message : String(error)
-      });
-      return "";
-    }
+    return window.BmsPostPreferences?.getStoredPassword?.() || "";
   }
 
   function setMessage(text, kind = "error") {
