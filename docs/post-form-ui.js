@@ -100,7 +100,9 @@
     }
     fileDropControl.setAttribute("aria-busy", state === "analyzing" ? "true" : "false");
     fileDropFileName.hidden = true;
+    fileDropFileName.removeAttribute("title");
     fileDropInternalName.hidden = true;
+    fileDropInternalName.removeAttribute("title");
     fileDropActions.hidden = true;
     fileDropError.hidden = true;
     fileDropError.textContent = "";
@@ -114,6 +116,7 @@
     if (state === "analyzing") {
       fileDropPrimary.textContent = "解析中…";
       fileDropFileName.textContent = selectedFile?.name || "選択したファイル";
+      fileDropFileName.title = fileDropFileName.textContent;
       fileDropFileName.hidden = false;
       fileDropHelp.textContent = "譜面情報と進捗ブロックを確認しています";
       return;
@@ -122,11 +125,13 @@
     if (state === "ready") {
       const blockCount = Number.isInteger(detail.blockCount) ? detail.blockCount : 0;
       const sourceFileName = String(detail.sourceFileName || "").trim();
-      fileDropPrimary.textContent = "✓";
+      fileDropPrimary.textContent = "✓ 解析完了";
       fileDropFileName.textContent = selectedFile?.name || "選択したファイル";
+      fileDropFileName.title = fileDropFileName.textContent;
       fileDropFileName.hidden = false;
       if (sourceFileName && sourceFileName !== selectedFile?.name) {
         fileDropInternalName.textContent = `ZIP内: ${sourceFileName}`;
+        fileDropInternalName.title = sourceFileName;
         fileDropInternalName.hidden = false;
       }
       fileDropHelp.textContent = [

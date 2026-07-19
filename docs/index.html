@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="./chart-miniview.css?v=post-form-miniview-01">
     <link rel="stylesheet" href="./tree-progress-polish.css?v=tree-shape-fix-01">
     <link rel="stylesheet" href="./version-management-ui.css?v=version-lifecycle-24h-01">
-    <link rel="stylesheet" href="./post-form-ui.css?v=post-form-ux-09a">
+    <link rel="stylesheet" href="./post-form-ui.css?v=post-form-ux-10">
     <link rel="stylesheet" href="./chart-detail-link.css?v=top-detail-recency-08">
   </head>
   <body id="top">
@@ -112,7 +112,7 @@
                     aria-label="譜面ファイルを選択、またはここへドロップ"
                     aria-describedby="chartFileDropHelp chartFileDropError"
                   >
-                    <span class="file-drop-primary" id="chartFileDropPrimary">クリックまたはドロップ</span>
+                    <span class="file-drop-primary" id="chartFileDropPrimary" role="status" aria-live="polite" aria-atomic="true">クリックまたはドロップ</span>
                     <span class="file-drop-file-name" id="chartFileDropFileName" hidden></span>
                     <span class="file-drop-internal-name" id="chartFileDropInternalName" hidden></span>
                     <span class="file-drop-details" id="chartFileDropHelp">.bms / .bme / .bml / .zip<br>最大5MB（BMS単体は2MB）</span>
@@ -160,50 +160,59 @@
               <fieldset class="form-section diff-info-section">
                 <legend class="form-section-title">差分情報</legend>
                 <div class="section-fields diff-fields">
-                  <div class="field difficulty-field">
-                    <span class="field-label">想定難易度 <span class="required-mark">*</span></span>
-                    <input id="difficulty" name="difficulty" type="hidden" required>
-                    <div class="difficulty-compact" id="difficultyCompact" hidden>
-                      <span class="difficulty-compact-value" id="difficultyCompactValue">未選択</span>
-                      <button
-                        class="secondary difficulty-change-button"
-                        id="difficultyChangeButton"
-                        type="button"
-                        aria-controls="difficultyPicker"
-                        aria-expanded="false"
-                      >変更</button>
-                    </div>
-                    <div class="difficulty-picker" id="difficultyPicker" aria-invalid="false">
-                      <div class="difficulty-tabs" role="group" aria-label="想定難易度の種類">
-                        <button class="difficulty-tab" type="button" data-difficulty-mode="symbol" data-symbol="★" aria-pressed="true">★</button>
-                        <button class="difficulty-tab" type="button" data-difficulty-mode="symbol" data-symbol="★★" aria-pressed="false">★★</button>
-                        <button class="difficulty-tab" type="button" data-difficulty-mode="symbol" data-symbol="sl" aria-pressed="false">sl</button>
-                        <button class="difficulty-tab" type="button" data-difficulty-mode="symbol" data-symbol="st" aria-pressed="false">st</button>
-                        <button class="difficulty-tab" type="button" data-difficulty-mode="manual" aria-pressed="false">手入力</button>
-                      </div>
-                      <div class="difficulty-choice-area">
-                        <div class="difficulty-chips" id="difficultyChips" role="group" aria-label="想定難易度の数字"></div>
-                        <div class="difficulty-manual" id="difficultyManualPanel" hidden>
-                          <input id="difficultyManual" type="text" inputmode="text" autocomplete="off" placeholder="例: ★12 / sl10 / 自由入力">
+                  <section class="diff-group chart-details-group" aria-labelledby="chartDetailsHeading">
+                    <h3 class="diff-group-title" id="chartDetailsHeading">譜面情報</h3>
+                    <div class="chart-details-grid">
+                      <div class="field difficulty-field">
+                        <span class="field-label">想定難易度 <span class="required-mark">*</span></span>
+                        <input id="difficulty" name="difficulty" type="hidden" required>
+                        <div class="difficulty-compact" id="difficultyCompact" hidden>
+                          <span class="difficulty-compact-value" id="difficultyCompactValue">未選択</span>
+                          <button
+                            class="secondary difficulty-change-button"
+                            id="difficultyChangeButton"
+                            type="button"
+                            aria-controls="difficultyPicker"
+                            aria-expanded="false"
+                          >変更</button>
+                        </div>
+                        <div class="difficulty-picker" id="difficultyPicker" aria-invalid="false">
+                          <div class="difficulty-tabs" role="group" aria-label="想定難易度の種類">
+                            <button class="difficulty-tab" type="button" data-difficulty-mode="symbol" data-symbol="★" aria-pressed="true">★</button>
+                            <button class="difficulty-tab" type="button" data-difficulty-mode="symbol" data-symbol="★★" aria-pressed="false">★★</button>
+                            <button class="difficulty-tab" type="button" data-difficulty-mode="symbol" data-symbol="sl" aria-pressed="false">sl</button>
+                            <button class="difficulty-tab" type="button" data-difficulty-mode="symbol" data-symbol="st" aria-pressed="false">st</button>
+                            <button class="difficulty-tab" type="button" data-difficulty-mode="manual" aria-pressed="false">手入力</button>
+                          </div>
+                          <div class="difficulty-choice-area">
+                            <div class="difficulty-chips" id="difficultyChips" role="group" aria-label="想定難易度の数字"></div>
+                            <div class="difficulty-manual" id="difficultyManualPanel" hidden>
+                              <input id="difficultyManual" type="text" inputmode="text" autocomplete="off" placeholder="例: ★12 / sl10 / 自由入力">
+                            </div>
+                          </div>
+                          <div class="difficulty-preview" aria-live="polite">
+                            <span class="difficulty-preview-label">選択中:</span>
+                            <span class="difficulty-preview-value" id="difficultyPreview">未選択</span>
+                          </div>
                         </div>
                       </div>
-                      <div class="difficulty-preview" aria-live="polite">
-                        <span class="difficulty-preview-label">選択中:</span>
-                        <span class="difficulty-preview-value" id="difficultyPreview">未選択</span>
-                      </div>
+
+                      <label class="field compact-text-field chart-name-field">
+                        <span class="field-label">仮差分名 <span class="required-mark">*</span></span>
+                        <input id="chartName" name="chartName" type="text" autocomplete="off" placeholder="例: [ANOTHER] / [ALITHER] / 仮差分" required>
+                        <span class="field-help">一覧で差分を区別する名前です。</span>
+                      </label>
                     </div>
-                  </div>
+                  </section>
 
-                  <label class="field compact-text-field chart-name-field">
-                    <span class="field-label">仮差分名 <span class="required-mark">*</span></span>
-                    <input id="chartName" name="chartName" type="text" autocomplete="off" placeholder="例: [ANOTHER] / [ALITHER] / 仮差分" required>
-                    <span class="field-help">一覧で差分を区別する名前です。</span>
-                  </label>
-
-                  <label class="field compact-text-field">
-                    <span class="field-label">差分作者（別名義可） <span class="required-mark">*</span></span>
-                    <input id="author" name="author" type="text" autocomplete="off" placeholder="例: tester / anonymous" required>
-                  </label>
+                  <section class="diff-group author-details-group" aria-labelledby="authorDetailsHeading">
+                    <h3 class="diff-group-title" id="authorDetailsHeading">作者情報</h3>
+                    <label class="field compact-text-field">
+                      <span class="field-label">差分作者（別名義可） <span class="required-mark">*</span></span>
+                      <input id="author" name="author" type="text" autocomplete="off" placeholder="例: tester / anonymous" required>
+                      <span class="field-help">一覧に表示する作者名です。別名義でも構いません。</span>
+                    </label>
+                  </section>
                 </div>
               </fieldset>
 
@@ -212,19 +221,6 @@
                 <div class="progress-map-field">
                   <div class="progress-map-header" id="progressMapHeader" hidden>
                     <span class="field-label">進捗マップ</span>
-                    <div class="progress-header-actions">
-                      <div class="progress-controls" id="progressControls" hidden>
-                        <label class="field progress-value-field">
-                          <span class="field-label">進捗度 <span class="required-mark">*</span></span>
-                          <span class="progress-value-control">
-                            <input id="progress" name="progress" type="number" min="0" max="100" step="1" value="100" required>
-                            <span class="progress-unit" aria-hidden="true">%</span>
-                          </span>
-                          <span class="field-help">0～100。没譜面は100固定です。</span>
-                        </label>
-                      </div>
-                      <button class="secondary progress-complete-button" id="completeProgressButton" type="button" disabled hidden>完成版にする</button>
-                    </div>
                   </div>
                   <div class="progress-map" id="progressMap" data-state="empty">
                     <p class="progress-map-status" id="progressMapStatus">譜面ファイル選択後に進捗マップを表示します</p>
@@ -248,6 +244,20 @@
                     <div class="progress-map-tooltip" id="progressMapTooltip" role="tooltip" hidden></div>
                     <div class="progress-map-popover" id="progressMapPopover" role="dialog" aria-live="polite" hidden></div>
                   </div>
+                </div>
+
+                <div class="progress-operation-row">
+                  <div class="progress-controls" id="progressControls" hidden>
+                    <label class="field progress-value-field">
+                      <span class="field-label">進捗度 <span class="required-mark">*</span></span>
+                      <span class="progress-value-control">
+                        <input id="progress" name="progress" type="number" min="0" max="100" step="1" value="100" required>
+                        <span class="progress-unit" aria-hidden="true">%</span>
+                      </span>
+                      <span class="field-help">0～100。没譜面は100固定です。</span>
+                    </label>
+                  </div>
+                  <button class="secondary progress-complete-button" id="completeProgressButton" type="button" disabled hidden>完成版にする</button>
                 </div>
 
                 <label class="field checkbox-field rejected-field" id="rejectedProgressControl" hidden>
@@ -435,7 +445,7 @@
     <script src="./tree-progress-polish.js?v=top-detail-recency-07"></script>
     <script src="./favorites-list.js?v=top-detail-recency-07"></script>
     <script src="./version-management-ui.js?v=top-detail-recency-07"></script>
-    <script src="./post-form-ui.js?v=post-form-ux-09a"></script>
+    <script src="./post-form-ui.js?v=post-form-ux-10"></script>
     <script src="./chart-detail-link.js?v=top-detail-recency-07"></script>
   </body>
 </html>

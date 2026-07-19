@@ -123,24 +123,42 @@
 
 .submit-panel.is-form-open .diff-fields {
   align-items: start;
-  grid-template-columns: minmax(390px, 1.15fr) minmax(280px, 0.85fr);
+  gap: 16px;
+  grid-template-columns: minmax(0, 2.15fr) minmax(240px, 1fr);
   max-width: none;
 }
 
-.submit-panel.is-form-open .diff-info-section:not(.is-difficulty-compact) .difficulty-field {
-  grid-row: span 2;
+.diff-group {
+  min-width: 0;
 }
 
-.submit-panel.is-form-open .diff-info-section.is-difficulty-compact .diff-fields {
-  grid-template-columns: minmax(150px, 0.42fr) minmax(230px, 1fr) minmax(230px, 1fr);
+.diff-group-title {
+  color: #426159;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.3;
+  margin: 0 0 7px;
 }
 
-.submit-panel.is-form-open .diff-info-section.is-difficulty-compact .difficulty-field {
-  grid-row: auto;
+.author-details-group {
+  border-left: 1px solid #d4e0dd;
+  padding-left: 16px;
 }
 
-.submit-panel.is-append-mode .diff-info-section.is-difficulty-compact .diff-fields {
-  grid-template-columns: minmax(150px, 0.42fr) minmax(260px, 1fr);
+.chart-details-grid {
+  align-items: start;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(360px, 1.2fr) minmax(220px, 0.8fr);
+  min-width: 0;
+}
+
+.submit-panel.is-form-open .diff-info-section.is-difficulty-compact .chart-details-grid {
+  grid-template-columns: minmax(145px, 0.38fr) minmax(230px, 1fr);
+}
+
+.submit-panel.is-append-mode .chart-details-grid {
+  grid-template-columns: 1fr;
 }
 
 .submit-panel.is-form-open .origin-url-field {
@@ -159,9 +177,9 @@
 }
 
 .submit-panel.is-form-open .form-section {
-  background: rgba(249, 252, 251, 0.55);
+  background: #f3f7f6;
   border: 0;
-  border-left: 2px solid #b4c8c2;
+  border-left: 2px solid #9ebbb3;
   border-radius: 2px;
   padding: 6px 12px 8px;
 }
@@ -172,9 +190,15 @@
 }
 
 .submit-panel.is-form-open .form-section-title {
-  background: transparent;
+  background: #f3f7f6;
   margin-bottom: 6px;
   padding: 0 5px;
+}
+
+.submit-panel.is-form-open .form-section input:not([type="checkbox"]):not([type="hidden"]):not([type="file"]),
+.submit-panel.is-form-open .form-section textarea {
+  background: #ffffff;
+  border-color: #c7d4d1;
 }
 
 .submit-panel.is-form-open .section-fields {
@@ -210,7 +234,7 @@ button.file-drop-zone:hover,
 button.file-drop-zone:active,
 button.file-drop-zone:focus-visible {
   align-content: center;
-  background: #f4f7f6;
+  background: #eaf2ef;
   border: 1px dashed #8fa9a2;
   border-radius: 5px;
   box-shadow: none;
@@ -300,9 +324,9 @@ button.file-drop-zone:is(:hover, :active, :focus-visible),
 .file-drop-control[data-state="ready"] button.file-drop-zone:focus-visible {
   align-items: center;
   grid-template-areas:
-    "mark name details"
-    "mark internal details";
-  grid-template-columns: auto minmax(0, 1fr) auto;
+    "status name details"
+    "status internal details";
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
   grid-template-rows: auto auto;
   justify-items: start;
   min-height: 40px;
@@ -311,13 +335,19 @@ button.file-drop-zone:is(:hover, :active, :focus-visible),
 }
 
 .file-drop-control[data-state="ready"] .file-drop-primary {
+  align-items: center;
   color: #176f58;
-  font-size: 1.05rem;
-  grid-area: mark;
+  display: inline-flex;
+  font-size: 0.88rem;
+  grid-area: status;
+  line-height: 1.25;
+  white-space: nowrap;
 }
 
 .file-drop-control[data-state="ready"] .file-drop-file-name {
+  align-self: center;
   grid-area: name;
+  line-height: 1.3;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -325,7 +355,9 @@ button.file-drop-zone:is(:hover, :active, :focus-visible),
 }
 
 .file-drop-control[data-state="ready"] .file-drop-internal-name {
+  align-self: center;
   grid-area: internal;
+  line-height: 1.3;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -333,7 +365,9 @@ button.file-drop-zone:is(:hover, :active, :focus-visible),
 }
 
 .file-drop-control[data-state="ready"] .file-drop-details {
+  align-self: center;
   grid-area: details;
+  line-height: 1.3;
   white-space: nowrap;
 }
 
@@ -354,7 +388,7 @@ button.file-drop-zone:is(:hover, :active, :focus-visible),
 }
 
 .file-drop-actions button {
-  min-height: 34px;
+  min-height: 36px;
   padding-inline: 12px;
 }
 
@@ -396,22 +430,36 @@ button.difficulty-change-button {
 }
 
 .progress-map-field {
-  margin-bottom: 8px;
+  margin-bottom: 0;
 }
 
 .progress-map-header {
-  align-items: start;
-}
-
-.progress-header-actions {
-  align-items: start;
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
+  align-items: center;
 }
 
 .progress-controls {
   margin: 0;
+}
+
+.progress-operation-row {
+  align-items: center;
+  background: #eaf2ef;
+  border-radius: 5px;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  margin-top: 8px;
+  min-height: 54px;
+  padding: 7px 9px;
+}
+
+.progress-operation-row:has(.progress-controls[hidden]) {
+  display: none;
+}
+
+.progress-operation-row .progress-complete-button {
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 .progress-value-field {
@@ -438,8 +486,8 @@ button.difficulty-change-button {
 }
 
 .rejected-field {
-  margin-top: 8px;
-  max-width: 360px;
+  margin-top: 7px;
+  max-width: 420px;
 }
 
 .rejected-field .checkbox-copy {
@@ -512,16 +560,16 @@ button.difficulty-change-button {
 
 @media (max-width: 1100px) {
   .submit-panel.is-form-open .diff-fields {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 2fr) minmax(230px, 1fr);
   }
 
-  .submit-panel.is-form-open .diff-info-section.is-difficulty-compact .diff-fields {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .submit-panel.is-form-open .difficulty-field,
   .submit-panel.is-form-open .origin-url-field {
     grid-column: 1 / -1;
+  }
+
+  .chart-details-grid,
+  .submit-panel.is-form-open .diff-info-section.is-difficulty-compact .chart-details-grid {
+    grid-template-columns: 1fr;
   }
 
   .post-form-footer {
@@ -572,23 +620,33 @@ button.difficulty-change-button {
   }
 
   .submit-panel.is-form-open .diff-fields,
-  .submit-panel.is-form-open .diff-info-section.is-difficulty-compact .diff-fields,
   .management-submit-rail {
     grid-template-columns: 1fr;
-  }
-
-  .submit-panel.is-form-open .diff-info-section.is-difficulty-compact .difficulty-field {
-    grid-column: auto;
   }
 
   .submit-panel.is-form-open .form-section {
     padding: 12px;
   }
 
-  .progress-map-header,
-  .progress-header-actions {
+  .chart-details-grid,
+  .submit-panel.is-form-open .diff-info-section.is-difficulty-compact .chart-details-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .author-details-group {
+    border-left: 0;
+    border-top: 1px solid #d4e0dd;
+    padding-left: 0;
+    padding-top: 11px;
+  }
+
+  .progress-operation-row {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .progress-operation-row .progress-complete-button {
+    margin-left: 0;
   }
 
   .progress-value-field {
@@ -624,14 +682,19 @@ button.difficulty-change-button {
   .file-drop-control[data-state="ready"] button.file-drop-zone:active,
   .file-drop-control[data-state="ready"] button.file-drop-zone:focus-visible {
     grid-template-areas:
-      "mark name"
-      "internal internal"
-      "details details";
-    grid-template-columns: auto minmax(0, 1fr);
-    min-height: 76px;
+      "status"
+      "name"
+      "internal"
+      "details";
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 112px;
   }
 
   .file-drop-control[data-state="ready"] .file-drop-actions {
     justify-content: flex-end;
+  }
+
+  .file-drop-actions button {
+    min-height: 44px;
   }
 }
