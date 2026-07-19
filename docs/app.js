@@ -11,7 +11,12 @@ const artistInput = document.querySelector("#artist");
 const subartistInput = document.querySelector("#subartist");
 const chartNameInput = document.querySelector("#chartName");
 const difficultyInput = document.querySelector("#difficulty");
+const difficultyField = document.querySelector(".difficulty-field");
+const difficultySection = difficultyField?.closest(".diff-info-section");
 const difficultyPicker = document.querySelector("#difficultyPicker");
+const difficultyCompact = document.querySelector("#difficultyCompact");
+const difficultyCompactValue = document.querySelector("#difficultyCompactValue");
+const difficultyChangeButton = document.querySelector("#difficultyChangeButton");
 const difficultyTabs = Array.from(document.querySelectorAll(".difficulty-tab"));
 const difficultyChips = document.querySelector("#difficultyChips");
 const difficultyManualPanel = document.querySelector("#difficultyManualPanel");
@@ -23,6 +28,7 @@ const progressInput = document.querySelector("#progress");
 const progressMap = document.querySelector("#progressMap");
 const progressMapHeader = document.querySelector("#progressMapHeader");
 const progressControls = document.querySelector("#progressControls");
+const rejectedProgressControl = document.querySelector("#rejectedProgressControl");
 const progressMapStatus = document.querySelector("#progressMapStatus");
 const progressMapGraphWrap = document.querySelector("#progressMapGraphWrap");
 const progressMapCanvas = document.querySelector("#progressMapCanvas");
@@ -46,6 +52,7 @@ const loadMoreChartsButton = document.querySelector("#loadMoreChartsButton");
 let isSubmitting = false;
 let lastValidManualDifficulty = "";
 let initialFileAnalysisRevision = 0;
+let difficultyPickerExpanded = true;
 
 const recentChartCount = 10;
 const maxDifficultyNumber = 25;
@@ -111,6 +118,9 @@ function setFieldInvalid(input, invalid) {
 
   if (input === difficultyInput) {
     difficultyPicker.setAttribute("aria-invalid", invalid ? "true" : "false");
+    if (invalid) {
+      setDifficultyPickerExpanded(true);
+    }
   }
 }
 
@@ -196,10 +206,37 @@ function getCurrentDifficultyValue() {
   return buildSymbolDifficulty();
 }
 
+function setDifficultyPickerExpanded(expanded, { focus = false } = {}) {
+  const hasValue = Boolean(getCurrentDifficultyValue());
+  const nextExpanded = Boolean(expanded) || !hasValue;
+  difficultyPickerExpanded = nextExpanded;
+  difficultyPicker.hidden = !nextExpanded;
+  difficultyCompact.hidden = nextExpanded;
+  difficultyField?.classList.toggle("is-compact", !nextExpanded);
+  difficultySection?.classList.toggle("is-difficulty-compact", !nextExpanded);
+  difficultyChangeButton?.setAttribute("aria-expanded", String(nextExpanded));
+  difficultyPicker.setAttribute("aria-hidden", String(!nextExpanded));
+
+  if (focus && nextExpanded) {
+    const selectedTab = difficultyTabs.find((tab) => tab.getAttribute("aria-pressed") === "true");
+    (selectedTab || difficultyTabs[0])?.focus();
+  }
+}
+
+function collapseDifficultyPickerIfSelected() {
+  if (!getCurrentDifficultyValue()) {
+    return false;
+  }
+
+  setDifficultyPickerExpanded(false);
+  return true;
+}
+
 function updateDifficultyValue() {
   const value = getCurrentDifficultyValue();
   difficultyInput.value = value;
   difficultyPreview.textContent = value || "未選択";
+  difficultyCompactValue.textContent = value || "未選択";
 
   if (value) {
     setFieldInvalid(difficultyInput, false);
@@ -282,6 +319,7 @@ function selectDifficultyNumber(number) {
 
   difficultyState.number = number;
   renderDifficultySelector();
+  collapseDifficultyPickerIfSelected();
 }
 
 function hasThreeDigitNumber(value) {
@@ -308,6 +346,7 @@ function resetDifficultySelector() {
   difficultyState.manualValue = "";
   lastValidManualDifficulty = "";
   renderDifficultySelector();
+  setDifficultyPickerExpanded(true);
 }
 
 function decodeBuffer(buffer, encoding) {
@@ -1020,6 +1059,9 @@ function setProgressMapMessage(message, state = "empty") {
   if (progressControls) {
     progressControls.hidden = true;
   }
+  if (rejectedProgressControl) {
+    rejectedProgressControl.hidden = true;
+  }
   completeProgressButton.hidden = true;
   progressMapGraphWrap.hidden = true;
   progressMapSummary.hidden = true;
@@ -1118,8 +1160,8 @@ function updateProgressSummary(progressValue = calculateMapProgress()) {
 
   const measureText = analysis.firstMeasure === null || analysis.lastMeasure === null
     ? ""
-    : ` / measures: ${analysis.firstMeasure}-${analysis.lastMeasure}`;
-  progressMapSummary.textContent = `play notes: ${analysis.playNotes} / blocks: ${analysis.standardBlocks.length} / progress: ${progressValue ?? 0}%${measureText}`;
+    : ` / 小節 ${analysis.firstMeasure}–${analysis.lastMeasure}`;
+  progressMapSummary.textContent = `ノーツ ${analysis.playNotes.toLocaleString("ja-JP")} / ${analysis.standardBlocks.length}区間${measureText}`;
   progressMapSummary.hidden = false;
 }
 
@@ -1249,6 +1291,9 @@ function renderProgressMap() {
   }
   if (progressControls) {
     progressControls.hidden = false;
+  }
+  if (rejectedProgressControl) {
+    rejectedProgressControl.hidden = false;
   }
   progressMapStatus.hidden = true;
   progressMapGraphWrap.hidden = false;
@@ -2227,6 +2272,25 @@ difficultyChips.addEventListener("click", (event) => {
 });
 
 difficultyManualInput.addEventListener("input", handleManualDifficultyInput);
+difficultyManualInput.addEventListener("blur", (event) => {
+  if (difficultyPicker.contains(event.relatedTarget)) {
+    return;
+  }
+  collapseDifficultyPickerIfSelected();
+});
+difficultyManualInput.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") {
+    return;
+  }
+
+  event.preventDefault();
+  if (collapseDifficultyPickerIfSelected()) {
+    difficultyChangeButton?.focus();
+  }
+});
+difficultyChangeButton?.addEventListener("click", () => {
+  setDifficultyPickerExpanded(true, { focus: true });
+});
 
 progressInput.addEventListener("input", () => {
   if (progressInput.getAttribute("aria-invalid") === "true") {
@@ -2350,6 +2414,12 @@ resetDifficultySelector();
 resetProgressMap();
 applyRejectedProgressState();
 updateChartListControls();
+
+window.BmsDifficultyUi = {
+  collapseIfSelected: collapseDifficultyPickerIfSelected,
+  expand: () => setDifficultyPickerExpanded(true),
+  isExpanded: () => difficultyPickerExpanded
+};
 
 const startInitialChartLoad = async () => {
   const detailRender = window.chartDetailInitialRenderPromise;

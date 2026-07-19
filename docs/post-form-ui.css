@@ -123,8 +123,24 @@
 
 .submit-panel.is-form-open .diff-fields {
   align-items: start;
-  grid-template-columns: minmax(360px, 1.35fr) minmax(180px, 0.72fr) minmax(180px, 0.72fr);
+  grid-template-columns: minmax(390px, 1.15fr) minmax(280px, 0.85fr);
   max-width: none;
+}
+
+.submit-panel.is-form-open .diff-info-section:not(.is-difficulty-compact) .difficulty-field {
+  grid-row: span 2;
+}
+
+.submit-panel.is-form-open .diff-info-section.is-difficulty-compact .diff-fields {
+  grid-template-columns: minmax(150px, 0.42fr) minmax(230px, 1fr) minmax(230px, 1fr);
+}
+
+.submit-panel.is-form-open .diff-info-section.is-difficulty-compact .difficulty-field {
+  grid-row: auto;
+}
+
+.submit-panel.is-append-mode .diff-info-section.is-difficulty-compact .diff-fields {
+  grid-template-columns: minmax(150px, 0.42fr) minmax(260px, 1fr);
 }
 
 .submit-panel.is-form-open .origin-url-field {
@@ -143,21 +159,30 @@
 }
 
 .submit-panel.is-form-open .form-section {
-  background: #fafcfb;
-  border: 1px solid #d8e1de;
-  border-left: 3px solid #a8bdb7;
-  border-radius: 4px;
-  padding: 14px 16px 16px;
+  background: rgba(249, 252, 251, 0.55);
+  border: 0;
+  border-left: 2px solid #b4c8c2;
+  border-radius: 2px;
+  padding: 6px 12px 8px;
 }
 
 .submit-panel.is-form-open .form-section:first-child {
-  border-top: 1px solid #d8e1de;
-  padding-top: 14px;
+  border-top: 0;
+  padding-top: 6px;
 }
 
 .submit-panel.is-form-open .form-section-title {
-  background: #fafcfb;
+  background: transparent;
+  margin-bottom: 6px;
   padding: 0 5px;
+}
+
+.submit-panel.is-form-open .section-fields {
+  gap: 12px;
+}
+
+.submit-panel.is-form-open .field {
+  gap: 4px;
 }
 
 .submit-panel.is-form-open .file-info-section {
@@ -248,6 +273,70 @@ button.file-drop-zone:focus-visible,
   padding-block: 10px;
 }
 
+.submit-panel.is-form-open .file-info-section[data-file-state="ready"] {
+  padding-block: 2px 5px;
+}
+
+.submit-panel.is-form-open .file-info-section[data-file-state="ready"] .form-section-title {
+  font-size: 0.82rem;
+  line-height: 1.1;
+  margin-bottom: 2px;
+}
+
+.file-drop-control[data-state="ready"] {
+  align-items: center;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+button.file-drop-zone:is(:hover, :active, :focus-visible),
+.file-drop-control[data-state="ready"] button.file-drop-zone {
+  box-shadow: none;
+}
+
+.file-drop-control[data-state="ready"] button.file-drop-zone,
+.file-drop-control[data-state="ready"] button.file-drop-zone:hover,
+.file-drop-control[data-state="ready"] button.file-drop-zone:active,
+.file-drop-control[data-state="ready"] button.file-drop-zone:focus-visible {
+  align-items: center;
+  grid-template-areas:
+    "mark name details"
+    "mark internal details";
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  justify-items: start;
+  min-height: 40px;
+  padding: 3px 8px;
+  text-align: left;
+}
+
+.file-drop-control[data-state="ready"] .file-drop-primary {
+  color: #176f58;
+  font-size: 1.05rem;
+  grid-area: mark;
+}
+
+.file-drop-control[data-state="ready"] .file-drop-file-name {
+  grid-area: name;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-drop-control[data-state="ready"] .file-drop-internal-name {
+  grid-area: internal;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-drop-control[data-state="ready"] .file-drop-details {
+  grid-area: details;
+  white-space: nowrap;
+}
+
 .file-drop-control[data-state="analyzing"] button.file-drop-zone {
   border-style: solid;
   cursor: progress;
@@ -276,14 +365,87 @@ button.file-drop-zone:focus-visible,
   margin: 0;
 }
 
-.progress-controls {
-  border-top: 1px solid #e0e7e4;
-  margin-top: 10px;
-  padding-top: 12px;
+.difficulty-compact {
+  align-items: center;
+  background: #f3f8f6;
+  border: 1px solid #cbdad5;
+  border-radius: 5px;
+  display: flex;
+  gap: 10px;
+  min-height: 42px;
+  padding: 4px 5px 4px 12px;
 }
 
-.progress-controls .management-column {
-  grid-template-columns: minmax(180px, 0.55fr) minmax(260px, 1fr);
+.difficulty-compact[hidden] {
+  display: none;
+}
+
+.difficulty-compact-value {
+  color: #175846;
+  flex: 1 1 auto;
+  font-size: 1rem;
+  font-weight: 800;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+button.difficulty-change-button {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding-inline: 10px;
+}
+
+.progress-map-field {
+  margin-bottom: 8px;
+}
+
+.progress-map-header {
+  align-items: start;
+}
+
+.progress-header-actions {
+  align-items: start;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.progress-controls {
+  margin: 0;
+}
+
+.progress-value-field {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.progress-value-control {
+  align-items: center;
+  display: grid;
+  gap: 5px;
+  grid-template-columns: 88px auto;
+}
+
+.progress-value-control input {
+  width: 88px;
+}
+
+.progress-unit {
+  color: #536474;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.rejected-field {
+  margin-top: 8px;
+  max-width: 360px;
+}
+
+.rejected-field .checkbox-copy {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
 }
 
 .submission-subtitle {
@@ -295,29 +457,65 @@ button.file-drop-zone:focus-visible,
 .post-form-footer {
   display: grid;
   gap: 18px 24px;
-  grid-template-columns: minmax(230px, 0.8fr) minmax(300px, 1.2fr) minmax(250px, 0.65fr);
+  grid-template-columns: minmax(320px, 3fr) minmax(300px, 2fr);
 }
 
-.post-submit-rail {
+.comment-column,
+.management-submit-rail {
   min-width: 0;
 }
 
-.post-submit-rail {
-  align-content: space-between;
+.comment-column {
+  align-content: start;
   display: grid;
-  gap: 12px;
+  gap: 6px;
 }
 
-.post-submit-rail .turnstile-control {
+.comment-column textarea {
+  height: 104px;
+  min-height: 96px;
+}
+
+.management-submit-rail {
+  align-content: start;
+  display: grid;
+  gap: 8px;
+}
+
+.management-submit-rail .management-column {
+  gap: 8px;
+}
+
+.management-submit-rail .field-help {
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+.management-submit-rail .turnstile-control {
+  justify-items: stretch;
   margin: 0;
 }
 
-.post-submit-rail .form-actions {
+.management-submit-rail .turnstile-widget {
+  width: 100%;
+}
+
+.management-submit-rail .form-actions {
   margin: 0;
+}
+
+@media (min-width: 761px) {
+  .submit-panel.is-form-open input:not([type="checkbox"]):not([type="hidden"]):not([type="file"]) {
+    min-height: 38px;
+  }
 }
 
 @media (max-width: 1100px) {
   .submit-panel.is-form-open .diff-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .submit-panel.is-form-open .diff-info-section.is-difficulty-compact .diff-fields {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -327,11 +525,7 @@ button.file-drop-zone:focus-visible,
   }
 
   .post-form-footer {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .post-submit-rail {
-    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr);
   }
 }
 
@@ -340,10 +534,8 @@ button.file-drop-zone:focus-visible,
     grid-template-columns: 1fr;
   }
 
-  .post-submit-rail {
-    align-items: end;
-    grid-column: auto;
-    grid-template-columns: minmax(0, 1fr) auto;
+  .comment-column textarea {
+    min-height: 120px;
   }
 }
 
@@ -380,16 +572,34 @@ button.file-drop-zone:focus-visible,
   }
 
   .submit-panel.is-form-open .diff-fields,
-  .post-submit-rail {
+  .submit-panel.is-form-open .diff-info-section.is-difficulty-compact .diff-fields,
+  .management-submit-rail {
     grid-template-columns: 1fr;
+  }
+
+  .submit-panel.is-form-open .diff-info-section.is-difficulty-compact .difficulty-field {
+    grid-column: auto;
   }
 
   .submit-panel.is-form-open .form-section {
     padding: 12px;
   }
 
-  .progress-controls .management-column {
-    grid-template-columns: 1fr;
+  .progress-map-header,
+  .progress-header-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .progress-value-field {
+    align-items: stretch;
+    display: grid;
+  }
+
+  .rejected-field .checkbox-copy {
+    align-items: start;
+    display: grid;
+    gap: 1px;
   }
 
   button.file-drop-zone,
@@ -400,8 +610,28 @@ button.file-drop-zone:focus-visible,
     padding-inline: 12px;
   }
 
-  .post-submit-rail .form-actions,
-  .post-submit-rail .form-actions button {
+  .management-submit-rail .form-actions,
+  .management-submit-rail .form-actions button {
     width: 100%;
+  }
+
+  .file-drop-control[data-state="ready"] {
+    grid-template-columns: 1fr;
+  }
+
+  .file-drop-control[data-state="ready"] button.file-drop-zone,
+  .file-drop-control[data-state="ready"] button.file-drop-zone:hover,
+  .file-drop-control[data-state="ready"] button.file-drop-zone:active,
+  .file-drop-control[data-state="ready"] button.file-drop-zone:focus-visible {
+    grid-template-areas:
+      "mark name"
+      "internal internal"
+      "details details";
+    grid-template-columns: auto minmax(0, 1fr);
+    min-height: 76px;
+  }
+
+  .file-drop-control[data-state="ready"] .file-drop-actions {
+    justify-content: flex-end;
   }
 }

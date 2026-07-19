@@ -29,6 +29,7 @@
   const progressMap = document.querySelector("#progressMap");
   const progressMapHeader = document.querySelector("#progressMapHeader");
   const progressControls = document.querySelector("#progressControls");
+  const rejectedProgressControl = document.querySelector("#rejectedProgressControl");
   const progressMapStatus = document.querySelector("#progressMapStatus");
   const progressMapGraphWrap = document.querySelector("#progressMapGraphWrap");
   const progressMapCanvas = document.querySelector("#progressMapCanvas");
@@ -512,7 +513,7 @@
       const playNotes = appendState.blocks.reduce((sum, block) => sum + (Number(block.playNotes) || 0), 0);
       const firstMeasure = appendState.blocks[0]?.startMeasure;
       const lastMeasure = appendState.blocks[appendState.blocks.length - 1]?.endMeasure;
-      progressMapSummary.textContent = `play notes: ${playNotes} / blocks: ${appendState.blocks.length} / measures: ${formatMeasure(firstMeasure)}-${formatMeasure(lastMeasure)} / progress: ${progress}%`;
+      progressMapSummary.textContent = `ノーツ ${playNotes.toLocaleString("ja-JP")} / ${appendState.blocks.length}区間 / 小節 ${formatMeasure(firstMeasure)}–${formatMeasure(lastMeasure)}`;
       progressMapSummary.hidden = false;
     }
 
@@ -531,6 +532,7 @@
     progressMap.classList.remove("is-locked");
     if (progressMapHeader) progressMapHeader.hidden = false;
     if (progressControls) progressControls.hidden = false;
+    if (rejectedProgressControl) rejectedProgressControl.hidden = false;
     progressMapStatus.hidden = true;
     progressMapGraphWrap.hidden = false;
     hideAppendFloatingInfo();
@@ -725,6 +727,7 @@
         difficultyManualInput.value = difficulty;
         difficultyManualInput.dispatchEvent(new Event("input", { bubbles: true }));
       }
+      window.BmsDifficultyUi?.collapseIfSelected?.();
       return;
     }
 

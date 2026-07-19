@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="./chart-miniview.css?v=post-form-miniview-01">
     <link rel="stylesheet" href="./tree-progress-polish.css?v=tree-shape-fix-01">
     <link rel="stylesheet" href="./version-management-ui.css?v=version-lifecycle-24h-01">
-    <link rel="stylesheet" href="./post-form-ui.css?v=post-form-ux-08">
+    <link rel="stylesheet" href="./post-form-ui.css?v=post-form-ux-09a">
     <link rel="stylesheet" href="./chart-detail-link.css?v=top-detail-recency-08">
   </head>
   <body id="top">
@@ -152,7 +152,7 @@
                   <label class="field origin-url-field">
                     <span class="field-label">原曲配布URL（任意）</span>
                     <input id="originUrl" name="originUrl" type="url" maxlength="2048" inputmode="url" autocomplete="url" placeholder="https://example.com/original-song">
-                    <span class="field-help">リンク先の内容・安全性・永続性はサイト側では確認しません。</span>
+                    <span class="field-help">リンク先の確認は行いません。</span>
                   </label>
                 </div>
               </fieldset>
@@ -163,6 +163,16 @@
                   <div class="field difficulty-field">
                     <span class="field-label">想定難易度 <span class="required-mark">*</span></span>
                     <input id="difficulty" name="difficulty" type="hidden" required>
+                    <div class="difficulty-compact" id="difficultyCompact" hidden>
+                      <span class="difficulty-compact-value" id="difficultyCompactValue">未選択</span>
+                      <button
+                        class="secondary difficulty-change-button"
+                        id="difficultyChangeButton"
+                        type="button"
+                        aria-controls="difficultyPicker"
+                        aria-expanded="false"
+                      >変更</button>
+                    </div>
                     <div class="difficulty-picker" id="difficultyPicker" aria-invalid="false">
                       <div class="difficulty-tabs" role="group" aria-label="想定難易度の種類">
                         <button class="difficulty-tab" type="button" data-difficulty-mode="symbol" data-symbol="★" aria-pressed="true">★</button>
@@ -187,7 +197,7 @@
                   <label class="field compact-text-field chart-name-field">
                     <span class="field-label">仮差分名 <span class="required-mark">*</span></span>
                     <input id="chartName" name="chartName" type="text" autocomplete="off" placeholder="例: [ANOTHER] / [ALITHER] / 仮差分" required>
-                    <span class="field-help">同じ曲の別差分を区別するための名前です。</span>
+                    <span class="field-help">一覧で差分を区別する名前です。</span>
                   </label>
 
                   <label class="field compact-text-field">
@@ -202,7 +212,19 @@
                 <div class="progress-map-field">
                   <div class="progress-map-header" id="progressMapHeader" hidden>
                     <span class="field-label">進捗マップ</span>
-                    <button class="secondary progress-complete-button" id="completeProgressButton" type="button" disabled hidden>完成版にする</button>
+                    <div class="progress-header-actions">
+                      <div class="progress-controls" id="progressControls" hidden>
+                        <label class="field progress-value-field">
+                          <span class="field-label">進捗度 <span class="required-mark">*</span></span>
+                          <span class="progress-value-control">
+                            <input id="progress" name="progress" type="number" min="0" max="100" step="1" value="100" required>
+                            <span class="progress-unit" aria-hidden="true">%</span>
+                          </span>
+                          <span class="field-help">0～100。没譜面は100固定です。</span>
+                        </label>
+                      </div>
+                      <button class="secondary progress-complete-button" id="completeProgressButton" type="button" disabled hidden>完成版にする</button>
+                    </div>
                   </div>
                   <div class="progress-map" id="progressMap" data-state="empty">
                     <p class="progress-map-status" id="progressMapStatus">譜面ファイル選択後に進捗マップを表示します</p>
@@ -228,54 +250,44 @@
                   </div>
                 </div>
 
-                <div class="progress-controls" id="progressControls" hidden>
-                  <div class="management-column">
-                    <label class="field">
-                      <span class="field-label">進捗度 <span class="required-mark">*</span></span>
-                      <input id="progress" name="progress" type="number" min="0" max="100" step="1" value="100" required>
-                      <span class="field-help">0〜100の整数。没譜面ON時は100固定です。</span>
-                    </label>
-
-                    <label class="field checkbox-field rejected-field">
-                      <input id="isRejected" name="isRejected" type="checkbox" value="true">
-                      <span class="checkbox-copy">
-                        <span class="checkbox-title">没譜面</span>
-                        <span class="field-help">追記されることがなくなります。進捗度は100固定です。</span>
-                      </span>
-                    </label>
-                  </div>
-                </div>
+                <label class="field checkbox-field rejected-field" id="rejectedProgressControl" hidden>
+                  <input id="isRejected" name="isRejected" type="checkbox" value="true">
+                  <span class="checkbox-copy">
+                    <span class="checkbox-title">没譜面</span>
+                    <span class="field-help">追記不可として100%で登録します。</span>
+                  </span>
+                </label>
               </fieldset>
 
               <fieldset class="form-section submission-section">
                 <legend class="form-section-title">管理・コメント・投稿</legend>
                 <div class="post-form-footer">
-                  <div class="management-column">
-                    <label class="field">
-                      <span class="field-label">管理パスワード <span class="required-mark">*</span></span>
-                      <input id="password" name="password" type="password" autocomplete="current-password" required>
-                      <span class="field-help">取り下げ・削除申請に使います。公開されず、再発行できません。なくさないように保管してください。</span>
-                    </label>
-
-                    <label class="field checkbox-field save-password-field">
-                      <input id="savePassword" type="checkbox">
-                      <span class="checkbox-copy">
-                        <span class="checkbox-title">パスワードを保存</span>
-                        <span class="field-help">この端末のブラウザに保存します。共有PCでは使わないでください。</span>
-                      </span>
-                    </label>
-                  </div>
-
                   <div class="comment-column">
                     <span class="submission-subtitle" id="commentSectionLabel">コメント</span>
                     <label class="field" aria-labelledby="commentSectionLabel">
                       <span class="visually-hidden">コメント</span>
                       <textarea id="comment" name="comment" rows="4" placeholder="音源URL、作業メモ、注意点など"></textarea>
-                      <span class="field-help">音源ファイルはアップロードせず、音源URLはコメント欄に記入してください。</span>
+                      <span class="field-help">音源は送信できません。必要ならURLを記入してください。</span>
                     </label>
                   </div>
 
-                  <div class="post-submit-rail">
+                  <div class="management-submit-rail">
+                    <div class="management-column">
+                      <label class="field">
+                        <span class="field-label">管理パスワード <span class="required-mark">*</span></span>
+                        <input id="password" name="password" type="password" autocomplete="current-password" required>
+                        <span class="field-help">取り下げ・削除申請に使用します。再発行できません。</span>
+                      </label>
+
+                      <label class="field checkbox-field save-password-field">
+                        <input id="savePassword" type="checkbox">
+                        <span class="checkbox-copy">
+                          <span class="checkbox-title">パスワードを保存</span>
+                          <span class="field-help">この端末に保存します。共有PCではOFFにしてください。</span>
+                        </span>
+                      </label>
+                    </div>
+
                     <div class="turnstile-control" aria-label="投稿認証">
                       <div class="turnstile-widget" id="turnstileWidget"></div>
                       <p class="turnstile-status" id="turnstileStatus" role="status" aria-live="polite" hidden></p>
@@ -412,18 +424,18 @@
     <script src="./zip-bms-reader.js?v=zip-bms-analysis-01"></script>
     <script src="./local-bms-analysis.js?v=post-form-miniview-01"></script>
     <script src="./turnstile-controller.js?v=turnstile-01"></script>
-    <script src="./app.js?v=post-form-ux-08"></script>
+    <script src="./app.js?v=post-form-ux-09a"></script>
     <script src="./progress-song-end-analysis.js?v=chart-miniview-position-01"></script>
     <script src="./progress-thumbnail-list.js?v=top-detail-recency-07"></script>
     <script src="./chart-miniview.js?v=post-form-miniview-01"></script>
-    <script src="./branch-append-ui.js?v=post-form-ux-08"></script>
-    <script src="./progress-image-preview.js?v=post-form-ux-08"></script>
+    <script src="./branch-append-ui.js?v=post-form-ux-09a"></script>
+    <script src="./progress-image-preview.js?v=post-form-ux-09a"></script>
     <script src="./progress-image-formdata.js?v=ui-tree-overlay-01"></script>
     <script src="./branch-tree-list.js?v=top-detail-recency-07"></script>
     <script src="./tree-progress-polish.js?v=top-detail-recency-07"></script>
     <script src="./favorites-list.js?v=top-detail-recency-07"></script>
     <script src="./version-management-ui.js?v=top-detail-recency-07"></script>
-    <script src="./post-form-ui.js?v=post-form-ux-08"></script>
+    <script src="./post-form-ui.js?v=post-form-ux-09a"></script>
     <script src="./chart-detail-link.js?v=top-detail-recency-07"></script>
   </body>
 </html>

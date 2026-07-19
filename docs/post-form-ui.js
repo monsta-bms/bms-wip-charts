@@ -16,6 +16,7 @@
   const launcher = document.querySelector(".post-form-launcher");
   const launcherDropCopy = document.querySelector("#postFormLauncherDropCopy");
   const fileDropControl = document.querySelector("#chartFileDropControl");
+  const fileInfoSection = fileDropControl?.closest(".file-info-section");
   const fileDropZone = document.querySelector("#chartFileDropZone");
   const fileDropPrimary = document.querySelector("#chartFileDropPrimary");
   const fileDropFileName = document.querySelector("#chartFileDropFileName");
@@ -94,6 +95,9 @@
     }
     const selectedFile = detail.file || fileInput?.files?.[0] || null;
     fileDropControl.dataset.state = state;
+    if (fileInfoSection) {
+      fileInfoSection.dataset.fileState = state;
+    }
     fileDropControl.setAttribute("aria-busy", state === "analyzing" ? "true" : "false");
     fileDropFileName.hidden = true;
     fileDropInternalName.hidden = true;
@@ -118,7 +122,7 @@
     if (state === "ready") {
       const blockCount = Number.isInteger(detail.blockCount) ? detail.blockCount : 0;
       const sourceFileName = String(detail.sourceFileName || "").trim();
-      fileDropPrimary.textContent = "解析済み";
+      fileDropPrimary.textContent = "✓";
       fileDropFileName.textContent = selectedFile?.name || "選択したファイル";
       fileDropFileName.hidden = false;
       if (sourceFileName && sourceFileName !== selectedFile?.name) {
