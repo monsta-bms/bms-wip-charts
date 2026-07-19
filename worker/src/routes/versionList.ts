@@ -359,7 +359,7 @@ function buildVersionFilter(params: VersionListParams): { sql: string; bindings:
       OR instr(songs.normalized_subtitle, ?) > 0
       OR instr(songs.normalized_artist, ?) > 0
       OR instr(songs.normalized_subartist, ?) > 0
-      OR instr(charts.normalized_chart_name, ?) > 0
+      OR instr(COALESCE(versions.normalized_chart_name, charts.normalized_chart_name), ?) > 0
       OR instr(lower(versions.author), lower(?)) > 0
     )`);
     bindings.push(
@@ -481,7 +481,7 @@ async function selectVersionList(env: Env, params: VersionListParams): Promise<{
       songs.subtitle AS song_subtitle,
       songs.artist AS song_artist,
       songs.subartist AS song_subartist,
-      charts.chart_name AS chart_name,
+      COALESCE(versions.chart_name, charts.chart_name) AS chart_name,
       versions.difficulty AS difficulty,
       versions.level AS level,
       versions.author AS author,

@@ -48,6 +48,18 @@
     return version?.displayVersion || version?.display_version || "ver?.?";
   }
 
+  function getVersionChartName(version, entry = {}) {
+    const chart = entry?.chart || {};
+    return String(
+      version?.chartName
+      || version?.chart_name
+      || chart.name
+      || chart.chartName
+      || chart.chart_name
+      || "差分名未入力"
+    ).trim();
+  }
+
   function getMiniViewInfo(version) {
     const miniView = version?.miniView;
     if (!miniView || miniView.available !== true || miniView.mode !== "7key-sp" || !miniView.url) {
@@ -700,6 +712,7 @@
     const version = node.version;
     const branchPath = getBranchPath(version);
     const displayVersionLabel = buildVersionPathLabel(branchPath);
+    const versionChartName = getVersionChartName(version, options.entry);
     const parentText = buildFromLabel(node.parent);
     const progress = getProgress(version);
     const completed = isCompleted(version, progress);
@@ -755,7 +768,7 @@
 
     if (tag) {
       const leafText = node.hasChildren ? "" : " / 末端";
-      const titleText = `displayVersion: ${getDisplayVersion(version)} / branchPath: ${branchPath}${leafText}`;
+      const titleText = `displayVersion: ${getDisplayVersion(version)} / branchPath: ${branchPath} / 差分名: ${versionChartName}${leafText}`;
       tag.classList.add("version-tree-tag");
       tag.style.setProperty("--tree-depth", String(node.depth));
       tag.title = titleText;
@@ -764,6 +777,7 @@
         <span class="version-label-stack">
           <span class="version-title-line">
             <span class="version-main-label">${html(displayVersionLabel)}</span>
+            <span class="version-chart-name" title="${html(versionChartName)}">${html(versionChartName)}</span>
             <span class="version-state-badges">${renderStateBadges(node, progress)}</span>
           </span>
           <span class="version-parent-line" title="${html(titleText)}">${html(parentText)}</span>
@@ -893,6 +907,7 @@
     const rawTitle = `displayVersion: ${getDisplayVersion(context.version)} / branchPath: ${getBranchPath(context.version)}`;
     const appendContextTitle = document.querySelector("#appendContextTitle");
     const appendParentVersion = document.querySelector("#appendParentVersion");
+    const appendParentChartName = document.querySelector("#appendParentChartName");
 
     if (appendContextTitle) {
       appendContextTitle.textContent = `追記投稿: ${currentLabel} から`;
@@ -905,6 +920,10 @@
         <span class="append-version-from">${html(fromLabel)}</span>
       `;
       appendParentVersion.title = rawTitle;
+    }
+
+    if (appendParentChartName) {
+      appendParentChartName.textContent = getVersionChartName(context.version, context.entry);
     }
   }
 

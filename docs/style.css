@@ -369,7 +369,6 @@ h2 {
 }
 
 .submit-panel.is-append-mode .song-info-section,
-.submit-panel.is-append-mode .chart-name-field,
 .submit-panel.is-append-mode .rejected-field {
   display: none;
 }

@@ -299,14 +299,26 @@
 .version-title-line {
   align-items: center;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 5px;
   min-width: 0;
 }
 
 .version-main-label {
   color: var(--primary-dark);
+  flex: 0 0 auto;
   font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.version-chart-name {
+  color: #667582;
+  flex: 1 1 auto;
+  font-size: 0.72rem;
+  font-weight: 700;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -331,7 +343,8 @@
 .version-state-badges {
   align-items: center;
   display: inline-flex;
-  flex-wrap: wrap;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
   gap: 4px;
 }
 

@@ -177,6 +177,10 @@ APIエラーは必ず以下のJSON形式で返す。
 | `collapsed_at` | 折り畳みにした日時。 |
 | `collapsed_by_version_id` | 折り畳み原因になった完成version ID。 |
 | `origin_url` | 原曲配布URLのversion単位snapshot。任意、NULL許可、最大2048文字。 |
+| `chart_name` | そのversionの差分名snapshot。NULL時は`charts.chart_name`へfallbackする。 |
+| `normalized_chart_name` | version差分名のNFKC・小文字化済み検索値。NULL時は`charts.normalized_chart_name`へfallbackする。 |
+
+`charts.chart_name` / `charts.normalized_chart_name` は、初回投稿時の起点差分名として維持する。追記で別名を指定しても更新しない。既存versionはmigration `0005_version_chart_name.sql` でchartの値をbackfillする。
 
 ## BMS解析範囲
 
@@ -247,7 +251,7 @@ D1から投稿一覧を取得する。
 | `q` | 空 | 最大100文字の部分一致検索語。前後空白を除去し、NFKC・小文字化して検索する。`%`と`_`は文字として扱う。 |
 | `excludeChartId` | 空 | 指定した公開chartを一覧と`total`から除外する。トップの「選択中の投稿」と最近一覧の重複防止に使用する。英数字、`_`, `-`のみ、最大160文字。 |
 
-検索対象は曲名、サブタイトル、アーティスト、サブアーティスト、差分名、公開中versionの作者とする。検索結果の単位はchartであり、いずれかに一致したchartについて公開中versionをすべて返す。
+検索対象は曲名、サブタイトル、アーティスト、サブアーティスト、公開中version自身の差分名、公開中versionの作者とする。検索結果の単位はchartであり、いずれかに一致したchartについて公開中versionをすべて返す。
 
 versionレスポンスには以下を含める。
 
@@ -263,6 +267,7 @@ versionレスポンスには以下を含める。
 - `childVersionCount`, `visibleChildVersionCount`: 公開中の直接子version数。既存`childVersionCount`もこの意味とする。
 - `totalChildVersionCount`: DB上の全直接子version数。`is_hidden=1`も含む。
 - `originUrl`: 初回投稿時に登録され、追記では親から継承した原曲配布URL。未登録は`null`。
+- `chartName`: そのversionの差分名。DB上の`versions.chart_name`がNULLの場合だけ起点の`charts.chart_name`へfallbackする。
 
 `progressImage` 例:
 
@@ -401,6 +406,8 @@ versionレスポンスには以下を含める。
 }
 ```
 
+`chartName`は一覧行の対象version自身の差分名であり、起点差分名とは限らない。`q`の差分名検索も`COALESCE(versions.normalized_chart_name, charts.normalized_chart_name)`を使用する。
+
 `isNew` はchartの初回公開日時から168時間以内かをD1時刻で判定する。追記によってNEW期間は延長しない。COUNTとSELECTは同じ公開・検索・状態条件を使用する。
 
 ### POST /api/versions/query
@@ -473,8 +480,9 @@ request:
 - `progressImage` が送信されていない場合は従来通り投稿を成功させる。
 - `isRejected=true` の場合は、入力された `progress` と送信された `progressMap` に関係なく保存値を `progress=100` に強制する。
 - `originUrl`は空欄なら`NULL`。絶対HTTP/HTTPS URLだけを許可し、認証情報、制御文字、未エンコード空白を拒否する。fragmentを削除してqueryを維持し、正規化後も2048文字以内とする。外部URLへの通信は行わない。
+- `chartName`は前後空白を除去し、100 Unicode code point以内とする。初回投稿では`charts`の起点差分名とBASE versionの差分名snapshotへ同じ値を保存する。
 
-成功レスポンスには、保存できた場合のみ `progressImage` objectを含める。
+成功レスポンスには`chartName`を含め、保存できた場合のみ `progressImage` objectを含める。
 
 ### POST /api/charts/:chartId/versions
 
@@ -494,6 +502,7 @@ request:
 
 任意項目:
 
+- `chartName`。今回作成するversionの差分名。旧Pages互換のため省略可能。
 - `difficulty`
 - `level`
 - `comment`
@@ -508,6 +517,8 @@ request:
 - 追記投稿で `isRejected=true` が送られた場合は `INVALID_REJECTED_FLAG_FOR_FOLLOWUP` を返す。
 - 親versionのprogressMap unionと同じ塗り範囲の場合は `PROGRESS_MAP_UNCHANGED` で拒否する。
 - 新versionの`originUrl`は親versionのDB値をコピーする。追記リクエストからのURL入力は受け付けない。
+- 新versionの差分名は、空でない有効な送信`chartName`、親versionの`chart_name`、起点の`charts.chart_name`の順で決定する。送信値を省略した旧Pagesは親名を継承する。
+- 追記で別名を指定しても`charts.chart_name`は更新しない。新versionの`chart_name` / `normalized_chart_name`だけをsnapshotとして保存する。
 
 成功レスポンス例:
 
@@ -518,6 +529,7 @@ request:
   "versionId": "version_new",
   "displayVersion": "ver2.0-a",
   "branchPath": "root/a",
+  "chartName": "[ANOTHER]",
   "progress": 72,
   "fileId": "file_xxx",
   "progressImage": {
@@ -1257,4 +1269,4 @@ dataは譜面objectの配列を返す。対象なしはHTTP 200の`[]`。
 ]
 ```
 
-`url`は、MD5重複排除後に採用されたversion自身に有効な`origin_url`がある場合だけ出力し、未登録時はキー自体を省略する。`url_diff`は常に従来どおり出力する。`org_md5`と外側ZIPのSHA-256は出力しない。header/取込HTMLは`Cache-Control: public, max-age=3600, must-revalidate`、dataは`public, max-age=60, must-revalidate`とし、すべてETagと`If-None-Match`による304応答に対応する。エラー応答は`Cache-Control: no-store`とする。
+`url`は、MD5重複排除後に採用されたversion自身に有効な`origin_url`がある場合だけ出力し、未登録時はキー自体を省略する。`name_diff`と`bms_wip_chart_name`は採用version自身の`chart_name`を使用し、NULLの既存行だけ`charts.chart_name`へfallbackする。`url_diff`は常に従来どおり出力する。`org_md5`と外側ZIPのSHA-256は出力しない。header/取込HTMLは`Cache-Control: public, max-age=3600, must-revalidate`、dataは`public, max-age=60, must-revalidate`とし、すべてETagと`If-None-Match`による304応答に対応する。エラー応答は`Cache-Control: no-store`とする。

@@ -1,5 +1,6 @@
 import { BmsAnalysis, normalizeText } from "../utils/bms";
 import { analyzeUploadedBmsBytes } from "../utils/bmsUploadAnalysis";
+import { validateChartName } from "../utils/chartName";
 import { sanitizeFileName, validateUploadFile } from "../utils/fileValidation";
 import { hashWithSecret, sha256HexFromBuffer } from "../utils/hash";
 import { normalizeOriginUrl } from "../utils/originUrl";
@@ -47,6 +48,7 @@ type ChartRow = {
 type VersionRow = {
   version_id: string;
   chart_id: string;
+  chart_name: string;
   parent_version_id: string | null;
   version_number: number;
   branch_label: string;
@@ -144,6 +146,7 @@ type CreateChartInput = {
   artist: string;
   subartist: string;
   chartName: string;
+  normalizedChartName: string;
   difficulty: string;
   level: string;
   author: string;
@@ -419,6 +422,7 @@ function buildVersion(row: VersionRow) {
     branchLabel: row.branch_label,
     branchPath: row.branch_path,
     displayVersion: buildDisplayVersion(row),
+    chartName: row.chart_name,
     author: row.author,
     authorsJson: row.authors_json,
     progress: row.progress,
@@ -625,7 +629,16 @@ function buildVisibleChartFilter(params: ListParams): { sql: string; bindings: s
       OR songs.normalized_subtitle LIKE ? ESCAPE '\\'
       OR songs.normalized_artist LIKE ? ESCAPE '\\'
       OR songs.normalized_subartist LIKE ? ESCAPE '\\'
-      OR charts.normalized_chart_name LIKE ? ESCAPE '\\'
+      OR EXISTS (
+        SELECT 1
+        FROM versions AS chart_name_versions
+        WHERE chart_name_versions.chart_id = charts.id
+          AND chart_name_versions.is_hidden = 0
+          AND COALESCE(
+            chart_name_versions.normalized_chart_name,
+            charts.normalized_chart_name
+          ) LIKE ? ESCAPE '\\'
+      )
       OR EXISTS (
         SELECT 1
         FROM versions AS author_versions
@@ -741,6 +754,7 @@ async function selectVisibleVersionRows(env: Env, chartIds: string[]): Promise<V
     SELECT
       versions.id AS version_id,
       versions.chart_id AS chart_id,
+      COALESCE(versions.chart_name, charts.chart_name) AS chart_name,
       versions.parent_version_id AS parent_version_id,
       versions.version_number AS version_number,
       versions.branch_label AS branch_label,
@@ -805,6 +819,7 @@ async function selectVisibleVersionRows(env: Env, chartIds: string[]): Promise<V
         WHERE child_versions.parent_version_id = versions.id
       ) AS total_child_version_count
     FROM versions
+    INNER JOIN charts ON charts.id = versions.chart_id
     WHERE versions.is_hidden = 0
       AND versions.chart_id IN (${placeholders})
     ORDER BY versions.chart_id ASC, versions.branch_path ASC
@@ -1119,6 +1134,19 @@ async function parseCreateChartInput(
     };
   }
 
+  const chartNameValidation = validateChartName(chartName);
+  if (!chartNameValidation.ok) {
+    return {
+      ok: false,
+      response: await failCreateChart(request, env, context, {
+        status: 400,
+        code: "INVALID_FORM",
+        message: "差分名を確認してください。",
+        detail: chartNameValidation.detail
+      })
+    };
+  }
+
   return {
     ok: true,
     value: {
@@ -1135,7 +1163,8 @@ async function parseCreateChartInput(
       subtitle,
       artist,
       subartist,
-      chartName,
+      chartName: chartNameValidation.value,
+      normalizedChartName: chartNameValidation.normalizedValue,
       difficulty,
       level,
       author,
@@ -1293,7 +1322,7 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
     const normalizedSubtitle = normalizeText(input.subtitle);
     const normalizedArtist = normalizeText(input.artist);
     const normalizedSubartist = normalizeText(input.subartist);
-    const normalizedChartName = normalizeText(input.chartName);
+    const normalizedChartName = input.normalizedChartName;
 
     let existingSong: ExistingSongRow | null;
     try {
@@ -1482,6 +1511,8 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
         version_number,
         branch_label,
         branch_path,
+        chart_name,
+        normalized_chart_name,
         author,
         authors_json,
         progress,
@@ -1510,10 +1541,12 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
         download_blocked,
         download_block_reason,
         completed_at
-      ) VALUES (?, ?, NULL, 1, '', 'root', ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?)
+      ) VALUES (?, ?, NULL, 1, '', 'root', ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?)
     `).bind(
       versionId,
       chartId,
+      input.chartName,
+      normalizedChartName,
       input.author,
       storedProgress,
       input.bmsAnalysis?.playNotes ?? null,
@@ -1613,6 +1646,7 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
       versionId,
       fileId,
       displayVersion: "ver1.0",
+      chartName: input.chartName,
       progress: storedProgress,
       progressMap: preparedProgressMap.progressMap,
       isRejected: input.isRejected,

@@ -26,7 +26,7 @@
 
 投稿フォームのファイル状態は、未選択を「クリックまたはドロップ」、ドラッグ中を「ここに離してください」、解析中を「解析中…」、成功を「✓ 解析完了」と表示する。解析成功時はファイル名、ZIP内部譜面名、block数、ファイルサイズ、ミニビュー非対応の補足、変更・解除を維持する。長い名前は省略表示し、titleで全文を確認できるようにする。
 
-差分情報は「譜面情報」と「作者情報」へ分ける。譜面情報には想定難易度と仮差分名、作者情報には差分作者を置き、「一覧に表示する作者名です。別名義でも構いません。」と補足する。PCではおおむね68:32の2領域、760px以下では譜面情報、作者情報の順に1列表示する。既存の難易度縮小・変更・手入力・reset・追記初期値・validationは維持する。
+差分情報は「譜面情報」と「作者情報」へ分ける。譜面情報には想定難易度と差分名、作者情報には差分作者を置き、「一覧に表示する作者名です。別名義でも構いません。」と補足する。PCではおおむね68:32の2領域、760px以下では譜面情報、作者情報の順に1列表示する。既存の難易度縮小・変更・手入力・reset・追記初期値・validationは維持する。
 
 進捗度inputと完成版操作は密度グラフ・進捗レール・小節ラベルの直下へ置き、没譜面はその次の行に置く。完成版ボタンは未解析、100%、没譜面で非表示、0～79%でdisabled、80～99%で有効とする既存条件を変更しない。進捗概要、block塗り、drag、親layer、miniView、PNG生成も変更しない。
 
@@ -38,7 +38,7 @@
 
 想定難易度は未選択または手入力中のみピッカーを展開し、数字・記号の選択直後、手入力確定後、追記元からの初期設定後は「選択値・変更」の要約表示へ縮小する。変更操作で現在値を維持して再展開し、難易度のvalidationエラーでは自動展開する。初回・追記投稿成功、追記キャンセル、form resetでは未選択の展開状態へ戻す。hidden inputと送信値は変更しない。
 
-差分情報は、難易度ピッカー展開時は難易度を左列2行、仮差分名と作者を右列へ配置し、要約時は3列へ圧縮する。進捗度は進捗マップ上部へ88px幅のnumber inputと`%`単位で表示し、完成版操作を同じ操作列へ置く。没譜面はグラフ下へ置き、進捗概要は`ノーツ / 区間 / 小節`の日本語表示とする。
+差分情報は、難易度ピッカー展開時は難易度を左列2行、差分名と作者を右列へ配置し、要約時は3列へ圧縮する。進捗度は進捗マップ上部へ88px幅のnumber inputと`%`単位で表示し、完成版操作を同じ操作列へ置く。没譜面はグラフ下へ置き、進捗概要は`ノーツ / 区間 / 小節`の日本語表示とする。
 
 フォーム最下部はPCでコメント約60%、管理レール約40%の2列とする。管理レールは管理パスワード、保存設定、Turnstile、追記キャンセル、投稿操作の順とし、920px以下はコメントから投稿操作まで1列へ積む。セクションは左アクセントだけを残して全周枠と背景差を弱める。localStorage、パスワード保存時機、validation、エラー表示、FormData、Worker APIは変更しない。
 
@@ -176,7 +176,7 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。�
 - 譜面ファイル
 - 曲名
 - アーティスト
-- 仮差分名
+- 差分名
 - 想定難易度
 - 差分作者
 - 進捗度
@@ -190,11 +190,11 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。�
 
 追記モードでは以下を行う。
 
-- 楽曲情報と仮差分名は追記元を引き継ぐため入力欄を隠す。
+- 楽曲情報は追記元を引き継ぎ、編集不可とする。差分名は親version自身の名前を初期値にし、「今回の差分名」として編集できる。
 - 親versionの `difficulty` / `level` を想定難易度UIへ初期反映し、編集可能にする。
 - 親versionの `progressMap.layers` を読み取り専用の親layerとして表示する。
 - 今回追記分は最後の `followup` layerとして編集する。
-- API送信時は `title`, `artist`, `chartName`, `isRejected` は送らない。
+- API送信時は `chartName` を送り、`title`, `artist`, `isRejected` は送らない。
 
 追記モードでは以下を禁止する。
 
@@ -498,11 +498,22 @@ MVPではサムネイルクリックによる拡大表示は実装しない。�
 - chartカード内の版ツリー、進捗サムネイル、miniView、DL、追記、お気に入り、管理操作、コメントは維持する。選択中カードも`#list`の共通イベント委譲と描画後mountを使用する。
 - 各chartの最新公開version投稿日時を基準に、D1の`serverTime`との差が1時間未満、1〜23時間、1〜7日の場合だけ相対時刻を表示する。8日以上、未来日時、不正日時は表示しない。タブ再表示時に更新し、頻繁なtimer更新は行わない。
 
+### version別差分名
+
+- `charts.chart_name` / `charts.normalized_chart_name` は初回投稿時の起点差分名であり、追記では変更しない。
+- `versions.chart_name` / `versions.normalized_chart_name` は各versionの差分名snapshotとする。新規BASEには起点名を同時保存する。
+- migration `0005_version_chart_name.sql` は既存versionへ所属chartの差分名と正規化名をbackfillする。移行途中のNULL行は`COALESCE(version, chart)`で読み取る。
+- 追記名は、空でない有効な送信値、親version名、chart起点名の順で決定する。旧Pagesが`chartName`を送らない場合も親名を継承できる。
+- 差分名は前後空白を除去し、100 Unicode code point以内とする。検索値は投稿時と同じNFKC・小文字化を使う。
+- トップのchart見出しは起点差分名を維持する。各version行は数字パス版ラベルの近くへそのversion自身の差分名を1行で表示する。
+- 独立一覧、version検索、お気に入りsnapshot、RC★/RC★★の`name_diff`と`bms_wip_chart_name`は対象version自身の差分名を使う。
+- version別差分名に一意制約は設けない。同名の複数versionを許可し、versionIdと数字パス版ラベルで区別する。
+
 ### chart検索API
 
-- `GET /api/charts`の`q`は、曲名、サブタイトル、アーティスト、サブアーティスト、差分名、公開中version作者を部分一致検索する。
+- `GET /api/charts`の`q`は、曲名、サブタイトル、アーティスト、サブアーティスト、公開中version自身の差分名、公開中version作者を部分一致検索する。
 - 検索に一致したversionだけへ絞らず、該当chartの全公開versionを返して数字パス版ラベルと祖先ツリーを維持する。
-- 検索語は前後空白を除去し、最大100文字とする。曲情報と差分名は投稿時と同じNFKC・小文字化済み値を使う。
+- 検索語は前後空白を除去し、最大100文字とする。曲情報と各versionの差分名は投稿時と同じNFKC・小文字化済み値を使う。
 - `%`, `_`, `\\`はLIKE検索の制御文字ではなく通常文字として扱う。
 - APIはchart件数の`total`と`hasNext`を返す。一覧取得とCOUNTは同じ公開条件・検索条件を使う。
 - トップの詳細カード一覧にあるお気に入り表示は、取得済みchartへ従来どおり適用する。独立投稿一覧 `list.html` の「お気に入りのみ」は `POST /api/versions/query` を使い、未取得ページを含むlocalStorage上の公開versionをversion単位で取得する。
@@ -512,10 +523,10 @@ MVPではサムネイルクリックによる拡大表示は実装しない。�
 `list.html` は大量の公開版を簡潔に確認するページとし、トップの詳細カード一覧とは別のversion単位APIを使用する。
 
 - `GET /api/versions` は公開versionを1件ずつ返す。`charts.is_hidden=0`, `versions.is_hidden=0`, `collapsed_by_completion=0`を共通条件とする。
-- 一覧の通常行は日付、タイトル、難易度、作者、コメント、進捗の6列とする。曲名の下に `[差分名] / 数字パス版ラベル` を表示する。タイトルを主列、進捗を64px固定列として扱う。
+- 一覧の通常行は日付、タイトル、難易度、作者、コメント、進捗の6列とする。曲名の下に `[対象version自身の差分名] / 数字パス版ラベル` を表示する。タイトルを主列、進捗を64px固定列として扱う。
 - コメントは`versions.comment`をtrimし、連続空白を1個へ畳んだ80 Unicode code pointまでの`commentPreview`だけを返す。80文字超過時だけ`…`を付け、全文・HTML・リンク化は一覧で扱わない。
 - `withdrawn`, `deleteRequested`, `downloadBlocked` は公開状態なら小さい状態ラベルを表示する。管理非表示versionと完成版に置き換えられた中間履歴は表示しない。
-- 検索対象は曲名、サブタイトル、アーティスト、サブアーティスト、差分名、そのversionの作者とする。
+- 検索対象は曲名、サブタイトル、アーティスト、サブアーティスト、対象version自身の差分名、そのversionの作者とする。
 - 並び順は `new`（version投稿日時順）と `updated`（chart更新日時を優先し、その中でversion投稿日時順）を提供する。
 - 状態は `all`, `incomplete`, `complete`, `rejected` を提供する。未完成・完成は非没譜面だけを対象とする。
 - 状態と並び順はネイティブradioのフィルターパネルで選択し、変更時に即再取得する。
@@ -548,7 +559,7 @@ MVPではサムネイルクリックによる拡大表示は実装しない。�
 - お気に入り状態はサーバーには保存せず、ブラウザごとの `localStorage` に保存する。
 - localStorage keyは `bms-wip-charts:favorites:v1` とする。
 - 保存形式はversionIdをkeyにしたmap形式とし、判定はversionIdの存在で行う。
-- `chartId`, `songTitle`, `chartName`, `versionLabel`, `branchPath`, `favoritedAt` は表示補助用snapshotとして保存してよい。
+- `chartId`, `songTitle`, 対象version自身の`chartName`, `versionLabel`, `branchPath`, `favoritedAt` は表示補助用snapshotとして保存してよい。旧snapshotに`chartName`がない場合もversionId判定を継続する。
 - localStorageが壊れている、またはJSON parseに失敗した場合は空扱いにし、一覧全体を壊さない。
 - APIレスポンスに存在しないfavoriteはMVPでは表示上無視し、自動削除しない。
 - `completed`, `downloadBlocked`, `collapsedByCompletion`, `isRejected` のversionもお気に入り可とする。
@@ -838,7 +849,7 @@ RC★★変換:
 
 標準項目は`md5`, `level`, `title`, `artist`, `url_diff`, `name_diff`とする。採用versionに有効な`origin_url`がある場合だけ、原曲配布URLを`url`として追加する。`org_md5`は出力しない。`url_diff`は既存file APIの絶対URLとし、ZIPでは内部BMSのMD5を使い、外側ZIPのSHA-256を譜面hashとして出力しない。
 
-元difficulty、chart名、数字パス版ラベル、作者、完成日時、subtitle、subartistは`bms_wip_`名前空間の独自項目として保持する。本フィードは投稿者の自己申告難易度をRC★/RC★★へ統合した完成差分フィードであり、公式な難易度認定ではない。
+元difficulty、採用version自身の差分名、数字パス版ラベル、作者、完成日時、subtitle、subartistは`bms_wip_`名前空間の独自項目として保持する。差分名がNULLの既存versionだけ起点差分名へfallbackする。本フィードは投稿者の自己申告難易度をRC★/RC★★へ統合した完成差分フィードであり、公式な難易度認定ではない。
 
 公開難易度表ルートのGET/HEAD/OPTIONSだけは`Access-Control-Allow-Origin: *`とし、投稿・管理APIのOrigin制限は変更しない。headerと取込HTMLは約1時間、dataは約60秒キャッシュし、ETag再検証に対応する。古いdataが残っていてもDL可否は既存file APIが現在のD1/R2状態で再判定する。
 

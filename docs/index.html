@@ -85,11 +85,11 @@
                   <dd id="appendParentArtist">-</dd>
                 </div>
                 <div>
-                  <dt>仮差分名</dt>
+                  <dt>差分名</dt>
                   <dd id="appendParentChartName">-</dd>
                 </div>
               </dl>
-              <p class="append-context-note">追記投稿では楽曲情報と仮差分名は追記元を引き継ぎます。今回追加した進捗範囲だけを塗って送信してください。</p>
+              <p class="append-context-note">楽曲情報は追記元を引き継ぎます。差分名は必要な場合だけ変更できます。今回追加した進捗範囲だけを塗って送信してください。</p>
             </div>
 
             <div class="form-sections">
@@ -198,9 +198,9 @@
                       </div>
 
                       <label class="field compact-text-field chart-name-field">
-                        <span class="field-label">仮差分名 <span class="required-mark">*</span></span>
-                        <input id="chartName" name="chartName" type="text" autocomplete="off" placeholder="例: [ANOTHER] / [ALITHER] / 仮差分" required>
-                        <span class="field-help">一覧で差分を区別する名前です。</span>
+                        <span class="field-label" id="chartNameLabel">差分名 <span class="required-mark">*</span></span>
+                        <input id="chartName" name="chartName" type="text" autocomplete="off" maxlength="100" placeholder="例: [ANOTHER] / [ALITHER] / 仮差分" required>
+                        <span class="field-help" id="chartNameHelp">一覧で差分を区別する名前です。</span>
                       </label>
                     </div>
                   </section>

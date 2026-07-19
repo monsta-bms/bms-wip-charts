@@ -106,7 +106,7 @@ const requiredFieldChecks = [
   { name: "譜面ファイル", input: fileInput, isMissing: () => !fileInput.files?.[0] },
   { name: "曲名", input: titleInput, isMissing: () => !titleInput.value.trim() },
   { name: "アーティスト", input: artistInput, isMissing: () => !artistInput.value.trim() },
-  { name: "仮差分名", input: chartNameInput, isMissing: () => !chartNameInput.value.trim() },
+  { name: "差分名", input: chartNameInput, isMissing: () => !chartNameInput.value.trim() },
   { name: "想定難易度", input: difficultyInput, isMissing: () => !difficultyInput.value.trim() },
   { name: "差分作者", input: authorInput, isMissing: () => !authorInput.value.trim() },
   { name: "進捗度", input: progressInput, isMissing: () => !progressInput.value.trim() },
@@ -1575,6 +1575,12 @@ function validateRequiredFields() {
     return false;
   }
 
+  if (Array.from(chartNameInput.value.trim()).length > 100) {
+    setFieldInvalid(chartNameInput, true);
+    showTextError("差分名は100文字以内で入力してください。");
+    return false;
+  }
+
   return true;
 }
 
@@ -1895,7 +1901,7 @@ function renderCharts(data) {
           <h3>${escapeHtml(song.title || "無題")}</h3>
           <span class="artist-separator">/</span>
           <span class="chart-artist">${escapeHtml(song.artist || "Unknown Artist")}</span>
-          <span class="chart-name-badge">${escapeHtml(chart.name || "差分名未入力")}</span>
+          <span class="chart-name-badge" title="${escapeHtml(`起点差分名: ${chart.name || "差分名未入力"}`)}" aria-label="${escapeHtml(`起点差分名: ${chart.name || "差分名未入力"}`)}">${escapeHtml(chart.name || "差分名未入力")}</span>
         </div>
         <div class="version-list">${rows || `<div class="list-status">表示できるversionがありません。</div>`}</div>
       </article>

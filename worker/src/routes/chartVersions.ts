@@ -1,5 +1,6 @@
 import { BmsAnalysis, normalizeText } from "../utils/bms";
 import { analyzeUploadedBmsBytes } from "../utils/bmsUploadAnalysis";
+import { validateChartName } from "../utils/chartName";
 import { sanitizeFileName, validateUploadFile } from "../utils/fileValidation";
 import { hashWithSecret, sha256HexFromBuffer } from "../utils/hash";
 import { prepareAppendProgressMap } from "../utils/progressMap";
@@ -33,6 +34,7 @@ type PostLogContext = {
 type ChartRow = {
   chart_id: string;
   chart_name: string;
+  normalized_chart_name: string;
   chart_is_hidden: number;
   song_id: string;
   song_title: string;
@@ -44,6 +46,8 @@ type ChartRow = {
 type ParentVersionRow = {
   id: string;
   chart_id: string;
+  chart_name: string | null;
+  normalized_chart_name: string | null;
   version_number: number;
   branch_path: string;
   progress_map_json: string | null;
@@ -67,6 +71,7 @@ type AppendVersionInput = {
   analysisWarnings: ApiWarning[];
   bmsAnalysisFailed: boolean;
   parentVersionId: string;
+  chartName: string;
   difficulty: string;
   level: string;
   author: string;
@@ -323,6 +328,7 @@ async function parseAppendVersionInput(
   }
 
   const parentVersionId = getFormText(form, "parentVersionId");
+  const chartName = getFormText(form, "chartName");
   const author = getFormText(form, "author");
   const progressMapText = getFormText(form, "progressMap");
   const password = getFormText(form, "password");
@@ -405,6 +411,7 @@ async function parseAppendVersionInput(
       analysisWarnings,
       bmsAnalysisFailed,
       parentVersionId,
+      chartName,
       difficulty: getFormText(form, "difficulty"),
       level: getFormText(form, "level"),
       author,
@@ -423,6 +430,7 @@ async function selectChart(env: Env, chartId: string): Promise<ChartRow | null> 
     SELECT
       charts.id AS chart_id,
       charts.chart_name AS chart_name,
+      charts.normalized_chart_name AS normalized_chart_name,
       charts.is_hidden AS chart_is_hidden,
       songs.id AS song_id,
       songs.title AS song_title,
@@ -441,6 +449,8 @@ async function selectParentVersion(env: Env, parentVersionId: string): Promise<P
     SELECT
       id,
       chart_id,
+      chart_name,
+      normalized_chart_name,
       version_number,
       branch_path,
       progress_map_json,
@@ -617,6 +627,26 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
     }
 
     const { chart, parent } = parentValidation.value;
+    const inheritedChartName = parent.chart_name?.trim() || chart.chart_name;
+    const inheritedNormalizedChartName = parent.normalized_chart_name?.trim()
+      || chart.normalized_chart_name
+      || normalizeText(inheritedChartName);
+    let effectiveChartName = inheritedChartName;
+    let effectiveNormalizedChartName = inheritedNormalizedChartName;
+
+    if (input.chartName) {
+      const chartNameValidation = validateChartName(input.chartName);
+      if (!chartNameValidation.ok) {
+        return failAppendVersion(request, env, context, {
+          status: 400,
+          code: "INVALID_FORM",
+          message: "今回の差分名を確認してください。",
+          detail: chartNameValidation.detail
+        });
+      }
+      effectiveChartName = chartNameValidation.value;
+      effectiveNormalizedChartName = chartNameValidation.normalizedValue;
+    }
 
     let existingDuplicate: ExistingVersionRow | null;
     try {
@@ -797,6 +827,8 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
           version_number,
           branch_label,
           branch_path,
+          chart_name,
+          normalized_chart_name,
           author,
           authors_json,
           progress,
@@ -825,7 +857,7 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
           download_blocked,
           download_block_reason,
           completed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, 0, NULL, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, 0, NULL, ?)
       `).bind(
         versionId,
         chartId,
@@ -833,6 +865,8 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
         versionNumber,
         branchLabel,
         branchPath,
+        effectiveChartName,
+        effectiveNormalizedChartName,
         input.author,
         storedProgress,
         input.bmsAnalysis?.playNotes ?? null,
@@ -907,7 +941,7 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
       context.ipHash,
       context.uaHash,
       input.fileSha256,
-      `Follow-up version created. parentVersionId=${input.parentVersionId}; branchPath=${branchPath}; ${analysisDetail}; progress=${storedProgress}; progressMap=saved; warnings=${warningDetail}`
+      `Follow-up version created. parentVersionId=${input.parentVersionId}; branchPath=${branchPath}; chartNameChanged=${effectiveNormalizedChartName !== inheritedNormalizedChartName}; ${analysisDetail}; progress=${storedProgress}; progressMap=saved; warnings=${warningDetail}`
     ));
 
     try {
@@ -954,6 +988,7 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
       versionId,
       displayVersion,
       branchPath,
+      chartName: effectiveChartName,
       progress: storedProgress,
       progressMap: preparedProgressMap.progressMap,
       originUrl: parent.origin_url,

@@ -283,7 +283,7 @@ async function selectEligibleRows(env: Env): Promise<DifficultyTableRow[]> {
       versions.file_id AS file_id,
       versions.completed_at AS completed_at,
       versions.created_at AS created_at,
-      charts.chart_name AS chart_name,
+      COALESCE(versions.chart_name, charts.chart_name) AS chart_name,
       versions.origin_url AS origin_url
     FROM versions
     INNER JOIN charts ON charts.id = versions.chart_id

@@ -293,7 +293,7 @@ async function listPendingDeleteRequests(request: Request, env: Env): Promise<Re
         versions.hidden_reason AS hidden_reason,
         versions.download_blocked AS download_blocked,
         versions.download_block_reason AS download_block_reason,
-        charts.chart_name AS chart_name,
+        COALESCE(versions.chart_name, charts.chart_name) AS chart_name,
         songs.title AS song_title,
         (
           SELECT COUNT(*)

@@ -385,7 +385,7 @@ export async function listR2CleanupCandidates(request: Request, env: Env): Promi
         versions.id AS version_id,
         versions.chart_id AS chart_id,
         songs.title AS song_title,
-        charts.chart_name AS chart_name,
+        COALESCE(versions.chart_name, charts.chart_name) AS chart_name,
         versions.branch_path AS branch_path,
         versions.author AS author,
         versions.hidden_reason AS hidden_reason,

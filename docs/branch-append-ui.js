@@ -20,6 +20,8 @@
   const artistInput = document.querySelector("#artist");
   const subartistInput = document.querySelector("#subartist");
   const chartNameInput = document.querySelector("#chartName");
+  const chartNameLabel = document.querySelector("#chartNameLabel");
+  const chartNameHelp = document.querySelector("#chartNameHelp");
   const difficultyInput = document.querySelector("#difficulty");
   const difficultyPicker = document.querySelector("#difficultyPicker");
   const difficultyManualInput = document.querySelector("#difficultyManual");
@@ -696,10 +698,19 @@
   }
 
   function setAppendFieldMode(active) {
-    for (const input of [titleInput, subtitleInput, artistInput, subartistInput, chartNameInput, isRejectedInput]) {
+    for (const input of [titleInput, subtitleInput, artistInput, subartistInput, isRejectedInput]) {
       if (input) {
         input.disabled = active;
       }
+    }
+
+    if (chartNameLabel) {
+      chartNameLabel.firstChild.textContent = active ? "今回の差分名 " : "差分名 ";
+    }
+    if (chartNameHelp) {
+      chartNameHelp.textContent = active
+        ? "親の差分名を引き継いでいます。必要な場合だけ変更してください。"
+        : "一覧で差分を区別する名前です。";
     }
   }
 
@@ -743,6 +754,13 @@
     const chartId = chart.id || chart.chartId || entry.chartId;
     const parentVersionId = parentVersion.id || parentVersion.versionId;
     const parentMap = parseProgressMap(parentVersion.progressMap);
+    const parentChartName = String(
+      parentVersion.chartName
+      || parentVersion.chart_name
+      || chart.name
+      || chart.chartName
+      || ""
+    ).trim();
 
     if (!chartId || !parentVersionId) {
       showText("追記先のchartIdまたはparentVersionIdを取得できませんでした。");
@@ -796,14 +814,14 @@
       appendParentArtist.textContent = song.artist || "Unknown Artist";
     }
     if (appendParentChartName) {
-      appendParentChartName.textContent = chart.name || "差分名未入力";
+      appendParentChartName.textContent = parentChartName || "差分名未入力";
     }
 
     if (titleInput) titleInput.value = song.title || "";
     if (artistInput) artistInput.value = song.artist || "";
     if (subtitleInput) subtitleInput.value = song.subtitle || "";
     if (subartistInput) subartistInput.value = song.subartist || "";
-    if (chartNameInput) chartNameInput.value = chart.name || "";
+    if (chartNameInput) chartNameInput.value = parentChartName;
     if (isRejectedInput) isRejectedInput.checked = false;
     if (fileInput) fileInput.value = "";
     if (authorInput) authorInput.value = "";
@@ -1022,6 +1040,16 @@
       missing.push("想定難易度");
       setInvalid(difficultyInput, true);
     }
+    if (!chartNameInput?.value?.trim()) {
+      missing.push("今回の差分名");
+      setInvalid(chartNameInput, true);
+    } else if (Array.from(chartNameInput.value.trim()).length > 100) {
+      showText("今回の差分名は100文字以内で入力してください。");
+      setInvalid(chartNameInput, true);
+      return false;
+    } else {
+      setInvalid(chartNameInput, false);
+    }
     if (!authorInput?.value?.trim()) {
       missing.push("差分作者");
       setInvalid(authorInput, true);
@@ -1040,7 +1068,6 @@
       showText("追記範囲が追加されていません。");
       return false;
     }
-
     if (appendState.fileGridMismatch) {
       showText("選択した譜面の進捗ブロック格子が追記元と一致しません。");
       return false;
@@ -1055,6 +1082,7 @@
     const formData = new FormData();
     formData.append("file", fileInput.files[0]);
     formData.append("parentVersionId", appendState.parentVersionId);
+    formData.append("chartName", chartNameInput.value.trim());
     formData.append("author", authorInput.value.trim());
     formData.append("progressMap", JSON.stringify(buildAppendProgressMapPayload()));
     formData.append("password", passwordInput.value);
@@ -1254,7 +1282,7 @@
             <h3>${html(song.title || "無題")}</h3>
             <span class="artist-separator">/</span>
             <span class="chart-artist">${html(song.artist || "Unknown Artist")}</span>
-            <span class="chart-name-badge">${html(chart.name || "差分名未入力")}</span>
+            <span class="chart-name-badge" title="${html(`起点差分名: ${chart.name || "差分名未入力"}`)}" aria-label="${html(`起点差分名: ${chart.name || "差分名未入力"}`)}">${html(chart.name || "差分名未入力")}</span>
           </div>
           <div class="version-list">${rows || `<div class="list-status">表示できるversionがありません。</div>`}</div>
         </article>

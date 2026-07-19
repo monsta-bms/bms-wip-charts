@@ -192,9 +192,16 @@
     return song.title || song.songTitle || song.name || entry?.songTitle || entry?.title || "";
   }
 
-  function getChartName(entry) {
+  function getChartName(entry, version) {
     const chart = entry?.chart || {};
-    return chart.name || chart.chartName || chart.chart_name || entry?.chartName || entry?.chart_name || "";
+    return version?.chartName
+      || version?.chart_name
+      || chart.name
+      || chart.chartName
+      || chart.chart_name
+      || entry?.chartName
+      || entry?.chart_name
+      || "";
   }
 
   function buildVersionLabel(version) {
@@ -404,7 +411,7 @@
         button.dataset.versionId = versionId;
         button.dataset.chartId = getChartId(entry);
         button.dataset.songTitle = getSongTitle(entry);
-        button.dataset.chartName = getChartName(entry);
+        button.dataset.chartName = getChartName(entry, version);
         button.dataset.versionLabel = buildVersionLabel(version);
         button.dataset.branchPath = getBranchPath(version);
         button.dataset.displayVersion = getDisplayVersion(version);

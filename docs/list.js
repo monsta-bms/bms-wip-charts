@@ -372,11 +372,16 @@
     return badges.join("");
   }
 
+  function formatVersionChartName(chartName) {
+    const value = String(chartName || "差分名未入力").trim();
+    return value.startsWith("[") && value.endsWith("]") ? value : `[${value}]`;
+  }
+
   function renderRow(item) {
     const songTitle = String(item.title || "曲名未入力").trim();
     const subtitle = String(item.subtitle || "").trim();
     const fullTitle = subtitle ? `${songTitle} ${subtitle}` : songTitle;
-    const chartName = String(item.chartName || "差分名未入力").trim();
+    const chartName = String(item.chartName || item.chart_name || "差分名未入力").trim();
     const versionLabel = String(item.versionLabel || "版不明").trim();
     const difficulty = String(item.difficulty || "未入力").trim();
     const author = String(item.author || "未入力").trim();
@@ -387,7 +392,8 @@
     const displayedAt = formatCreatedAt(state.sort === "updated" ? item.chartUpdatedAt : item.createdAt);
     const relativeTimeBadge = renderRelativeTimeBadge(item.createdAt);
     const stateBadges = buildStateBadges(item);
-    const fullLabel = `${fullTitle} [${chartName}] / ${versionLabel}`;
+    const versionChartName = formatVersionChartName(chartName);
+    const fullLabel = `${fullTitle} ${versionChartName} / ${versionLabel}`;
     const detailUrl = new URL("./index.html", document.baseURI);
     detailUrl.searchParams.set("chartId", String(item.chartId || ""));
     detailUrl.searchParams.set("versionId", String(item.versionId || ""));
@@ -404,7 +410,7 @@
             <a class="compact-song-title compact-detail-link" href="${escapeHtml(detailUrl.toString())}">${escapeHtml(fullTitle)}</a>
             <span class="compact-state-badges">${stateBadges}</span>
           </div>
-          <span class="compact-version-title">[${escapeHtml(chartName)}] / ${escapeHtml(versionLabel)}</span>
+          <span class="compact-version-title">${escapeHtml(versionChartName)} / ${escapeHtml(versionLabel)}</span>
         </div>
         <div class="compact-difficulty"><span class="compact-field-label">難易度</span><span>${escapeHtml(difficulty)}</span></div>
         <div class="compact-author"><span class="compact-field-label">作者</span><span title="${escapeHtml(author)}">${escapeHtml(author)}</span></div>
