@@ -39,6 +39,14 @@ html[data-theme="white"] {
   --canvas-bg: #ffffff;
   --canvas-grid: #d5dfdc;
   --canvas-density: rgba(42, 128, 116, 0.46);
+  --progress-panel-bg: #f4f8f7;
+  --progress-plot-start: #fbfdfc;
+  --progress-plot-end: #e9f2ef;
+  --progress-unpainted-bar: #c9ddd6;
+  --progress-unpainted-rail: #d6e6e0;
+  --progress-border: #aac2ba;
+  --progress-grid-line: rgba(36, 110, 91, 0.18);
+  --progress-meta: #4d625b;
 }
 
 html[data-theme="default"],
@@ -83,21 +91,29 @@ html:not([data-theme]) {
   --canvas-bg: #fafbfb;
   --canvas-grid: #b8c6c1;
   --canvas-density: rgba(42, 128, 116, 0.5);
+  --progress-panel-bg: #edf3f1;
+  --progress-plot-start: #f8fbfa;
+  --progress-plot-end: #e4eeea;
+  --progress-unpainted-bar: #c3d9d2;
+  --progress-unpainted-rail: #d1e2dc;
+  --progress-border: #8fa9a0;
+  --progress-grid-line: rgba(31, 107, 87, 0.2);
+  --progress-meta: #495f58;
 }
 
 html[data-theme="dark"] {
   color-scheme: dark;
   --bg: #101613;
   --surface: #18211e;
-  --surface-raised: #202a26;
-  --surface-muted: #202c28;
-  --surface-strong: #293732;
-  --input-bg: #111916;
+  --surface-raised: #202b27;
+  --surface-muted: #1d2925;
+  --surface-strong: #2a3833;
+  --input-bg: #0f1815;
   --text: #e5eeea;
-  --muted: #a8b7b1;
-  --placeholder: #82928c;
-  --line: #3b4e47;
-  --line-strong: #60766e;
+  --muted: #b3c0bb;
+  --placeholder: #93a29d;
+  --line: #465c54;
+  --line-strong: #6b8179;
   --primary: #4fa589;
   --primary-hover: #63b99b;
   --primary-active: #37846b;
@@ -117,15 +133,23 @@ html[data-theme="dark"] {
   --focus-ring: rgba(99, 185, 155, 0.48);
   --shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
   --dialog-backdrop: rgba(0, 0, 0, 0.7);
-  --disabled-bg: #29332f;
-  --disabled-text: #7d8b86;
+  --disabled-bg: #2b3934;
+  --disabled-text: #9caaa5;
   --header-bg: rgba(24, 33, 30, 0.97);
   --theme-tree-line-color: #76978b;
   --theme-tree-line-muted: #586f67;
   --theme-tree-line-strong: #9bb8ae;
-  --canvas-bg: #17201d;
-  --canvas-grid: #4a5e56;
-  --canvas-density: rgba(99, 185, 155, 0.66);
+  --canvas-bg: #141f1b;
+  --canvas-grid: #526a61;
+  --canvas-density: rgba(105, 190, 162, 0.78);
+  --progress-panel-bg: #17231f;
+  --progress-plot-start: #1d2b26;
+  --progress-plot-end: #15201c;
+  --progress-unpainted-bar: #3b5a50;
+  --progress-unpainted-rail: #31483f;
+  --progress-border: #587168;
+  --progress-grid-line: rgba(155, 184, 174, 0.28);
+  --progress-meta: #b8c7c1;
 }
 
 html {
@@ -350,6 +374,12 @@ a,
   color: var(--text);
 }
 
+.chart-title-row {
+  background: var(--surface-raised);
+  border-color: var(--line);
+  color: var(--text);
+}
+
 .submit-panel.is-form-open {
   --post-panel-bg: var(--surface);
   --post-section-bg: var(--surface-muted);
@@ -373,6 +403,160 @@ a,
   background-color: var(--input-bg);
   border-color: var(--line);
   color: var(--text);
+}
+
+.submit-panel.is-form-open .author-details-group,
+.submit-panel.is-form-open .comment-column,
+.submit-panel.is-form-open .management-submit-rail {
+  background: transparent;
+}
+
+.submit-panel.is-form-open .author-details-group {
+  border-color: var(--post-line-soft);
+}
+
+.submit-panel.is-form-open :is(.diff-group-title, .submission-subtitle) {
+  color: var(--text);
+}
+
+.submit-panel.is-form-open :is(.post-form-draft-summary, .progress-unit, .file-drop-internal-name, .file-drop-details, .file-drop-note) {
+  color: var(--post-muted);
+}
+
+.submit-panel.is-form-open button.file-drop-zone,
+.submit-panel.is-form-open button.file-drop-zone:hover,
+.submit-panel.is-form-open button.file-drop-zone:active,
+.submit-panel.is-form-open button.file-drop-zone:focus-visible {
+  background: var(--post-operation-bg);
+  border-color: var(--post-line);
+  color: var(--post-text);
+}
+
+.submit-panel.is-form-open button.file-drop-zone:hover,
+.submit-panel.is-form-open button.file-drop-zone:focus-visible,
+.submit-panel.is-form-open .file-drop-control[data-state="drag"] button.file-drop-zone {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+}
+
+.submit-panel.is-form-open :is(.file-drop-primary, .file-drop-file-name, .difficulty-compact-value) {
+  color: var(--primary-hover);
+}
+
+.submit-panel.is-form-open .difficulty-compact,
+.submit-panel.is-form-open .difficulty-picker,
+.submit-panel.is-form-open .difficulty-preview {
+  background: var(--input-bg);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+.submit-panel.is-form-open button.difficulty-tab,
+.submit-panel.is-form-open button.difficulty-chip {
+  background: var(--secondary-bg);
+  border-color: var(--line);
+  color: var(--secondary-text);
+}
+
+.submit-panel.is-form-open button.difficulty-tab:hover,
+.submit-panel.is-form-open button.difficulty-tab:focus-visible,
+.submit-panel.is-form-open button.difficulty-chip:hover,
+.submit-panel.is-form-open button.difficulty-chip:focus-visible {
+  background: var(--secondary-hover);
+  border-color: var(--primary);
+  color: var(--secondary-text);
+}
+
+.submit-panel.is-form-open button.difficulty-chip:disabled,
+.submit-panel.is-form-open button.difficulty-chip:disabled:hover,
+.submit-panel.is-form-open button.difficulty-chip:disabled:focus-visible {
+  background: var(--disabled-bg);
+  border-color: var(--line);
+  color: var(--disabled-text);
+}
+
+.submit-panel.is-form-open .difficulty-preview-label {
+  background: var(--primary-soft);
+  border-color: var(--line);
+  color: var(--primary-hover);
+}
+
+.submit-panel.is-form-open button.secondary:not(.form-miniview-navigator),
+.submit-panel.is-form-open button.secondary:not(.form-miniview-navigator):visited {
+  background: var(--secondary-bg);
+  border-color: var(--line-strong);
+  color: var(--secondary-text);
+}
+
+.submit-panel.is-form-open button.secondary:not(.form-miniview-navigator):hover,
+.submit-panel.is-form-open button.secondary:not(.form-miniview-navigator):focus-visible {
+  background: var(--secondary-hover);
+  border-color: var(--primary);
+  color: var(--secondary-text);
+}
+
+.submit-panel.is-form-open button.secondary:not(.form-miniview-navigator):disabled,
+.submit-panel.is-form-open button.secondary:not(.form-miniview-navigator):disabled:hover,
+.submit-panel.is-form-open button.secondary:not(.form-miniview-navigator):disabled:focus-visible {
+  background: var(--disabled-bg);
+  border-color: var(--line);
+  color: var(--disabled-text);
+}
+
+.submit-panel.is-form-open #submitButton {
+  background: var(--primary);
+  border-color: var(--primary-active);
+  color: var(--on-primary);
+}
+
+.submit-panel.is-form-open #submitButton:hover,
+.submit-panel.is-form-open #submitButton:focus-visible {
+  background: var(--primary-hover);
+}
+
+.submit-panel.is-form-open #submitButton:disabled {
+  background: var(--disabled-bg);
+  border-color: var(--line);
+  color: var(--disabled-text);
+}
+
+.submit-panel.is-form-open .progress-operation-row {
+  background: var(--post-operation-bg);
+  border-color: var(--post-line-soft);
+}
+
+.submit-panel.is-form-open .progress-operation-row .progress-complete-button:not(:disabled) {
+  background: var(--secondary-bg);
+  border-color: var(--primary);
+  color: var(--secondary-text);
+}
+
+.progress-map,
+.density-chart-wrap,
+.progress-block-layer,
+.progress-map-popover {
+  background: var(--progress-panel-bg);
+  border-color: var(--progress-border);
+}
+
+button.progress-map-block,
+button.progress-map-block:disabled,
+button.progress-map-block:disabled:hover,
+button.progress-map-block:disabled:focus-visible {
+  background: var(--progress-panel-bg);
+  border-color: var(--progress-grid-line);
+}
+
+button.progress-map-block.is-barline {
+  border-left-color: var(--line-strong);
+}
+
+.progress-block-measure-label,
+.progress-map-summary,
+.progress-thumbnail-meta,
+.progress-thumbnail-value,
+.progress-thumbnail-miniview-status {
+  color: var(--progress-meta);
 }
 
 .field-help,
@@ -443,6 +627,51 @@ a,
   color: var(--muted);
 }
 
+.version-list-header,
+.append-version-from,
+.version-parent-line,
+.version-branch-line,
+.version-chart-name,
+.version-row.version-tree-row .meta-label {
+  color: var(--muted);
+}
+
+.version-main-label,
+.append-version-label {
+  color: var(--primary-hover);
+}
+
+.version-row.version-tree-row.is-completed,
+.version-row.version-tree-row.has-intermediate-group-control.is-completed,
+.version-row.version-tree-row.is-collapsed-by-completion,
+.version-row.version-tree-row.is-intermediate-history {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.version-row.version-tree-row.is-intermediate-history .version-main-label,
+.version-row.version-tree-row.is-intermediate-history .meta-value,
+.version-row.version-tree-row.is-intermediate-history .version-parent-line {
+  color: var(--muted);
+}
+
+.group-toggle-button,
+.version-row.version-tree-row.has-intermediate-group-control .group-toggle-button,
+.download-available-control,
+.download-blocked-control,
+.append-disabled-intermediate {
+  background: var(--secondary-bg);
+  border-color: var(--line-strong);
+  color: var(--secondary-text);
+}
+
+.group-toggle-button:hover,
+.download-available-control:hover {
+  background: var(--secondary-hover);
+  border-color: var(--primary);
+  color: var(--secondary-text);
+}
+
 .progress-thumbnail-graph,
 .progress-thumbnail-density,
 .progress-thumbnail-strip,
@@ -488,13 +717,38 @@ a,
 
 .compact-search-controls input,
 .compact-date-controls input,
-.compact-filter-fieldset,
 .compact-radio-choice,
 .compact-date-shortcuts button,
 .compact-pagination button {
   background: var(--input-bg);
   border-color: var(--line);
   color: var(--text);
+}
+
+.compact-filter-panel {
+  background: var(--surface-muted);
+  border-color: var(--line);
+}
+
+.compact-filter-row,
+.compact-filter-fieldset,
+.compact-date-filter,
+.compact-favorite-filter {
+  background: transparent;
+  border-color: var(--line);
+}
+
+.compact-filter-label,
+.compact-search-form label,
+.compact-date-controls label,
+.compact-date-separator,
+.compact-favorite-filter,
+.compact-list-header p {
+  color: var(--muted);
+}
+
+.compact-favorite-filter:has(input:disabled) {
+  color: var(--disabled-text);
 }
 
 .compact-list-head {

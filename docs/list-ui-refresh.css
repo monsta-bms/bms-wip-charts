@@ -207,9 +207,9 @@
 .progress-thumbnail-graph {
   --progress-thumbnail-cell-gap: 1px;
   --progress-thumbnail-plot-padding-x: 1px;
-  background: #f7fbfa;
-  border-left: 1px solid rgba(31, 122, 92, 0.3);
-  border-right: 1px solid rgba(31, 122, 92, 0.3);
+  background: var(--progress-panel-bg, #f7fbfa);
+  border-left: 1px solid var(--progress-border, rgba(31, 122, 92, 0.3));
+  border-right: 1px solid var(--progress-border, rgba(31, 122, 92, 0.3));
   display: grid;
   gap: 4px;
   min-width: 0;
@@ -228,15 +228,15 @@
 
 .progress-thumbnail-density {
   align-items: end;
-  background: linear-gradient(180deg, #fbfdfc, #edf6f2);
-  border-bottom: 1px solid rgba(31, 122, 92, 0.12);
+  background: linear-gradient(180deg, var(--progress-plot-start, #fbfdfc), var(--progress-plot-end, #edf6f2));
+  border-bottom: 1px solid var(--progress-grid-line, rgba(31, 122, 92, 0.12));
   gap: var(--progress-thumbnail-cell-gap);
   height: 34px;
 }
 
 .progress-thumbnail-density-bar {
   align-self: end;
-  background: #D3E5DF;
+  background: var(--progress-unpainted-bar, #d3e5df);
   border-radius: 2px 2px 0 0;
   height: var(--bar-height, 6%);
   min-height: 3px;
@@ -255,14 +255,14 @@
 }
 
 .progress-thumbnail-fill-strip {
-  background: #DCEAE5;
+  background: var(--progress-unpainted-rail, #dceae5);
   border-radius: 999px;
   gap: 0;
   height: 6px;
 }
 
 .progress-thumbnail-strip-cell {
-  background: #DCEAE5;
+  background: var(--progress-unpainted-rail, #dceae5);
   border-radius: 0;
   min-width: 1px;
 }
@@ -283,7 +283,7 @@
 
 .progress-thumbnail-meta {
   align-items: center;
-  color: #536372;
+  color: var(--progress-meta, #536372);
   display: flex;
   flex-wrap: nowrap;
   gap: 7px;
@@ -299,7 +299,7 @@
 }
 
 .progress-thumbnail-value {
-  color: #536372;
+  color: var(--progress-meta, #536372);
   display: block;
   font-size: 0.72rem;
   font-weight: 800;
