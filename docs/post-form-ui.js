@@ -102,7 +102,9 @@
     fileDropFileName.hidden = true;
     fileDropFileName.removeAttribute("title");
     fileDropInternalName.hidden = true;
+    fileDropInternalName.setAttribute("aria-hidden", "true");
     fileDropInternalName.removeAttribute("title");
+    fileDropControl.classList.remove("has-internal-file");
     fileDropActions.hidden = true;
     fileDropError.hidden = true;
     fileDropError.textContent = "";
@@ -125,19 +127,18 @@
     if (state === "ready") {
       const blockCount = Number.isInteger(detail.blockCount) ? detail.blockCount : 0;
       const sourceFileName = String(detail.sourceFileName || "").trim();
+      const hasInternalFile = Boolean(sourceFileName && sourceFileName !== selectedFile?.name);
       fileDropPrimary.textContent = "✓ 解析完了";
       fileDropFileName.textContent = selectedFile?.name || "選択したファイル";
       fileDropFileName.title = fileDropFileName.textContent;
       fileDropFileName.hidden = false;
-      if (sourceFileName && sourceFileName !== selectedFile?.name) {
+      if (hasInternalFile) {
         fileDropInternalName.textContent = `ZIP内: ${sourceFileName}`;
         fileDropInternalName.title = sourceFileName;
         fileDropInternalName.removeAttribute("aria-hidden");
-      } else {
-        fileDropInternalName.textContent = "";
-        fileDropInternalName.setAttribute("aria-hidden", "true");
+        fileDropInternalName.hidden = false;
       }
-      fileDropInternalName.hidden = false;
+      fileDropControl.classList.toggle("has-internal-file", hasInternalFile);
       fileDropHelp.textContent = [
         blockCount > 0 ? `${blockCount} blocks` : "進捗マップなし",
         selectedFile ? formatFileSize(selectedFile.size) : "",
@@ -274,7 +275,6 @@
     const items = [];
     const fileName = fileInput?.files?.[0]?.name?.trim();
     const difficulty = difficultyInput?.value?.trim();
-    const author = authorInput?.value?.trim();
 
     if (fileName) {
       items.push(fileName);
@@ -282,13 +282,9 @@
     if (difficulty) {
       items.push(`\u96e3\u6613\u5ea6 ${difficulty}`);
     }
-    if (author) {
-      items.push(`\u4f5c\u8005 ${author}`);
-    }
-
     summary.textContent = items.length
       ? `\u7de8\u96c6\u4e2d: ${items.join(" / ")}`
-      : (isDirty() ? "\u7de8\u96c6\u4e2d" : "");
+      : "";
     summary.hidden = !summary.textContent || !body.hidden;
   }
 

@@ -728,6 +728,7 @@
     row.classList.toggle("is-hidden-version", hidden);
     row.classList.toggle("is-intermediate-history", supersededIntermediate);
     row.dataset.versionId = getVersionId(version);
+    row.dataset.parentVersionId = getParentVersionId(version);
     row.dataset.chartId = getChartId(options.entry);
     row.dataset.depth = String(node.depth);
     row.dataset.branchPath = branchPath;

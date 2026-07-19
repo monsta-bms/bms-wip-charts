@@ -1,10 +1,15 @@
 (() => {
   const CHART_LIST_SELECTOR = "#chartList";
   const SVG_NS = "http://www.w3.org/2000/svg";
-  const TREE_ZONE_WIDTH = 94;
+  const TREE_ZONE_WIDTH_FALLBACK = 94;
   const TREE_ROOT_X = 18;
-  const TREE_INDENT = 16;
+  const TREE_MAX_INDENT = 15;
+  const TREE_MIN_INDENT = 5;
+  const TREE_ZONE_END_GAP = 10;
+  const TREE_CHILD_TRUNK_OFFSET = 6;
+  const TREE_CORNER_RADIUS = 4;
   const TREE_NODE_RADIUS = 3.8;
+  const TREE_EDGE_GAP = 0.25;
   const TREE_LABEL_GAP = 8;
   const MAX_WARNINGS = 5;
   let warningCount = 0;
@@ -23,11 +28,22 @@
     return depth <= 0 ? "" : branchPathAtDepth(branchPath, depth - 1);
   };
 
-  const getNodeXInTreeZone = (depth) => {
-    if (depth <= 0) {
-      return TREE_ROOT_X;
+  const getTreeZoneWidth = (list) => {
+    const value = Number.parseFloat(window.getComputedStyle(list).getPropertyValue("--tree-zone-width"));
+    return Number.isFinite(value) && value > 0 ? value : TREE_ZONE_WIDTH_FALLBACK;
+  };
+
+  const getTreeIndent = (treeZoneWidth, maxDepth) => {
+    if (maxDepth <= 0) {
+      return TREE_MAX_INDENT;
     }
-    return Math.min(TREE_ZONE_WIDTH - 18, TREE_ROOT_X + ((depth - 1) * TREE_INDENT));
+    const availableWidth = Math.max(0, treeZoneWidth - TREE_ROOT_X - TREE_ZONE_END_GAP);
+    return Math.min(TREE_MAX_INDENT, Math.max(TREE_MIN_INDENT, availableWidth / maxDepth));
+  };
+
+  const getNodeXInTreeZone = (depth, treeIndent, treeZoneWidth) => {
+    const maxNodeX = Math.max(TREE_ROOT_X, treeZoneWidth - TREE_ZONE_END_GAP);
+    return Math.min(maxNodeX, TREE_ROOT_X + (Math.max(0, depth) * treeIndent));
   };
 
   const warnOnce = (message, details) => {
@@ -46,14 +62,14 @@
     return element;
   };
 
-  const appendPath = (svg, className, d) => {
-    const path = createSvgElement("path", { class: className, d });
+  const appendPath = (svg, className, d, attributes = {}) => {
+    const path = createSvgElement("path", { class: className, d, ...attributes });
     svg.appendChild(path);
     return path;
   };
 
-  const appendCircle = (svg, className, cx, cy, r) => {
-    const circle = createSvgElement("circle", { class: className, cx, cy, r });
+  const appendCircle = (svg, className, cx, cy, r, attributes = {}) => {
+    const circle = createSvgElement("circle", { class: className, cx, cy, r, ...attributes });
     svg.appendChild(circle);
     return circle;
   };
@@ -107,12 +123,19 @@
 
   const collectVisibleRows = (list) => {
     const listRect = list.getBoundingClientRect();
-    return Array.from(list.querySelectorAll(":scope > .version-row.version-tree-row"))
+    const rowMetadata = Array.from(list.querySelectorAll(":scope > .version-row.version-tree-row"))
       .filter(isVisibleRow)
       .map((row) => {
         const branchPath = row.dataset.branchPath || "root";
         const depthValue = Number(row.dataset.depth || getDepthFromBranchPath(branchPath));
         const depth = Number.isFinite(depthValue) ? Math.max(0, depthValue) : 0;
+        return { row, branchPath, depth };
+      });
+    const maxDepth = rowMetadata.reduce((maximum, item) => Math.max(maximum, item.depth), 0);
+    const treeZoneWidth = getTreeZoneWidth(list);
+    const treeIndent = getTreeIndent(treeZoneWidth, maxDepth);
+
+    return rowMetadata.map(({ row, branchPath, depth }) => {
         const cell = row.querySelector(":scope > .version-tree-cell") || row.querySelector(":scope > .version-tag");
         const label = row.querySelector(".version-label-stack") || row.querySelector(".version-main-label") || cell;
         const rowRect = row.getBoundingClientRect();
@@ -121,20 +144,24 @@
         const anchorY = Math.round(labelRect.top - listRect.top + (labelRect.height / 2));
         const cellLeft = Math.round(cellRect.left - listRect.left);
         const treeOriginX = cellLeft;
-        const nodeX = Math.round(treeOriginX + getNodeXInTreeZone(depth));
+        const nodeX = Math.round(treeOriginX + getNodeXInTreeZone(depth, treeIndent, treeZoneWidth));
         const labelStartX = Math.round(labelRect.left - listRect.left);
         const groupControl = getCollapsedGroupControl(row);
         return {
           key: branchPath,
           type: "row",
           row,
+          versionId: row.dataset.versionId || "",
+          parentVersionId: row.dataset.parentVersionId || "",
           branchPath,
-          parentKey: depth <= 0 ? "" : getParentBranchPath(branchPath),
+          parentKey: depth <= 0 ? "" : (row.dataset.parentBranchPath || getParentBranchPath(branchPath)),
           depth,
           anchorY,
           treeOriginX,
           nodeX,
           labelStartX,
+          treeIndent,
+          treeZoneWidth,
           groupControl
         };
       });
@@ -161,7 +188,11 @@
     const omittedDepth = Math.min(targetDepth - 1, visibleAncestorDepth + 1);
     const omittedPath = branchPathAtDepth(targetNode.branchPath, omittedDepth);
     const parentPath = branchPathAtDepth(targetNode.branchPath, visibleAncestorDepth);
-    const nodeX = Math.round(targetNode.treeOriginX + getNodeXInTreeZone(omittedDepth));
+    const nodeX = Math.round(targetNode.treeOriginX + getNodeXInTreeZone(
+      omittedDepth,
+      targetNode.treeIndent,
+      targetNode.treeZoneWidth
+    ));
 
     return {
       key: `omitted:${group.groupId}`,
@@ -173,6 +204,8 @@
       treeOriginX: targetNode.treeOriginX,
       nodeX,
       labelStartX: targetNode.labelStartX,
+      treeIndent: targetNode.treeIndent,
+      treeZoneWidth: targetNode.treeZoneWidth,
       count: group.count,
       groupId: group.groupId,
       targetKey: targetNode.key
@@ -221,7 +254,7 @@
     return { rows, nodes, omittedNodes, edges };
   };
 
-  const buildEdgePath = (parent, child) => {
+  const buildEdgeGeometry = (parent, child) => {
     const childIsBelow = child.anchorY >= parent.anchorY;
     const direction = childIsBelow ? 1 : -1;
     const sameRow = Math.abs(child.anchorY - parent.anchorY) <= 1;
@@ -229,36 +262,48 @@
       const horizontalStartX = parent.nodeX + TREE_NODE_RADIUS + 1;
       const horizontalEndX = child.nodeX - TREE_NODE_RADIUS - 1;
       if (horizontalEndX > horizontalStartX) {
-        return `M ${horizontalStartX} ${parent.anchorY} L ${horizontalEndX} ${child.anchorY}`;
+        return {
+          d: `M ${horizontalStartX} ${parent.anchorY} L ${horizontalEndX} ${child.anchorY}`,
+          trunkX: horizontalStartX
+        };
       }
-      return `M ${parent.nodeX} ${parent.anchorY} L ${child.nodeX} ${child.anchorY}`;
+      return {
+        d: `M ${parent.nodeX} ${parent.anchorY} L ${child.nodeX} ${child.anchorY}`,
+        trunkX: parent.nodeX
+      };
     }
 
-    const startY = parent.anchorY + (direction * TREE_NODE_RADIUS);
     const endY = child.anchorY;
-    const startX = parent.nodeX;
-    const endX = child.nodeX - TREE_NODE_RADIUS - 1;
-    const sameColumn = Math.abs(child.nodeX - startX) <= 1 || Math.abs(endX - startX) <= (TREE_NODE_RADIUS + 2);
+    const endX = child.nodeX - TREE_NODE_RADIUS - TREE_EDGE_GAP;
+    const parentLineStartX = parent.nodeX + TREE_NODE_RADIUS + TREE_EDGE_GAP;
+    const sameColumn = endX <= parentLineStartX + 1;
 
     if (sameColumn) {
+      const startY = parent.anchorY + (direction * TREE_NODE_RADIUS);
       const stopY = endY - (direction * TREE_NODE_RADIUS);
-      return `M ${startX} ${startY} L ${startX} ${stopY}`;
+      return {
+        d: `M ${parent.nodeX} ${startY} L ${parent.nodeX} ${stopY}`,
+        trunkX: parent.nodeX
+      };
     }
 
-    const cornerRadius = Math.max(6, Math.min(12, Math.abs(endX - startX) * 0.55));
+    const trunkX = Math.min(endX - 1.5, Math.max(parentLineStartX, parent.nodeX + TREE_CHILD_TRUNK_OFFSET));
+    const availableHorizontal = Math.max(1.5, endX - trunkX);
+    const availableVertical = Math.max(1.5, Math.abs(endY - parent.anchorY) / 3);
+    const cornerRadius = Math.min(TREE_CORNER_RADIUS, availableHorizontal, availableVertical);
     const trunkEndY = endY - (direction * cornerRadius);
-    const cornerEndX = Math.min(endX, startX + cornerRadius);
+    const cornerEndX = Math.min(endX, trunkX + cornerRadius);
     const parts = [
-      `M ${startX} ${startY}`,
-      `L ${startX} ${trunkEndY}`,
-      `Q ${startX} ${endY} ${cornerEndX} ${endY}`
+      `M ${trunkX} ${parent.anchorY}`,
+      `L ${trunkX} ${trunkEndY}`,
+      `Q ${trunkX} ${endY} ${cornerEndX} ${endY}`
     ];
 
     if (endX > cornerEndX + 0.5) {
       parts.push(`L ${endX} ${endY}`);
     }
 
-    return parts.join(" ");
+    return { d: parts.join(" "), trunkX };
   };
 
   const drawEdges = (svg, edges) => {
@@ -269,7 +314,14 @@
         const className = edge.omitted
           ? "tree-overlay-line tree-overlay-line-edge tree-overlay-line-omitted-edge"
           : "tree-overlay-line tree-overlay-line-edge";
-        appendPath(svg, className, buildEdgePath(edge.parent, edge.child));
+        const geometry = buildEdgeGeometry(edge.parent, edge.child);
+        appendPath(svg, className, geometry.d, {
+          "data-parent-branch-path": edge.parent.branchPath,
+          "data-child-branch-path": edge.child.branchPath,
+          "data-parent-node-x": edge.parent.nodeX,
+          "data-child-node-x": edge.child.nodeX,
+          "data-child-trunk-x": geometry.trunkX
+        });
       });
   };
 
@@ -298,7 +350,8 @@
         node.depth <= 0 ? "tree-overlay-node tree-overlay-node-root" : "tree-overlay-node",
         node.nodeX,
         node.anchorY,
-        TREE_NODE_RADIUS
+        TREE_NODE_RADIUS,
+        { "data-branch-path": node.branchPath, "data-depth": node.depth }
       );
     });
   };
@@ -332,7 +385,11 @@
     addOmittedButton(controls, {
       count: group.count,
       groupId: group.groupId,
-      nodeX: Math.round(rowNode.treeOriginX + getNodeXInTreeZone(markerDepth)),
+      nodeX: Math.round(rowNode.treeOriginX + getNodeXInTreeZone(
+        markerDepth,
+        rowNode.treeIndent,
+        rowNode.treeZoneWidth
+      )),
       anchorY: rowNode.anchorY
     }, true);
   };

@@ -401,15 +401,23 @@ button.file-drop-zone:is(:hover, :active, :focus-visible),
 .file-drop-control[data-state="ready"] button.file-drop-zone:active,
 .file-drop-control[data-state="ready"] button.file-drop-zone:focus-visible {
   align-items: center;
-  grid-template-areas:
-    "status name details"
-    "status internal details";
+  grid-template-areas: "status name details";
   grid-template-columns: max-content minmax(0, 1fr) max-content;
-  grid-template-rows: auto auto;
+  grid-template-rows: auto;
   justify-items: start;
   min-height: 40px;
   padding: 3px 8px;
   text-align: left;
+}
+
+.file-drop-control[data-state="ready"].has-internal-file button.file-drop-zone,
+.file-drop-control[data-state="ready"].has-internal-file button.file-drop-zone:hover,
+.file-drop-control[data-state="ready"].has-internal-file button.file-drop-zone:active,
+.file-drop-control[data-state="ready"].has-internal-file button.file-drop-zone:focus-visible {
+  grid-template-areas:
+    "status name details"
+    "status internal details";
+  grid-template-rows: auto auto;
 }
 
 .file-drop-control[data-state="ready"] .file-drop-primary {
@@ -437,7 +445,6 @@ button.file-drop-zone:is(:hover, :active, :focus-visible),
   grid-area: internal;
   line-height: 1.3;
   max-width: 100%;
-  min-height: 1.3em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -812,10 +819,21 @@ button.difficulty-change-button {
     grid-template-areas:
       "status"
       "name"
-      "internal"
       "details";
     grid-template-columns: minmax(0, 1fr);
-    min-height: 112px;
+    min-height: 88px;
+  }
+
+  .file-drop-control[data-state="ready"].has-internal-file button.file-drop-zone,
+  .file-drop-control[data-state="ready"].has-internal-file button.file-drop-zone:hover,
+  .file-drop-control[data-state="ready"].has-internal-file button.file-drop-zone:active,
+  .file-drop-control[data-state="ready"].has-internal-file button.file-drop-zone:focus-visible {
+    grid-template-areas:
+      "status"
+      "name"
+      "internal"
+      "details";
+    min-height: 108px;
   }
 
   .file-drop-control[data-state="ready"] .file-drop-actions {
