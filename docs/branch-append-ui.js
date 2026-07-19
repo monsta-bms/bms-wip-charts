@@ -427,6 +427,11 @@
     });
   }
 
+  function getThemeCanvasColor(name, fallback) {
+    const value = window.getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return value || fallback;
+  }
+
   function drawAppendDensityChart() {
     if (!progressMapCanvas || !appendState.blocks.length || progressMapGraphWrap.hidden) {
       return;
@@ -451,14 +456,14 @@
 
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     context.clearRect(0, 0, cssWidth, cssHeight);
-    context.fillStyle = "#ffffff";
+    context.fillStyle = getThemeCanvasColor("--canvas-bg", "#ffffff");
     context.fillRect(0, 0, cssWidth, cssHeight);
-    context.strokeStyle = "#dce4ea";
+    context.strokeStyle = getThemeCanvasColor("--canvas-grid", "#dce4ea");
     context.beginPath();
     context.moveTo(0, baseY + 0.5);
     context.lineTo(cssWidth, baseY + 0.5);
     context.stroke();
-    context.fillStyle = "rgba(42, 128, 116, 0.46)";
+    context.fillStyle = getThemeCanvasColor("--canvas-density", "rgba(42, 128, 116, 0.46)");
 
     densities.forEach((item, index) => {
       const x = index * barSlot;
@@ -1450,6 +1455,12 @@
     drawAppendDensityChart();
     renderAppendLabels();
     hideAppendFloatingInfo();
+  });
+
+  window.addEventListener("bms:themechange", () => {
+    if (appendState.active) {
+      drawAppendDensityChart();
+    }
   });
 
   try {

@@ -55,8 +55,10 @@
     link.textContent = item.label;
     navigationList.append(link);
   });
+  window.BmsTheme?.mountControl?.(navigationList);
   navigation.append(navigationList);
   header.replaceChildren(brandLink, menuButton, navigation);
+  window.BmsTheme?.syncThemeLinks?.(header);
 
   function closeMenu({ restoreFocus = false } = {}) {
     header.classList.remove("is-menu-open");

@@ -1040,3 +1040,23 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 320/390/760/1024/1366/1920pxでversion差分名が版ラベル、状態バッジ、難易度、作者、進捗、操作列へ重ならないこと。
 - 初回投稿、追記投稿、ツリー、折り畳み、DL、管理操作、進捗サムネイル、miniView、検索、ページング、Turnstileに回帰がないこと。
 - Worker typecheck、Pages JavaScript構文検査、Worker dry-run、`git diff --check`が成功すること。
+
+## SITE-THEME-14
+
+- 保存値なし、JavaScript無効、localStorage利用不可の各状態で`default`表示になり、初期描画で白い点滅が発生しないこと。
+- `white`、`default`、`dark`を選択でき、`bms-wip-charts:theme:v1`へ保存され、再読込・ページ移動・戻る/進む後も維持されること。
+- 不正な保存値を削除して`default`へ戻し、ログに不正値そのものを出さないこと。
+- localStorageのread/write/remove失敗時に、現在ページ内の切替と他機能が動き、ログがcode、stage、errorTypeだけを持つこと。
+- 別タブでのテーマ変更へ`storage`イベントで追従し、フォームreset、scroll、focus移動、dirty化が起きないこと。
+- 共通ヘッダーと管理画面に`表示テーマ`selectがあり、モバイルメニュー内でも44px以上の操作高と横はみ出しなしを維持すること。
+- index/list/guide/changelog/adminを3テーマで確認し、背景、カード、入力、ボタン、disabled、notice、error、dialog、管理表見出しが読めること。
+- 投稿フォームを開いたままテーマ変更しても、入力、選択ファイル、進捗塗り、追記モード、保存済み作者/パスワード、beforeunload判定が変化しないこと。
+- ツリー線、ノード、折り畳み、省略マーク、選択中versionが3テーマで読め、テーマ変更後も接続座標が変わらないこと。
+- 進捗密度CanvasとminiView Canvasがテーマ変更後に再描画され、API再取得や譜面再解析を行わないこと。
+- progressImage生成PNG、FormDataへ添付するPNG、R2保存済みPNG、progressMapデータがテーマで変化しないこと。
+- Turnstileがwhite/defaultでlight、darkでdarkになり、challenge中のテーマ変更は終了後まで安全に遅延され、フォーム入力を失わないこと。
+- RC★/RC★★リンクに現在テーマのqueryが付き、取込HTMLだけが配色変更されること。不正themeはdefaultになり、header/data JSONは不変であること。
+- 通常文字、補助文字、リンク、主要/補助/disabledボタン、入力、placeholder、badge、warning/error、focus ringのコントラストを確認すること。
+- 320/390/760/1024/1366/1920pxでヘッダー、テーマselect、投稿フォーム、ツリー、一覧、pagination、dialog、guide、changelog、adminに横スクロールや重なりがないこと。
+- 初回投稿、追記投稿、ファイルdrop、progressMap塗り、miniView、PNG生成、管理操作、検索、お気に入り、追加読込、直接リンク、難易度表に回帰がないこと。
+- Pages JavaScript構文検査、HTML ID重複検査、CSS直接色監査、Worker typecheck、Worker dry-run、`git diff --check`が成功すること。

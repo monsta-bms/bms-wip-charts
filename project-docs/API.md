@@ -1270,3 +1270,15 @@ dataは譜面objectの配列を返す。対象なしはHTTP 200の`[]`。
 ```
 
 `url`は、MD5重複排除後に採用されたversion自身に有効な`origin_url`がある場合だけ出力し、未登録時はキー自体を省略する。`name_diff`と`bms_wip_chart_name`は採用version自身の`chart_name`を使用し、NULLの既存行だけ`charts.chart_name`へfallbackする。`url_diff`は常に従来どおり出力する。`org_md5`と外側ZIPのSHA-256は出力しない。header/取込HTMLは`Cache-Control: public, max-age=3600, must-revalidate`、dataは`public, max-age=60, must-revalidate`とし、すべてETagと`If-None-Match`による304応答に対応する。エラー応答は`Cache-Control: no-store`とする。
+
+### 取込HTMLのtheme query
+
+`GET /difficulty-tables/:tableId`の取込HTMLは、任意の`theme` queryを受け付ける。
+
+```text
+?theme=white
+?theme=default
+?theme=dark
+```
+
+省略または不正値は`default`として扱う。queryは取込HTMLの背景・文字・リンク配色だけに適用し、`meta[name="bmstable"]`、header/data JSON、難易度表データ、ETag、キャッシュ時間、CORS、D1 queryへ影響しない。

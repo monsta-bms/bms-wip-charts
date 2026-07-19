@@ -1,0 +1,628 @@
+html[data-theme="white"] {
+  color-scheme: light;
+  --bg: #f7f9fa;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-muted: #f0f3f4;
+  --surface-strong: #e4eae8;
+  --input-bg: #ffffff;
+  --text: #18221f;
+  --muted: #5a6864;
+  --placeholder: #77847f;
+  --line: #cfd8d5;
+  --line-strong: #9eaea9;
+  --primary: #246e5b;
+  --primary-hover: #195443;
+  --primary-active: #123f33;
+  --primary-soft: #e1eeea;
+  --on-primary: #ffffff;
+  --secondary-bg: #e8efed;
+  --secondary-hover: #d9e5e1;
+  --secondary-text: #194d3f;
+  --success: #176647;
+  --success-bg: #e4f4eb;
+  --warning: #795500;
+  --warning-bg: #fff3d1;
+  --danger: #a53732;
+  --danger-bg: #fdebea;
+  --info: #28627a;
+  --info-bg: #e5f0f4;
+  --focus-ring: rgba(36, 110, 91, 0.3);
+  --shadow: 0 4px 14px rgba(23, 32, 42, 0.07);
+  --dialog-backdrop: rgba(20, 30, 27, 0.4);
+  --disabled-bg: #e3e9e7;
+  --disabled-text: #6f7b77;
+  --header-bg: rgba(255, 255, 255, 0.97);
+  --theme-tree-line-color: #71877f;
+  --theme-tree-line-muted: #9aaba5;
+  --theme-tree-line-strong: #506b62;
+  --canvas-bg: #ffffff;
+  --canvas-grid: #d5dfdc;
+  --canvas-density: rgba(42, 128, 116, 0.46);
+}
+
+html[data-theme="default"],
+html:not([data-theme]) {
+  color-scheme: light;
+  --bg: #e4e9e7;
+  --surface: #f0f3f2;
+  --surface-raised: #fafbfb;
+  --surface-muted: #e2e9e6;
+  --surface-strong: #d3dfdb;
+  --input-bg: #fafbfb;
+  --text: #1d2926;
+  --muted: #52635e;
+  --placeholder: #6d7e78;
+  --line: #aab9b4;
+  --line-strong: #81978f;
+  --primary: #1f6b57;
+  --primary-hover: #155241;
+  --primary-active: #103e32;
+  --primary-soft: #d6e5df;
+  --on-primary: #ffffff;
+  --secondary-bg: #dbe6e2;
+  --secondary-hover: #ccdcd6;
+  --secondary-text: #174c3e;
+  --success: #176647;
+  --success-bg: #dcefe5;
+  --warning: #755200;
+  --warning-bg: #f5e7bc;
+  --danger: #9f3833;
+  --danger-bg: #f4deda;
+  --info: #245f75;
+  --info-bg: #d9e9ee;
+  --focus-ring: rgba(31, 107, 87, 0.32);
+  --shadow: 0 3px 10px rgba(23, 32, 42, 0.06);
+  --dialog-backdrop: rgba(18, 28, 25, 0.46);
+  --disabled-bg: #c6d0cd;
+  --disabled-text: #65726e;
+  --header-bg: rgba(240, 243, 242, 0.97);
+  --theme-tree-line-color: #667e75;
+  --theme-tree-line-muted: #8fa199;
+  --theme-tree-line-strong: #4d685e;
+  --canvas-bg: #fafbfb;
+  --canvas-grid: #b8c6c1;
+  --canvas-density: rgba(42, 128, 116, 0.5);
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #101613;
+  --surface: #18211e;
+  --surface-raised: #202a26;
+  --surface-muted: #202c28;
+  --surface-strong: #293732;
+  --input-bg: #111916;
+  --text: #e5eeea;
+  --muted: #a8b7b1;
+  --placeholder: #82928c;
+  --line: #3b4e47;
+  --line-strong: #60766e;
+  --primary: #4fa589;
+  --primary-hover: #63b99b;
+  --primary-active: #37846b;
+  --primary-soft: #203c33;
+  --on-primary: #071a14;
+  --secondary-bg: #26342f;
+  --secondary-hover: #31433c;
+  --secondary-text: #d4e4de;
+  --success: #78d7ad;
+  --success-bg: #17392e;
+  --warning: #f2c66d;
+  --warning-bg: #3d321b;
+  --danger: #ffaaa4;
+  --danger-bg: #442522;
+  --info: #83cce0;
+  --info-bg: #193642;
+  --focus-ring: rgba(99, 185, 155, 0.48);
+  --shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+  --dialog-backdrop: rgba(0, 0, 0, 0.7);
+  --disabled-bg: #29332f;
+  --disabled-text: #7d8b86;
+  --header-bg: rgba(24, 33, 30, 0.97);
+  --theme-tree-line-color: #76978b;
+  --theme-tree-line-muted: #586f67;
+  --theme-tree-line-strong: #9bb8ae;
+  --canvas-bg: #17201d;
+  --canvas-grid: #4a5e56;
+  --canvas-density: rgba(99, 185, 155, 0.66);
+}
+
+html {
+  --primary-dark: var(--primary-hover);
+  --work-surface: var(--surface-raised);
+  --post-panel-bg: var(--surface);
+  --post-section-bg: var(--surface-muted);
+  --post-operation-bg: var(--surface-strong);
+  --post-input-bg: var(--input-bg);
+  --post-line: var(--line-strong);
+  --post-line-soft: var(--line);
+  --post-accent: var(--primary);
+  --post-text: var(--text);
+  --post-muted: var(--muted);
+  --miniview-bg: #050505;
+  --miniview-placeholder-bg: #090909;
+  --miniview-grid: #303030;
+  --miniview-grid-subdivision: #2c2c2c;
+  --miniview-grid-beat: #4a4a4a;
+  --miniview-measure-line: #e8e8e8;
+  --miniview-measure-band: #8f8f8f;
+  --miniview-measure-text: #f6f6f6;
+  --miniview-bpm-band: #08120b;
+  --miniview-bpm-line: #3dbb58;
+  --miniview-bpm-text: #67df7b;
+  --miniview-border: #d0d0d0;
+  --miniview-scratch-lane: #120808;
+  --miniview-scratch-note: #ff5555;
+  --miniview-scratch-ln: #9f343a;
+  --miniview-blue-lane: #080b14;
+  --miniview-blue-note: #4b74ff;
+  --miniview-blue-ln: #2e4599;
+  --miniview-white-lane: #090909;
+  --miniview-white-note: #ededed;
+  --miniview-white-ln: #8f999f;
+  background: var(--bg);
+  color: var(--text);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+::selection {
+  background: var(--primary-soft);
+  color: var(--text);
+}
+
+input,
+select,
+textarea {
+  background: var(--input-bg);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--placeholder);
+  opacity: 1;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline-color: var(--focus-ring);
+}
+
+button,
+button[type="submit"] {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
+}
+
+button:hover,
+button:focus-visible,
+button[type="submit"]:hover,
+button[type="submit"]:focus-visible {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+}
+
+button:active,
+button[type="submit"]:active {
+  background: var(--primary-active);
+  border-color: var(--primary-active);
+}
+
+button.secondary,
+.secondary-button,
+.admin-secondary {
+  background: var(--secondary-bg);
+  border-color: var(--line-strong);
+  color: var(--secondary-text);
+}
+
+button.secondary:hover,
+button.secondary:focus-visible,
+.secondary-button:hover,
+.secondary-button:focus-visible,
+.admin-secondary:hover,
+.admin-secondary:focus-visible {
+  background: var(--secondary-hover);
+  border-color: var(--primary);
+  color: var(--secondary-text);
+}
+
+button:disabled,
+button:disabled:hover,
+button:disabled:focus-visible {
+  background: var(--disabled-bg);
+  border-color: var(--line);
+  color: var(--disabled-text);
+}
+
+a,
+.site-brand,
+.site-brand-fallback {
+  color: var(--primary-hover);
+}
+
+.site-header[data-site-header] {
+  background: var(--header-bg);
+  border-color: var(--line);
+}
+
+.site-menu-toggle,
+.site-menu-toggle:hover,
+.site-menu-toggle:focus-visible,
+.site-menu-toggle[aria-expanded="true"] {
+  background: var(--secondary-bg);
+  border-color: var(--line-strong);
+  color: var(--secondary-text);
+}
+
+.site-navigation a {
+  color: var(--text);
+}
+
+.site-navigation a:hover,
+.site-navigation a:focus-visible,
+.site-navigation a[aria-current] {
+  border-color: var(--primary);
+  color: var(--primary-hover);
+}
+
+.theme-control {
+  flex: 0 0 auto;
+  margin-left: 6px;
+}
+
+.theme-control-field {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 0.78rem;
+  font-weight: 700;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.theme-control-select {
+  background: var(--input-bg);
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 0.82rem;
+  min-height: 36px;
+  padding: 5px 26px 5px 8px;
+}
+
+.theme-status {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: fixed;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.panel,
+.chart-group,
+.chart-group-header,
+.version-row,
+.version-list-header,
+.content-page-header,
+.quick-use-item,
+.guide-info-block,
+.guide-safety-list > section,
+.compact-filter-panel,
+.compact-version-list,
+.compact-version-row,
+.admin-auth,
+.admin-queue,
+.admin-request-row,
+.admin-cleanup-row,
+.admin-ban-row,
+.admin-ban-log-row,
+.admin-dialog-panel,
+.version-management-dialog-panel {
+  background-color: var(--surface);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+.form-section,
+.submit-panel.is-form-open .form-section,
+.progress-map,
+.append-context,
+.compact-version-row:nth-child(even),
+.admin-dialog-summary,
+.admin-empty,
+.admin-state,
+.turnstile-control {
+  background-color: var(--surface-muted);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+.submit-panel.is-form-open {
+  --post-panel-bg: var(--surface);
+  --post-section-bg: var(--surface-muted);
+  --post-operation-bg: var(--surface-strong);
+  --post-input-bg: var(--input-bg);
+  --post-line: var(--line-strong);
+  --post-line-soft: var(--line);
+  --post-accent: var(--primary);
+  --post-text: var(--text);
+  --post-muted: var(--muted);
+  background: var(--surface);
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
+.submit-panel.is-form-open :is(input, select, textarea),
+.difficulty-picker,
+.difficulty-choice-area,
+.progress-map-visual,
+.progress-map-blocks {
+  background-color: var(--input-bg);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+.field-help,
+.required-note,
+.progress-map-summary,
+.list-status,
+.compact-list-state,
+.compact-list-summary,
+.content-page-note,
+.admin-auth p,
+.admin-queue p,
+.admin-dialog-hint,
+.admin-secondary,
+.form-miniview-status {
+  color: var(--muted);
+}
+
+.notice,
+.guide-callout,
+.admin-ban-warning,
+.admin-state.is-warning,
+.compact-state-badge.is-new {
+  background: var(--warning-bg);
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.error,
+.compact-list-error,
+.admin-status[data-kind="error"],
+.admin-dialog-message,
+.turnstile-status.is-error,
+.version-management-message.is-error {
+  background: var(--danger-bg);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.admin-status[data-kind="success"],
+.version-management-message.is-success,
+.progress-map-status[data-kind="success"] {
+  background: var(--success-bg);
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.version-list {
+  --tree-line-color: var(--theme-tree-line-color);
+  --tree-line-muted: var(--theme-tree-line-muted);
+  --tree-line-strong: var(--theme-tree-line-strong);
+}
+
+.tree-overlay-node,
+.tree-overlay-node-root {
+  fill: var(--surface-raised);
+  stroke: var(--primary);
+}
+
+.tree-omission-button {
+  background: var(--surface-raised);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--surface);
+  color: var(--primary-hover);
+}
+
+.version-row.is-intermediate,
+.version-row.is-disabled {
+  color: var(--muted);
+}
+
+.progress-thumbnail-graph,
+.progress-thumbnail-density,
+.progress-thumbnail-strip,
+.progress-thumbnail-rail {
+  border-color: var(--line);
+}
+
+.recycle-overview,
+.content-page-header,
+.guide-callout {
+  background: var(--surface-raised);
+  border-color: var(--line-strong);
+}
+
+.recycle-cta,
+.guide-index a {
+  background: var(--surface-raised);
+  border-color: var(--line-strong);
+  color: var(--primary-hover);
+}
+
+.recycle-cta:hover,
+.recycle-cta:focus-visible,
+.guide-index a:hover,
+.guide-index a:focus-visible {
+  background: var(--primary-soft);
+}
+
+.recycle-cta-primary,
+.recycle-cta-primary:hover,
+.recycle-cta-primary:focus-visible {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
+}
+
+.content-section h3,
+.changelog-date,
+.work-ticket-label,
+.admin-kicker {
+  color: var(--primary-hover);
+}
+
+.compact-search-controls input,
+.compact-date-controls input,
+.compact-filter-fieldset,
+.compact-radio-choice,
+.compact-date-shortcuts button,
+.compact-pagination button {
+  background: var(--input-bg);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+.compact-list-head {
+  background: var(--surface-strong);
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+.compact-radio-choice:hover,
+.compact-radio-choice:focus-within,
+.compact-radio-choice:has(input:checked),
+.compact-date-shortcuts button[aria-pressed="true"],
+.compact-pagination button.is-current {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary-hover);
+}
+
+.compact-version-title,
+.compact-comment,
+.compact-field-label,
+.compact-relative-time-badge {
+  color: var(--muted);
+}
+
+.admin-shell {
+  color: var(--text);
+}
+
+.admin-header-tools {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.admin-header-tools .theme-control {
+  margin: 0;
+}
+
+.admin-environment,
+.admin-state,
+.admin-hash,
+.admin-hash-list {
+  background: var(--secondary-bg);
+  border-color: var(--line);
+  color: var(--secondary-text);
+}
+
+.admin-request-row.is-blocked,
+.admin-ban-warning {
+  background: var(--warning-bg);
+}
+
+.admin-list-header,
+.admin-cleanup-list-header,
+.admin-ban-log-header,
+.admin-ban-list-header {
+  background: var(--surface-strong);
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+.admin-request-row,
+.admin-cleanup-row,
+.admin-ban-log-row,
+.admin-ban-row {
+  border-color: var(--line);
+}
+
+.admin-ban-warning {
+  color: var(--warning) !important;
+}
+
+.admin-dialog::backdrop,
+.version-management-dialog::backdrop,
+.chart-miniview-dialog::backdrop {
+  background: var(--dialog-backdrop);
+}
+
+@media (max-width: 900px) {
+  .site-navigation-list {
+    flex-wrap: wrap;
+  }
+
+  .theme-control {
+    margin-left: 2px;
+  }
+}
+
+@media (max-width: 760px) {
+  .site-navigation {
+    background: var(--surface-raised);
+    border-color: var(--line);
+    box-shadow: var(--shadow);
+  }
+
+  .site-navigation a:hover,
+  .site-navigation a:focus-visible,
+  .site-navigation a[aria-current] {
+    background: var(--primary-soft);
+    border-left-color: var(--primary);
+  }
+
+  .theme-control {
+    border-top: 1px solid var(--line);
+    margin: 4px 0 0;
+    padding: 8px 10px 2px;
+  }
+
+  .theme-control-field {
+    justify-content: space-between;
+    min-height: 44px;
+  }
+
+  .theme-control-select {
+    min-height: 44px;
+    min-width: 150px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  body,
+  .site-header[data-site-header],
+  .panel,
+  .chart-group,
+  input,
+  select,
+  textarea {
+    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+  }
+}

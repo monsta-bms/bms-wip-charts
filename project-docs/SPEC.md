@@ -863,3 +863,14 @@ RC★★変換:
 - `GET /api/charts`はversionごとに`originUrl`を返すが、公開一覧UIにはリンクやURL文字列を追加しない。
 - RC★/RC★★では、MD5重複排除後に採用されたversion自身の有効な`origin_url`だけを`url`として出力する。URLなしでも掲載を継続し、`url_diff`と`md5`の既存仕様は変えない。`org_md5`は実装しない。
 - 既存versionへの追加・訂正・削除、追記フォームでの編集は後続フェーズとする。
+
+## SITE-THEME-14 全体テーマ
+
+- 公開Pagesと管理画面は`white`、`default`、`dark`の3テーマを提供する。初期値は既存の青緑グレー配色を引き継ぐ`default`とし、OSテーマから自動選択しない。
+- 選択値は`localStorage`の`bms-wip-charts:theme:v1`へ保存する。許可値以外は削除して`default`へ戻す。ストレージを利用できない場合も現在ページ内の切替は継続し、値そのものをログへ出さない。
+- 各HTMLは主CSSより先に`theme-init.js`を同期実行し、`html[data-theme]`と`color-scheme`を設定する。JavaScript無効時はCSSの`html:not([data-theme])`で`default`を表示する。
+- 共通ヘッダーのテーマ選択はページ再読込、ページ移動、戻る・進む、別タブの`storage`イベントへ追従する。テーマ変更はフォーム入力、dirty判定、選択ファイル、検索、ページ番号、選択versionへ影響させない。
+- UI配色は`theme.css`のsemantic tokenを使う。progressMapの投稿者layer色、ノート色、難易度や状態の意味色は識別性を保つため固定色または専用visual tokenとして扱う。
+- 画面用CanvasはCSS変数から配色を取得し、`bms:themechange`で表示中のCanvasだけ再描画する。progressImageとして生成・送信・R2保存するPNGと保存済みPNGにはテーマを反映しない。
+- Turnstileは`white`/`default`で`light`、`dark`で`dark`を使用する。実行中challengeは途中破棄せず、終了後に安全にremove/renderする。
+- RC★/RC★★の取込リンクは現在テーマを`theme` queryへ付与する。Workerの取込HTMLだけが`white`/`default`/`dark`を反映し、header JSON、data JSON、キャッシュ条件、D1 queryは変更しない。

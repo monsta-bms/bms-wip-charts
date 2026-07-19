@@ -19,6 +19,11 @@
   let token = "";
   let pendingChallenge = null;
   let scriptElement = null;
+  let pendingThemeRefresh = false;
+
+  function getWidgetTheme() {
+    return window.BmsTheme?.getTurnstileTheme?.() || "light";
+  }
 
   function makeError(code, message, detail = message) {
     return { code, message, detail };
@@ -56,6 +61,19 @@
     }
     scriptElement = null;
     scriptPromise = null;
+  }
+
+  function removeWidget() {
+    token = "";
+    if (widgetId !== null && window.turnstile) {
+      try {
+        window.turnstile.remove(widgetId);
+      } catch {
+        // The container is cleared below even if the external widget is already gone.
+      }
+    }
+    widgetId = null;
+    container?.replaceChildren();
   }
 
   function loadScript() {
@@ -120,7 +138,7 @@
     widgetId = turnstile.render(container, {
       sitekey,
       action,
-      theme: "auto",
+      theme: getWidgetTheme(),
       size: "flexible",
       appearance: "interaction-only",
       execution: "execute",
@@ -216,7 +234,16 @@
         "Turnstile認証がリセットされました。"
       ));
     }
-    if (widgetId !== null && window.turnstile) {
+    if (pendingThemeRefresh) {
+      pendingThemeRefresh = false;
+      removeWidget();
+      ensureWidget().catch((error) => {
+        setStatus(error?.message || "Turnstileを再読み込みできませんでした。", {
+          error: true,
+          retryable: true
+        });
+      });
+    } else if (widgetId !== null && window.turnstile) {
       try {
         window.turnstile.reset(widgetId);
       } catch {
@@ -243,6 +270,21 @@
   }
 
   retryButton?.addEventListener("click", retry);
+
+  window.addEventListener("bms:themechange", () => {
+    if (pendingChallenge) {
+      pendingThemeRefresh = true;
+      return;
+    }
+    pendingThemeRefresh = false;
+    removeWidget();
+    ensureWidget().catch((error) => {
+      setStatus(error?.message || "Turnstileを再読み込みできませんでした。", {
+        error: true,
+        retryable: true
+      });
+    });
+  });
 
   window.BmsTurnstile = {
     action,

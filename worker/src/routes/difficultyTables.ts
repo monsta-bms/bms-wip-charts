@@ -30,6 +30,7 @@ const SL_TO_RC_STAR_LEVEL = new Map<number, string>([
 
 type DifficultyTableId = "rc-star" | "rc-double-star";
 type DifficultyTableResource = "import" | "header" | "data";
+type ImportTheme = "white" | "default" | "dark";
 
 type DifficultyTableDefinition = {
   id: DifficultyTableId;
@@ -371,19 +372,66 @@ function escapeHtml(value: string): string {
   })[character] ?? character);
 }
 
+function getImportTheme(request: Request): ImportTheme {
+  const theme = new URL(request.url).searchParams.get("theme");
+  return theme === "white" || theme === "dark" ? theme : "default";
+}
+
+function getImportThemeStyle(theme: ImportTheme): string {
+  const palettes: Record<ImportTheme, {
+    background: string;
+    surface: string;
+    text: string;
+    muted: string;
+    line: string;
+    link: string;
+  }> = {
+    white: {
+      background: "#f7f9fa",
+      surface: "#ffffff",
+      text: "#18221f",
+      muted: "#5a6864",
+      line: "#cfd8d5",
+      link: "#195443"
+    },
+    default: {
+      background: "#e4e9e7",
+      surface: "#f0f3f2",
+      text: "#1d2926",
+      muted: "#52635e",
+      line: "#aab9b4",
+      link: "#155241"
+    },
+    dark: {
+      background: "#101613",
+      surface: "#18211e",
+      text: "#e5eeea",
+      muted: "#a8b7b1",
+      line: "#3b4e47",
+      link: "#63b99b"
+    }
+  };
+  const palette = palettes[theme];
+  return `:root{color-scheme:${theme === "dark" ? "dark" : "light"}}body{box-sizing:border-box;margin:0;min-height:100vh;padding:clamp(24px,6vw,72px);background:${palette.background};color:${palette.text};font-family:system-ui,-apple-system,"Segoe UI",sans-serif}main{box-sizing:border-box;margin:0 auto;max-width:680px;padding:clamp(20px,5vw,40px);background:${palette.surface};border:1px solid ${palette.line};border-radius:6px}h1{margin:0 0 12px;font-size:clamp(1.35rem,4vw,2rem)}p{margin:0;color:${palette.muted}}a{color:${palette.link};font-weight:700;text-underline-offset:.2em}a:focus-visible{outline:3px solid ${palette.link};outline-offset:3px}`;
+}
+
 function buildImportHtml(request: Request, table: DifficultyTableDefinition): string {
   const headerUrl = buildAbsoluteUrl(request, `${API_PATH_PREFIX}${table.id}/header.json`);
+  const theme = getImportTheme(request);
   return `<!doctype html>
-<html lang="ja">
+<html lang="ja" data-theme="${theme}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="bmstable" content="${escapeHtml(headerUrl)}">
   <title>${escapeHtml(table.name)}</title>
+  <style>${getImportThemeStyle(theme)}</style>
 </head>
 <body>
-  <h1>${escapeHtml(table.name)}</h1>
-  <p><a href="${escapeHtml(headerUrl)}">header.json</a></p>
+  <main>
+    <h1>${escapeHtml(table.name)}</h1>
+    <p><a href="${escapeHtml(headerUrl)}">header.json</a></p>
+  </main>
 </body>
 </html>`;
 }

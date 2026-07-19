@@ -238,6 +238,11 @@
     };
   }
 
+  function getThemeColor(name, fallback) {
+    const value = window.getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return value || fallback;
+  }
+
   function drawPlaceholder(canvas) {
     const width = Math.max(48, Math.round(canvas.getBoundingClientRect().width || 70));
     const height = Math.max(56, Math.round(canvas.getBoundingClientRect().height || 68));
@@ -249,9 +254,9 @@
       return;
     }
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
-    context.fillStyle = "#090909";
+    context.fillStyle = getThemeColor("--miniview-placeholder-bg", "#090909");
     context.fillRect(0, 0, width, height);
-    context.strokeStyle = "#303030";
+    context.strokeStyle = getThemeColor("--miniview-grid", "#303030");
     context.lineWidth = 1;
     for (let lane = 1; lane < 8; lane += 1) {
       const x = Math.round(lane * width / 8) + 0.5;
@@ -265,25 +270,25 @@
   function getLanePalette(lane) {
     if (lane === 0) {
       return {
-        laneFill: "#120808",
-        noteFill: "#FF5555",
-        longFill: "#9F343A",
-        longMarker: "#FF5555"
+        laneFill: getThemeColor("--miniview-scratch-lane", "#120808"),
+        noteFill: getThemeColor("--miniview-scratch-note", "#FF5555"),
+        longFill: getThemeColor("--miniview-scratch-ln", "#9F343A"),
+        longMarker: getThemeColor("--miniview-scratch-note", "#FF5555")
       };
     }
     if (lane % 2 === 0) {
       return {
-        laneFill: "#080B14",
-        noteFill: "#4B74FF",
-        longFill: "#2E4599",
-        longMarker: "#4B74FF"
+        laneFill: getThemeColor("--miniview-blue-lane", "#080B14"),
+        noteFill: getThemeColor("--miniview-blue-note", "#4B74FF"),
+        longFill: getThemeColor("--miniview-blue-ln", "#2E4599"),
+        longMarker: getThemeColor("--miniview-blue-note", "#4B74FF")
       };
     }
     return {
-      laneFill: "#090909",
-      noteFill: "#EDEDED",
-      longFill: "#8F999F",
-      longMarker: "#EDEDED"
+      laneFill: getThemeColor("--miniview-white-lane", "#090909"),
+      noteFill: getThemeColor("--miniview-white-note", "#EDEDED"),
+      longFill: getThemeColor("--miniview-white-ln", "#8F999F"),
+      longMarker: getThemeColor("--miniview-white-note", "#EDEDED")
     };
   }
 
@@ -389,10 +394,10 @@
     const noteHeightForLane = (lane) => large ? (lane === 0 ? 5 : 3.8) : 1.5;
     const markerHeightForLane = (lane) => large ? (lane === 0 ? 5.4 : 4.8) : 1.8;
 
-    context.fillStyle = "#050505";
+    context.fillStyle = getThemeColor("--miniview-bg", "#050505");
     context.fillRect(0, 0, width, height);
     if (large) {
-      context.fillStyle = "#08120B";
+      context.fillStyle = getThemeColor("--miniview-bpm-band", "#08120B");
       context.fillRect(plotX, plotY, bpmBandWidth, plotHeight);
     }
     for (let lane = 0; lane < 8; lane += 1) {
@@ -400,11 +405,11 @@
       context.fillRect(laneGeometry[lane].x, plotY, laneGeometry[lane].width, plotHeight);
     }
     if (large) {
-      context.fillStyle = "#8F8F8F";
+      context.fillStyle = getThemeColor("--miniview-measure-band", "#8F8F8F");
       context.fillRect(measureBandX, plotY, measureBandWidth, plotHeight);
     }
 
-    context.strokeStyle = "#3A3A3A";
+    context.strokeStyle = getThemeColor("--miniview-grid", "#3A3A3A");
     context.lineWidth = large ? 1 : 0.6;
     for (let lane = 1; lane < 8; lane += 1) {
       const x = laneGeometry[lane].x;
@@ -433,7 +438,9 @@
           if (position <= rangeStart || position >= rangeEnd || position >= item.end - 1e-9) {
             continue;
           }
-          context.strokeStyle = division % 4 === 0 ? "#4A4A4A" : "#2C2C2C";
+          context.strokeStyle = division % 4 === 0
+            ? getThemeColor("--miniview-grid-beat", "#4A4A4A")
+            : getThemeColor("--miniview-grid-subdivision", "#2C2C2C");
           context.lineWidth = division % 4 === 0 ? 0.9 : 0.65;
           const y = yForPosition(position);
           context.beginPath();
@@ -444,7 +451,7 @@
       }
       if (item.start >= rangeStart - 1e-9 && item.start <= rangeEnd + 1e-9) {
         const startY = yForPosition(item.start);
-        context.strokeStyle = "#E8E8E8";
+        context.strokeStyle = getThemeColor("--miniview-measure-line", "#E8E8E8");
         context.lineWidth = large ? 1.3 : 0.8;
         context.beginPath();
         context.moveTo(lanePlotX, startY);
@@ -452,7 +459,7 @@
         context.stroke();
       }
       if (large && measurePixelHeight >= 14) {
-        context.fillStyle = "#F6F6F6";
+        context.fillStyle = getThemeColor("--miniview-measure-text", "#F6F6F6");
         context.font = "700 12px system-ui, sans-serif";
         context.textAlign = "center";
         context.textBaseline = "middle";
@@ -466,7 +473,7 @@
     const finalVisibleBoundary = visibleMeasures.at(-1)?.end;
     if (Number.isFinite(finalVisibleBoundary) && finalVisibleBoundary <= rangeEnd + 1e-9) {
       const finalY = yForPosition(finalVisibleBoundary);
-      context.strokeStyle = "#E8E8E8";
+      context.strokeStyle = getThemeColor("--miniview-measure-line", "#E8E8E8");
       context.lineWidth = large ? 1.3 : 0.8;
       context.beginPath();
       context.moveTo(lanePlotX, finalY);
@@ -549,23 +556,23 @@
         const exactY = yForPosition(annotation.position);
         const lineY = Math.max(plotY + 1, Math.min(plotY + plotHeight - 1, exactY));
         const labelY = Math.max(plotY + 7, Math.min(plotY + plotHeight - 7, exactY - 3));
-        context.strokeStyle = "#3DBB58";
+        context.strokeStyle = getThemeColor("--miniview-bpm-line", "#3DBB58");
         context.lineWidth = 1;
         context.beginPath();
         context.moveTo(plotX + bpmBandWidth - 7, lineY);
         context.lineTo(lanePlotX, lineY);
         context.stroke();
-        context.fillStyle = "#67DF7B";
+        context.fillStyle = getThemeColor("--miniview-bpm-text", "#67DF7B");
         context.fillText(formatBpm(annotation.bpm), plotX + bpmBandWidth - 3, labelY);
       }
     }
     if (large) {
-      context.strokeStyle = "#31523A";
+      context.strokeStyle = getThemeColor("--miniview-bpm-line", "#31523A");
       context.lineWidth = 1;
       context.strokeRect(plotX + 0.5, plotY + 0.5, Math.max(0, bpmBandWidth - 1), Math.max(0, plotHeight - 1));
     }
 
-    context.strokeStyle = "#D0D0D0";
+    context.strokeStyle = getThemeColor("--miniview-border", "#D0D0D0");
     context.lineWidth = 1;
     context.strokeRect(lanePlotX + 0.5, plotY + 0.5, Math.max(0, lanePlotWidth - 1), Math.max(0, plotHeight - 1));
     if (large) {
@@ -1283,6 +1290,37 @@
         positionRangePreview(activeRangeTarget, true);
       }
     }, 120);
+  });
+
+  window.addEventListener("bms:themechange", () => {
+    listElement.querySelectorAll(".chart-miniview-button[data-version-id]").forEach((button) => {
+      const payload = payloadCache.get(button.dataset.versionId || "");
+      const canvas = button.querySelector("canvas");
+      if (payload && canvas) {
+        drawPayload(canvas, payload);
+      }
+    });
+
+    if (activeRangeTarget && rangePreviewCanvas && !rangePreview?.hidden) {
+      const ranges = getProgressBlockRanges(activeRangeTarget);
+      const block = ranges[activeRangeIndex];
+      const payload = activeRangeTarget === formMiniViewNavigator
+        ? formMiniViewState.payload
+        : payloadCache.get(activeRangeTarget.dataset.versionId || "");
+      const viewRange = payload && block ? buildBlockViewRange(payload, block) : null;
+      if (payload && viewRange) {
+        drawPayload(rangePreviewCanvas, payload, true, viewRange);
+      } else {
+        drawPlaceholder(rangePreviewCanvas);
+      }
+    }
+
+    if (dialog?.open && dialogCanvas && lastDialogTrigger) {
+      const payload = payloadCache.get(lastDialogTrigger.dataset.versionId || "");
+      if (payload) {
+        drawPayload(dialogCanvas, payload, true);
+      }
+    }
   });
 
   window.scheduleChartMiniViewMount = schedule;

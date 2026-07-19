@@ -1203,6 +1203,11 @@ function updateProgressFromMap({ updateBlocks = true } = {}) {
   }
 }
 
+function getThemeCanvasColor(name, fallback) {
+  const value = window.getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value || fallback;
+}
+
 function drawDensityChart() {
   const analysis = progressMapState.analysis;
   if (!analysis || progressMapGraphWrap.hidden) {
@@ -1222,7 +1227,7 @@ function drawDensityChart() {
 
   context.setTransform(ratio, 0, 0, ratio, 0, 0);
   context.clearRect(0, 0, cssWidth, cssHeight);
-  context.fillStyle = "#ffffff";
+  context.fillStyle = getThemeCanvasColor("--canvas-bg", "#ffffff");
   context.fillRect(0, 0, cssWidth, cssHeight);
 
   const blocks = Array.isArray(analysis.standardBlocks) ? analysis.standardBlocks : [];
@@ -1240,14 +1245,14 @@ function drawDensityChart() {
   const barSlot = plotWidth / densities.length;
   const barWidth = Math.max(1, barSlot);
 
-  context.strokeStyle = "#dce4ea";
+  context.strokeStyle = getThemeCanvasColor("--canvas-grid", "#dce4ea");
   context.lineWidth = 1;
   context.beginPath();
   context.moveTo(0, baseY + 0.5);
   context.lineTo(cssWidth, baseY + 0.5);
   context.stroke();
 
-  context.fillStyle = "rgba(42, 128, 116, 0.46)";
+  context.fillStyle = getThemeCanvasColor("--canvas-density", "rgba(42, 128, 116, 0.46)");
   densities.forEach((item, index) => {
     const x = index * barSlot;
     const height = Math.max(item.densityValue > 0 ? 2 : 0, (item.densityValue / maxDensity) * plotHeight);
@@ -2357,6 +2362,10 @@ window.addEventListener("resize", () => {
     renderProgressMeasureLabels(progressMapState.analysis.standardBlocks);
   }
   hideProgressMapFloatingInfo();
+});
+
+window.addEventListener("bms:themechange", () => {
+  drawDensityChart();
 });
 
 document.addEventListener("click", (event) => {
