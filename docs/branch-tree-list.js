@@ -777,8 +777,11 @@
         <span class="version-label-stack">
           <span class="version-title-line">
             <span class="version-main-label">${html(displayVersionLabel)}</span>
-            <span class="version-chart-name" title="${html(versionChartName)}">${html(versionChartName)}</span>
             <span class="version-state-badges">${renderStateBadges(node, progress)}</span>
+          </span>
+          <span class="version-chart-name-line">
+            <span class="version-chart-name-label">差分名：</span>
+            <span class="version-chart-name" title="${html(versionChartName)}">${html(versionChartName)}</span>
           </span>
           <span class="version-parent-line" title="${html(titleText)}">${html(parentText)}</span>
           <span class="version-lifecycle-line">${renderLifecycleMeta(version, { isLatest: options.isLatest })}</span>

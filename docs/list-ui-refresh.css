@@ -25,6 +25,42 @@
   min-height: 82px;
 }
 
+.chart-heading-main {
+  align-items: baseline;
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  min-width: 0;
+}
+
+.chart-heading-main h3 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.chart-origin-name {
+  align-items: baseline;
+  display: flex;
+  flex: 1 1 100%;
+  font-size: 0.78rem;
+  gap: 4px;
+  line-height: 1.4;
+  min-width: 0;
+}
+
+.chart-origin-name-label {
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.chart-origin-name-value {
+  color: var(--text);
+  font-weight: 700;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .version-tree-cell {
   overflow: visible;
 }
@@ -156,6 +192,32 @@
   letter-spacing: 0;
   overflow: visible;
   text-overflow: clip;
+  white-space: nowrap;
+}
+
+.version-chart-name-line {
+  align-items: baseline;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-width: 0;
+}
+
+.version-chart-name-label {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.version-chart-name {
+  color: var(--text);
+  display: block;
+  font-size: 0.74rem;
+  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

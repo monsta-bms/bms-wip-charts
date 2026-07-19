@@ -205,21 +205,36 @@
 
 .submit-panel.is-form-open .form-section {
   background: var(--post-section-bg);
-  border: 0;
+  border: 1px solid var(--post-line-soft);
   border-left: 2px solid var(--post-accent);
-  border-radius: 2px;
-  padding: 6px 12px 8px;
+  border-radius: 4px;
+  padding: 10px 12px 12px;
 }
 
 .submit-panel.is-form-open .form-section:first-child {
-  border-top: 0;
-  padding-top: 6px;
+  border-top: 1px solid var(--post-line-soft);
+  padding-top: 10px;
 }
 
 .submit-panel.is-form-open .form-section-title {
-  background: var(--post-section-bg);
-  margin-bottom: 6px;
-  padding: 0 5px;
+  background: transparent;
+  display: block;
+  margin: 0 0 8px;
+  padding: 0;
+}
+
+.submit-panel.is-form-open .difficulty-picker {
+  row-gap: 0;
+}
+
+.submit-panel.is-form-open .difficulty-choice-area {
+  height: auto;
+  min-height: 0;
+  margin-top: 7px;
+}
+
+.submit-panel.is-form-open .difficulty-preview {
+  margin-top: 8px;
 }
 
 .submit-panel.is-form-open .form-section input:not([type="checkbox"]):not([type="hidden"]):not([type="file"]),
@@ -376,7 +391,7 @@ button.file-drop-zone:focus-visible,
 }
 
 .submit-panel.is-form-open .file-info-section[data-file-state="ready"] {
-  padding-block: 2px 5px;
+  padding-block: 7px 8px;
 }
 
 .submit-panel.is-form-open .file-info-section[data-file-state="ready"] .form-section-title {

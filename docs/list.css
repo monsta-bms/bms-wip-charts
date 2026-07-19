@@ -302,14 +302,14 @@
 }
 
 .compact-relative-time-badge {
+  background: var(--time-badge-bg);
+  border: 1px solid var(--time-badge-border);
+  color: var(--time-badge-text);
   display: inline-flex;
   min-height: 18px;
   align-items: center;
   padding: 1px 5px;
-  border: 1px solid #b7cbc5;
   border-radius: 3px;
-  background: #eef5f3;
-  color: #4e6961;
   font-size: 0.64rem;
   font-weight: 700;
   line-height: 1.1;
@@ -366,10 +366,30 @@
 }
 
 .compact-version-title {
+  display: grid;
+  gap: 1px;
   margin-top: 2px;
-  overflow: hidden;
   color: #63717a;
   font-size: 0.78rem;
+  min-width: 0;
+}
+
+.compact-version-detail {
+  display: grid;
+  gap: 3px;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-width: 0;
+}
+
+.compact-version-detail-label {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.compact-version-detail-value {
+  color: var(--text);
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

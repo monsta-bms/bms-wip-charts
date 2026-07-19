@@ -47,6 +47,9 @@ html[data-theme="white"] {
   --progress-border: #aac2ba;
   --progress-grid-line: rgba(36, 110, 91, 0.18);
   --progress-meta: #4d625b;
+  --time-badge-bg: #eef4f2;
+  --time-badge-text: #35584e;
+  --time-badge-border: #a8beb6;
 }
 
 html[data-theme="default"],
@@ -99,6 +102,9 @@ html:not([data-theme]) {
   --progress-border: #8fa9a0;
   --progress-grid-line: rgba(31, 107, 87, 0.2);
   --progress-meta: #495f58;
+  --time-badge-bg: #dce7e3;
+  --time-badge-text: #294f44;
+  --time-badge-border: #809d93;
 }
 
 html[data-theme="dark"] {
@@ -150,6 +156,9 @@ html[data-theme="dark"] {
   --progress-border: #587168;
   --progress-grid-line: rgba(155, 184, 174, 0.28);
   --progress-meta: #b8c7c1;
+  --time-badge-bg: #24332e;
+  --time-badge-text: #d5e5df;
+  --time-badge-border: #5f786f;
 }
 
 html {
@@ -631,9 +640,13 @@ button.progress-map-block.is-barline {
 .append-version-from,
 .version-parent-line,
 .version-branch-line,
-.version-chart-name,
+.version-chart-name-label,
 .version-row.version-tree-row .meta-label {
   color: var(--muted);
+}
+
+.version-chart-name {
+  color: var(--text);
 }
 
 .version-main-label,
@@ -769,9 +782,15 @@ button.progress-map-block.is-barline {
 
 .compact-version-title,
 .compact-comment,
-.compact-field-label,
-.compact-relative-time-badge {
+.compact-field-label {
   color: var(--muted);
+}
+
+.recent-activity-badge,
+.compact-relative-time-badge {
+  background: var(--time-badge-bg);
+  border-color: var(--time-badge-border);
+  color: var(--time-badge-text);
 }
 
 .admin-shell {

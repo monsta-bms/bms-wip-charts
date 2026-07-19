@@ -8,14 +8,14 @@
     <title>リサイクルセンター</title>
     <link rel="stylesheet" href="./style.css?v=ui-refresh-01-phase1">
     <link rel="stylesheet" href="./site-header.css?v=recycle-ux-02a">
-    <link rel="stylesheet" href="./branch-tree-list.css?v=ui-tree-overlay-01">
-    <link rel="stylesheet" href="./list-ui-refresh.css?v=ui-tree-overlay-01">
+    <link rel="stylesheet" href="./branch-tree-list.css?v=site-theme-14-final">
+    <link rel="stylesheet" href="./list-ui-refresh.css?v=site-theme-14-final">
     <link rel="stylesheet" href="./chart-miniview.css?v=post-form-miniview-01">
     <link rel="stylesheet" href="./tree-progress-polish.css?v=tree-shape-fix-01">
     <link rel="stylesheet" href="./version-management-ui.css?v=version-lifecycle-24h-01">
-    <link rel="stylesheet" href="./post-form-ui.css?v=post-form-tree-12">
-    <link rel="stylesheet" href="./chart-detail-link.css?v=top-detail-recency-08">
-    <link rel="stylesheet" href="./theme.css?v=site-theme-14-followup-01">
+    <link rel="stylesheet" href="./post-form-ui.css?v=site-theme-14-final">
+    <link rel="stylesheet" href="./chart-detail-link.css?v=site-theme-14-final">
+    <link rel="stylesheet" href="./theme.css?v=site-theme-14-final">
   </head>
   <body id="top">
     <div class="page-shell">
@@ -26,13 +26,13 @@
       <main>
         <section class="recycle-overview" aria-labelledby="recycleOverviewTitle">
           <div class="recycle-overview-copy">
-            <p class="work-ticket-label">持ち込み案内</p>
+
             <h1 id="recycleOverviewTitle">
-              作りかけ、続き募集中、なんか没。
-              <span>そんなBMS差分を持ち込む場所です。</span>
+              全差分作者が求めていた
+              <span>没譜面・未完成譜面の専用投稿サイト</span>
             </h1>
             <p class="recycle-overview-description">
-              未完成の譜面は、ほかの人が続きを作ったり、分岐させたり、なんかいじったりできます。
+              追記機能・難易度表機能つき
             </p>
             <p class="recycle-overview-note">
               <strong>アカウント登録は不要です。</strong>
@@ -95,8 +95,8 @@
             </div>
 
             <div class="form-sections">
-              <fieldset class="form-section file-info-section">
-                <legend class="form-section-title">譜面ファイル <span class="required-mark">*</span></legend>
+              <section class="form-section file-info-section" aria-labelledby="fileInfoSectionTitle">
+                <h3 class="form-section-title" id="fileInfoSectionTitle">譜面ファイル <span class="required-mark">*</span></h3>
                 <div class="file-drop-control" id="chartFileDropControl" data-state="empty">
                   <input
                     class="visually-hidden-file-input"
@@ -126,10 +126,10 @@
                   </div>
                   <p class="file-drop-error" id="chartFileDropError" role="alert" hidden></p>
                 </div>
-              </fieldset>
+              </section>
 
-              <fieldset class="form-section song-info-section">
-                <legend class="form-section-title">楽曲情報</legend>
+              <section class="form-section song-info-section" aria-labelledby="songInfoSectionTitle">
+                <h3 class="form-section-title" id="songInfoSectionTitle">楽曲情報</h3>
                 <div class="section-fields two-column-fields">
                   <label class="field">
                     <span class="field-label">曲名 <span class="required-mark">*</span></span>
@@ -157,13 +157,13 @@
                     <span class="field-help">リンク先の確認は行いません。</span>
                   </label>
                 </div>
-              </fieldset>
+              </section>
 
-              <fieldset class="form-section diff-info-section">
-                <legend class="form-section-title">差分情報</legend>
+              <section class="form-section diff-info-section" aria-labelledby="diffInfoSectionTitle">
+                <h3 class="form-section-title" id="diffInfoSectionTitle">差分情報</h3>
                 <div class="section-fields diff-fields">
                   <section class="diff-group chart-details-group" aria-labelledby="chartDetailsHeading">
-                    <h3 class="diff-group-title" id="chartDetailsHeading">譜面情報</h3>
+                    <h4 class="diff-group-title" id="chartDetailsHeading">譜面情報</h4>
                     <div class="chart-details-grid">
                       <div class="field difficulty-field">
                         <span class="field-label">想定難易度 <span class="required-mark">*</span></span>
@@ -208,7 +208,7 @@
                   </section>
 
                   <section class="diff-group author-details-group" aria-labelledby="authorDetailsHeading">
-                    <h3 class="diff-group-title" id="authorDetailsHeading">作者情報</h3>
+                    <h4 class="diff-group-title" id="authorDetailsHeading">作者情報</h4>
                     <div class="author-field-stack">
                       <label class="field compact-text-field">
                         <span class="field-label">差分作者（別名義可） <span class="required-mark">*</span></span>
@@ -226,10 +226,10 @@
                     </div>
                   </section>
                 </div>
-              </fieldset>
+              </section>
 
-              <fieldset class="form-section progress-section">
-                <legend class="form-section-title">進捗</legend>
+              <section class="form-section progress-section" aria-labelledby="progressSectionTitle">
+                <h3 class="form-section-title" id="progressSectionTitle">進捗</h3>
                 <div class="progress-map-field">
                   <div class="progress-map-header" id="progressMapHeader" hidden>
                     <span class="field-label">進捗マップ</span>
@@ -279,10 +279,10 @@
                     <span class="field-help">追記不可として100%で登録します。</span>
                   </span>
                 </label>
-              </fieldset>
+              </section>
 
-              <fieldset class="form-section submission-section">
-                <legend class="form-section-title">管理・コメント・投稿</legend>
+              <section class="form-section submission-section" aria-labelledby="submissionSectionTitle">
+                <h3 class="form-section-title" id="submissionSectionTitle">管理・コメント・投稿</h3>
                 <div class="post-form-footer">
                   <div class="comment-column">
                     <span class="submission-subtitle" id="commentSectionLabel">コメント</span>
@@ -327,7 +327,7 @@
                     </div>
                   </div>
                 </div>
-              </fieldset>
+              </section>
             </div>
             </form>
           </div>
@@ -453,14 +453,14 @@
     <script src="./local-bms-analysis.js?v=post-form-miniview-01"></script>
     <script src="./turnstile-controller.js?v=turnstile-01"></script>
     <script src="./post-form-preferences.js?v=post-form-ux-11"></script>
-    <script src="./app.js?v=post-form-ux-11"></script>
+    <script src="./app.js?v=site-theme-14-final"></script>
     <script src="./progress-song-end-analysis.js?v=chart-miniview-position-01"></script>
-    <script src="./progress-thumbnail-list.js?v=top-detail-recency-07"></script>
+    <script src="./progress-thumbnail-list.js?v=site-theme-14-final"></script>
     <script src="./chart-miniview.js?v=post-form-miniview-01"></script>
-    <script src="./branch-append-ui.js?v=post-form-ux-11"></script>
+    <script src="./branch-append-ui.js?v=site-theme-14-final"></script>
     <script src="./progress-image-preview.js?v=post-form-ux-09a"></script>
     <script src="./progress-image-formdata.js?v=ui-tree-overlay-01"></script>
-    <script src="./branch-tree-list.js?v=post-form-tree-12"></script>
+    <script src="./branch-tree-list.js?v=site-theme-14-final"></script>
     <script src="./tree-progress-polish.js?v=post-form-tree-12"></script>
     <script src="./favorites-list.js?v=top-detail-recency-07"></script>
     <script src="./version-management-ui.js?v=post-form-ux-11"></script>

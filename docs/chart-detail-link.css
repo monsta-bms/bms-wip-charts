@@ -99,15 +99,15 @@
 }
 
 .recent-activity-badge {
+  background: var(--time-badge-bg);
+  border: 1px solid var(--time-badge-border);
+  color: var(--time-badge-text);
   display: inline-flex;
   align-items: center;
   min-height: 18px;
   margin-inline-start: 5px;
   padding: 1px 5px;
-  border: 1px solid #9fc4b9;
   border-radius: 3px;
-  background: #eef7f4;
-  color: #176556;
   font-size: 0.67rem;
   font-weight: 700;
   line-height: 1.2;

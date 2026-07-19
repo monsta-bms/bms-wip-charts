@@ -373,8 +373,7 @@
   }
 
   function formatVersionChartName(chartName) {
-    const value = String(chartName || "差分名未入力").trim();
-    return value.startsWith("[") && value.endsWith("]") ? value : `[${value}]`;
+    return String(chartName || "差分名未入力").trim();
   }
 
   function renderRow(item) {
@@ -393,7 +392,7 @@
     const relativeTimeBadge = renderRelativeTimeBadge(item.createdAt);
     const stateBadges = buildStateBadges(item);
     const versionChartName = formatVersionChartName(chartName);
-    const fullLabel = `${fullTitle} ${versionChartName} / ${versionLabel}`;
+    const fullLabel = `${fullTitle} / 差分名: ${versionChartName} / 版: ${versionLabel}`;
     const detailUrl = new URL("./index.html", document.baseURI);
     detailUrl.searchParams.set("chartId", String(item.chartId || ""));
     detailUrl.searchParams.set("versionId", String(item.versionId || ""));
@@ -410,7 +409,16 @@
             <a class="compact-song-title compact-detail-link" href="${escapeHtml(detailUrl.toString())}">${escapeHtml(fullTitle)}</a>
             <span class="compact-state-badges">${stateBadges}</span>
           </div>
-          <span class="compact-version-title">${escapeHtml(versionChartName)} / ${escapeHtml(versionLabel)}</span>
+          <div class="compact-version-title">
+            <span class="compact-version-detail">
+              <span class="compact-version-detail-label">差分名：</span>
+              <span class="compact-version-detail-value" title="${escapeHtml(versionChartName)}">${escapeHtml(versionChartName)}</span>
+            </span>
+            <span class="compact-version-detail">
+              <span class="compact-version-detail-label">版：</span>
+              <span class="compact-version-detail-value">${escapeHtml(versionLabel)}</span>
+            </span>
+          </div>
         </div>
         <div class="compact-difficulty"><span class="compact-field-label">難易度</span><span>${escapeHtml(difficulty)}</span></div>
         <div class="compact-author"><span class="compact-field-label">作者</span><span title="${escapeHtml(author)}">${escapeHtml(author)}</span></div>

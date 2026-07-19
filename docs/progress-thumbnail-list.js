@@ -1022,10 +1022,15 @@
       return `
         <article class="chart-group">
           <div class="chart-title-row">
-            <h3>${html(song.title || "無題")}</h3>
-            <span class="artist-separator">/</span>
-            <span class="chart-artist">${html(song.artist || "Unknown Artist")}</span>
-            <span class="chart-name-badge">${html(chart.name || "差分名未入力")}</span>
+            <div class="chart-heading-main">
+              <h3>${html(song.title || "無題")}</h3>
+              <span class="artist-separator">/</span>
+              <span class="chart-artist">${html(song.artist || "Unknown Artist")}</span>
+            </div>
+            <div class="chart-origin-name">
+              <span class="chart-origin-name-label">起点差分名：</span>
+              <span class="chart-origin-name-value" title="${html(chart.name || "差分名未入力")}">${html(chart.name || "差分名未入力")}</span>
+            </div>
           </div>
           <div class="version-list">${rows || `<div class="list-status">表示できるversionがありません。</div>`}</div>
         </article>
