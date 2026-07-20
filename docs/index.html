@@ -6,14 +6,14 @@
     <script src="./theme-init.js?v=site-theme-14"></script>
     <meta name="turnstile-sitekey" content="0x4AAAAAAD0OJhR8c4dKkDrk">
     <title>リサイクルセンター</title>
-    <link rel="stylesheet" href="./style.css?v=ui-refresh-01-phase1">
+    <link rel="stylesheet" href="./style.css?v=append-policy-15">
     <link rel="stylesheet" href="./site-header.css?v=recycle-ux-02a">
-    <link rel="stylesheet" href="./branch-tree-list.css?v=site-theme-14-final">
+    <link rel="stylesheet" href="./branch-tree-list.css?v=append-policy-15">
     <link rel="stylesheet" href="./list-ui-refresh.css?v=site-theme-14-final">
     <link rel="stylesheet" href="./chart-miniview.css?v=post-form-miniview-01">
     <link rel="stylesheet" href="./tree-progress-polish.css?v=tree-shape-fix-01">
     <link rel="stylesheet" href="./version-management-ui.css?v=version-lifecycle-24h-01">
-    <link rel="stylesheet" href="./post-form-ui.css?v=site-theme-14-final">
+    <link rel="stylesheet" href="./post-form-ui.css?v=append-policy-15">
     <link rel="stylesheet" href="./chart-detail-link.css?v=site-theme-14-final">
     <link rel="stylesheet" href="./theme.css?v=site-theme-14-final">
   </head>
@@ -272,13 +272,23 @@
                   <button class="secondary progress-complete-button" id="completeProgressButton" type="button" disabled hidden>完成版にする</button>
                 </div>
 
-                <label class="field checkbox-field rejected-field" id="rejectedProgressControl" hidden>
-                  <input id="isRejected" name="isRejected" type="checkbox" value="true">
-                  <span class="checkbox-copy">
-                    <span class="checkbox-title">没譜面</span>
-                    <span class="field-help">追記不可として100%で登録します。</span>
-                  </span>
-                </label>
+                <div class="progress-policy-controls">
+                  <label class="field checkbox-field rejected-field" id="rejectedProgressControl" hidden>
+                    <input id="isRejected" name="isRejected" type="checkbox" value="true">
+                    <span class="checkbox-copy">
+                      <span class="checkbox-title">没譜面</span>
+                      <span class="field-help">100%の没譜面として登録します。</span>
+                    </span>
+                  </label>
+
+                  <label class="field checkbox-field append-policy-field" id="allowAppendControl" hidden>
+                    <input id="allowAppend" name="allowAppend" type="checkbox" value="true" checked>
+                    <span class="checkbox-copy">
+                      <span class="checkbox-title">この版からの追記・分岐を許可する</span>
+                      <span class="field-help">他の利用者が、この版を親として新しい版を投稿できます。</span>
+                    </span>
+                  </label>
+                </div>
               </section>
 
               <section class="form-section submission-section" aria-labelledby="submissionSectionTitle">
@@ -393,6 +403,10 @@
             <dt>派生版</dt>
             <dd id="versionManagementDescendants">-</dd>
           </div>
+          <div>
+            <dt>追記受付</dt>
+            <dd id="versionManagementAllowAppend">-</dd>
+          </div>
         </dl>
 
         <label class="field">
@@ -453,17 +467,17 @@
     <script src="./local-bms-analysis.js?v=post-form-miniview-01"></script>
     <script src="./turnstile-controller.js?v=turnstile-01"></script>
     <script src="./post-form-preferences.js?v=post-form-ux-11"></script>
-    <script src="./app.js?v=site-theme-14-final"></script>
+    <script src="./app.js?v=append-policy-15"></script>
     <script src="./progress-song-end-analysis.js?v=chart-miniview-position-01"></script>
     <script src="./progress-thumbnail-list.js?v=site-theme-14-final"></script>
     <script src="./chart-miniview.js?v=post-form-miniview-01"></script>
-    <script src="./branch-append-ui.js?v=site-theme-14-final"></script>
+    <script src="./branch-append-ui.js?v=append-policy-15"></script>
     <script src="./progress-image-preview.js?v=post-form-ux-09a"></script>
     <script src="./progress-image-formdata.js?v=ui-tree-overlay-01"></script>
-    <script src="./branch-tree-list.js?v=site-theme-14-final"></script>
+    <script src="./branch-tree-list.js?v=append-policy-15"></script>
     <script src="./tree-progress-polish.js?v=post-form-tree-12"></script>
     <script src="./favorites-list.js?v=top-detail-recency-07"></script>
-    <script src="./version-management-ui.js?v=post-form-ux-11"></script>
+    <script src="./version-management-ui.js?v=append-policy-15"></script>
     <script src="./post-form-ui.js?v=post-form-tree-12"></script>
     <script src="./chart-detail-link.js?v=top-detail-recency-07"></script>
   </body>

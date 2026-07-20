@@ -1,5 +1,6 @@
 import { BmsAnalysis, normalizeText } from "../utils/bms";
 import { analyzeUploadedBmsBytes } from "../utils/bmsUploadAnalysis";
+import { parseAllowAppend } from "../utils/appendPolicy";
 import { validateChartName } from "../utils/chartName";
 import { sanitizeFileName, validateUploadFile } from "../utils/fileValidation";
 import { hashWithSecret, sha256HexFromBuffer } from "../utils/hash";
@@ -72,6 +73,7 @@ type VersionRow = {
   md5: string | null;
   origin_url: string | null;
   is_rejected: number;
+  allow_append: number;
   file_id: string;
   file_name: string;
   file_size: number;
@@ -154,6 +156,7 @@ type CreateChartInput = {
   progressMapText: string;
   comment: string;
   isRejected: boolean;
+  allowAppend: boolean;
   passwordHash: string;
   metadataWarning: ApiWarning | null;
   parsedMetadata: {
@@ -459,6 +462,7 @@ function buildVersion(row: VersionRow) {
     md5: row.md5,
     originUrl: row.origin_url,
     isRejected: toBoolean(row.is_rejected),
+    allowAppend: toBoolean(row.allow_append),
     file: {
       id: row.file_id,
       name: row.file_name,
@@ -558,7 +562,7 @@ async function cleanupR2AfterDbFailure(
   env: Env,
   r2Key: string,
   fileId: string,
-  originalError: unknown
+  _originalError: unknown
 ): Promise<void> {
   try {
     await env.FILES.delete(r2Key);
@@ -566,9 +570,8 @@ async function cleanupR2AfterDbFailure(
     console.error("[r2-orphan-cleanup] failed to delete R2 object after DB insert failure", {
       code: "R2_ORPHAN_CLEANUP_FAILED",
       fileId,
-      r2Key,
-      dbMessage: errorDetail(originalError),
-      cleanupMessage: errorDetail(cleanupError)
+      stage: "create_r2_cleanup",
+      errorType: cleanupError instanceof Error ? cleanupError.name : typeof cleanupError
     });
 
     try {
@@ -582,19 +585,19 @@ async function cleanupR2AfterDbFailure(
           code,
           reason,
           detail
-        ) VALUES (?, 'r2_orphan_file', 'r2_key', ?, 'error', 'R2_ORPHAN_FILE', ?, ?)
+        ) VALUES (?, 'r2_orphan_file', 'file', ?, 'error', 'R2_ORPHAN_FILE', ?, ?)
       `).bind(
         makeId("admin_log"),
-        r2Key,
+        fileId,
         "D1 insert failed after R2 upload, and R2 cleanup also failed.",
-        `fileId=${fileId}; dbError=${errorDetail(originalError)}; cleanupError=${errorDetail(cleanupError)}`
+        `fileId=${fileId}; cleanup could not remove the uploaded object.`
       ).run();
     } catch (adminLogError) {
       console.error("[admin-log-write] failed to write R2 orphan admin log", {
         code: "ADMIN_LOG_WRITE_FAILED",
         fileId,
-        r2Key,
-        message: errorDetail(adminLogError)
+        stage: "create_r2_cleanup_admin_log",
+        errorType: adminLogError instanceof Error ? adminLogError.name : typeof adminLogError
       });
     }
   }
@@ -778,6 +781,7 @@ async function selectVisibleVersionRows(env: Env, chartIds: string[]): Promise<V
       versions.md5 AS md5,
       versions.origin_url AS origin_url,
       versions.is_rejected AS is_rejected,
+      versions.allow_append AS allow_append,
       versions.file_id AS file_id,
       versions.file_name AS file_name,
       versions.file_size AS file_size,
@@ -1111,6 +1115,18 @@ async function parseCreateChartInput(
   const author = getFormText(form, "author");
   const comment = getFormText(form, "comment");
   const isRejected = parseBooleanField(getFormText(form, "isRejected"));
+  const allowAppend = parseAllowAppend(form, !isRejected);
+  if (!allowAppend.ok) {
+    return {
+      ok: false,
+      response: await failCreateChart(request, env, context, {
+        status: 400,
+        code: "INVALID_ALLOW_APPEND",
+        message: "追記受付の設定が正しくありません。ページを再読み込みしてください。",
+        detail: allowAppend.detail
+      })
+    };
+  }
   const storedProgress = isRejected ? 100 : progress.value;
   const progressMapText = getFormText(form, "progressMap");
 
@@ -1172,6 +1188,7 @@ async function parseCreateChartInput(
       progressMapText,
       comment,
       isRejected,
+      allowAppend: allowAppend.value,
       passwordHash: await hashWithSecret(`password:${password}`, secret),
       metadataWarning,
       parsedMetadata,
@@ -1532,6 +1549,7 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
         md5,
         origin_url,
         is_rejected,
+        allow_append,
         file_id,
         file_name,
         file_size,
@@ -1541,7 +1559,7 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
         download_blocked,
         download_block_reason,
         completed_at
-      ) VALUES (?, ?, NULL, 1, '', 'root', ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?)
+      ) VALUES (?, ?, NULL, 1, '', 'root', ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?)
     `).bind(
       versionId,
       chartId,
@@ -1565,6 +1583,7 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
       input.md5,
       input.originUrl,
       input.isRejected ? 1 : 0,
+      input.allowAppend ? 1 : 0,
       fileId,
       input.fileName,
       input.file.size,
@@ -1650,6 +1669,7 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
       progress: storedProgress,
       progressMap: preparedProgressMap.progressMap,
       isRejected: input.isRejected,
+      allowAppend: input.allowAppend,
       completed: storedProgress === 100,
       completedAt,
       originUrl: input.originUrl,

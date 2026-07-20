@@ -1,9 +1,10 @@
 import { BmsAnalysis, normalizeText } from "../utils/bms";
 import { analyzeUploadedBmsBytes } from "../utils/bmsUploadAnalysis";
+import { parseAllowAppend } from "../utils/appendPolicy";
 import { validateChartName } from "../utils/chartName";
 import { sanitizeFileName, validateUploadFile } from "../utils/fileValidation";
 import { hashWithSecret, sha256HexFromBuffer } from "../utils/hash";
-import { prepareAppendProgressMap } from "../utils/progressMap";
+import { hasUsableStoredProgressMap, prepareAppendProgressMap } from "../utils/progressMap";
 import { buildRequestFingerprint } from "../utils/requestFingerprint";
 import { apiError, Env, errorDetail, methodNotAllowed, ok } from "../utils/response";
 import { buildZipInspectionLogDetail, inspectZipUpload } from "../utils/zipValidation";
@@ -56,20 +57,16 @@ type ParentVersionRow = {
   origin_url: string | null;
   is_hidden: number;
   is_rejected: number;
+  collapsed_by_completion: number;
+  file_deleted_at: string | null;
+  allow_append: number;
 };
 
 type ExistingVersionRow = { id: string };
 type ChildCountRow = { child_count: number };
 
-type AppendVersionInput = {
+type AppendVersionFormInput = {
   file: File;
-  fileName: string;
-  fileBytes: ArrayBuffer;
-  fileSha256: string;
-  md5: string | null;
-  bmsAnalysis: BmsAnalysis | null;
-  analysisWarnings: ApiWarning[];
-  bmsAnalysisFailed: boolean;
   parentVersionId: string;
   chartName: string;
   difficulty: string;
@@ -77,6 +74,19 @@ type AppendVersionInput = {
   author: string;
   progressMapText: string;
   comment: string;
+  password: string;
+  isRejected: boolean;
+  allowAppend: boolean;
+};
+
+type AppendVersionInput = Omit<AppendVersionFormInput, "password"> & {
+  fileName: string;
+  fileBytes: ArrayBuffer;
+  fileSha256: string;
+  md5: string | null;
+  bmsAnalysis: BmsAnalysis | null;
+  analysisWarnings: ApiWarning[];
+  bmsAnalysisFailed: boolean;
   passwordHash: string;
   parsedMetadata: {
     title: string | null;
@@ -221,7 +231,7 @@ async function cleanupR2AfterDbFailure(
   env: Env,
   r2Key: string,
   fileId: string,
-  originalError: unknown
+  _originalError: unknown
 ): Promise<void> {
   try {
     await env.FILES.delete(r2Key);
@@ -229,9 +239,8 @@ async function cleanupR2AfterDbFailure(
     console.error("[r2-orphan-cleanup] failed to delete R2 object after append DB failure", {
       code: "R2_ORPHAN_CLEANUP_FAILED",
       fileId,
-      r2Key,
-      dbMessage: errorDetail(originalError),
-      cleanupMessage: errorDetail(cleanupError)
+      stage: "append_r2_cleanup",
+      errorType: cleanupError instanceof Error ? cleanupError.name : typeof cleanupError
     });
 
     try {
@@ -245,30 +254,29 @@ async function cleanupR2AfterDbFailure(
           code,
           reason,
           detail
-        ) VALUES (?, 'r2_orphan_file', 'r2_key', ?, 'error', 'R2_ORPHAN_FILE', ?, ?)
+        ) VALUES (?, 'r2_orphan_file', 'file', ?, 'error', 'R2_ORPHAN_FILE', ?, ?)
       `).bind(
         makeId("admin_log"),
-        r2Key,
+        fileId,
         "Append version D1 insert failed after R2 upload, and R2 cleanup also failed.",
-        `fileId=${fileId}; dbError=${errorDetail(originalError)}; cleanupError=${errorDetail(cleanupError)}`
+        `fileId=${fileId}; cleanup could not remove the uploaded object.`
       ).run();
     } catch (adminLogError) {
       console.error("[admin-log-write] failed to write append R2 orphan admin log", {
         code: "ADMIN_LOG_WRITE_FAILED",
         fileId,
-        r2Key,
-        message: errorDetail(adminLogError)
+        stage: "append_r2_cleanup_admin_log",
+        errorType: adminLogError instanceof Error ? adminLogError.name : typeof adminLogError
       });
     }
   }
 }
 
-async function parseAppendVersionInput(
+async function parseAppendVersionFormInput(
   request: Request,
   env: Env,
-  context: PostLogContext,
-  secret: string
-): Promise<{ ok: true; value: AppendVersionInput } | { ok: false; response: Response }> {
+  context: PostLogContext
+): Promise<{ ok: true; value: AppendVersionFormInput } | { ok: false; response: Response }> {
   const contentType = request.headers.get("Content-Type") ?? "";
   if (!contentType.toLowerCase().includes("multipart/form-data")) {
     return {
@@ -302,14 +310,16 @@ async function parseAppendVersionInput(
     };
   }
 
-  if (parseBooleanField(getFormText(form, "isRejected"))) {
+  const isRejected = parseBooleanField(getFormText(form, "isRejected"));
+  const allowAppend = parseAllowAppend(form, true);
+  if (!allowAppend.ok) {
     return {
       ok: false,
       response: await failAppendVersion(request, env, context, {
         status: 400,
-        code: "INVALID_REJECTED_FLAG_FOR_FOLLOWUP",
-        message: "追記投稿では没譜面チェックを指定できません。",
-        detail: "isRejected=true is not allowed for POST /api/charts/:chartId/versions."
+        code: "INVALID_ALLOW_APPEND",
+        message: "追記受付の設定が正しくありません。ページを再読み込みしてください。",
+        detail: allowAppend.detail
       })
     };
   }
@@ -353,7 +363,32 @@ async function parseAppendVersionInput(
     };
   }
 
-  const validation = validateUploadFile(file);
+  return {
+    ok: true,
+    value: {
+      file,
+      parentVersionId,
+      chartName,
+      difficulty: getFormText(form, "difficulty"),
+      level: getFormText(form, "level"),
+      author,
+      progressMapText,
+      comment: getFormText(form, "comment"),
+      password,
+      isRejected,
+      allowAppend: allowAppend.value
+    }
+  };
+}
+
+async function materializeAppendVersionInput(
+  request: Request,
+  env: Env,
+  context: PostLogContext,
+  secret: string,
+  formInput: AppendVersionFormInput
+): Promise<{ ok: true; value: AppendVersionInput } | { ok: false; response: Response }> {
+  const validation = validateUploadFile(formInput.file);
   if (!validation.ok) {
     return {
       ok: false,
@@ -366,7 +401,7 @@ async function parseAppendVersionInput(
     };
   }
 
-  const fileBytes = await file.arrayBuffer();
+  const fileBytes = await formInput.file.arrayBuffer();
   const fileSha256 = await sha256HexFromBuffer(fileBytes);
   context.fileSha256 = fileSha256;
 
@@ -384,7 +419,7 @@ async function parseAppendVersionInput(
   };
 
   if (validation.isBmsText) {
-    const analyzed = analyzeUploadedBmsBytes(fileBytes, file.name);
+    const analyzed = analyzeUploadedBmsBytes(fileBytes, formInput.file.name);
     md5 = analyzed.md5;
     bmsAnalysis = analyzed.analysis;
     bmsAnalysisFailed = analyzed.analysisFailed;
@@ -399,24 +434,19 @@ async function parseAppendVersionInput(
     };
   }
 
+  const { password, ...inputWithoutPassword } = formInput;
+
   return {
     ok: true,
     value: {
-      file,
-      fileName: sanitizeFileName(file.name),
+      ...inputWithoutPassword,
+      fileName: sanitizeFileName(formInput.file.name),
       fileBytes,
       fileSha256,
       md5,
       bmsAnalysis,
       analysisWarnings,
       bmsAnalysisFailed,
-      parentVersionId,
-      chartName,
-      difficulty: getFormText(form, "difficulty"),
-      level: getFormText(form, "level"),
-      author,
-      progressMapText,
-      comment: getFormText(form, "comment"),
       passwordHash: await hashWithSecret(`password:${password}`, secret),
       parsedMetadata,
       metadataWarning,
@@ -458,7 +488,10 @@ async function selectParentVersion(env: Env, parentVersionId: string): Promise<P
       level,
       origin_url,
       is_hidden,
-      is_rejected
+      is_rejected,
+      collapsed_by_completion,
+      file_deleted_at,
+      allow_append
     FROM versions
     WHERE id = ?
     LIMIT 1
@@ -481,9 +514,8 @@ async function validateChartAndParent(
   } catch (error) {
     console.error("[append-version-parent-lookup] failed to read chart or parent version", {
       code: "DB_READ_FAILED",
-      chartId,
-      parentVersionId,
-      message: errorDetail(error)
+      stage: "append_parent_lookup",
+      errorType: error instanceof Error ? error.name : typeof error
     });
     return {
       ok: false,
@@ -491,7 +523,7 @@ async function validateChartAndParent(
         status: 500,
         code: "DB_READ_FAILED",
         message: "追記元の確認に失敗しました。",
-        detail: `Failed to lookup chart or parent version: ${errorDetail(error)}`
+        detail: "Failed to lookup chart or parent version."
       })
     };
   }
@@ -535,26 +567,50 @@ async function validateChartAndParent(
     };
   }
 
-  if (parent.is_hidden === 1) {
+  if (parent.is_hidden === 1 || parent.file_deleted_at !== null) {
     return {
       ok: false,
       response: await failAppendVersion(request, env, context, {
         status: 404,
         code: "PARENT_VERSION_NOT_FOUND",
         message: "追記元のバージョンが見つかりません。",
-        detail: `parentVersionId is hidden: ${parentVersionId}`
+        detail: `parentVersionId is hidden or its chart file was deleted: ${parentVersionId}`
       })
     };
   }
 
-  if (parent.is_rejected === 1) {
+  if (parent.collapsed_by_completion === 1) {
+    return {
+      ok: false,
+      response: await failAppendVersion(request, env, context, {
+        status: 404,
+        code: "PARENT_VERSION_NOT_FOUND",
+        message: "追記元のバージョンが見つかりません。",
+        detail: `parentVersionId was superseded by a completed descendant: ${parentVersionId}`
+      })
+    };
+  }
+
+  if (!hasUsableStoredProgressMap(parent.progress_map_json)) {
     return {
       ok: false,
       response: await failAppendVersion(request, env, context, {
         status: 409,
-        code: "REJECTED_CHART_CANNOT_BE_EXTENDED",
-        message: "没譜面から追記投稿はできません。",
-        detail: `parentVersionId is rejected: ${parentVersionId}`
+        code: "INVALID_PROGRESS_MAP",
+        message: "追記元の進捗マップを利用できません。別の版を選択してください。",
+        detail: `parentVersionId has no usable progressMap: ${parentVersionId}`
+      })
+    };
+  }
+
+  if (parent.allow_append !== 1) {
+    return {
+      ok: false,
+      response: await failAppendVersion(request, env, context, {
+        status: 409,
+        code: "PARENT_APPEND_DISABLED",
+        message: "この版からの追記受付は停止されています。ページを再読み込みして、別の版を選択してください。",
+        detail: `parentVersionId has allow_append=0: ${parentVersionId}`
       })
     };
   }
@@ -593,12 +649,24 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
   context.chartId = chartId;
 
   try {
-    const parsed = await parseAppendVersionInput(request, env, context, secret);
+    const parsed = await parseAppendVersionFormInput(request, env, context);
     if (!parsed.ok) {
       return parsed.response;
     }
 
-    const input = parsed.value;
+    const formInput = parsed.value;
+    const parentValidation = await validateChartAndParent(request, env, context, chartId, formInput.parentVersionId);
+    if (!parentValidation.ok) {
+      return parentValidation.response;
+    }
+
+    const { chart, parent } = parentValidation.value;
+    const materialized = await materializeAppendVersionInput(request, env, context, secret, formInput);
+    if (!materialized.ok) {
+      return materialized.response;
+    }
+
+    const input = materialized.value;
     try {
       if (await findActiveFileBan(env, input.fileSha256)) {
         return failAppendVersion(request, env, context, {
@@ -621,12 +689,6 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
         detail: "File posting protection lookup failed."
       });
     }
-    const parentValidation = await validateChartAndParent(request, env, context, chartId, input.parentVersionId);
-    if (!parentValidation.ok) {
-      return parentValidation.response;
-    }
-
-    const { chart, parent } = parentValidation.value;
     const inheritedChartName = parent.chart_name?.trim() || chart.chart_name;
     const inheritedNormalizedChartName = parent.normalized_chart_name?.trim()
       || chart.normalized_chart_name
@@ -765,6 +827,7 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
       rawProgressMap: input.progressMapText,
       versionId,
       parentProgressMapJson: parent.progress_map_json,
+      isRejected: input.isRejected,
       bmsAnalysis: input.bmsAnalysis,
       isZip: input.extension === ".zip",
       analysisFailed: input.bmsAnalysisFailed
@@ -848,6 +911,7 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
           md5,
           origin_url,
           is_rejected,
+          allow_append,
           file_id,
           file_name,
           file_size,
@@ -857,7 +921,32 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
           download_blocked,
           download_block_reason,
           completed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, 0, NULL, ?)
+        )
+        SELECT
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL,
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, 0, NULL, ?
+        WHERE EXISTS (
+          SELECT 1
+          FROM versions AS parent
+          INNER JOIN charts AS parent_chart ON parent_chart.id = parent.chart_id
+          WHERE parent.id = ?
+            AND parent.chart_id = ?
+            AND COALESCE(parent.is_hidden, 0) = 0
+            AND COALESCE(parent.collapsed_by_completion, 0) = 0
+            AND parent.file_deleted_at IS NULL
+            AND parent.progress_map_json IS NOT NULL
+            AND json_valid(parent.progress_map_json) = 1
+            AND json_extract(parent.progress_map_json, '$.schemaVersion') = 2
+            AND json_extract(parent.progress_map_json, '$.blockMode') = 'standardized_measure'
+            AND json_type(parent.progress_map_json, '$.blocks') = 'array'
+            AND json_array_length(parent.progress_map_json, '$.blocks') > 0
+            AND json_array_length(parent.progress_map_json, '$.blocks') = json_extract(parent.progress_map_json, '$.targetBlockCount')
+            AND json_type(parent.progress_map_json, '$.layers') = 'array'
+            AND parent.allow_append = 1
+            AND COALESCE(parent_chart.is_hidden, 0) = 0
+        )
       `).bind(
         versionId,
         chartId,
@@ -884,22 +973,27 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
         chart.song_subartist,
         input.md5,
         parent.origin_url,
+        input.isRejected ? 1 : 0,
+        input.allowAppend ? 1 : 0,
         fileId,
         input.fileName,
         input.file.size,
         input.fileSha256,
         r2Key,
         input.passwordHash,
-        completedAt
+        completedAt,
+        input.parentVersionId,
+        chartId
       ),
       env.DB.prepare(`
         UPDATE charts
         SET updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).bind(chartId)
+          AND EXISTS (SELECT 1 FROM versions WHERE id = ?)
+      `).bind(chartId, versionId)
     ];
 
-    if (storedProgress === 100) {
+    if (storedProgress === 100 && !input.isRejected) {
       statements.push(env.DB.prepare(`
         UPDATE versions
         SET
@@ -916,7 +1010,8 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
           AND progress BETWEEN 1 AND 99
           AND branch_path <> ?
           AND ? LIKE branch_path || '/%'
-      `).bind(versionId, chartId, branchPath, branchPath));
+          AND EXISTS (SELECT 1 FROM versions WHERE id = ?)
+      `).bind(versionId, chartId, branchPath, branchPath, versionId));
     }
 
     statements.push(env.DB.prepare(`
@@ -932,7 +1027,9 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
         result,
         error_code,
         detail
-      ) VALUES (?, 'append_version', ?, ?, ?, ?, ?, ?, 'accepted', NULL, ?)
+      )
+      SELECT ?, 'append_version', ?, ?, ?, ?, ?, ?, 'accepted', NULL, ?
+      WHERE EXISTS (SELECT 1 FROM versions WHERE id = ?)
     `).bind(
       makeId("post_log"),
       chart.song_id,
@@ -941,34 +1038,54 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
       context.ipHash,
       context.uaHash,
       input.fileSha256,
-      `Follow-up version created. parentVersionId=${input.parentVersionId}; branchPath=${branchPath}; chartNameChanged=${effectiveNormalizedChartName !== inheritedNormalizedChartName}; ${analysisDetail}; progress=${storedProgress}; progressMap=saved; warnings=${warningDetail}`
+      `Follow-up version created. parentVersionId=${input.parentVersionId}; branchPath=${branchPath}; chartNameChanged=${effectiveNormalizedChartName !== inheritedNormalizedChartName}; isRejected=${input.isRejected}; allowAppend=${input.allowAppend}; ${analysisDetail}; progress=${storedProgress}; progressMap=saved; warnings=${warningDetail}`,
+      versionId
     ));
 
     try {
-      await env.DB.batch(statements);
+      const results = await env.DB.batch(statements);
+      if (Number(results[0]?.meta?.changes ?? 0) === 0) {
+        await cleanupR2AfterDbFailure(
+          env,
+          r2Key,
+          fileId,
+          new Error("Parent version became unavailable before the conditional insert.")
+        );
+        const latestParentValidation = await validateChartAndParent(
+          request,
+          env,
+          context,
+          chartId,
+          input.parentVersionId
+        );
+        if (!latestParentValidation.ok) {
+          return latestParentValidation.response;
+        }
+        return failAppendVersion(request, env, context, {
+          status: 409,
+          code: "PARENT_APPEND_CONFLICT",
+          message: "親版の状態が更新されたため追記できませんでした。ページを再読み込みして、もう一度確認してください。",
+          detail: "The final conditional append insert did not create a version after parent revalidation passed."
+        });
+      }
     } catch (error) {
       const detail = errorDetail(error);
       const branchConflict = detail.includes("versions.chart_id") && detail.includes("versions.branch_path");
       const code = branchConflict ? "BRANCH_CREATE_FAILED" : "VERSION_INSERT_FAILED";
       console.error("[append-version-db-insert] failed to insert follow-up version", {
         code,
-        chartId,
-        parentVersionId: input.parentVersionId,
-        versionId,
-        fileId,
-        branchPath,
-        message: detail
+        stage: "append_version_insert",
+        errorType: error instanceof Error ? error.name : typeof error
       });
       await cleanupR2AfterDbFailure(env, r2Key, fileId, error);
 
       try {
-        await writePostLog(env, context, "rejected", code, `D1 append insert failed after R2 upload: ${detail}`);
+        await writePostLog(env, context, "rejected", code, "D1 append insert failed after R2 upload.");
       } catch (postLogError) {
         console.error("[post-log-write] failed to write append DB insert failure log", {
           code: "POST_LOG_WRITE_FAILED",
-          chartId,
-          versionId,
-          message: errorDetail(postLogError)
+          stage: "append_insert_failure_post_log",
+          errorType: postLogError instanceof Error ? postLogError.name : typeof postLogError
         });
       }
 
@@ -978,7 +1095,7 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
         500,
         code,
         branchConflict ? "分岐番号の作成に失敗しました。" : "追記データの保存に失敗しました。",
-        `D1 append insert failed after R2 upload: ${detail}`
+        "D1 append insert failed after R2 upload."
       );
     }
 
@@ -991,6 +1108,10 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
       chartName: effectiveChartName,
       progress: storedProgress,
       progressMap: preparedProgressMap.progressMap,
+      isRejected: input.isRejected,
+      allowAppend: input.allowAppend,
+      completed: storedProgress === 100,
+      completedAt,
       originUrl: parent.origin_url,
       fileId,
       file: {

@@ -605,15 +605,26 @@ button.difficulty-change-button {
   font-weight: 800;
 }
 
-.rejected-field {
-  margin-top: 7px;
-  max-width: 420px;
+.progress-policy-controls {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 8px;
 }
 
-.rejected-field .checkbox-copy {
-  align-items: baseline;
-  display: flex;
-  gap: 8px;
+.progress-policy-controls .checkbox-field {
+  background: var(--post-operation-bg);
+  border: 1px solid var(--post-line-soft);
+  border-radius: 5px;
+  margin: 0;
+  max-width: none;
+  padding: 9px 10px;
+}
+
+.progress-policy-controls .checkbox-copy {
+  align-items: start;
+  display: grid;
+  gap: 1px;
 }
 
 .submission-subtitle {
@@ -804,10 +815,8 @@ button.difficulty-change-button {
     display: grid;
   }
 
-  .rejected-field .checkbox-copy {
-    align-items: start;
-    display: grid;
-    gap: 1px;
+  .progress-policy-controls {
+    grid-template-columns: 1fr;
   }
 
   button.file-drop-zone,

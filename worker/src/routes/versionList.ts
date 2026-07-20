@@ -43,6 +43,7 @@ type VersionListRow = {
   comment: string | null;
   progress: number;
   is_rejected: number;
+  allow_append: number;
   withdrawn_at: string | null;
   delete_requested_at: string | null;
   download_blocked: number;
@@ -441,6 +442,7 @@ function mapVersionRow(row: VersionListRow) {
     ...comment,
     progress: row.progress,
     isRejected: row.is_rejected === 1,
+    allowAppend: row.allow_append === 1,
     withdrawn: row.withdrawn_at !== null || row.download_block_reason === "withdrawn",
     deleteRequested: row.delete_requested_at !== null || row.download_block_reason === "delete_requested",
     downloadBlocked: row.download_blocked === 1,
@@ -488,6 +490,7 @@ async function selectVersionList(env: Env, params: VersionListParams): Promise<{
       versions.comment AS comment,
       versions.progress AS progress,
       versions.is_rejected AS is_rejected,
+      versions.allow_append AS allow_append,
       versions.withdrawn_at AS withdrawn_at,
       versions.delete_requested_at AS delete_requested_at,
       versions.download_blocked AS download_blocked,

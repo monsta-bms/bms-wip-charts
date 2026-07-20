@@ -425,6 +425,16 @@
     return version?.isRejected === true || version?.is_rejected === true;
   }
 
+  function resolveAllowAppend(version) {
+    if (typeof window.BmsAppendPolicy?.resolve === "function") {
+      return window.BmsAppendPolicy.resolve(version);
+    }
+    if (typeof version?.allowAppend === "boolean") {
+      return version.allowAppend;
+    }
+    return !isRejected(version);
+  }
+
   function isCollapsedByCompletion(version) {
     return version?.collapsedByCompletion === true || version?.collapsed_by_completion === true;
   }
@@ -607,8 +617,9 @@
       return;
     }
 
-    const appendButton = actions.querySelector(".append-version-button, button.secondary:not(.intermediate-toggle-button)");
-    if (!appendButton) {
+    const appendControl = actions.querySelector(".append-policy-control")
+      || actions.querySelector(".append-version-button, button.secondary:not(.intermediate-toggle-button)");
+    if (!appendControl) {
       return;
     }
 
@@ -618,7 +629,7 @@
     locked.disabled = true;
     locked.title = title;
     locked.textContent = "追記不可";
-    appendButton.replaceWith(locked);
+    appendControl.replaceWith(locked);
   }
 
   function ensureManagementControl(row, version, chartId, displayVersionLabel) {
@@ -639,6 +650,7 @@
     button.dataset.author = String(version?.author || "未入力");
     button.dataset.withdrawn = isWithdrawn(version) ? "true" : "false";
     button.dataset.deleteRequested = isDeleteRequested(version) ? "true" : "false";
+    button.dataset.allowAppend = resolveAllowAppend(version) ? "true" : "false";
     button.dataset.createdAt = String(version?.createdAt || version?.created_at || "");
     button.dataset.within24Hours = isWithin24Hours(version) ? "true" : "false";
     button.dataset.hasDescendants = hasChildVersions(version) ? "true" : "false";

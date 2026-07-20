@@ -39,6 +39,8 @@ const progressMapPopover = document.querySelector("#progressMapPopover");
 const completeProgressButton = document.querySelector("#completeProgressButton");
 const commentInput = document.querySelector("#comment");
 const isRejectedInput = document.querySelector("#isRejected");
+const allowAppendControl = document.querySelector("#allowAppendControl");
+const allowAppendInput = document.querySelector("#allowAppend");
 const passwordInput = document.querySelector("#password");
 const saveAuthorInput = document.querySelector("#saveAuthor");
 const savePasswordInput = document.querySelector("#savePassword");
@@ -53,6 +55,7 @@ let isSubmitting = false;
 let lastValidManualDifficulty = "";
 let initialFileAnalysisRevision = 0;
 let difficultyPickerExpanded = true;
+let allowAppendTouched = false;
 
 const recentChartCount = 10;
 const maxDifficultyNumber = 25;
@@ -149,12 +152,54 @@ function escapeHtml(value) {
 
 function showError(error) {
   const code = error?.code || "REQUEST_FAILED";
-  const message = error?.message || "処理に失敗しました。";
+  const safeMessages = {
+    INVALID_ALLOW_APPEND: "追記受付の設定が正しくありません。ページを再読み込みしてください。",
+    PARENT_APPEND_DISABLED: "この版からの追記受付は停止されています。ページを再読み込みして、別の版を選択してください。",
+    PARENT_APPEND_CONFLICT: "親版の状態が更新されたため追記できませんでした。ページを再読み込みして、もう一度確認してください。"
+  };
+  const message = safeMessages[code] || error?.message || "処理に失敗しました。";
   const detail = error?.detail || "ブラウザの開発者ツールで通信状況を確認してください。";
 
-  errorBox.textContent = `code: ${code}\nmessage: ${message}\ndetail: ${detail}`;
+  errorBox.textContent = safeMessages[code]
+    ? `code: ${code}\nmessage: ${message}`
+    : `code: ${code}\nmessage: ${message}\ndetail: ${detail}`;
   errorBox.hidden = false;
 }
+
+function isRejectedVersion(version) {
+  return version?.isRejected === true
+    || version?.is_rejected === true
+    || Number(version?.isRejected ?? version?.is_rejected) === 1;
+}
+
+function resolveAllowAppend(version) {
+  if (typeof version?.allowAppend === "boolean") {
+    return version.allowAppend;
+  }
+  return !isRejectedVersion(version);
+}
+
+function setAllowAppendSuggestion(isRejected, { resetTouched = false, force = false } = {}) {
+  if (resetTouched) {
+    allowAppendTouched = false;
+  }
+  if (!allowAppendInput || (allowAppendTouched && !force)) {
+    return;
+  }
+  allowAppendInput.checked = !isRejected;
+}
+
+function resetAllowAppendForForm(isRejected = false) {
+  setAllowAppendSuggestion(Boolean(isRejected), { resetTouched: true, force: true });
+}
+
+window.BmsAppendPolicy = {
+  resolve: resolveAllowAppend,
+  resetForForm: resetAllowAppendForForm,
+  suggestForRejected: (isRejected) => setAllowAppendSuggestion(Boolean(isRejected)),
+  isTouched: () => allowAppendTouched,
+  value: () => Boolean(allowAppendInput?.checked)
+};
 
 function showTextError(message) {
   errorBox.textContent = message;
@@ -1062,6 +1107,9 @@ function setProgressMapMessage(message, state = "empty") {
   if (rejectedProgressControl) {
     rejectedProgressControl.hidden = true;
   }
+  if (allowAppendControl) {
+    allowAppendControl.hidden = true;
+  }
   completeProgressButton.hidden = true;
   progressMapGraphWrap.hidden = true;
   progressMapSummary.hidden = true;
@@ -1299,6 +1347,9 @@ function renderProgressMap() {
   }
   if (rejectedProgressControl) {
     rejectedProgressControl.hidden = false;
+  }
+  if (allowAppendControl) {
+    allowAppendControl.hidden = false;
   }
   progressMapStatus.hidden = true;
   progressMapGraphWrap.hidden = false;
@@ -2134,6 +2185,7 @@ function buildChartFormData() {
   formData.append("progress", isRejectedInput.checked ? "100" : progressInput.value.trim());
   formData.append("comment", commentInput.value.trim());
   formData.append("isRejected", isRejectedInput.checked ? "true" : "false");
+  formData.append("allowAppend", allowAppendInput?.checked ? "true" : "false");
   formData.append("password", passwordInput.value);
 
   if (progressMapPayload) {
@@ -2179,6 +2231,7 @@ async function submitChart() {
       savePassword: Boolean(savePasswordInput?.checked)
     });
     form.reset();
+    resetAllowAppendForForm(false);
     window.BmsPostPreferences?.restore?.();
     clearRequiredFieldIndicators();
     resetDifficultySelector();
@@ -2201,7 +2254,9 @@ async function submitChart() {
   } catch (error) {
     console.error("[api-chart-create] failed to create chart", {
       code: error?.code || "CHART_CREATE_FAILED",
-      message: error?.detail || error?.message || String(error)
+      stage: "submit_initial",
+      status: Number(error?.status) || null,
+      errorType: error?.name || typeof error
     });
     showError(error);
   } finally {
@@ -2284,9 +2339,21 @@ progressInput.addEventListener("input", () => {
 });
 
 isRejectedInput.addEventListener("change", () => {
+  setAllowAppendSuggestion(isRejectedInput.checked);
   applyRejectedProgressState();
   applyRejectedProgressMapState();
   clearError();
+});
+
+allowAppendInput?.addEventListener("change", (event) => {
+  if (event.isTrusted) {
+    allowAppendTouched = true;
+  }
+  clearError();
+});
+
+form.addEventListener("reset", () => {
+  queueMicrotask(() => resetAllowAppendForForm(false));
 });
 
 progressMapBlocks.addEventListener("pointerdown", (event) => {
@@ -2396,6 +2463,7 @@ form.addEventListener("submit", (event) => {
 
 resetDifficultySelector();
 resetProgressMap();
+resetAllowAppendForForm(false);
 applyRejectedProgressState();
 updateChartListControls();
 

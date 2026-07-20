@@ -268,6 +268,7 @@ versionレスポンスには以下を含める。
 - `totalChildVersionCount`: DB上の全直接子version数。`is_hidden=1`も含む。
 - `originUrl`: 初回投稿時に登録され、追記では親から継承した原曲配布URL。未登録は`null`。
 - `chartName`: そのversionの差分名。DB上の`versions.chart_name`がNULLの場合だけ起点の`charts.chart_name`へfallbackする。
+- `allowAppend`: そのversionを親にした新しい追記・分岐を受け付けるかを示すboolean。
 
 `progressImage` 例:
 
@@ -387,6 +388,7 @@ versionレスポンスには以下を含める。
       "hasComment": true,
       "progress": 60,
       "isRejected": false,
+      "allowAppend": true,
       "withdrawn": false,
       "deleteRequested": false,
       "downloadBlocked": false,
@@ -466,6 +468,7 @@ request:
 - `progressImage` optional `image/png` file
 - `comment`
 - `isRejected`
+- `allowAppend`。新PagesはcheckboxのON/OFFを `true` / `false` で必ず送る。
 - `password`
 
 主な仕様:
@@ -479,10 +482,11 @@ request:
 - `progressImage` が送られた場合、Worker側でPNG検証後にR2へ保存し、`versions.progress_image_*` へ保存する。
 - `progressImage` が送信されていない場合は従来通り投稿を成功させる。
 - `isRejected=true` の場合は、入力された `progress` と送信された `progressMap` に関係なく保存値を `progress=100` に強制する。
+- `allowAppend`は完全一致の文字列`true` / `false`だけを受け付ける。項目がない旧Pagesでは、非没譜面をtrue、没譜面をfalseとして保存する。
 - `originUrl`は空欄なら`NULL`。絶対HTTP/HTTPS URLだけを許可し、認証情報、制御文字、未エンコード空白を拒否する。fragmentを削除してqueryを維持し、正規化後も2048文字以内とする。外部URLへの通信は行わない。
 - `chartName`は前後空白を除去し、100 Unicode code point以内とする。初回投稿では`charts`の起点差分名とBASE versionの差分名snapshotへ同じ値を保存する。
 
-成功レスポンスには`chartName`を含め、保存できた場合のみ `progressImage` objectを含める。
+成功レスポンスには`chartName`, `isRejected`, `allowAppend`, `completed`, `completedAt`を含め、保存できた場合のみ `progressImage` objectを含める。
 
 ### POST /api/charts/:chartId/versions
 
@@ -506,6 +510,8 @@ request:
 - `difficulty`
 - `level`
 - `comment`
+- `isRejected`
+- `allowAppend`。新PagesはcheckboxのON/OFFを `true` / `false` で必ず送る。
 - `progressImage` optional `image/png` file
 
 主な仕様:
@@ -513,9 +519,12 @@ request:
 - 許可拡張子、サイズ上限、R2保存、SHA256/MD5計算、単体BMS解析は初回投稿と同じ方針を使う。
 - `progressMap` は必須。progressは送信値を信用せず、全layerのunionからWorker側で再計算する。
 - `progressImage` が送られた場合、初回投稿と同じR2 key規則で保存する。
-- 親versionが `is_rejected=1` の場合は `REJECTED_CHART_CANNOT_BE_EXTENDED` を返す。
-- 追記投稿で `isRejected=true` が送られた場合は `INVALID_REJECTED_FLAG_FOR_FOLLOWUP` を返す。
-- 親versionのprogressMap unionと同じ塗り範囲の場合は `PROGRESS_MAP_UNCHANGED` で拒否する。
+- 親versionは公開中、指定chart所属、`collapsed_by_completion=0`、`file_deleted_at IS NULL`、利用可能なprogressMapあり、`allow_append=1`を必須とする。`is_rejected=1`だけでは拒否しない。
+- 公開中の取り下げ、削除申請、通常DL停止は、それだけを理由に追記拒否しない。
+- `isRejected=true` の子versionも作成できる。この場合、親layerを維持し、今回versionのlayerを `rejected_auto_fill` で全塗りにして `progress=100` とする。
+- `allowAppend`は新しく作る子version自身の設定であり、親から継承しない。項目がない旧Pagesではtrueとして保存する。
+- 親の軽量確認はmultipart解析直後、ファイルhash・BMS/ZIP解析・R2保存より前に行う。D1 INSERT時にも親条件を再確認し、競合で不成立なら子versionを作成せず、先に保存した譜面R2 objectをcleanupする。
+- 未完成の親versionでprogressMap unionが同じ塗り範囲の場合は `PROGRESS_MAP_UNCHANGED` で拒否する。完成済みの親versionは、正規化後の子レイヤーに有効な区間が1件以上ある場合だけ、unionが100%のままでも追記できる。通常子の空rangesは `PROGRESS_MAP_UNCHANGED` と「追記する進捗範囲を1つ以上選択してください。」で拒否する。没譜面子は従来どおり `rejected_auto_fill` を適用する。
 - 新versionの`originUrl`は親versionのDB値をコピーする。追記リクエストからのURL入力は受け付けない。
 - 新versionの差分名は、空でない有効な送信`chartName`、親versionの`chart_name`、起点の`charts.chart_name`の順で決定する。送信値を省略した旧Pagesは親名を継承する。
 - 追記で別名を指定しても`charts.chart_name`は更新しない。新versionの`chart_name` / `normalized_chart_name`だけをsnapshotとして保存する。
@@ -531,6 +540,10 @@ request:
   "branchPath": "root/a",
   "chartName": "[ANOTHER]",
   "progress": 72,
+  "isRejected": false,
+  "allowAppend": true,
+  "completed": false,
+  "completedAt": null,
   "fileId": "file_xxx",
   "progressImage": {
     "url": "/api/progress-images/version_new",
@@ -573,6 +586,7 @@ request:
 | `CORS_ORIGIN_NOT_ALLOWED` | 403 | `ALLOWED_ORIGINS` とリクエストOriginが一致しない。 |
 | `METHOD_NOT_ALLOWED` | 405 | 許可されていないHTTPメソッド。 |
 | `INVALID_FORM` | 400 | multipart/form-dataや必須項目が不正。 |
+| `INVALID_ALLOW_APPEND` | 400 | `allowAppend`が完全一致の`true` / `false`以外。 |
 | `PASSWORD_REQUIRED` | 400 | 管理パスワードが未入力。 |
 | `INVALID_ORIGIN_URL` | 400 | 原曲配布URLが絶対HTTP/HTTPS URLではない、認証情報・制御文字・未エンコード空白を含むなど不正。 |
 | `ORIGIN_URL_TOO_LONG` | 400 | 原曲配布URLが正規化前または正規化後に2048文字を超える。 |
@@ -581,7 +595,7 @@ request:
 | `INVALID_PROGRESS_MAP` | 400 | `progressMap` がJSONとして不正、または必須構造を満たさない。 |
 | `PROGRESS_MAP_OUT_OF_RANGE` | 400 | `progressMap.layers[].ranges` がブロック範囲外を指している。 |
 | `PROGRESS_MAP_BLOCK_COUNT_MISMATCH` | 400 | `progressMap.targetBlockCount` と `blocks.length` が一致しない。 |
-| `PROGRESS_MAP_UNCHANGED` | 409 | 追記投稿の塗り範囲が親versionと同じ。 |
+| `PROGRESS_MAP_UNCHANGED` | 409 | 追記投稿の塗り範囲が親versionと同じ、または完成済み親への通常子で有効な新規rangeがない。 |
 | `INVALID_PROGRESS_IMAGE` | 400 | `progressImage` がPNGファイルではない、または空。 |
 | `PROGRESS_IMAGE_TOO_LARGE` | 400 | `progressImage` が1MBを超えている。 |
 | `PROGRESS_IMAGE_UPLOAD_FAILED` | 500 | `progressImage` のR2保存またはDB metadata保存に失敗。 |
@@ -595,6 +609,8 @@ request:
 | `CHART_NOT_FOUND` | 404 | 追記対象chartが存在しない、または非表示。 |
 | `PARENT_VERSION_NOT_FOUND` | 404 | 追記元versionが存在しない、または非表示。 |
 | `PARENT_VERSION_CHART_MISMATCH` | 409 | 追記元versionが指定chartに属していない。 |
+| `PARENT_APPEND_DISABLED` | 409 | 追記元versionの `allow_append=0` により追記・分岐受付が停止中。 |
+| `PARENT_APPEND_CONFLICT` | 409 | 条件付きINSERTが0件となり、その後の親version再検証はすべて通過した。親状態または保存条件の競合として再読込を案内する。 |
 | `TITLE_ARTIST_MISMATCH` | 409 | 追記ファイルの `#TITLE` / `#ARTIST` が追記先songと一致しない。 |
 | `BRANCH_CREATE_FAILED` | 500 | 分岐suffix/branch_pathの作成またはDB unique競合処理に失敗。 |
 | `VERSION_INSERT_FAILED` | 500 | 追記versionのD1保存に失敗。 |
@@ -604,8 +620,6 @@ request:
 | `FILE_DOWNLOAD_BLOCKED` | 403 | versionのDLがブロックされている。 |
 | `R2_FILE_NOT_FOUND` | 404 | D1 metadataはあるが譜面R2 objectがない。 |
 | `R2_DOWNLOAD_FAILED` | 500 | R2からの取得に失敗。 |
-| `INVALID_REJECTED_FLAG_FOR_FOLLOWUP` | 400 | 追記投稿では没譜面チェックを指定できない。 |
-| `REJECTED_CHART_CANNOT_BE_EXTENDED` | 409 | 没譜面versionから追記投稿しようとした。 |
 | `UNKNOWN_ERROR` | 500 | 想定外エラー。 |
 | `INTERNAL_ERROR` | 500 | 未処理例外。 |
 
@@ -1125,6 +1139,7 @@ INVALID_EXTENSION
 FILE_TOO_LARGE
 INVALID_PROGRESS
 INVALID_REJECTED_FLAG_FOR_FOLLOWUP
+INVALID_ALLOW_APPEND
 INVALID_PROGRESS_MAP
 PROGRESS_MAP_OUT_OF_RANGE
 PROGRESS_MAP_BLOCK_COUNT_MISMATCH
@@ -1133,12 +1148,13 @@ CHART_NOT_FOUND
 PARENT_VERSION_NOT_FOUND
 PARENT_VERSION_CHART_MISMATCH
 REJECTED_CHART_CANNOT_BE_EXTENDED
+PARENT_APPEND_DISABLED
 TITLE_ARTIST_MISMATCH
 DUPLICATE_FILE
 CHART_ALREADY_EXISTS
 ```
 
-`POSTING_BLOCKED`, `POST_RATE_LIMITED`, `BAN_CHECK_FAILED`, `POST_RATE_LIMIT_CHECK_FAILED`およびサーバー起因エラーは数えない。
+`INVALID_REJECTED_FLAG_FOR_FOLLOWUP` と `REJECTED_CHART_CANNOT_BE_EXTENDED` は、deploy直前の旧Workerが記録したログをrolling windowへ含めるための互換コードであり、新APIレスポンスでは返さない。`PARENT_APPEND_CONFLICT`, `POSTING_BLOCKED`, `POST_RATE_LIMITED`, `BAN_CHECK_FAILED`, `POST_RATE_LIMIT_CHECK_FAILED`およびサーバー起因エラーは数えない。
 
 上限超過レスポンス:
 

@@ -378,7 +378,7 @@ version単位の独立投稿一覧APIとフィルターを確認する:
 - `withdrawn_at`があっても追記投稿できること。
 - `delete_requested_at`があっても追記投稿できること。
 - `download_blocked=1`だけでは追記拒否されないこと。
-- `is_hidden=1`または`is_rejected=1`では追記できないこと。
+- `is_hidden=1`では追記できず、`is_rejected=1`は`allowAppend`に従うこと。
 - 既存の別`download_block_reason`が取り消し/削除操作で上書きされないこと。
 - 同一versionのpending申請重複が`DELETE_REQUEST_ALREADY_EXISTS`になること。
 - `delete_requests.message`にAPI入力のreasonが保存され、`created_at`が申請日時になること。
@@ -581,7 +581,7 @@ WHERE file_deleted_at IS NOT NULL;
 - フィルタOFF時の中間履歴折り畳み挙動が壊れていないこと。
 - DL不可versionもお気に入りできること。
 - 完成versionもお気に入りできること。
-- isRejected=true のversionもお気に入りでき、追記不可表示など既存状態は維持されること。
+- isRejected=true のversionもお気に入りでき、追記操作は`allowAppend`に従うこと。
 - ★buttonがDL/追記投稿ボタンと干渉しないこと。
 - 難易度★とお気に入り★が色、位置、サイズで視覚的に区別できること。
 - ツリー表示が崩れないこと。
@@ -1060,3 +1060,50 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 320/390/760/1024/1366/1920pxでヘッダー、テーマselect、投稿フォーム、ツリー、一覧、pagination、dialog、guide、changelog、adminに横スクロールや重なりがないこと。
 - 初回投稿、追記投稿、ファイルdrop、progressMap塗り、miniView、PNG生成、管理操作、検索、お気に入り、追加読込、直接リンク、難易度表に回帰がないこと。
 - Pages JavaScript構文検査、HTML ID重複検査、CSS直接色監査、Worker typecheck、Worker dry-run、`git diff --check`が成功すること。
+
+## APPEND-POLICY-15
+
+制作状態とversion単位の追記受付を分離したことを確認する:
+
+- 隔離ローカルD1へ`0001`から`0006_append_policy.sql`まで順に適用でき、既存migrationが変更・再番号付けされていないこと。
+- `versions.allow_append`が`INTEGER NOT NULL DEFAULT 1 CHECK (allow_append IN (0, 1))`であり、0/1以外を拒否すること。
+- migration前の`is_rejected=1`だけが`allow_append=0`へbackfillされ、未完成、完成、取り下げ中、削除申請中、通常DL停止の既存versionは1になること。
+- migration後のINSERTで`allow_append`省略時に1が保存されること。
+- 初回投稿と追記投稿で、未完成/完成/没譜面それぞれの`allowAppend=true/false`を保存できること。
+- `isRejected=true`は初回・追記ともprogress=100となり、指定した`allowAppend`をWorkerが上書きしないこと。
+- 完成済み親への通常子で`ranges=[]`は`PROGRESS_MAP_UNCHANGED`となり、「追記する進捗範囲を1つ以上選択してください。」と表示されること。
+- 完成済み親への通常子は、正規化後の子レイヤーに有効なrangeが1件以上あればunionが100%のままでも追記できること。
+- 完成済み親への通常子で逆転、範囲外、不正形式のrangeだけを送った場合は既存の進捗mapエラーで拒否されること。現行rangeは両端を含むブロック番号のため`[n,n]`は1ブロックの有効rangeとして維持すること。
+- 完成済み親への没譜面子は空rangesでも`rejected_auto_fill`で全区間へ正規化され、progress=100で受付されること。
+- 未完成親の無変更unionは従来どおり`PROGRESS_MAP_UNCHANGED`になり、既存の進捗検証が変わらないこと。
+- `allowAppend`は完全一致の`true`/`false`だけを受け付け、`1`、`0`、空文字、大文字違い、任意文字列は`INVALID_ALLOW_APPEND`になること。
+- `allowAppend`欠落時は、初回の非没譜面がtrue、初回の没譜面がfalse、追記で作る子versionがtrueになること。
+- 親versionが同じchartに属する公開versionで、非中間履歴、file未削除、利用可能なprogressMapあり、`allow_append=1`の場合だけ追記できること。
+- 没譜面の親でも`allow_append=1`なら追記でき、`allow_append=0`なら直接APIを呼んでも`PARENT_APPEND_DISABLED`の409になること。
+- 公開中の取り下げ、削除申請、通常DL停止versionは`allow_append`に従い、これらの状態だけでは追記を拒否しないこと。
+- 親なし、別chart、非表示、中間履歴、file削除済み、progressMap利用不可は、`allow_append`とは別の既存構造エラーになること。
+- multipart前のBAN、投稿レート制限、Turnstileが従来どおり先に実行され、親の軽量検証はmultipart後かつfile hash/BMS解析/R2保存前に行われること。
+- 最初の親確認後に`allow_append=0`へ変わった場合、条件付きINSERTが子versionを作らず、`PARENT_APPEND_DISABLED`を返すこと。
+- 条件付きINSERTが0件でも親version再検証がすべて通る場合だけ、409 `PARENT_APPEND_CONFLICT`と再読込を促す安全な文言を返すこと。
+- 条件付きINSERT後の再検証でchart・親version・所属chart・progressMap・中間履歴・`allow_append`の問題が判明した場合は、それぞれの既存エラー分類を維持すること。
+- `PARENT_APPEND_CONFLICT`はclient rejected投稿レート制限へ数えず、旧`INVALID_REJECTED_FLAG_FOR_FOLLOWUP`と`REJECTED_CHART_CANNOT_BE_EXTENDED`は新コードとともにrolling window集計へ残ること。
+- 投稿レート制限の回数、10分・1時間・24時間の時間窓、IP hash識別、BAN・レート制限の判定順序が変わらないこと。
+- 条件付きINSERT失敗時に保存済み譜面R2 objectが削除され、子version、孤立object、raw R2 keyログが残らないこと。
+- 条件付きINSERT失敗後のR2 cleanupに失敗しても元のHTTP分類を上書きせず、`R2_ORPHAN_FILE`をadmin_logsへ記録すること。
+- 既存子versionがある親を追記停止にしても既存子と版ツリーは変化せず、新規追記だけが止まること。
+- `GET /api/charts`、chart詳細、`GET /api/versions`、`POST /api/versions/query`、初回・追記成功レスポンスのversion情報がbooleanの`allowAppend`を返すこと。
+- RC★/RC★★のheader/data JSONへ`allowAppend`が追加されず、掲載条件、ETag、キャッシュ規則が変わらないこと。
+- 旧APIレスポンスで`allowAppend`欠落時、Pagesは非没譜面をtrue、没譜面をfalseとして表示すること。
+- 初回フォームは未完成/完成でON、没譜面でOFFを提案し、追記フォームはONで開始すること。
+- 利用者がcheckboxを触る前だけ制作状態に応じて提案値が変わり、一度触った後は制作状態変更で上書きされないこと。
+- フォーム初期化、明示reset、投稿成功、追記対象切替、追記キャンセルで値とtouched状態が正しく初期化されること。
+- 初回・追記のFormDataがcheckbox OFFでも`allowAppend=false`を送信し、投稿失敗後は現在値を維持すること。
+- `allowAppend`がdirty/beforeunload判定に含まれ、作者・パスワード・テーマなどのlocalStorageへ保存されないこと。
+- `allowAppend=true`の未完成・完成・没譜面に追記操作があり、完成非没譜面だけ既存確認dialogを表示すること。
+- `allowAppend=false`はdisabledな`追記受付停止`と常時読める理由を表示し、構造上の追記不可表示と区別できること。
+- 投稿管理dialogに`追記受付：許可/停止`が読み取り専用で表示され、編集UI・保存API・新しい`post_logs.action`がないこと。
+- 390/760/1366/1920pxとwhite/default/darkでcheckbox、補足文、追記停止表示が読め、横overflowや既存見出しパネル崩れがないこと。
+- テーマ切替でcheckbox値、touched/dirty状態、選択file、追記対象、フォーム開閉状態が変化しないこと。
+- `list.html`の表示・検索・ページングに追記可否UIが追加されず、新しいAPIフィールドでも既存表示が壊れないこと。
+- 通常投稿、通常追記、branch採番、ツリー展開/折り畳み、追加読込、検索、ページング、お気に入り、DL、管理操作、取り下げ、削除申請、Turnstile、rate limit、進捗Canvas、miniView、生成PNGに回帰がないこと。
+- Pages JavaScript構文検査、HTML ID重複検査、Worker typecheck、Worker dry-run、`git diff --check`が成功すること。

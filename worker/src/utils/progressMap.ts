@@ -64,6 +64,7 @@ type PrepareAppendProgressMapParams = {
   rawProgressMap: string;
   versionId: string;
   parentProgressMapJson: string | null;
+  isRejected: boolean;
   bmsAnalysis: BmsAnalysis | null;
   isZip?: boolean;
   analysisFailed?: boolean;
@@ -79,7 +80,12 @@ type ProgressMapLayout = {
 
 type NormalizeLayoutResult = ProgressMapLayout | { ok: false; failure: ProgressMapFailure };
 
-function failure(code: string, detail: string, status = 400): ProgressMapFailure {
+function failure(
+  code: string,
+  detail: string,
+  status = 400,
+  messageOverride?: string
+): ProgressMapFailure {
   const messages: Record<string, string> = {
     INVALID_PROGRESS_MAP: "進捗マップ情報が不正です。",
     PROGRESS_MAP_OUT_OF_RANGE: "進捗マップの範囲が不正です。",
@@ -92,7 +98,7 @@ function failure(code: string, detail: string, status = 400): ProgressMapFailure
   return {
     status,
     code,
-    message: messages[code] ?? "進捗マップ情報が不正です。",
+    message: messageOverride ?? messages[code] ?? "進捗マップ情報が不正です。",
     detail
   };
 }
@@ -629,12 +635,20 @@ function buildStoredProgressMapSignature(rawProgressMap: string | null): string 
     return null;
   }
 
+  if (layout.blocks.length === 0 || !Array.isArray(parsed.value.layers)) {
+    return null;
+  }
+
   const painted = collectPaintedIndexes(parsed.value, layout.targetBlockCount);
   if (!painted.ok) {
     return null;
   }
 
   return buildPaintedSignature(layout.targetBlockCount, painted.indexes);
+}
+
+export function hasUsableStoredProgressMap(rawProgressMap: string | null): boolean {
+  return buildStoredProgressMapSignature(rawProgressMap) !== null;
 }
 
 function normalizeClientProgressMap(
@@ -685,7 +699,8 @@ function normalizeAppendProgressMap(
   versionId: string,
   parentProgressMapJson: string | null,
   bmsAnalysis: BmsAnalysis | null,
-  isZip: boolean
+  isZip: boolean,
+  isRejected: boolean
 ): ProgressMapResult {
   const parsed = parseProgressMap(rawProgressMap);
   if (!parsed.ok) {
@@ -733,13 +748,77 @@ function normalizeAppendProgressMap(
     return normalizedLayers;
   }
 
+  if (isRejected) {
+    const childLayerIndex = normalizedLayers.layers.length - 1;
+    const childLayer = normalizedLayers.layers[childLayerIndex];
+    if (!childLayer) {
+      return {
+        ok: false,
+        failure: failure("INVALID_PROGRESS_MAP", "A follow-up progressMap must include the child version layer.")
+      };
+    }
+
+    const fullRanges: Array<[number, number]> = layout.targetBlockCount > 0
+      ? [[0, layout.targetBlockCount - 1]]
+      : [];
+    const layers = normalizedLayers.layers.slice();
+    layers[childLayerIndex] = {
+      ...childLayer,
+      versionId,
+      kind: "rejected_auto_fill",
+      ranges: fullRanges
+    };
+
+    const progressMap: ProgressMapJson = {
+      schemaVersion: 2,
+      blockMode: "standardized_measure",
+      firstMeasure: layout.firstMeasure,
+      lastMeasure: layout.lastMeasure,
+      targetBlockCount: layout.targetBlockCount,
+      blocks: layout.blocks,
+      layers,
+      progress: 100
+    };
+
+    return {
+      ok: true,
+      progress: 100,
+      progressMap,
+      progressMapJson: JSON.stringify(progressMap)
+    };
+  }
+
   const progress = layout.targetBlockCount === 0
     ? 0
     : Math.round((normalizedLayers.paintedIndexes.size / layout.targetBlockCount) * 100);
   const nextSignature = buildPaintedSignature(layout.targetBlockCount, normalizedLayers.paintedIndexes);
   const parentSignature = buildStoredProgressMapSignature(parentProgressMapJson);
+  const completeSignature = layout.targetBlockCount > 0
+    ? `${layout.targetBlockCount}:0-${layout.targetBlockCount - 1}`
+    : null;
+  const childLayer = normalizedLayers.layers[normalizedLayers.layers.length - 1];
 
-  if (parentSignature !== null && parentSignature === nextSignature) {
+  if (
+    parentSignature !== null
+    && parentSignature === completeSignature
+    && (!childLayer || childLayer.ranges.length === 0)
+  ) {
+    return {
+      ok: false,
+      failure: failure(
+        "PROGRESS_MAP_UNCHANGED",
+        "A follow-up from a completed parent must include at least one normalized child range.",
+        409,
+        "追記する進捗範囲を1つ以上選択してください。"
+      )
+    };
+  }
+
+  if (
+    parentSignature !== null
+    && parentSignature === nextSignature
+    && parentSignature !== completeSignature
+  ) {
     return {
       ok: false,
       failure: failure(
@@ -871,6 +950,7 @@ export function prepareAppendProgressMap(params: PrepareAppendProgressMapParams)
     params.versionId,
     params.parentProgressMapJson,
     params.bmsAnalysis,
-    params.isZip === true
+    params.isZip === true,
+    params.isRejected
   );
 }

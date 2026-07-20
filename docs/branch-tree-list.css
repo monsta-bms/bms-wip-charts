@@ -488,8 +488,28 @@
   width: 100%;
 }
 
-.version-tree-row .append-disabled-note {
+.version-tree-row .append-disabled-note:not(.append-policy-disabled-note) {
   display: none;
+}
+
+.append-policy-control {
+  align-items: end;
+  display: grid;
+  gap: 3px;
+  justify-items: end;
+  max-width: 180px;
+  min-width: 0;
+}
+
+.append-policy-control .append-policy-disabled-button {
+  margin: 0;
+}
+
+.append-policy-control .append-policy-disabled-note {
+  display: block;
+  max-width: 180px;
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 
 .version-actions .secondary,
@@ -599,6 +619,16 @@
   .version-actions,
   .actions-cell {
     justify-content: flex-start;
+  }
+
+  .append-policy-control {
+    justify-items: start;
+    max-width: 100%;
+  }
+
+  .append-policy-control .append-policy-disabled-note {
+    max-width: 100%;
+    text-align: left;
   }
 }
 
