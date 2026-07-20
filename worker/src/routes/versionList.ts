@@ -42,6 +42,7 @@ type VersionListRow = {
   author: string;
   comment: string | null;
   progress: number;
+  completed_at: string | null;
   is_rejected: number;
   allow_append: number;
   withdrawn_at: string | null;
@@ -337,9 +338,9 @@ function buildVersionFilter(params: VersionListParams): { sql: string; bindings:
   const bindings: Array<string | number> = [];
 
   if (params.status === "incomplete") {
-    conditions.push("versions.progress < 100", "versions.is_rejected = 0");
+    conditions.push("versions.completed_at IS NULL", "versions.is_rejected = 0");
   } else if (params.status === "complete") {
-    conditions.push("versions.progress = 100", "versions.is_rejected = 0");
+    conditions.push("versions.completed_at IS NOT NULL", "versions.is_rejected = 0");
   } else if (params.status === "rejected") {
     conditions.push("versions.is_rejected = 1");
   }
@@ -441,6 +442,8 @@ function mapVersionRow(row: VersionListRow) {
     author: row.author,
     ...comment,
     progress: row.progress,
+    completed: row.completed_at !== null && row.is_rejected !== 1,
+    completedAt: row.completed_at,
     isRejected: row.is_rejected === 1,
     allowAppend: row.allow_append === 1,
     withdrawn: row.withdrawn_at !== null || row.download_block_reason === "withdrawn",
@@ -489,6 +492,7 @@ async function selectVersionList(env: Env, params: VersionListParams): Promise<{
       versions.author AS author,
       versions.comment AS comment,
       versions.progress AS progress,
+      versions.completed_at AS completed_at,
       versions.is_rejected AS is_rejected,
       versions.allow_append AS allow_append,
       versions.withdrawn_at AS withdrawn_at,

@@ -28,7 +28,7 @@
 
 差分情報は「譜面情報」と「作者情報」へ分ける。譜面情報には想定難易度と差分名、作者情報には差分作者を置き、「一覧に表示する作者名です。別名義でも構いません。」と補足する。PCではおおむね68:32の2領域、760px以下では譜面情報、作者情報の順に1列表示する。既存の難易度縮小・変更・手入力・reset・追記初期値・validationは維持する。
 
-進捗度inputと完成版操作は密度グラフ・進捗レール・小節ラベルの直下へ置き、没譜面はその次の行に置く。完成版ボタンは未解析、100%、没譜面で非表示、0～79%でdisabled、80～99%で有効とする既存条件を変更しない。進捗概要、block塗り、drag、親layer、miniView、PNG生成も変更しない。
+進捗度inputは密度グラフ・進捗レール・小節ラベルの直下へ置き、完成版・没譜面・追記受付はその下の投稿状態パネルへまとめる。完成版ボタンは常時表示し、初回投稿では常にdisabled、追記投稿では進捗80%未満をdisabled、80%以上の未指定時だけ有効とする。進捗概要、block塗り、drag、親layer、miniView、PNG生成は変更しない。
 
 フォーム全体は白、入力セクションは`#f3f7f6`、ファイル・進捗の操作面は`#eaf2ef`、inputとtextareaは白として明度差を付ける。左アクセント線は`#9ebbb3`を使用し、全周枠やshadowを増やさない。
 
@@ -38,7 +38,7 @@
 
 想定難易度は未選択または手入力中のみピッカーを展開し、数字・記号の選択直後、手入力確定後、追記元からの初期設定後は「選択値・変更」の要約表示へ縮小する。変更操作で現在値を維持して再展開し、難易度のvalidationエラーでは自動展開する。初回・追記投稿成功、追記キャンセル、form resetでは未選択の展開状態へ戻す。hidden inputと送信値は変更しない。
 
-差分情報は、難易度ピッカー展開時は難易度を左列2行、差分名と作者を右列へ配置し、要約時は3列へ圧縮する。進捗度は進捗マップ上部へ88px幅のnumber inputと`%`単位で表示し、完成版操作を同じ操作列へ置く。没譜面はグラフ下へ置き、進捗概要は`ノーツ / 区間 / 小節`の日本語表示とする。
+差分情報は、難易度ピッカー展開時は難易度を左列2行、差分名と作者を右列へ配置し、要約時は3列へ圧縮する。進捗度は進捗マップ上部へ88px幅のnumber inputと`%`単位で表示する。完成版操作は没譜面・追記受付とともに進捗グラフ下の投稿状態パネルへ置き、進捗概要は`ノーツ / 区間 / 小節`の日本語表示とする。
 
 フォーム最下部はPCでコメント約60%、管理レール約40%の2列とする。管理レールは管理パスワード、保存設定、Turnstile、追記キャンセル、投稿操作の順とし、920px以下はコメントから投稿操作まで1列へ積む。セクションは左アクセントだけを残して全周枠と背景差を弱める。localStorage、パスワード保存時機、validation、エラー表示、FormData、Worker APIは変更しない。
 
@@ -48,7 +48,7 @@
 
 ファイル欄は空、ドラッグ中、解析中、解析済み、エラーの状態を持つ。解析済みでは外側ファイル名、ZIPの場合は既存ローカル解析が返した内部譜面名、ブロック数を表示する。ZIPを表示用に再展開しない。変更・解除・初回/追記切替・追記キャンセル・投稿成功後resetでは、既存revision管理とともに古いファイル表示、進捗マップ、ローカルminiViewを破棄する。
 
-進捗欄はファイル未選択時に案内文だけを表示し、解析中は短い状態文、解析成功後だけ密度グラフ、編集ブロック、進捗度、没譜面、完成操作を表示する。完成操作は進捗80%未満でdisabled、80〜99%で有効、100%または没譜面では非表示とする。公開フォーム内の進捗PNG確認UIは表示しないが、`BmsProgressImage`のCanvas/Blob/進捗マップ生成関数とFormDataへの`progressImage`添付は維持する。
+進捗欄はファイル未選択時に案内文だけを表示し、解析中は短い状態文、解析成功後だけ密度グラフ、編集ブロック、進捗度と投稿状態パネルを表示する。完成操作はパネル内へ常時表示し、初回投稿、没譜面、追記80%未満ではdisabled、追記80〜100%では未指定時に有効とする。公開フォーム内の進捗PNG確認UIは表示しないが、`BmsProgressImage`のCanvas/Blob/進捗マップ生成関数とFormDataへの`progressImage`添付は維持する。
 
 フォームは「譜面ファイル」「楽曲情報」「差分情報」「進捗」「管理・コメント・投稿」の5区分とする。`originUrl`は楽曲情報へ置き、追記時のWorker継承、ID/name、送信仕様は変えない。ネイティブfile inputはFormData、required、既存イベントのためDOMに保持し、見える操作はキーボード対応buttonのドロップゾーンへ集約する。
 
@@ -194,14 +194,14 @@ BMS差分をログイン不要で共有できる1ページサイトを作る。�
 - 親versionの `difficulty` / `level` を想定難易度UIへ初期反映し、編集可能にする。
 - 親versionの `progressMap.layers` を読み取り専用の親layerとして表示する。
 - 今回追記分は最後の `followup` layerとして編集する。
-- API送信時は `chartName`, `isRejected`, `allowAppend` を送り、`title`, `artist` は送らない。
+- API送信時は `chartName`, `isRejected=false`, `allowAppend` を送り、`title`, `artist` は送らない。
 
 追記モードでは以下を禁止する。
 
 - `progressMap` を持たない古いversionからの画面追記
 - 今回追記分のlayerが空のままの送信
 
-没譜面versionも `allowAppend=true` なら追記元にでき、追記で作成するversion自身も没譜面にできる。通常の完成versionだけは追記開始時の確認dialogを維持し、没譜面からの追記では完成確認を出さない。
+没譜面versionも `allowAppend=true` なら追記元にできるが、追記で作成するversion自身は没譜面にできない。通常の完成versionだけは追記開始時の確認dialogを維持し、没譜面からの追記では完成確認を出さない。
 
 完成versionに置き換えられた中間履歴versionでは、一覧UI上で追記投稿ボタンをdisabledまたは非表示にし、`追記不可` として扱う。
 
@@ -275,10 +275,12 @@ round(塗られた標準化ブロック数のunion / 標準化ブロック総数
 
 ### 完成版にするボタン
 
-- `progress >= 80` かつ `progress < 100` で有効化する。
+- 初回投稿では常にdisabledとし、初回通常版を完成版として保存しない。
+- 追記投稿では `progress >= 80` かつ `progress <= 100` の未指定時に有効化する。
 - 押すと未塗りブロックをすべて塗る。
 - `progress=100` にする。
-- 追記投稿では今回追記layerに未塗り分を追加し、`progress=100` として送信する。
+- 追記投稿では今回追記layerを `completion_fill` とし、押下直前のrangesを検証用 `completionBaseRanges` として送る。Workerは親layerとのunionが80%以上であることを検証し、保存するprogressMapから一時検証値を除外する。
+- 完成版指定を経由せず、未完成親から送られた `progress=100` は完成版として保存しない。
 
 ### 没譜面との連動
 
@@ -288,34 +290,29 @@ round(塗られた標準化ブロック数のunion / 標準化ブロック総数
 - 進捗マップは全塗り扱い
 - 進捗度欄は100固定
 - 進捗マップの標準化ブロックは編集不可
-- Worker側で今回versionの `rejected_auto_fill` layerを全塗りにする。追記では親layerを維持する。
+- Worker側で今回versionの `rejected_auto_fill` layerを全塗りにする。
 
-没譜面チェックは初回投稿と追記投稿の両方で有効とする。
+没譜面チェックは初回投稿だけで有効とする。追記投稿ではdisabled・未選択に固定し、改ざんされた `isRejected=true` はWorkerが拒否する。
 
 ### 制作状態と追記受付
 
-制作状態（未完成・完成・没譜面）と、そのversionを親にした新しい追記・分岐の受付可否は独立して保存する。`versions.allow_append` はversion単位のbooleanで、DBでは `0/1`、公開APIでは `allowAppend` のbooleanとして扱う。
+`versions.allow_append` はversion単位のbooleanで、DBでは `0/1`、公開APIでは `allowAppend` のbooleanとして扱う。利用者がON/OFFできるのは、初回投稿の没譜面と、追記投稿で明示的に完成版指定した場合だけである。初回通常版と追記の未完成版は `allowAppend=true` に固定し、falseはWorkerが `APPEND_POLICY_LOCKED_FOR_INCOMPLETE` で拒否する。追記投稿の没譜面は `FOLLOWUP_REJECTED_NOT_ALLOWED`、初回通常版の完成状態は `INITIAL_COMPLETION_NOT_ALLOWED` で拒否する。
 
-- 未完成・追記可
-- 未完成・追記停止
-- 完成・追記可
-- 完成・追記停止
-- 没譜面・追記可
-- 没譜面・追記停止
+投稿フォームの進捗欄には「投稿状態」パネルを置き、完成版・没譜面・追記受付を同じ3列構造で表示する。初回の完成版ボタンと追記80%未満の完成版ボタン、追記時の没譜面、未完成時の追記受付には実際のdisabled属性、`aria-disabled`、状態バッジ、常時表示の理由文を付ける。
 
-初回投稿フォームを新しく開いた時の提案値は未完成・完成でON、没譜面でOFFとする。追記フォームはONで開始する。利用者が追記受付checkboxを一度操作した後は、同じフォーム操作中に没譜面を切り替えても値を自動上書きしない。form reset、投稿成功、追記対象変更、追記キャンセルでは操作済み状態を破棄して提案値へ戻す。追記受付設定はlocalStorageへ保存しない。
+初回没譜面を初めて選択した時の追記受付はOFF、追記完成版を初めて指定した時はONを初期値とする。同じフォーム内で状態を往復した場合は利用者の選択を保持し、form reset、投稿成功、追記対象変更、追記キャンセルでは破棄する。追記受付設定はlocalStorageへ保存しない。
 
-初回・追記のFormDataはcheckbox OFFでも `allowAppend=false` を明示送信する。Workerは完全一致の文字列 `true` / `false` だけを受け付ける。旧Pagesから項目が欠ける場合、初回は非没譜面ならtrue・没譜面ならfalse、追記で作る子versionはtrueへfallbackし、その値を明示的にDBへ保存する。
+初回・追記のFormDataはdisabled checkboxにも依存せず、最終判定した `allowAppend=true/false` を必ず明示送信する。Workerは完全一致の文字列 `true` / `false` だけを受け付ける。旧Pagesから項目が欠ける場合、初回は非没譜面ならtrue・没譜面ならfalse、追記で作る子versionはtrueへfallbackするが、上記の禁止組み合わせはfallback後も再検証する。
 
 migration `0006_append_policy.sql` は `allow_append INTEGER NOT NULL DEFAULT 1 CHECK (allow_append IN (0, 1))` を追加し、既存の没譜面だけを0へbackfillする。既存の未完成・完成・取り下げ中・削除申請中・通常DL停止versionは1を維持する。
 
 本番反映順はmigration、Worker、Pagesとする。migration適用後に新Workerを先行させても、旧Pagesから欠落する`allowAppend`は上記fallbackで保存できる。新Pagesは旧APIレスポンスで`allowAppend`が欠落した場合、非没譜面をtrue、没譜面をfalseとして表示する。
 
-追記元は、対象chartに属する公開versionであり、完成版に置き換え済みの中間履歴ではなく、譜面R2ファイルが未削除で、利用可能なprogressMapを持ち、`allow_append=1`であることを必須とする。`is_rejected`、公開中の取り下げ、削除申請、通常DL停止だけでは追記を禁止しない。完成済み親への通常追記は、正規化後の新規子レイヤーに有効なrangeが1件以上ある場合だけ、完成union一致の例外を適用する。没譜面子は空rangesでも従来どおり `rejected_auto_fill` で全区間へ正規化する。未完成親の無変更union判定は変更しない。
+追記元は、対象chartに属する公開versionであり、完成版に置き換え済みの中間履歴ではなく、譜面R2ファイルが未削除で、利用可能なprogressMapを持ち、`allow_append=1`であることを必須とする。`is_rejected`、公開中の取り下げ、削除申請、通常DL停止だけでは追記を禁止しない。完成済み親への通常追記は、正規化後の新規子レイヤーに有効なrangeが1件以上ある場合だけ、完成union一致の例外を適用する。追記子の没譜面化は認めない。未完成親の無変更union判定は変更しない。
 
 Workerはmultipart解析後かつファイルhash・BMS解析より前に親を確認し、R2保存後のD1 INSERTでも同じ条件を再確認する。最終確認で失敗した場合は子versionを作らず、保存済みR2 objectを既存cleanup処理で削除する。条件付きINSERTが0件となった後の再検証で具体的な親エラーが判明した場合はその既存分類を返し、すべて通過した場合だけ409 `PARENT_APPEND_CONFLICT` として再読込を案内する。この競合コードは利用者入力起因の投稿失敗レート制限へ含めない。旧Workerが記録した `INVALID_REJECTED_FLAG_FOR_FOLLOWUP` と `REJECTED_CHART_CANNOT_BE_EXTENDED` はrolling window互換のため集計対象へ残すが、新APIからは返さない。
 
-一覧では `allowAppend=false` のversionに、disabledな `追記受付停止` と理由文を常時表示する。progressMap欠落、中間履歴、非表示、ファイル削除などの構造上の追記不可理由とは混同しない。投稿管理dialogには `追記受付：許可/停止` を読み取り専用で表示し、このPhaseでは投稿後の変更APIや編集UIを設けない。独立一覧 `list.html` には追記受付表示やフィルターを追加しない。
+一覧では `allowAppend=false` のversion情報側に `追記受付停止` バッジと読み上げ可能な理由を置き、操作列は `DL / 追記停止 / …` の短い横並びにする。progressMap欠落、中間履歴、非表示、ファイル削除などの構造上の追記不可理由とは混同しない。投稿管理dialogには `追記受付：許可/停止` を読み取り専用で表示し、このPhaseでは投稿後の変更APIや編集UIを設けない。独立一覧 `list.html` には追記受付表示やフィルターを追加しない。
 
 ## progress_map_json
 

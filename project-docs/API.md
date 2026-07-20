@@ -361,8 +361,8 @@ versionレスポンスには以下を含める。
 
 状態条件:
 
-- `incomplete`: `progress < 100 AND is_rejected = 0`
-- `complete`: `progress = 100 AND is_rejected = 0`
+- `incomplete`: `completed_at IS NULL AND is_rejected = 0`
+- `complete`: `completed_at IS NOT NULL AND is_rejected = 0`
 - `rejected`: `is_rejected = 1`
 
 レスポンス例:
@@ -482,7 +482,8 @@ request:
 - `progressImage` が送られた場合、Worker側でPNG検証後にR2へ保存し、`versions.progress_image_*` へ保存する。
 - `progressImage` が送信されていない場合は従来通り投稿を成功させる。
 - `isRejected=true` の場合は、入力された `progress` と送信された `progressMap` に関係なく保存値を `progress=100` に強制する。
-- `allowAppend`は完全一致の文字列`true` / `false`だけを受け付ける。項目がない旧Pagesでは、非没譜面をtrue、没譜面をfalseとして保存する。
+- `allowAppend`は完全一致の文字列`true` / `false`だけを受け付ける。初回通常版はtrue固定、初回没譜面はtrue/falseを選択できる。項目がない旧Pagesでは、非没譜面をtrue、没譜面をfalseとして扱う。
+- 初回通常版は完成版にできない。Worker再計算後のprogressが100なら `INITIAL_COMPLETION_NOT_ALLOWED` で拒否する。没譜面はprogress=100でも `completed=false`, `completedAt=null` とする。
 - `originUrl`は空欄なら`NULL`。絶対HTTP/HTTPS URLだけを許可し、認証情報、制御文字、未エンコード空白を拒否する。fragmentを削除してqueryを維持し、正規化後も2048文字以内とする。外部URLへの通信は行わない。
 - `chartName`は前後空白を除去し、100 Unicode code point以内とする。初回投稿では`charts`の起点差分名とBASE versionの差分名snapshotへ同じ値を保存する。
 
@@ -521,10 +522,11 @@ request:
 - `progressImage` が送られた場合、初回投稿と同じR2 key規則で保存する。
 - 親versionは公開中、指定chart所属、`collapsed_by_completion=0`、`file_deleted_at IS NULL`、利用可能なprogressMapあり、`allow_append=1`を必須とする。`is_rejected=1`だけでは拒否しない。
 - 公開中の取り下げ、削除申請、通常DL停止は、それだけを理由に追記拒否しない。
-- `isRejected=true` の子versionも作成できる。この場合、親layerを維持し、今回versionのlayerを `rejected_auto_fill` で全塗りにして `progress=100` とする。
-- `allowAppend`は新しく作る子version自身の設定であり、親から継承しない。項目がない旧Pagesではtrueとして保存する。
+- 追記投稿の `isRejected=true` は `FOLLOWUP_REJECTED_NOT_ALLOWED` で拒否する。
+- 未完成の子versionは `allowAppend=true` 固定とし、falseは `APPEND_POLICY_LOCKED_FOR_INCOMPLETE` で拒否する。明示的な完成版だけtrue/falseを選択できる。項目がない旧Pagesではtrueとして扱う。
+- 完成版は最後の子layerが `completion_fill` で、Worker再計算progressが100の場合だけ成立する。`completionBaseRanges` と親layerのunionが80%未満なら `COMPLETION_PROGRESS_TOO_LOW` で拒否する。未完成親から完成指定なしで100%を送った場合は `COMPLETION_ACTION_REQUIRED` で拒否する。
 - 親の軽量確認はmultipart解析直後、ファイルhash・BMS/ZIP解析・R2保存より前に行う。D1 INSERT時にも親条件を再確認し、競合で不成立なら子versionを作成せず、先に保存した譜面R2 objectをcleanupする。
-- 未完成の親versionでprogressMap unionが同じ塗り範囲の場合は `PROGRESS_MAP_UNCHANGED` で拒否する。完成済みの親versionは、正規化後の子レイヤーに有効な区間が1件以上ある場合だけ、unionが100%のままでも追記できる。通常子の空rangesは `PROGRESS_MAP_UNCHANGED` と「追記する進捗範囲を1つ以上選択してください。」で拒否する。没譜面子は従来どおり `rejected_auto_fill` を適用する。
+- 未完成の親versionでprogressMap unionが同じ塗り範囲の場合は `PROGRESS_MAP_UNCHANGED` で拒否する。完成済みの親versionは、正規化後の子レイヤーに有効な区間が1件以上ある場合だけ、unionが100%のままでも通常追記できる。通常子の空rangesは `PROGRESS_MAP_UNCHANGED` と「追記する進捗範囲を1つ以上選択してください。」で拒否する。
 - 新versionの`originUrl`は親versionのDB値をコピーする。追記リクエストからのURL入力は受け付けない。
 - 新versionの差分名は、空でない有効な送信`chartName`、親versionの`chart_name`、起点の`charts.chart_name`の順で決定する。送信値を省略した旧Pagesは親名を継承する。
 - 追記で別名を指定しても`charts.chart_name`は更新しない。新versionの`chart_name` / `normalized_chart_name`だけをsnapshotとして保存する。
@@ -587,6 +589,11 @@ request:
 | `METHOD_NOT_ALLOWED` | 405 | 許可されていないHTTPメソッド。 |
 | `INVALID_FORM` | 400 | multipart/form-dataや必須項目が不正。 |
 | `INVALID_ALLOW_APPEND` | 400 | `allowAppend`が完全一致の`true` / `false`以外。 |
+| `APPEND_POLICY_LOCKED_FOR_INCOMPLETE` | 400 | 初回通常版または追記の未完成版で`allowAppend=false`が指定された。 |
+| `INITIAL_COMPLETION_NOT_ALLOWED` | 400 | 初回通常投稿がWorker再計算で完成状態になった。 |
+| `FOLLOWUP_REJECTED_NOT_ALLOWED` | 400 | 追記投稿で`isRejected=true`が指定された。 |
+| `COMPLETION_PROGRESS_TOO_LOW` | 400 | 完成版指定前の親・子進捗unionが80%未満。 |
+| `COMPLETION_ACTION_REQUIRED` | 400 | 未完成親から完成版指定なしでprogress=100が送られた。 |
 | `PASSWORD_REQUIRED` | 400 | 管理パスワードが未入力。 |
 | `INVALID_ORIGIN_URL` | 400 | 原曲配布URLが絶対HTTP/HTTPS URLではない、認証情報・制御文字・未エンコード空白を含むなど不正。 |
 | `ORIGIN_URL_TOO_LONG` | 400 | 原曲配布URLが正規化前または正規化後に2048文字を超える。 |
@@ -1140,6 +1147,11 @@ FILE_TOO_LARGE
 INVALID_PROGRESS
 INVALID_REJECTED_FLAG_FOR_FOLLOWUP
 INVALID_ALLOW_APPEND
+APPEND_POLICY_LOCKED_FOR_INCOMPLETE
+INITIAL_COMPLETION_NOT_ALLOWED
+FOLLOWUP_REJECTED_NOT_ALLOWED
+COMPLETION_PROGRESS_TOO_LOW
+COMPLETION_ACTION_REQUIRED
 INVALID_PROGRESS_MAP
 PROGRESS_MAP_OUT_OF_RANGE
 PROGRESS_MAP_BLOCK_COUNT_MISMATCH

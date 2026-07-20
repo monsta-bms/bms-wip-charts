@@ -12,6 +12,12 @@
   --post-accent: #678f84;
   --post-text: #1e2b28;
   --post-muted: #52645f;
+  --control-disabled-bg: color-mix(in srgb, var(--post-input-bg) 58%, var(--post-section-bg));
+  --control-disabled-text: var(--post-muted);
+  --control-disabled-border: var(--post-line);
+  --state-badge-bg: var(--post-input-bg);
+  --state-badge-text: var(--post-muted);
+  --state-badge-border: var(--post-line);
   background: var(--post-panel-bg);
   border-color: var(--post-line-soft);
   color: var(--post-text);
@@ -612,14 +618,22 @@ button.difficulty-change-button {
   display: grid;
   gap: 0;
   margin-top: 8px;
-  padding: 2px 10px;
+  padding: 0 10px 2px;
+}
+
+.post-state-title {
+  color: var(--post-text);
+  font-size: 0.92rem;
+  font-weight: 800;
+  margin: 0;
+  padding: 10px 0 7px;
 }
 
 .progress-policy-item {
-  align-items: start;
+  align-items: center;
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(88px, 0.16fr) minmax(0, 1fr);
+  grid-template-columns: minmax(88px, 0.14fr) minmax(250px, 0.8fr) minmax(260px, 1.2fr);
   min-width: 0;
   padding: 10px 0;
 }
@@ -633,7 +647,61 @@ button.difficulty-change-button {
   font-size: 0.82rem;
   font-weight: 800;
   line-height: 1.4;
-  padding-top: 1px;
+}
+
+.post-state-control,
+.post-state-message {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.post-state-message {
+  align-items: flex-start;
+}
+
+.post-state-description {
+  color: var(--post-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.post-state-badge {
+  background: var(--state-badge-bg);
+  border: 1px solid var(--state-badge-border);
+  border-radius: 999px;
+  color: var(--state-badge-text);
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.2;
+  padding: 3px 7px;
+  white-space: nowrap;
+}
+
+.post-state-badge[data-state="configurable"],
+.post-state-badge[data-state="selected"] {
+  border-color: var(--post-accent);
+  color: var(--post-text);
+}
+
+.progress-complete-button:disabled,
+.progress-complete-button[aria-disabled="true"] {
+  background: var(--control-disabled-bg);
+  border-color: var(--control-disabled-border);
+  color: var(--control-disabled-text);
+  cursor: not-allowed;
+}
+
+.progress-complete-button:disabled:hover {
+  background: var(--control-disabled-bg);
+  border-color: var(--control-disabled-border);
+  color: var(--control-disabled-text);
+  transform: none;
 }
 
 .progress-policy-controls .form-check {
@@ -680,7 +748,10 @@ button.difficulty-change-button {
 
 .progress-policy-controls .form-check:has(input:disabled) {
   cursor: not-allowed;
-  opacity: 0.66;
+}
+
+.progress-policy-controls .form-check > input[type="checkbox"]:disabled + .form-check-body .form-check-label {
+  color: var(--control-disabled-text);
 }
 
 .submission-subtitle {
@@ -874,6 +945,16 @@ button.difficulty-change-button {
   .progress-policy-item {
     gap: 4px;
     grid-template-columns: 1fr;
+  }
+
+  .post-state-control,
+  .post-state-message {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .post-state-description {
+    flex: 1 1 220px;
   }
 
   button.file-drop-zone,

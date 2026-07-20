@@ -289,6 +289,7 @@ async function selectEligibleRows(env: Env): Promise<DifficultyTableRow[]> {
     FROM versions
     INNER JOIN charts ON charts.id = versions.chart_id
     WHERE versions.progress = 100
+      AND versions.completed_at IS NOT NULL
       AND COALESCE(versions.is_hidden, 0) = 0
       AND COALESCE(charts.is_hidden, 0) = 0
       AND COALESCE(versions.download_blocked, 0) = 0

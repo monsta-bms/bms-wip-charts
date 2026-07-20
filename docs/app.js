@@ -37,10 +37,16 @@ const progressMapSummary = document.querySelector("#progressMapSummary");
 const progressMapTooltip = document.querySelector("#progressMapTooltip");
 const progressMapPopover = document.querySelector("#progressMapPopover");
 const completeProgressButton = document.querySelector("#completeProgressButton");
+const completionStateBadge = document.querySelector("#completionStateBadge");
+const completionStateDescription = document.querySelector("#completionStateDescription");
 const commentInput = document.querySelector("#comment");
 const isRejectedInput = document.querySelector("#isRejected");
+const rejectedStateBadge = document.querySelector("#rejectedStateBadge");
+const rejectedStateDescription = document.querySelector("#rejectedStateDescription");
 const allowAppendControl = document.querySelector("#allowAppendControl");
 const allowAppendInput = document.querySelector("#allowAppend");
+const allowAppendStateBadge = document.querySelector("#allowAppendStateBadge");
+const allowAppendStateDescription = document.querySelector("#allowAppendStateDescription");
 const passwordInput = document.querySelector("#password");
 const saveAuthorInput = document.querySelector("#saveAuthor");
 const savePasswordInput = document.querySelector("#savePassword");
@@ -55,7 +61,14 @@ let isSubmitting = false;
 let lastValidManualDifficulty = "";
 let initialFileAnalysisRevision = 0;
 let difficultyPickerExpanded = true;
-let allowAppendTouched = false;
+const postStateUi = {
+  mode: "initial",
+  completionRequested: false,
+  initialRejectedChoice: false,
+  initialRejectedChoiceInitialized: false,
+  appendCompletedChoice: true,
+  appendCompletedChoiceInitialized: false
+};
 
 const recentChartCount = 10;
 const maxDifficultyNumber = 25;
@@ -154,6 +167,11 @@ function showError(error) {
   const code = error?.code || "REQUEST_FAILED";
   const safeMessages = {
     INVALID_ALLOW_APPEND: "追記受付の設定が正しくありません。ページを再読み込みしてください。",
+    APPEND_POLICY_LOCKED_FOR_INCOMPLETE: "未完成版では追記受付を停止できません。",
+    INITIAL_COMPLETION_NOT_ALLOWED: "初回投稿では完成版にできません。追記投稿から完成版にしてください。",
+    FOLLOWUP_REJECTED_NOT_ALLOWED: "追記投稿では没譜面にできません。",
+    COMPLETION_PROGRESS_TOO_LOW: "完成版にするには、進捗度を80%以上にしてください。",
+    COMPLETION_ACTION_REQUIRED: "完成版にする操作を使用してください。",
     PARENT_APPEND_DISABLED: "この版からの追記受付は停止されています。ページを再読み込みして、別の版を選択してください。",
     PARENT_APPEND_CONFLICT: "親版の状態が更新されたため追記できませんでした。ページを再読み込みして、もう一度確認してください。"
   };
@@ -179,26 +197,133 @@ function resolveAllowAppend(version) {
   return !isRejectedVersion(version);
 }
 
-function setAllowAppendSuggestion(isRejected, { resetTouched = false, force = false } = {}) {
-  if (resetTouched) {
-    allowAppendTouched = false;
-  }
-  if (!allowAppendInput || (allowAppendTouched && !force)) {
-    return;
-  }
-  allowAppendInput.checked = !isRejected;
+function setPostStateBadge(element, text, state) {
+  if (!element) return;
+  element.textContent = text;
+  element.dataset.state = state;
 }
 
-function resetAllowAppendForForm(isRejected = false) {
-  setAllowAppendSuggestion(Boolean(isRejected), { resetTouched: true, force: true });
+function setControlDisabled(control, disabled) {
+  if (!control) return;
+  control.disabled = disabled;
+  control.setAttribute("aria-disabled", disabled ? "true" : "false");
+}
+
+function getPostStateSnapshot() {
+  const isAppend = postStateUi.mode === "append";
+  const isRejected = !isAppend && Boolean(isRejectedInput?.checked);
+  const isCompleted = isAppend && postStateUi.completionRequested;
+  const isAllowAppendConfigurable = isRejected || isCompleted;
+  const allowAppendUserChoice = isRejected
+    ? postStateUi.initialRejectedChoice
+    : postStateUi.appendCompletedChoice;
+
+  return {
+    isAppend,
+    isRejected,
+    isCompleted,
+    isAllowAppendConfigurable,
+    effectiveAllowAppend: isAllowAppendConfigurable ? allowAppendUserChoice : true
+  };
+}
+
+function updatePostStateUi({ progress = Number(progressInput?.value) } = {}) {
+  const state = getPostStateSnapshot();
+  const numericProgress = Number.isFinite(Number(progress)) ? Number(progress) : 0;
+
+  if (isRejectedInput) {
+    if (state.isAppend) isRejectedInput.checked = false;
+    setControlDisabled(isRejectedInput, state.isAppend);
+  }
+
+  if (completeProgressButton) {
+    const completionAvailable = state.isAppend && !state.isCompleted && numericProgress >= 80 && numericProgress <= 100;
+    setControlDisabled(completeProgressButton, !completionAvailable);
+    completeProgressButton.hidden = false;
+    completeProgressButton.textContent = state.isCompleted ? "完成版指定中" : "完成版にする";
+  }
+
+  if (!state.isAppend) {
+    setPostStateBadge(completionStateBadge, "利用不可", "unavailable");
+    if (completionStateDescription) completionStateDescription.textContent = "初回投稿では完成版にできません。";
+  } else if (state.isCompleted) {
+    setPostStateBadge(completionStateBadge, "設定済み", "selected");
+    if (completionStateDescription) completionStateDescription.textContent = "完成版として投稿します。透明部分はすべて塗りつぶされます。";
+  } else if (numericProgress < 80) {
+    setPostStateBadge(completionStateBadge, "利用不可", "unavailable");
+    if (completionStateDescription) completionStateDescription.textContent = "完成版にするには、進捗度を80%以上にしてください。";
+  } else {
+    setPostStateBadge(completionStateBadge, "設定可能", "configurable");
+    if (completionStateDescription) completionStateDescription.textContent = "透明部分を塗りつぶし、進捗度100%の完成版として投稿します。";
+  }
+
+  if (state.isAppend) {
+    setPostStateBadge(rejectedStateBadge, "追記投稿では利用不可", "unavailable");
+    if (rejectedStateDescription) rejectedStateDescription.textContent = "追記投稿では没譜面にできません。";
+  } else {
+    setPostStateBadge(rejectedStateBadge, "操作可能", "configurable");
+    if (rejectedStateDescription) {
+      rejectedStateDescription.textContent = state.isRejected
+        ? "没譜面として投稿します。進捗度は100%として扱われます。"
+        : "制作途中の通常版として投稿します。";
+    }
+  }
+
+  if (allowAppendInput) {
+    allowAppendInput.checked = state.effectiveAllowAppend;
+    setControlDisabled(allowAppendInput, !state.isAllowAppendConfigurable);
+  }
+  setPostStateBadge(
+    allowAppendStateBadge,
+    state.isAllowAppendConfigurable ? "設定可能" : "自動で許可",
+    state.isAllowAppendConfigurable ? "configurable" : "automatic"
+  );
+  if (allowAppendStateDescription) {
+    if (!state.isAppend && !state.isRejected) {
+      allowAppendStateDescription.textContent = "初回の未完成版は追記受付が必須です。停止にはできません。";
+    } else if (!state.isAppend) {
+      allowAppendStateDescription.textContent = state.effectiveAllowAppend
+        ? "他の利用者による引継ぎ・改変を許可します。"
+        : "他の利用者による追記・改変を受け付けません。";
+    } else if (!state.isCompleted) {
+      allowAppendStateDescription.textContent = "未完成版は追記受付が必須です。停止にはできません。";
+    } else {
+      allowAppendStateDescription.textContent = state.effectiveAllowAppend
+        ? "他の利用者による追加の改変・分岐を許可します。"
+        : "この完成版からの新しい追記・分岐を停止します。";
+    }
+  }
+
+  return state;
+}
+
+function resetAllowAppendForForm(isRejected = false, { mode = "initial" } = {}) {
+  postStateUi.mode = mode === "append" ? "append" : "initial";
+  postStateUi.completionRequested = false;
+  postStateUi.initialRejectedChoice = false;
+  postStateUi.initialRejectedChoiceInitialized = false;
+  postStateUi.appendCompletedChoice = true;
+  postStateUi.appendCompletedChoiceInitialized = false;
+  if (isRejectedInput) isRejectedInput.checked = postStateUi.mode === "initial" && Boolean(isRejected);
+  updatePostStateUi();
 }
 
 window.BmsAppendPolicy = {
   resolve: resolveAllowAppend,
   resetForForm: resetAllowAppendForForm,
-  suggestForRejected: (isRejected) => setAllowAppendSuggestion(Boolean(isRejected)),
-  isTouched: () => allowAppendTouched,
-  value: () => Boolean(allowAppendInput?.checked)
+  setMode: (mode) => resetAllowAppendForForm(false, { mode }),
+  setCompletionRequested: (requested, options = {}) => {
+    postStateUi.completionRequested = Boolean(requested);
+    if (postStateUi.completionRequested && !postStateUi.appendCompletedChoiceInitialized) {
+      postStateUi.appendCompletedChoice = true;
+      postStateUi.appendCompletedChoiceInitialized = true;
+    }
+    return updatePostStateUi(options);
+  },
+  sync: updatePostStateUi,
+  snapshot: getPostStateSnapshot,
+  effectiveValue: () => getPostStateSnapshot().effectiveAllowAppend,
+  value: () => getPostStateSnapshot().effectiveAllowAppend
 };
 
 function showTextError(message) {
@@ -1104,7 +1229,6 @@ function setProgressMapMessage(message, state = "empty") {
   if (progressControls) {
     progressControls.hidden = true;
   }
-  completeProgressButton.hidden = true;
   progressMapGraphWrap.hidden = true;
   progressMapSummary.hidden = true;
   progressMapBlocks.innerHTML = "";
@@ -1208,11 +1332,7 @@ function updateProgressSummary(progressValue = calculateMapProgress()) {
 }
 
 function updateCompleteButtonState() {
-  const progressValue = Number(progressInput.value);
-  const hasMap = Boolean(progressMapState.analysis && progressMapState.analysis.standardBlocks.length > 0);
-  const canShow = hasMap && !isRejectedInput.checked && Number.isFinite(progressValue) && progressValue < 100;
-  completeProgressButton.hidden = !canShow;
-  completeProgressButton.disabled = !canShow || progressValue < 80;
+  updatePostStateUi({ progress: Number(progressInput.value) });
 }
 
 function updateProgressBlockClasses() {
@@ -2179,7 +2299,7 @@ function buildChartFormData() {
   formData.append("progress", isRejectedInput.checked ? "100" : progressInput.value.trim());
   formData.append("comment", commentInput.value.trim());
   formData.append("isRejected", isRejectedInput.checked ? "true" : "false");
-  formData.append("allowAppend", allowAppendInput?.checked ? "true" : "false");
+  formData.append("allowAppend", getPostStateSnapshot().effectiveAllowAppend ? "true" : "false");
   formData.append("password", passwordInput.value);
 
   if (progressMapPayload) {
@@ -2333,21 +2453,33 @@ progressInput.addEventListener("input", () => {
 });
 
 isRejectedInput.addEventListener("change", () => {
-  setAllowAppendSuggestion(isRejectedInput.checked);
+  if (isRejectedInput.checked && !postStateUi.initialRejectedChoiceInitialized) {
+    postStateUi.initialRejectedChoice = false;
+    postStateUi.initialRejectedChoiceInitialized = true;
+  }
   applyRejectedProgressState();
   applyRejectedProgressMapState();
+  updatePostStateUi();
   clearError();
 });
 
-allowAppendInput?.addEventListener("change", (event) => {
-  if (event.isTrusted) {
-    allowAppendTouched = true;
+allowAppendInput?.addEventListener("change", () => {
+  const state = getPostStateSnapshot();
+  if (state.isAllowAppendConfigurable) {
+    if (state.isAppend) {
+      postStateUi.appendCompletedChoice = allowAppendInput.checked;
+      postStateUi.appendCompletedChoiceInitialized = true;
+    } else {
+      postStateUi.initialRejectedChoice = allowAppendInput.checked;
+      postStateUi.initialRejectedChoiceInitialized = true;
+    }
   }
+  updatePostStateUi();
   clearError();
 });
 
 form.addEventListener("reset", () => {
-  queueMicrotask(() => resetAllowAppendForForm(false));
+  queueMicrotask(() => resetAllowAppendForForm(false, { mode: "initial" }));
 });
 
 progressMapBlocks.addEventListener("pointerdown", (event) => {

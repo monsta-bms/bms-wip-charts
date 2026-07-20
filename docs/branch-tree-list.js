@@ -418,7 +418,9 @@
   }
 
   function isCompleted(version, progress) {
-    return version?.completed === true || Number(progress) === 100;
+    if (isRejected(version)) return false;
+    if (typeof version?.completed === "boolean") return version.completed;
+    return Boolean(version?.completedAt || version?.completed_at);
   }
 
   function isRejected(version) {
@@ -578,6 +580,20 @@
     }
 
     return badges.slice(0, 2).join("");
+  }
+
+  function renderAppendPolicyInfo(version) {
+    if (resolveAllowAppend(version)) {
+      return "";
+    }
+
+    const descriptionId = `append-policy-description-${html(getVersionId(version))}`;
+    return `
+      <span class="version-append-policy-line" id="${descriptionId}">
+        <span class="append-policy-state-badge">追記受付停止</span>
+        <span class="visually-hidden">この版からの新しい追記は停止されています。</span>
+      </span>
+    `;
   }
 
   function enhanceDownloadControl(row, version, displayVersionLabel, forceBlocked = false) {
@@ -795,6 +811,7 @@
             <span class="version-chart-name-label">差分名：</span>
             <span class="version-chart-name" title="${html(versionChartName)}">${html(versionChartName)}</span>
           </span>
+          ${renderAppendPolicyInfo(version)}
           <span class="version-parent-line" title="${html(titleText)}">${html(parentText)}</span>
           <span class="version-lifecycle-line">${renderLifecycleMeta(version, { isLatest: options.isLatest })}</span>
         </span>

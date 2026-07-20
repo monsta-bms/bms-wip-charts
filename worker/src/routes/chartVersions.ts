@@ -51,6 +51,7 @@ type ParentVersionRow = {
   normalized_chart_name: string | null;
   version_number: number;
   branch_path: string;
+  progress: number;
   progress_map_json: string | null;
   difficulty: string | null;
   level: string | null;
@@ -311,6 +312,17 @@ async function parseAppendVersionFormInput(
   }
 
   const isRejected = parseBooleanField(getFormText(form, "isRejected"));
+  if (isRejected) {
+    return {
+      ok: false,
+      response: await failAppendVersion(request, env, context, {
+        status: 400,
+        code: "FOLLOWUP_REJECTED_NOT_ALLOWED",
+        message: "追記投稿では没譜面にできません。",
+        detail: "Follow-up submissions cannot set isRejected=true."
+      })
+    };
+  }
   const allowAppend = parseAllowAppend(form, true);
   if (!allowAppend.ok) {
     return {
@@ -483,6 +495,7 @@ async function selectParentVersion(env: Env, parentVersionId: string): Promise<P
       normalized_chart_name,
       version_number,
       branch_path,
+      progress,
       progress_map_json,
       difficulty,
       level,
@@ -843,8 +856,35 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
       return failAppendVersion(request, env, context, preparedProgressMap.failure);
     }
 
+    if (!preparedProgressMap.progressMap) {
+      return failAppendVersion(request, env, context, {
+        status: 400,
+        code: "INVALID_PROGRESS_MAP",
+        message: "進捗マップが正しくありません。",
+        detail: "A follow-up progressMap must produce a stored progressMap."
+      });
+    }
+
     const storedProgress = preparedProgressMap.progress;
-    const completedAt = storedProgress === 100 ? new Date().toISOString() : null;
+    const childLayer = preparedProgressMap.progressMap.layers.at(-1);
+    const completionRequested = childLayer?.kind === "completion_fill" && storedProgress === 100;
+    if (storedProgress === 100 && !completionRequested && parent.progress < 100) {
+      return failAppendVersion(request, env, context, {
+        status: 400,
+        code: "COMPLETION_ACTION_REQUIRED",
+        message: "完成版にする操作を使用してください。",
+        detail: "A 100% follow-up must use an explicit completion_fill layer."
+      });
+    }
+    if (!completionRequested && !input.allowAppend) {
+      return failAppendVersion(request, env, context, {
+        status: 400,
+        code: "APPEND_POLICY_LOCKED_FOR_INCOMPLETE",
+        message: "未完成版では追記受付を停止できません。",
+        detail: "Incomplete follow-up versions must keep allowAppend enabled."
+      });
+    }
+    const completedAt = completionRequested ? new Date().toISOString() : null;
     const difficulty = input.difficulty || parent.difficulty || null;
     const level = input.level || parent.level || (difficulty ? extractLevelFromDifficulty(difficulty) : "") || null;
     const measureNotesJson = input.bmsAnalysis ? JSON.stringify(input.bmsAnalysis.measureNotesJson) : null;
@@ -993,7 +1033,7 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
       `).bind(chartId, versionId)
     ];
 
-    if (storedProgress === 100 && !input.isRejected) {
+    if (completionRequested) {
       statements.push(env.DB.prepare(`
         UPDATE versions
         SET
@@ -1110,7 +1150,7 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
       progressMap: preparedProgressMap.progressMap,
       isRejected: input.isRejected,
       allowAppend: input.allowAppend,
-      completed: storedProgress === 100,
+      completed: completionRequested,
       completedAt,
       originUrl: parent.origin_url,
       fileId,

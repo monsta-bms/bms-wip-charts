@@ -67,7 +67,7 @@
     blocks: [],
     parentPainted: new Set(),
     currentPainted: new Set(),
-    preRejectedCurrentPainted: null,
+    completionBasePainted: null,
     layerKind: "followup",
     fileGridMismatch: false,
     fileAnalysisRevision: 0,
@@ -538,11 +538,10 @@
       progressMapSummary.hidden = false;
     }
 
-    if (completeProgressButton) {
-      const rejected = Boolean(isRejectedInput?.checked);
-      completeProgressButton.hidden = rejected || progress >= 100;
-      completeProgressButton.disabled = rejected || progress < 80 || progress >= 100;
-    }
+    window.BmsAppendPolicy?.setCompletionRequested?.(
+      appendState.layerKind === "completion_fill",
+      { progress }
+    );
   }
 
   function renderAppendProgressMap() {
@@ -589,7 +588,7 @@
     appendState.blocks = blocks;
     appendState.parentPainted = collectPaintedIndexes(parentLayers, blocks.length);
     appendState.currentPainted = new Set();
-    appendState.preRejectedCurrentPainted = null;
+    appendState.completionBasePainted = null;
     appendState.layerKind = "followup";
     appendState.fileGridMismatch = false;
     appendState.isDragging = false;
@@ -619,7 +618,7 @@
     }));
     layers.push(currentLayer);
 
-    return {
+    const payload = {
       ...parentMap,
       schemaVersion: 2,
       blockMode: "standardized_measure",
@@ -630,6 +629,10 @@
       layers,
       progress: calculateProgress()
     };
+    if (appendState.layerKind === "completion_fill") {
+      payload.completionBaseRanges = compressRanges(appendState.completionBasePainted || new Set());
+    }
+    return payload;
   }
 
   function applyAppendDragRange(currentBlockIndex) {
@@ -669,6 +672,11 @@
       return;
     }
 
+    if (appendState.layerKind === "completion_fill") {
+      appendState.layerKind = "followup";
+      appendState.completionBasePainted = null;
+      window.BmsAppendPolicy?.setCompletionRequested?.(false, { progress: calculateProgress() });
+    }
     const currentPainted = appendState.currentPainted.has(blockIndex);
     appendState.isDragging = true;
     appendState.dragAnchorIndex = blockIndex;
@@ -692,33 +700,12 @@
     appendState.originalCurrentPainted = null;
   }
 
-  function applyAppendRejectedState(rejected) {
-    finishAppendDrag();
-    hideAppendFloatingInfo();
-
-    if (rejected) {
-      if (!(appendState.preRejectedCurrentPainted instanceof Set)) {
-        appendState.preRejectedCurrentPainted = new Set(appendState.currentPainted);
-      }
-      appendState.currentPainted = new Set(appendState.blocks.map((block) => block.index));
-      appendState.layerKind = "rejected_auto_fill";
-    } else {
-      if (appendState.preRejectedCurrentPainted instanceof Set) {
-        appendState.currentPainted = new Set(appendState.preRejectedCurrentPainted);
-      }
-      appendState.preRejectedCurrentPainted = null;
-      appendState.layerKind = "followup";
-    }
-
-    updateAppendBlockClasses();
-    updateAppendProgressSummary();
-  }
-
   function paintAppendCompletion() {
     if (!appendState.active || isRejectedInput?.checked || !appendState.blocks.length) {
       return;
     }
 
+    appendState.completionBasePainted = new Set(appendState.currentPainted);
     appendState.layerKind = "completion_fill";
     for (const block of appendState.blocks) {
       if (!appendState.parentPainted.has(block.index)) {
@@ -867,7 +854,7 @@
     if (subartistInput) subartistInput.value = song.subartist || "";
     if (chartNameInput) chartNameInput.value = parentChartName;
     if (isRejectedInput) isRejectedInput.checked = false;
-    window.BmsAppendPolicy?.resetForForm?.(false);
+    window.BmsAppendPolicy?.setMode?.("append");
     if (fileInput) fileInput.value = "";
     if (authorInput) authorInput.value = "";
     if (commentInput) commentInput.value = "";
@@ -906,7 +893,7 @@
     appendState.blocks = [];
     appendState.parentPainted = new Set();
     appendState.currentPainted = new Set();
-    appendState.preRejectedCurrentPainted = null;
+    appendState.completionBasePainted = null;
     appendState.layerKind = "followup";
     appendState.fileGridMismatch = false;
     appendState.fileAnalysisRevision += 1;
@@ -924,7 +911,7 @@
 
     if (resetForm) {
       form?.reset();
-      window.BmsAppendPolicy?.resetForForm?.(false);
+      window.BmsAppendPolicy?.setMode?.("initial");
       if (typeof clearRequiredFieldIndicators === "function") {
         clearRequiredFieldIndicators();
       }
@@ -1034,9 +1021,6 @@
 
       appendState.blocks = analyzedBlocks;
       renderAppendProgressMap();
-      if (isRejectedInput?.checked) {
-        applyAppendRejectedState(true);
-      }
       if (localAnalysis.miniView?.status === "ready") {
         window.BmsFormMiniView?.setAnalysis(localAnalysis.miniView, analyzedBlocks);
       } else {
@@ -1139,8 +1123,8 @@
     formData.append("difficulty", difficulty);
     formData.append("level", localExtractLevel(difficulty));
     formData.append("comment", commentInput.value.trim());
-    formData.append("isRejected", isRejectedInput?.checked ? "true" : "false");
-    formData.append("allowAppend", allowAppendInput?.checked ? "true" : "false");
+    formData.append("isRejected", "false");
+    formData.append("allowAppend", window.BmsAppendPolicy?.effectiveValue?.() ? "true" : "false");
     return formData;
   }
 
@@ -1245,18 +1229,15 @@
     const parentVersionId = version.id || version.versionId || "";
 
     if (!resolveAllowAppend(version)) {
+      const descriptionId = `append-policy-description-${html(parentVersionId)}`;
       return `
-        <span class="append-policy-control">
-          <button class="secondary append-policy-disabled-button" type="button" disabled aria-disabled="true">追記受付停止</button>
-          <span class="append-disabled-note append-policy-disabled-note">この版からの新しい追記は停止されています。</span>
-        </span>
+        <button class="secondary append-policy-disabled-button" type="button" disabled aria-disabled="true" aria-describedby="${descriptionId}">追記停止</button>
       `;
     }
 
     if (!isUsableProgressMap(version.progressMap)) {
       return `
-        <button class="secondary" type="button" disabled title="このversionは古い形式のため、画面から追記できません。">追記投稿</button>
-        <span class="append-disabled-note">古い形式のため追記不可</span>
+        <button class="secondary" type="button" disabled aria-disabled="true">旧形式</button>
       `;
     }
 
@@ -1405,17 +1386,6 @@
 
     event.stopImmediatePropagation();
     handleAppendFileChange(fileInput.files?.[0]);
-  }, true);
-
-  isRejectedInput?.addEventListener("change", (event) => {
-    if (!appendState.active) {
-      return;
-    }
-
-    event.stopImmediatePropagation();
-    applyAppendRejectedState(isRejectedInput.checked);
-    window.BmsAppendPolicy?.suggestForRejected?.(isRejectedInput.checked);
-    clearMessage();
   }, true);
 
   progressMapBlocks?.addEventListener("pointerdown", (event) => {

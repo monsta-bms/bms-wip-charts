@@ -6,14 +6,14 @@
     <script src="./theme-init.js?v=site-theme-14"></script>
     <meta name="turnstile-sitekey" content="0x4AAAAAAD0OJhR8c4dKkDrk">
     <title>リサイクルセンター</title>
-    <link rel="stylesheet" href="./style.css?v=append-policy-15">
+    <link rel="stylesheet" href="./style.css?v=append-policy-15-final">
     <link rel="stylesheet" href="./site-header.css?v=recycle-ux-02a">
-    <link rel="stylesheet" href="./branch-tree-list.css?v=append-policy-15">
+    <link rel="stylesheet" href="./branch-tree-list.css?v=append-policy-15-final">
     <link rel="stylesheet" href="./list-ui-refresh.css?v=site-theme-14-final">
     <link rel="stylesheet" href="./chart-miniview.css?v=post-form-miniview-01">
     <link rel="stylesheet" href="./tree-progress-polish.css?v=tree-shape-fix-01">
     <link rel="stylesheet" href="./version-management-ui.css?v=version-lifecycle-24h-01">
-    <link rel="stylesheet" href="./post-form-ui.css?v=append-policy-15-ui-finish">
+    <link rel="stylesheet" href="./post-form-ui.css?v=append-policy-15-final">
     <link rel="stylesheet" href="./chart-detail-link.css?v=site-theme-14-final">
     <link rel="stylesheet" href="./theme.css?v=site-theme-14-final">
   </head>
@@ -269,30 +269,48 @@
                       <span class="field-help">0～100。没譜面は100固定です。</span>
                     </label>
                   </div>
-                  <button class="secondary progress-complete-button" id="completeProgressButton" type="button" disabled hidden>完成版にする</button>
                 </div>
 
-                <div class="progress-policy-controls" aria-label="制作状態と追記可否">
-                  <div class="progress-policy-item rejected-field" id="rejectedProgressControl">
-                    <span class="progress-policy-heading">没譜面</span>
-                    <label class="form-check">
+                <div class="progress-policy-controls post-state-panel" aria-labelledby="postStatePanelTitle">
+                  <h4 class="post-state-title" id="postStatePanelTitle">投稿状態</h4>
+
+                  <div class="progress-policy-item post-state-row completion-state-row" id="completionStateControl">
+                    <span class="progress-policy-heading post-state-name">完成版</span>
+                    <div class="post-state-control">
+                      <button class="secondary progress-complete-button" id="completeProgressButton" type="button" disabled aria-disabled="true">完成版にする</button>
+                    </div>
+                    <div class="post-state-message">
+                      <span class="post-state-badge" id="completionStateBadge">利用不可</span>
+                      <p class="post-state-description" id="completionStateDescription" aria-live="polite">初回投稿では完成版にできません。</p>
+                    </div>
+                  </div>
+
+                  <div class="progress-policy-item post-state-row rejected-field" id="rejectedProgressControl">
+                    <span class="progress-policy-heading post-state-name">没譜面</span>
+                    <label class="form-check post-state-control">
                       <input id="isRejected" name="isRejected" type="checkbox" value="true">
                       <span class="form-check-body">
                         <span class="form-check-label">没譜面</span>
-                        <span class="form-check-help">自分での制作を打ち切った版として登録します。進捗は100%になります。</span>
                       </span>
                     </label>
+                    <div class="post-state-message">
+                      <span class="post-state-badge" id="rejectedStateBadge">操作可能</span>
+                      <p class="post-state-description" id="rejectedStateDescription" aria-live="polite">制作途中の通常版として投稿します。</p>
+                    </div>
                   </div>
 
-                  <div class="progress-policy-item append-policy-field" id="allowAppendControl">
-                    <span class="progress-policy-heading">追記可否</span>
-                    <label class="form-check">
+                  <div class="progress-policy-item post-state-row append-policy-field" id="allowAppendControl">
+                    <span class="progress-policy-heading post-state-name">追記受付</span>
+                    <label class="form-check post-state-control">
                       <input id="allowAppend" name="allowAppend" type="checkbox" value="true" checked>
                       <span class="form-check-body">
                         <span class="form-check-label">この版からの追記・分岐を許可する</span>
-                        <span class="form-check-help">他の利用者が、この版を親として新しい版を投稿できます。没譜面でも許可できます。</span>
                       </span>
                     </label>
+                    <div class="post-state-message">
+                      <span class="post-state-badge" id="allowAppendStateBadge">自動で許可</span>
+                      <p class="post-state-description" id="allowAppendStateDescription" aria-live="polite">初回の未完成版は追記受付が必須です。停止にはできません。</p>
+                    </div>
                   </div>
                 </div>
               </section>
@@ -473,14 +491,14 @@
     <script src="./local-bms-analysis.js?v=post-form-miniview-01"></script>
     <script src="./turnstile-controller.js?v=turnstile-01"></script>
     <script src="./post-form-preferences.js?v=post-form-ux-11"></script>
-    <script src="./app.js?v=append-policy-15-ui-finish"></script>
+    <script src="./app.js?v=append-policy-15-final"></script>
     <script src="./progress-song-end-analysis.js?v=chart-miniview-position-01"></script>
     <script src="./progress-thumbnail-list.js?v=site-theme-14-final"></script>
     <script src="./chart-miniview.js?v=post-form-miniview-01"></script>
-    <script src="./branch-append-ui.js?v=append-policy-15"></script>
+    <script src="./branch-append-ui.js?v=append-policy-15-final"></script>
     <script src="./progress-image-preview.js?v=post-form-ux-09a"></script>
     <script src="./progress-image-formdata.js?v=ui-tree-overlay-01"></script>
-    <script src="./branch-tree-list.js?v=append-policy-15"></script>
+    <script src="./branch-tree-list.js?v=append-policy-15-final"></script>
     <script src="./tree-progress-polish.js?v=post-form-tree-12"></script>
     <script src="./favorites-list.js?v=top-detail-recency-07"></script>
     <script src="./version-management-ui.js?v=append-policy-15"></script>

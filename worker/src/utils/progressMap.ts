@@ -92,7 +92,8 @@ function failure(
     PROGRESS_MAP_BLOCK_COUNT_MISMATCH: "進捗マップのブロック数が一致しません。",
     ZIP_PROGRESS_MAP_MISMATCH: "ZIP内譜面と進捗マップが一致しません。",
     ZIP_BMS_ANALYSIS_FAILED: "ZIP内譜面を解析できないため進捗マップを確認できません。",
-    PROGRESS_MAP_UNCHANGED: "進捗マップに変更がありません。"
+    PROGRESS_MAP_UNCHANGED: "進捗マップに変更がありません。",
+    COMPLETION_PROGRESS_TOO_LOW: "完成版にするには、進捗度を80%以上にしてください。"
   };
 
   return {
@@ -748,9 +749,11 @@ function normalizeAppendProgressMap(
     return normalizedLayers;
   }
 
+  const childLayerIndex = normalizedLayers.layers.length - 1;
+  const childLayer = normalizedLayers.layers[childLayerIndex];
+  let completionBaseRangeCount: number | null = null;
+
   if (isRejected) {
-    const childLayerIndex = normalizedLayers.layers.length - 1;
-    const childLayer = normalizedLayers.layers[childLayerIndex];
     if (!childLayer) {
       return {
         ok: false,
@@ -788,6 +791,46 @@ function normalizeAppendProgressMap(
     };
   }
 
+  if (childLayer?.kind === "completion_fill") {
+    if (!Array.isArray(parsed.value.completionBaseRanges)) {
+      return {
+        ok: false,
+        failure: failure(
+          "COMPLETION_PROGRESS_TOO_LOW",
+          "completion_fill requires completionBaseRanges from before the fill operation."
+        )
+      };
+    }
+
+    const normalizedCompletionBase = normalizeLayerRanges(
+      parsed.value.completionBaseRanges,
+      layout.targetBlockCount,
+      childLayerIndex
+    );
+    if (!normalizedCompletionBase.ok) {
+      return normalizedCompletionBase;
+    }
+    completionBaseRangeCount = normalizedCompletionBase.ranges.length;
+
+    const completionBasePainted = new Set<number>();
+    for (const layer of normalizedLayers.layers.slice(0, childLayerIndex)) {
+      for (const index of collectRangeIndexes(layer.ranges)) completionBasePainted.add(index);
+    }
+    for (const index of collectRangeIndexes(normalizedCompletionBase.ranges)) completionBasePainted.add(index);
+    const completionBaseProgress = layout.targetBlockCount === 0
+      ? 0
+      : Math.round((completionBasePainted.size / layout.targetBlockCount) * 100);
+    if (completionBaseProgress < 80) {
+      return {
+        ok: false,
+        failure: failure(
+          "COMPLETION_PROGRESS_TOO_LOW",
+          `completion_fill was requested at ${completionBaseProgress}%; at least 80% is required.`
+        )
+      };
+    }
+  }
+
   const progress = layout.targetBlockCount === 0
     ? 0
     : Math.round((normalizedLayers.paintedIndexes.size / layout.targetBlockCount) * 100);
@@ -796,12 +839,15 @@ function normalizeAppendProgressMap(
   const completeSignature = layout.targetBlockCount > 0
     ? `${layout.targetBlockCount}:0-${layout.targetBlockCount - 1}`
     : null;
-  const childLayer = normalizedLayers.layers[normalizedLayers.layers.length - 1];
-
   if (
     parentSignature !== null
     && parentSignature === completeSignature
-    && (!childLayer || childLayer.ranges.length === 0)
+    && (
+      !childLayer
+      || (childLayer.kind === "completion_fill"
+        ? completionBaseRangeCount === 0
+        : childLayer.ranges.length === 0)
+    )
   ) {
     return {
       ok: false,

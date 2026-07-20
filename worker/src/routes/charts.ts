@@ -436,7 +436,7 @@ function buildVersion(row: VersionRow) {
     measureNotes: measureNotesProjection.measureNotes,
     miniView: measureNotesProjection.miniView,
     progressMap: parseStoredJson(row.progress_map_json, "progress_map_json", row.version_id),
-    completed: row.progress === 100,
+    completed: row.completed_at !== null && !toBoolean(row.is_rejected),
     completedAt: row.completed_at,
     withdrawn: row.withdrawn_at !== null || row.download_block_reason === "withdrawn",
     withdrawnAt: row.withdrawn_at,
@@ -1127,6 +1127,17 @@ async function parseCreateChartInput(
       })
     };
   }
+  if (!isRejected && !allowAppend.value) {
+    return {
+      ok: false,
+      response: await failCreateChart(request, env, context, {
+        status: 400,
+        code: "APPEND_POLICY_LOCKED_FOR_INCOMPLETE",
+        message: "未完成版では追記受付を停止できません。",
+        detail: "Initial non-rejected versions must keep allowAppend enabled."
+      })
+    };
+  }
   const storedProgress = isRejected ? 100 : progress.value;
   const progressMapText = getFormText(form, "progressMap");
 
@@ -1437,8 +1448,17 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
       return failCreateChart(request, env, context, preparedProgressMap.failure);
     }
 
+    if (!input.isRejected && preparedProgressMap.progress === 100) {
+      return failCreateChart(request, env, context, {
+        status: 400,
+        code: "INITIAL_COMPLETION_NOT_ALLOWED",
+        message: "初回投稿では完成版にできません。追記投稿から完成版にしてください。",
+        detail: "Initial non-rejected submissions cannot create a completed version."
+      });
+    }
+
     const storedProgress = preparedProgressMap.progress;
-    const completedAt = storedProgress === 100 ? new Date().toISOString() : null;
+    const completedAt = null;
     const measureNotesJson = input.bmsAnalysis ? JSON.stringify(input.bmsAnalysis.measureNotesJson) : null;
     const progressMapJson = preparedProgressMap.progressMapJson;
     const responseWarnings: ApiWarning[] = [
@@ -1670,7 +1690,7 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
       progressMap: preparedProgressMap.progressMap,
       isRejected: input.isRejected,
       allowAppend: input.allowAppend,
-      completed: storedProgress === 100,
+      completed: false,
       completedAt,
       originUrl: input.originUrl,
       file: {
