@@ -15,6 +15,7 @@ type FileRow = {
   download_block_reason: string | null;
   chart_is_hidden: number;
   chart_hidden_reason: string | null;
+  lifecycle_status: string | null;
 };
 
 function toBoolean(value: number): boolean {
@@ -75,7 +76,14 @@ async function selectFileRow(env: Env, fileId: string): Promise<FileRow | null> 
       versions.download_blocked AS download_blocked,
       versions.download_block_reason AS download_block_reason,
       charts.is_hidden AS chart_is_hidden,
-      charts.hidden_reason AS chart_hidden_reason
+      charts.hidden_reason AS chart_hidden_reason,
+      (
+        SELECT lifecycle.status
+        FROM version_withdrawals AS lifecycle
+        WHERE lifecycle.version_id = versions.id
+        ORDER BY lifecycle.requested_at DESC, lifecycle.id DESC
+        LIMIT 1
+      ) AS lifecycle_status
     FROM versions
     INNER JOIN charts ON charts.id = versions.chart_id
     WHERE versions.file_id = ?
@@ -131,14 +139,17 @@ export async function handleFileRoute(request: Request, env: Env, fileId: string
     );
   }
 
-  if (fileRow.file_deleted_at) {
+  const lifecycleContentBlocked = ["processing", "tombstoned", "deleted"].includes(
+    fileRow.lifecycle_status || ""
+  );
+  if (lifecycleContentBlocked) {
     return apiError(
       request,
       env,
-      410,
-      "FILE_DELETED",
-      "この譜面ファイルは削除済みです。",
-      `The R2 chart file was deleted at ${fileRow.file_deleted_at}.`
+      404,
+      "FILE_NOT_FOUND",
+      "この投稿のファイルは公開されていません。",
+      "The requested file is not public."
     );
   }
 
@@ -161,6 +172,17 @@ export async function handleFileRoute(request: Request, env: Env, fileId: string
       "FILE_NOT_AVAILABLE",
       "このファイルは現在利用できません。",
       `The version is hidden. reason=${fileRow.version_hidden_reason ?? "none"}`
+    );
+  }
+
+  if (fileRow.file_deleted_at) {
+    return apiError(
+      request,
+      env,
+      410,
+      "FILE_DELETED",
+      "この譜面ファイルは削除済みです。",
+      `The R2 chart file was deleted at ${fileRow.file_deleted_at}.`
     );
   }
 

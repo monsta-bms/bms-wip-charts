@@ -304,6 +304,25 @@
   min-width: 0;
 }
 
+.version-row.version-tree-row.is-withdrawal-processing,
+.version-row.version-tree-row.is-withdrawal-tombstone {
+  background: var(--surface-muted, #f4f7f6);
+}
+
+.version-redacted-message {
+  display: block;
+  color: var(--text-secondary, #53646a);
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.version-row.version-tree-row.is-withdrawal-processing > .meta-block,
+.version-row.version-tree-row.is-withdrawal-tombstone > .meta-block,
+.version-row.version-tree-row.is-withdrawal-processing > .version-actions,
+.version-row.version-tree-row.is-withdrawal-tombstone > .version-actions {
+  min-height: 1px;
+}
+
 .version-main-label {
   color: var(--primary-dark);
   flex: 0 0 auto;

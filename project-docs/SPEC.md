@@ -889,6 +889,21 @@ RC★★変換:
 - RC★/RC★★では、MD5重複排除後に採用されたversion自身の有効な`origin_url`だけを`url`として出力する。URLなしでも掲載を継続し、`url_diff`と`md5`の既存仕様は変えない。`org_md5`は実装しない。
 - 既存versionへの追加・訂正・削除、追記フォームでの編集は後続フェーズとする。
 
+## WITHDRAWAL-LIFECYCLE-16A 取り下げ申請
+
+- 利用者向け操作を「投稿を取り下げる」へ一本化し、新規`version_withdrawals`へ監査可能な申請履歴を保存する。`active`は行を作らず、最新の新方式行と旧`withdrawn_at/delete_requests`から公開状態を導出する。
+- statusは`pending/processing/canceled/deleted/tombstoned`、request modeは`immediate/deferred`。16Aが作成するのはpendingだけで、processing、削除、墓標化、R2 cleanup、Cronは16B以降の責任とする。
+- immediateは投稿から24時間以内、DB上の全直接子0、完成版置換参照0、旧delete request 0、active lifecycle 0、公開中、ファイル未削除をすべて満たす場合。予定時刻は申請時刻と同じで取消不可。16Aでは実削除されず処理待ちになる。
+- deferredはimmediate条件を満たさない場合。予定時刻はD1の申請時刻から7日後で、予定時刻未満だけ投稿者が管理パスワードで取消できる。7日ちょうど以降はCron未実行でも取消不可。
+- pending中はversion本体の`allow_append/download_blocked/withdrawn_at/is_hidden/file_deleted_at`を変更しない。一般一覧、検索、件数、お気に入り、RC★/RC★★からは除外する一方、直接chart詳細の版ツリーには状態・予定時刻付きで残す。DLは既存状態、追記は`allow_append`に従う。
+- processing/tombstoned/deletedはDLと追記を拒否する。pending中に子versionが増えても申請を自動取消せず、将来の期限処理で再判定する。
+- canceled履歴だけのversionはactiveへ戻し、一般一覧・お気に入りsnapshot・難易度表の通常条件へ復帰できる。取消後の公開APIでは古い申請日時・予定日時を露出しない。
+- 旧`withdrawn_at`とpendingの旧`delete_requests`は新テーブルへbackfillせず、`legacy_withdrawn/legacy_delete_pending`として読み取り専用にする。新Pagesは旧操作APIへfallbackしない。
+- 申請はクライアント生成idempotency keyを使う。生keyは永続化せず既存`HASH_SECRET`によるhashだけを保存する。同じkeyの再送は同じ結果、別versionへの再利用は競合エラーとする。
+- post_logsは既存`withdraw_version` actionを再利用し、operation、request mode、outcome、固定error codeだけを記録する。パスワード、生idempotency key、生IP/UA、R2 key、SQLを保存しない。
+- 新migrationにはversion/chartへの外部キーを置かず、将来versionを物理削除しても申請監査行を残せるようにする。同一versionのpending/processingはpartial UNIQUE indexで最大1件に制限する。
+- 16B finalizerがない16A単体は本番配信禁止。本番migration、Worker deploy、Pages push、既存Cron変更を行わない。
+
 ## SITE-THEME-14 全体テーマ
 
 - 公開Pagesと管理画面は`white`、`default`、`dark`の3テーマを提供する。初期値は既存の青緑グレー配色を引き継ぐ`default`とし、OSテーマから自動選択しない。
@@ -899,3 +914,54 @@ RC★★変換:
 - 画面用CanvasはCSS変数から配色を取得し、`bms:themechange`で表示中のCanvasだけ再描画する。progressImageとして生成・送信・R2保存するPNGと保存済みPNGにはテーマを反映しない。
 - Turnstileは`white`/`default`で`light`、`dark`で`dark`を使用する。実行中challengeは途中破棄せず、終了後に安全にremove/renderする。
 - RC★/RC★★の取込リンクは現在テーマを`theme` queryへ付与する。Workerの取込HTMLだけが`white`/`default`/`dark`を反映し、header JSON、data JSON、キャッシュ条件、D1 queryは変更しない。
+
+## WITHDRAWAL-LIFECYCLE-16B
+
+### 取り下げ要求の確定処理
+
+- `version_withdrawals`の`pending`またはlease期限切れの`processing`を、共通finalizerが条件付きUPDATEでclaimする。claim時は一意な`lease_token`、10分後の`lease_expires_at`、`processing_mode`、`attempt_count + 1`を保存する。
+- 即時要求はAPI内で同じfinalizerを同期実行する。遅延要求は`scheduled_at <= CURRENT_TIMESTAMP`になったものを`processDueVersionWithdrawals()`で最大20件ずつ処理できるが、16BではCronや公開実行APIを追加しない。
+- 削除直前に依存関係を再検査する。直接子version、`collapsed_by_version_id`参照、legacy `delete_requests`のいずれかが存在する場合は墓標化し、存在しない場合だけ物理削除する。子versionは公開状態に関係なく全件を依存として扱う。
+- R2では譜面objectとprogressImage objectを個別に確認して削除する。objectが既にない場合は成功扱いとする。いずれかの削除に失敗した場合はD1を終端状態へ進めず、leaseを解放して再試行可能な`processing`として残す。
+- R2削除後、D1変更の直前に依存関係を再検査する。依存が増えた場合は墓標化へ切り替える。物理削除はlifecycle更新、version削除、空chart、空songの削除をD1 batchで行う。
+- R2削除後にD1更新が失敗した場合、次回実行はobject不在を正常な修復経路として扱う。R2とD1をまたぐ完全なトランザクションは存在しない。
+
+### 物理削除と墓標化
+
+- 物理削除では`versions`行を削除し、参照versionがなくなったchartとsongだけを削除する。`version_withdrawals`は外部キーを持たない監査行として`deleted`終端状態を保持する。
+- 物理削除の依存判定は事前検査とD1確定条件で同じSQL条件を使う。公開状態を問わない直接子、`collapsed_by_version_id`参照、旧`delete_requests`のいずれかがあれば削除せず墓標化し、確定直前に依存が増えた場合も墓標化へ切り替える。
+- 墓標化ではversion行を残し、`allow_append=0`、`download_blocked=1`、`file_deleted_at`を設定する。譜面objectとprogressImage objectは削除し、公開用の作者、コメント、原曲URL、ハッシュ、進捗、ファイル情報は返さない。
+- 墓標は直接chart詳細の版ツリーだけに残し、固定文言「投稿者により取り下げられました」と「派生版を維持するため、版ツリー上の履歴だけ残っています。」を表示する。通常一覧、検索、version一覧、難易度表、お気に入りqueryからは除外する。
+- `processing`も通常一覧から除外し、直接chart詳細では固定状態だけを返す。譜面DL、progressImage、miniView、追記、旧取り下げ・削除申請操作は拒否する。
+
+### 冪等性と監査
+
+- 同じidempotency keyの終端結果は、version行の取得や管理パスワード照合より先に`version_withdrawals`から返す。物理削除済みでも同じ`deleted`結果を返せる。別versionへの同じkey再利用は409とする。
+- 削除済みversionを指定した詳細URLは、同じchartに公開可能なversionが残る場合、親（判別可能な場合）、代表または最新版、BASE、先頭versionの順で安全な移動先を選び、`history.replaceState`でURLを置き換える。chart自体が消えている場合は選択を解除して一覧へ戻す。
+- お気に入りはversion ID単位で保存する。processing/tombstonedでは星を表示せず、お気に入り保存値自体は削除しない。activeへ戻った場合は同じ保存値から再表示できる。
+- finalizerの個別成功、墓標化、再試行、失敗は`admin_logs`へ記録する。raw R2 key、パスワード、Secret、生IP、生UA、完全なhashは記録しない。
+- 手動R2 cleanup、既存の30日cleanup Cron、管理承認・却下、D1 schema、R2保存形式は変更しない。
+
+## WITHDRAWAL-LIFECYCLE-16C 毎時observe
+
+### Cronとモード
+
+- 既存の毎日R2 cleanup `0 18 * * *`は変更せず、取り下げ監視用に毎時`0 * * * *`を追加する。Scheduled handlerは`event.cron`を完全一致で振り分け、各invocationでは対応する一方だけを実行する。
+- 通常変数`WITHDRAWAL_CRON_MODE`が厳密に`observe`の場合だけ監視する。`off`、未設定、空文字、大文字、前後空白、`active`を含むその他の値はすべて安全側のoffとする。リポジトリ既定値は`off`で、active分岐、claim、finalizer実行は16Cに存在しない。
+- 判定時刻はScheduled Eventの`scheduledTime`から一度だけ生成し、候補検索、lease期限、分類の全処理で共有する。単体試験では同じ`now`を注入できる。
+
+### 候補と分類
+
+- 候補は、`pending/immediate`、期限到達済み`pending/deferred`、leaseがNULLまたは期限切れの`processing`。期限前deferred、有効lease中processing、canceled/deleted/tombstonedは除外する。
+- `scheduled_at ASC, id ASC`で最大21件を読み、先頭20件だけを分類する。21件目があれば`truncated=true`とする。
+- 候補取得後に各lifecycle行を再取得し、取消、terminal化、lease更新などで候補外になった行は`ignored`とする。
+- pendingで依存なしは`would_delete`、依存ありは`would_tombstone`。期限切れprocessingは同条件で`would_retry_delete`または`would_retry_tombstone`とする。
+- version不存在、chart不整合、legacy lifecycle、外部状態競合、候補単位の予期しない読取失敗は`manual_review`とする。1件の失敗で残りの分類を中断しない。
+- delete/tombstone判断は16B finalizerの読み取り専用依存調査と競合判定を共有する。直接子は公開状態を問わず数え、`collapsed_by_version_id`参照と旧`delete_requests`参照も物理削除阻止要因とする。
+
+### 非変更と監査
+
+- observeが行う書込みは`admin_logs`だけ。version、withdrawal、chart、song、旧削除申請、post log、lease、attempt count、error code、R2 objectおよびmetadataを変更しない。R2 HEAD/GET/LISTも実行しない。
+- 実行ごとに、予定時刻、取得・分類件数、各分類件数、要確認・無視・エラー件数、上限超過、所要時間を集計記録する。個別診断はmanual reviewまたは予期しない候補エラーだけを最大5件記録する。
+- ログにはパスワード、idempotency key/hash、lease token、IP/UA hash、R2 key、SQL、stack、作者、コメント、origin URL、ファイル名、譜面hash、progressMap、Secret、Binding値を保存しない。
+- Pages、公開API、D1 schema、migration、Secret、R2保存形式は変更しない。active処理は16Dの別レビュー対象とする。

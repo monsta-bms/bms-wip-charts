@@ -4,11 +4,12 @@ compatibility_date = "2026-06-28"
 workers_dev = true
 
 [triggers]
-crons = ["0 18 * * *"]
+crons = ["0 18 * * *", "0 * * * *"]
 
 [vars]
 # カンマ区切りで複数Originを許可する。ブラウザのOriginはパスを含まない。
 ALLOWED_ORIGINS = "https://monsta-bms.github.io,http://localhost:8787"
+WITHDRAWAL_CRON_MODE = "off"
 
 [[d1_databases]]
 binding = "DB"

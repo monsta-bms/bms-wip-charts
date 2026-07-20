@@ -1,5 +1,11 @@
 import { normalizeText } from "../utils/bms";
 import { apiError, Env, methodNotAllowed, ok } from "../utils/response";
+import {
+  LifecycleProjection,
+  lifecycleProjectionSql,
+  publicWithdrawalExclusionSql,
+  resolvePublicLifecycleStatus
+} from "../utils/versionWithdrawal";
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
@@ -26,7 +32,7 @@ type VersionListParams = {
   dateToExclusiveUtc: string | null;
 };
 
-type VersionListRow = {
+type VersionListRow = LifecycleProjection & {
   version_id: string;
   chart_id: string;
   version_created_at: string;
@@ -84,7 +90,8 @@ type VersionListBody = {
 const PUBLIC_VERSION_CONDITIONS = [
   "charts.is_hidden = 0",
   "versions.is_hidden = 0",
-  "COALESCE(versions.collapsed_by_completion, 0) = 0"
+  "COALESCE(versions.collapsed_by_completion, 0) = 0",
+  publicWithdrawalExclusionSql("versions")
 ];
 
 function invalidParam(detail: string, favoriteQuery: boolean): ParseResult {
@@ -426,6 +433,7 @@ function buildCommentPreview(comment: string | null): { commentPreview: string; 
 
 function mapVersionRow(row: VersionListRow) {
   const comment = buildCommentPreview(row.comment);
+  const lifecycleStatus = resolvePublicLifecycleStatus(row);
   return {
     versionId: row.version_id,
     chartId: row.chart_id,
@@ -448,6 +456,11 @@ function mapVersionRow(row: VersionListRow) {
     allowAppend: row.allow_append === 1,
     withdrawn: row.withdrawn_at !== null || row.download_block_reason === "withdrawn",
     deleteRequested: row.delete_requested_at !== null || row.download_block_reason === "delete_requested",
+    lifecycleStatus,
+    requestMode: row.lifecycle_request_mode,
+    withdrawalRequestedAt: row.lifecycle_requested_at,
+    scheduledAt: row.lifecycle_scheduled_at,
+    canCancelWithdrawal: lifecycleStatus === "withdrawal_pending" && row.lifecycle_can_cancel === 1,
     downloadBlocked: row.download_blocked === 1,
     branchPath: row.branch_path,
     versionLabel: buildVersionPathLabel(row.branch_path),
@@ -500,6 +513,7 @@ async function selectVersionList(env: Env, params: VersionListParams): Promise<{
       versions.download_blocked AS download_blocked,
       versions.download_block_reason AS download_block_reason,
       versions.branch_path AS branch_path,
+      ${lifecycleProjectionSql("versions")},
       datetime(charts.created_at, '+168 hours') AS new_until,
       CASE WHEN CURRENT_TIMESTAMP < datetime(charts.created_at, '+168 hours') THEN 1 ELSE 0 END AS is_new
     FROM versions

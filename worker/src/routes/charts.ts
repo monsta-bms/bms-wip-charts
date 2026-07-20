@@ -8,6 +8,13 @@ import { normalizeOriginUrl } from "../utils/originUrl";
 import { prepareProgressMap } from "../utils/progressMap";
 import { buildRequestFingerprint } from "../utils/requestFingerprint";
 import { apiError, Env, errorDetail, methodNotAllowed, ok } from "../utils/response";
+import {
+  LifecycleProjection,
+  lifecycleProjectionSql,
+  publicWithdrawalExclusionSql,
+  resolvePublicLifecycleStatus,
+  sanitizePublicVersion
+} from "../utils/versionWithdrawal";
 import { buildZipInspectionLogDetail, inspectZipUpload } from "../utils/zipValidation";
 import { findActiveFileBan } from "./bans";
 
@@ -46,7 +53,7 @@ type ChartRow = {
   chart_updated_at: string;
 };
 
-type VersionRow = {
+type VersionRow = LifecycleProjection & {
   version_id: string;
   chart_id: string;
   chart_name: string;
@@ -415,10 +422,12 @@ function projectMeasureNotes(value: string | null, versionId: string): {
 }
 
 function buildVersion(row: VersionRow) {
-  const downloadBlocked = toBoolean(row.download_blocked);
+  const lifecycleStatus = resolvePublicLifecycleStatus(row);
+  const lifecycleBlocksAccess = lifecycleStatus === "processing" || lifecycleStatus === "tombstoned";
+  const downloadBlocked = toBoolean(row.download_blocked) || lifecycleBlocksAccess;
   const measureNotesProjection = projectMeasureNotes(row.measure_notes_json, row.version_id);
 
-  return {
+  const version = {
     id: row.version_id,
     parentVersionId: row.parent_version_id,
     versionNumber: row.version_number,
@@ -442,6 +451,11 @@ function buildVersion(row: VersionRow) {
     withdrawnAt: row.withdrawn_at,
     deleteRequested: row.delete_requested_at !== null || row.download_block_reason === "delete_requested",
     deleteRequestedAt: row.delete_requested_at,
+    lifecycleStatus,
+    requestMode: row.lifecycle_request_mode,
+    withdrawalRequestedAt: row.lifecycle_requested_at,
+    scheduledAt: row.lifecycle_scheduled_at,
+    canCancelWithdrawal: lifecycleStatus === "withdrawal_pending" && toBoolean(row.lifecycle_can_cancel ?? 0),
     hidden: toBoolean(row.is_hidden),
     hiddenReason: row.hidden_reason,
     hiddenAt: row.hidden_at,
@@ -479,6 +493,7 @@ function buildVersion(row: VersionRow) {
     totalChildVersionCount: Number(row.total_child_version_count),
     updatedAt: row.updated_at
   };
+  return sanitizePublicVersion(version, lifecycleStatus);
 }
 
 function buildChartEntry(chartRow: ChartRow, versionRows: VersionRow[]) {
@@ -615,6 +630,7 @@ function buildVisibleChartFilter(params: ListParams): { sql: string; bindings: s
       FROM versions
       WHERE versions.chart_id = charts.id
         AND versions.is_hidden = 0
+        AND ${publicWithdrawalExclusionSql("versions")}
     )`
   ];
   const bindings: string[] = [];
@@ -637,6 +653,7 @@ function buildVisibleChartFilter(params: ListParams): { sql: string; bindings: s
         FROM versions AS chart_name_versions
         WHERE chart_name_versions.chart_id = charts.id
           AND chart_name_versions.is_hidden = 0
+          AND ${publicWithdrawalExclusionSql("chart_name_versions")}
           AND COALESCE(
             chart_name_versions.normalized_chart_name,
             charts.normalized_chart_name
@@ -647,6 +664,7 @@ function buildVisibleChartFilter(params: ListParams): { sql: string; bindings: s
         FROM versions AS author_versions
         WHERE author_versions.chart_id = charts.id
           AND author_versions.is_hidden = 0
+          AND ${publicWithdrawalExclusionSql("author_versions")}
           AND author_versions.author LIKE ? ESCAPE '\\' COLLATE NOCASE
       )
     )`);
@@ -747,7 +765,11 @@ async function selectVisibleChartById(env: Env, chartId: string): Promise<ChartR
   `).bind(chartId).first<ChartRow>();
 }
 
-async function selectVisibleVersionRows(env: Env, chartIds: string[]): Promise<VersionRow[]> {
+async function selectVisibleVersionRows(
+  env: Env,
+  chartIds: string[],
+  includeWithdrawalStates = false
+): Promise<VersionRow[]> {
   if (chartIds.length === 0) {
     return [];
   }
@@ -801,6 +823,7 @@ async function selectVisibleVersionRows(env: Env, chartIds: string[]): Promise<V
       versions.delete_requested_at AS delete_requested_at,
       versions.hidden_at AS hidden_at,
       versions.download_blocked_at AS download_blocked_at,
+      ${lifecycleProjectionSql("versions")},
       CASE
         WHEN versions.created_at >= datetime('now', '-24 hours') THEN 1
         ELSE 0
@@ -826,6 +849,7 @@ async function selectVisibleVersionRows(env: Env, chartIds: string[]): Promise<V
     INNER JOIN charts ON charts.id = versions.chart_id
     WHERE versions.is_hidden = 0
       AND versions.chart_id IN (${placeholders})
+      ${includeWithdrawalStates ? "" : `AND ${publicWithdrawalExclusionSql("versions")}`}
     ORDER BY versions.chart_id ASC, versions.branch_path ASC
   `).bind(...chartIds).all<VersionRow>();
 
@@ -934,7 +958,7 @@ export async function handleChartDetailRoute(
       );
     }
 
-    const versionRows = await selectVisibleVersionRows(env, [chartRow.chart_id]);
+    const versionRows = await selectVisibleVersionRows(env, [chartRow.chart_id], true);
     const serverTime = await selectServerTime(env);
     return ok(request, env, {
       charts: [buildChartEntry(chartRow, versionRows)],

@@ -1,13 +1,9 @@
 (() => {
   const apiBaseUrl = window.API_BASE_URL || "https://bms-wip-charts-worker.monsta3228gsl.workers.dev";
-  const reasonMaxLength = 500;
   const chartList = document.querySelector("#chartList");
   const chartInteractionRoot = document.querySelector("#list") || chartList;
   const dialog = document.querySelector("#versionManagementDialog");
-
-  if (!chartList || !chartInteractionRoot || !dialog) {
-    return;
-  }
+  if (!chartList || !chartInteractionRoot || !dialog) return;
 
   const form = dialog.querySelector("#versionManagementForm");
   const title = dialog.querySelector("#versionManagementTitle");
@@ -15,19 +11,29 @@
   const authorValue = dialog.querySelector("#versionManagementAuthor");
   const stateValue = dialog.querySelector("#versionManagementState");
   const createdAtValue = dialog.querySelector("#versionManagementCreatedAt");
-  const elapsedValue = dialog.querySelector("#versionManagementElapsed");
-  const deadlineValue = dialog.querySelector("#versionManagementDeadline");
-  const descendantsValue = dialog.querySelector("#versionManagementDescendants");
+  const scheduleValue = dialog.querySelector("#versionManagementSchedule");
+  const downloadValue = dialog.querySelector("#versionManagementDownload");
   const allowAppendValue = dialog.querySelector("#versionManagementAllowAppend");
-  const withdrawDescription = dialog.querySelector("#versionWithdrawDescription");
-  const deleteDescription = dialog.querySelector("#versionDeleteDescription");
+  const actionTitle = dialog.querySelector("#withdrawalActionTitle");
+  const description = dialog.querySelector("#versionWithdrawalDescription");
   const passwordInput = dialog.querySelector("#versionManagementPassword");
-  const reasonInput = dialog.querySelector("#versionDeleteReason");
-  const withdrawConfirm = dialog.querySelector("#versionWithdrawConfirm");
-  const withdrawButton = dialog.querySelector("#versionWithdrawButton");
-  const deleteRequestButton = dialog.querySelector("#versionDeleteRequestButton");
+  const actionButton = dialog.querySelector("#versionWithdrawalActionButton");
   const closeButtons = Array.from(dialog.querySelectorAll("[data-version-management-close]"));
   const message = dialog.querySelector("#versionManagementMessage");
+
+  const fixedErrorMessages = {
+    INVALID_IDEMPOTENCY_KEY: "取り下げ操作を確認できません。管理画面を開き直してください。",
+    IDEMPOTENCY_KEY_REUSED: "取り下げ操作を確認できません。管理画面を開き直してください。",
+    WITHDRAWAL_NOT_ALLOWED: "この投稿は現在取り下げできません。",
+    WITHDRAWAL_NOT_PENDING: "取り消せる取り下げ申請がありません。",
+    WITHDRAWAL_CANCEL_EXPIRED: "取り下げ申請の取消期限を過ぎています。",
+    WITHDRAWAL_STATE_CONFLICT: "投稿の状態が更新されました。画面を再読み込みして確認してください。",
+    LIFECYCLE_OPERATION_IN_PROGRESS: "取り下げ処理が開始されているため、操作できません。",
+    LEGACY_LIFECYCLE_ACTIVE: "この投稿は従来方式の取り下げ・削除処理中です。",
+    INVALID_PASSWORD: "管理パスワードが違います。",
+    PASSWORD_REQUIRED: "管理パスワードを入力してください。",
+    RATE_LIMITED: "管理パスワードの試行回数が上限を超えました。しばらく待ってから再試行してください。"
+  };
 
   const state = {
     versionId: "",
@@ -35,21 +41,25 @@
     versionLabel: "",
     author: "",
     createdAt: null,
-    within24Hours: false,
-    hasDescendants: false,
-    withdrawn: false,
-    deleteRequested: false,
-    allowAppend: true,
-    hidden: false,
-    submitting: false
+    lifecycleStatus: "active",
+    requestMode: null,
+    requestedAt: null,
+    scheduledAt: null,
+    requestPreview: "unavailable",
+    canRequestWithdrawal: false,
+    canCancelWithdrawal: false,
+    downloadAvailable: false,
+    appendAvailable: false,
+    loading: false,
+    submitting: false,
+    idempotencyKey: "",
+    lifecycleRevision: 0,
+    lifecycleController: null
   };
 
   function parseApiDate(value) {
     const source = String(value || "").trim();
-    if (!source) {
-      return null;
-    }
-
+    if (!source) return null;
     const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(source)
       ? `${source.replace(" ", "T")}Z`
       : source;
@@ -57,11 +67,9 @@
     return Number.isFinite(date.getTime()) ? date : null;
   }
 
-  function formatDateTime(date) {
-    if (!date) {
-      return "不明";
-    }
-
+  function formatDateTime(value) {
+    const date = value instanceof Date ? value : parseApiDate(value);
+    if (!date) return "-";
     return new Intl.DateTimeFormat("ja-JP", {
       timeZone: "Asia/Tokyo",
       year: "numeric",
@@ -73,57 +81,14 @@
     }).format(date);
   }
 
-  function formatDuration(milliseconds) {
-    const minutes = Math.max(0, Math.floor(milliseconds / 60000));
-    if (minutes < 60) {
-      return `${minutes}分`;
-    }
-
-    const hours = Math.floor(minutes / 60);
-    const remainingMinutes = minutes % 60;
-    return `${hours}時間${remainingMinutes > 0 ? `${remainingMinutes}分` : ""}`;
-  }
-
-  function updateLifecyclePreview() {
-    const createdAt = state.createdAt;
-    const deadline = createdAt ? new Date(createdAt.getTime() + 24 * 60 * 60 * 1000) : null;
-    const now = Date.now();
-    const within24Hours = createdAt
-      ? now < deadline.getTime()
-      : state.within24Hours;
-    state.within24Hours = within24Hours;
-
-    createdAtValue.textContent = formatDateTime(createdAt);
-    elapsedValue.textContent = createdAt ? formatDuration(now - createdAt.getTime()) : "不明";
-    deadlineValue.textContent = deadline
-      ? `${formatDateTime(deadline)}${within24Hours ? `（残り${formatDuration(deadline.getTime() - now)}）` : "（経過済み）"}`
-      : "不明";
-    descendantsValue.textContent = state.hasDescendants ? "あり" : "なし";
-    if (allowAppendValue) {
-      allowAppendValue.textContent = state.allowAppend ? "許可" : "停止";
-    }
-    const appendPolicyText = state.allowAppend
-      ? "この版からの追記受付は継続します。"
-      : "この版からの新しい追記は停止されています。";
-
-    if (within24Hours && !state.hasDescendants) {
-      withdrawDescription.textContent = "この版は投稿から24時間以内で、公開中の追記版がありません。取り下げると一覧から非表示になります。譜面ファイルと進捗画像はすぐには整理されません。";
-      deleteDescription.textContent = "この版は投稿から24時間以内で、公開中の追記版がありません。削除すると一覧から非表示になります。この場合、管理者確認待ちの削除申請は作成されません。";
-      return;
-    }
-
-    if (within24Hours) {
-      withdrawDescription.textContent = `この版は投稿から24時間以内ですが、公開中の追記版があるため一覧に履歴を残します。ダウンロードを停止します。${appendPolicyText}`;
-      deleteDescription.textContent = `公開中の追記版があるため一覧に履歴を残し、ダウンロードを停止して削除申請を受け付けます。${appendPolicyText}`;
-      return;
-    }
-
-    withdrawDescription.textContent = `この版は投稿から24時間を経過しています。取り下げるとダウンロードを停止します。${appendPolicyText}`;
-    deleteDescription.textContent = `この版は投稿から24時間を経過しています。ダウンロードを停止し、管理者確認待ちの削除申請として受け付けます。${appendPolicyText}`;
-  }
-
   function readSavedPassword() {
     return window.BmsPostPreferences?.getStoredPassword?.() || "";
+  }
+
+  function createIdempotencyKey() {
+    if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
   }
 
   function setMessage(text, kind = "error") {
@@ -132,109 +97,213 @@
     message.hidden = !text;
   }
 
+  function describeState() {
+    switch (state.lifecycleStatus) {
+      case "withdrawal_pending":
+        return state.requestMode === "immediate" ? "削除処理待ち" : "取り下げ申請中";
+      case "processing": return "取り下げ処理中";
+      case "legacy_withdrawn": return "従来方式の取り下げ中";
+      case "legacy_delete_pending": return "従来方式の削除申請中";
+      case "tombstoned": return "履歴のみ";
+      default: return "公開中";
+    }
+  }
+
+  function renderLifecycle() {
+    stateValue.textContent = describeState();
+    scheduleValue.textContent = state.scheduledAt
+      ? `${formatDateTime(state.scheduledAt)}以降`
+      : "-";
+    downloadValue.textContent = state.downloadAvailable ? "利用可能" : "利用不可";
+    allowAppendValue.textContent = state.appendAvailable ? "許可" : "停止";
+
+    actionButton.hidden = false;
+    actionButton.disabled = state.loading || state.submitting;
+    if (state.loading) {
+      actionTitle.textContent = "投稿を取り下げる";
+      description.textContent = "対象の状態を確認しています。";
+      actionButton.textContent = "確認中…";
+      return;
+    }
+
+    if (state.lifecycleStatus === "active" && state.canRequestWithdrawal) {
+      actionTitle.textContent = "投稿を取り下げる";
+      if (state.requestPreview === "immediate_delete") {
+        description.textContent = "この投稿は24時間以内で、現在は派生版や参照がありません。取り下げると削除処理へ進み、元に戻せません。";
+        actionButton.textContent = "取り下げて削除する";
+      } else {
+        description.textContent = "取り下げ後、7日間は申請を取り消せます。申請期間中は一般一覧から非表示になります。派生版や参照がある場合は、期限後も版ツリー上の履歴だけ残ります。";
+        actionButton.textContent = "取り下げを申請する";
+      }
+      return;
+    }
+
+    if (state.lifecycleStatus === "withdrawal_pending" && state.requestMode === "deferred") {
+      actionTitle.textContent = "取り下げ申請中";
+      description.textContent = `自動処理予定：${formatDateTime(state.scheduledAt)}以降。申請期間中は、詳細画面や既知のURLからダウンロード・追記できます。`;
+      if (state.canCancelWithdrawal) {
+        actionButton.textContent = "取り下げ申請を取り消す";
+      } else {
+        actionButton.textContent = "取消期限を過ぎています";
+        actionButton.disabled = true;
+      }
+      return;
+    }
+
+    actionButton.hidden = true;
+    if (state.lifecycleStatus === "withdrawal_pending") {
+      actionTitle.textContent = "削除処理待ち";
+      description.textContent = "この投稿は削除処理待ちです。この操作は取り消せません。";
+    } else if (state.lifecycleStatus === "processing") {
+      actionTitle.textContent = "取り下げ処理中";
+      description.textContent = "取り下げ処理を受け付けました。処理完了までしばらくお待ちください。";
+    } else if (["legacy_withdrawn", "legacy_delete_pending"].includes(state.lifecycleStatus)) {
+      actionTitle.textContent = "従来方式の処理中";
+      description.textContent = "この投稿は従来方式の取り下げ・削除処理中です。";
+    } else if (state.lifecycleStatus === "tombstoned") {
+      actionTitle.textContent = "投稿者により取り下げられました";
+      description.textContent = "派生版を維持するため、版ツリー上の履歴だけ残っています。";
+    } else {
+      actionTitle.textContent = "投稿を取り下げる";
+      description.textContent = "この投稿は現在取り下げできません。";
+    }
+  }
+
   function setSubmitting(submitting) {
     state.submitting = submitting;
     passwordInput.disabled = submitting;
-    reasonInput.disabled = submitting || state.deleteRequested || state.hidden;
-    withdrawConfirm.disabled = submitting || state.withdrawn || state.hidden;
-    withdrawButton.disabled = submitting || state.withdrawn || state.hidden;
-    deleteRequestButton.disabled = submitting || state.deleteRequested || state.hidden;
-    closeButtons.forEach((button) => {
-      button.disabled = submitting;
-    });
+    closeButtons.forEach((button) => { button.disabled = submitting; });
     dialog.classList.toggle("is-submitting", submitting);
+    renderLifecycle();
   }
 
-  function describeState() {
-    const values = [];
-    if (state.withdrawn) {
-      values.push("取り下げ済み");
-    }
-    if (state.deleteRequested) {
-      values.push("削除申請中");
-    }
-    if (state.hidden) {
-      values.push("非表示");
-    }
-    return values.length > 0 ? values.join(" / ") : "公開中";
+  function applyLifecycle(body) {
+    state.lifecycleStatus = String(body?.lifecycleStatus || "active");
+    state.requestMode = body?.requestMode === "immediate" || body?.requestMode === "deferred"
+      ? body.requestMode
+      : null;
+    state.requestedAt = parseApiDate(body?.requestedAt);
+    state.scheduledAt = parseApiDate(body?.scheduledAt);
+    state.requestPreview = String(body?.requestPreview || "unavailable");
+    state.canRequestWithdrawal = body?.canRequestWithdrawal === true;
+    state.canCancelWithdrawal = body?.canCancelWithdrawal === true;
+    state.downloadAvailable = body?.downloadAvailable === true;
+    state.appendAvailable = body?.appendAvailable === true;
   }
 
-  function deleteActionLabel() {
-    if (state.deleteRequested) {
-      return "削除申請中";
-    }
+  async function readJson(response) {
+    const text = await response.text();
+    if (!text) return null;
+    try { return JSON.parse(text); } catch { return null; }
+  }
 
-    return state.within24Hours && !state.hasDescendants ? "削除する" : "削除を申請";
+  async function fetchLifecycle() {
+    const revision = state.lifecycleRevision;
+    const versionId = state.versionId;
+    state.lifecycleController?.abort();
+    const controller = new AbortController();
+    state.lifecycleController = controller;
+    state.loading = true;
+    renderLifecycle();
+    try {
+      const response = await fetch(new URL(
+        `/api/versions/${encodeURIComponent(versionId)}/lifecycle`,
+        apiBaseUrl
+      ).toString(), { cache: "no-store", signal: controller.signal });
+      const body = await readJson(response);
+      if (revision !== state.lifecycleRevision || versionId !== state.versionId) return;
+      if (!response.ok) {
+        if (response.status === 404 || body?.code === "NOT_FOUND") {
+          throw { code: "LIFECYCLE_API_UNAVAILABLE" };
+        }
+        throw body || { code: "LIFECYCLE_LOAD_FAILED" };
+      }
+      applyLifecycle(body);
+      setMessage("");
+    } catch (error) {
+      if (error?.name === "AbortError" || revision !== state.lifecycleRevision) return;
+      console.warn("[version-management] lifecycle lookup failed", {
+        code: error?.code || "LIFECYCLE_LOAD_FAILED",
+        versionId: state.versionId
+      });
+      state.canRequestWithdrawal = false;
+      setMessage("取り下げ機能を更新中です。時間を置いて再度お試しください。");
+    } finally {
+      if (revision !== state.lifecycleRevision || versionId !== state.versionId) return;
+      if (state.lifecycleController === controller) state.lifecycleController = null;
+      state.loading = false;
+      renderLifecycle();
+    }
   }
 
   function openDialog(button) {
+    state.lifecycleController?.abort();
+    state.lifecycleRevision += 1;
     state.versionId = button.dataset.versionId || "";
     state.chartId = button.dataset.chartId || "";
     state.versionLabel = button.dataset.versionLabel || "-";
     state.author = button.dataset.author || "未入力";
     state.createdAt = parseApiDate(button.dataset.createdAt);
-    state.within24Hours = button.dataset.within24Hours === "true";
-    state.hasDescendants = button.dataset.hasDescendants === "true";
-    state.withdrawn = button.dataset.withdrawn === "true";
-    state.deleteRequested = button.dataset.deleteRequested === "true";
-    state.allowAppend = button.dataset.allowAppend !== "false";
-    state.hidden = false;
+    state.lifecycleStatus = button.dataset.lifecycleStatus || "active";
+    state.requestMode = button.dataset.requestMode || null;
+    state.scheduledAt = parseApiDate(button.dataset.scheduledAt);
+    state.requestPreview = "unavailable";
+    state.canRequestWithdrawal = false;
+    state.canCancelWithdrawal = button.dataset.canCancelWithdrawal === "true";
+    state.downloadAvailable = button.dataset.downloadAvailable === "true";
+    state.appendAvailable = button.dataset.appendAvailable === "true";
+    state.idempotencyKey = "";
+    state.loading = true;
+    state.submitting = false;
 
     title.textContent = `投稿管理: ${state.versionLabel}`;
     versionValue.textContent = state.versionLabel;
     authorValue.textContent = state.author;
-    stateValue.textContent = describeState();
-    updateLifecyclePreview();
+    createdAtValue.textContent = formatDateTime(state.createdAt);
     passwordInput.value = readSavedPassword();
-    reasonInput.value = "";
-    withdrawConfirm.checked = false;
     setMessage("");
-    setSubmitting(false);
-
-    withdrawButton.textContent = state.withdrawn ? "取り下げ済み" : "取り下げる";
-    deleteRequestButton.textContent = deleteActionLabel();
-    if (typeof dialog.showModal === "function") {
-      dialog.showModal();
-    } else {
-      dialog.setAttribute("open", "");
-    }
-    window.setTimeout(() => passwordInput.focus(), 0);
+    renderLifecycle();
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+    void fetchLifecycle().then(() => window.setTimeout(() => passwordInput.focus(), 0));
   }
 
   function closeDialog() {
-    if (state.submitting) {
-      return;
-    }
-    if (typeof dialog.close === "function") {
-      dialog.close();
-    } else {
-      dialog.removeAttribute("open");
-    }
+    if (state.submitting) return;
+    state.lifecycleController?.abort();
+    state.lifecycleController = null;
+    state.lifecycleRevision += 1;
+    state.idempotencyKey = "";
+    if (typeof dialog.close === "function") dialog.close();
+    else dialog.removeAttribute("open");
   }
 
-  function buildOutcomeMessage(body, action) {
-    const outcome = body?.outcome;
-    const appendPolicyText = state.allowAppend
-      ? "この版からの追記受付は継続します。"
-      : "この版からの新しい追記は停止されています。";
-    if (outcome === "immediate_hidden") {
-      return "投稿から24時間以内で公開中の追記版がないため、一覧から取り下げました。譜面ファイルと進捗画像はすぐには整理されません。";
+  async function refreshPublicViews(outcome) {
+    const failures = [];
+    try {
+      const refreshed = await window.BmsChartDetail?.refreshAfterManagement?.({
+        chartId: state.chartId,
+        versionId: state.versionId,
+        outcome
+      });
+      if (refreshed === false) failures.push("selected-detail");
+    } catch {
+      failures.push("selected-detail");
     }
-
-    if (outcome === "download_blocked") {
-      return body?.hasDescendants
-        ? `派生版があるため非表示にはせず、DLのみ停止しました。${appendPolicyText}`
-        : `24時間を経過しているため、DLのみ停止しました。${appendPolicyText}`;
+    try {
+      if (typeof window.loadCharts === "function") {
+        const refreshed = await window.loadCharts({
+          selectedChartId: window.BmsChartDetail?.getSelection?.().chartId || ""
+        });
+        if (!refreshed) failures.push("recent-list");
+      }
+    } catch {
+      failures.push("recent-list");
     }
-
-    if (outcome === "delete_requested") {
-      return `削除申請として受け付けました。DLを停止し、後日管理確認後に処理されます。${appendPolicyText}`;
-    }
-
-    return action === "withdraw" ? "取り下げを受け付けました。" : "削除申請を受け付けました。";
+    return failures;
   }
 
-  async function requestLifecycle(action) {
+  async function submitOperation() {
     const password = passwordInput.value.trim();
     if (!password) {
       setMessage("管理パスワードを入力してください。");
@@ -242,139 +311,92 @@
       return;
     }
 
-    if (action === "withdraw" && !withdrawConfirm.checked) {
-      setMessage("取り下げ内容を確認し、確認欄にチェックしてください。");
-      withdrawConfirm.focus();
+    const canceling = state.lifecycleStatus === "withdrawal_pending"
+      && state.requestMode === "deferred"
+      && state.canCancelWithdrawal;
+    const immediate = state.requestPreview === "immediate_delete";
+    const confirmation = canceling
+      ? "取り下げ申請を取り消しますか？"
+      : immediate
+        ? "取り下げると削除処理待ちとなり、元に戻せません。続けますか？"
+        : "投稿を一般一覧から取り下げます。7日間は申請を取り消せます。続けますか？";
+    if (!window.confirm(confirmation)) {
+      if (!canceling) state.idempotencyKey = "";
       return;
     }
 
-    const reason = reasonInput.value.trim();
-    if (reason.length > reasonMaxLength) {
-      setMessage(`削除申請理由は${reasonMaxLength}文字以内で入力してください。`);
-      reasonInput.focus();
-      return;
-    }
+    const path = canceling
+      ? `/api/versions/${encodeURIComponent(state.versionId)}/withdrawal/cancel`
+      : `/api/versions/${encodeURIComponent(state.versionId)}/withdrawal`;
+    if (!canceling && !state.idempotencyKey) state.idempotencyKey = createIdempotencyKey();
 
     setMessage("");
     setSubmitting(true);
-    const path = `/api/versions/${encodeURIComponent(state.versionId)}/${action === "withdraw" ? "withdraw" : "delete-request"}`;
-
     try {
       const response = await fetch(new URL(path, apiBaseUrl).toString(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(action === "withdraw" ? { password } : { password, reason })
+        body: JSON.stringify(canceling
+          ? { password }
+          : { password, idempotencyKey: state.idempotencyKey })
       });
-      const responseText = await response.text();
-      let body = null;
-      try {
-        body = responseText ? JSON.parse(responseText) : null;
-      } catch {
-        body = null;
-      }
+      const body = await readJson(response);
+      if (!response.ok) throw body || { code: "REQUEST_FAILED" };
 
-      if (!response.ok) {
-        throw body || {
-          code: "REQUEST_FAILED",
-          message: "管理操作に失敗しました。",
-          detail: `HTTP status ${response.status}`
-        };
-      }
-
-      state.within24Hours = body?.within24Hours === true;
-      state.hasDescendants = body?.hasDescendants === true;
-      if (body?.outcome === "immediate_hidden") {
-        state.hidden = true;
-      } else if (action === "withdraw") {
-        state.withdrawn = true;
-      } else if (body?.outcome === "delete_requested") {
-        state.deleteRequested = true;
-      }
-      stateValue.textContent = describeState();
-      withdrawButton.textContent = state.withdrawn ? "取り下げ済み" : "取り下げる";
-      deleteRequestButton.textContent = deleteActionLabel();
-      const outcomeMessage = buildOutcomeMessage(body, action);
-      setMessage(outcomeMessage, "success");
+      state.idempotencyKey = "";
+      applyLifecycle(body);
+      const outcome = String(body?.outcome || "");
+      const successText = canceling
+        ? "取り下げ申請を取り消しました。"
+        : outcome === "immediate_deleted"
+          ? "投稿を削除しました。"
+          : outcome === "tombstoned"
+            ? "投稿者により取り下げられました。派生版を維持するため、版ツリー上の履歴だけ残っています。"
+            : outcome === "processing"
+              ? "取り下げ処理を受け付けました。処理完了までしばらくお待ちください。"
+              : "取り下げ申請を受け付けました。7日間は取り消せます。";
       setSubmitting(false);
-
-      const refreshFailures = [];
-      try {
-        const detailResult = await window.BmsChartDetail?.refreshAfterManagement?.({
-          chartId: state.chartId,
-          versionId: state.versionId,
-          outcome: body?.outcome || ""
-        });
-        if (detailResult === false) {
-          refreshFailures.push("selected-detail");
-        }
-      } catch (refreshError) {
-        refreshFailures.push("selected-detail");
-        console.warn("[version-management-refresh] selected detail refresh failed", {
-          code: "SELECTED_DETAIL_REFRESH_FAILED",
-          chartId: state.chartId,
-          versionId: state.versionId,
-          errorType: refreshError instanceof Error ? refreshError.name : typeof refreshError
-        });
+      setMessage(successText, "success");
+      const failures = await refreshPublicViews(outcome);
+      if (failures.length > 0) {
+        setMessage(`${successText}\n表示を更新できませんでした。ページを再読み込みしてください。`, "success");
       }
-
-      try {
-        if (typeof loadCharts === "function") {
-          const listResult = await loadCharts({
-            selectedChartId: window.BmsChartDetail?.getSelection?.().chartId || ""
-          });
-          if (!listResult) {
-            refreshFailures.push("recent-list");
-          }
-        }
-      } catch (refreshError) {
-        refreshFailures.push("recent-list");
-        console.warn("[version-management-refresh] recent list refresh failed", {
-          code: "RECENT_LIST_REFRESH_FAILED",
-          chartId: state.chartId,
-          versionId: state.versionId,
-          errorType: refreshError instanceof Error ? refreshError.name : typeof refreshError
-        });
+      if (["immediate_deleted", "tombstoned"].includes(outcome) && failures.length === 0) {
+        closeDialog();
       }
-
-      if (refreshFailures.length > 0) {
-        setMessage(`${outcomeMessage}\n操作は完了しましたが、表示の更新に失敗しました。ページを再読み込みしてください。`, "success");
-      }
-      return;
     } catch (error) {
       const code = error?.code || "REQUEST_FAILED";
-      const errorMessage = error?.message || "管理操作に失敗しました。";
-      const detail = error?.detail || "通信状況を確認してください。";
-      console.error("[version-management] lifecycle request failed", {
+      console.warn("[version-management] lifecycle operation failed", {
         code,
         versionId: state.versionId,
-        action,
-        detail
+        operation: canceling ? "cancel" : "request"
       });
-      setMessage(`${errorMessage}\ncode: ${code}\n${detail}`);
+      const unavailable = code === "NOT_FOUND" || code === "LIFECYCLE_API_UNAVAILABLE";
+      setMessage(unavailable
+        ? "取り下げ機能を更新中です。時間を置いて再度お試しください。"
+        : fixedErrorMessages[code] || "取り下げ操作に失敗しました。時間を置いて再度お試しください。");
       setSubmitting(false);
     }
   }
 
   chartInteractionRoot.addEventListener("click", (event) => {
     const button = event.target.closest(".version-management-button");
-    if (!button) {
-      return;
-    }
+    if (!button) return;
     event.preventDefault();
     openDialog(button);
   });
-
-  withdrawButton.addEventListener("click", () => requestLifecycle("withdraw"));
-  deleteRequestButton.addEventListener("click", () => requestLifecycle("delete-request"));
+  actionButton.addEventListener("click", submitOperation);
   closeButtons.forEach((button) => button.addEventListener("click", closeDialog));
   dialog.addEventListener("click", (event) => {
-    if (event.target === dialog) {
-      closeDialog();
-    }
+    if (event.target === dialog) closeDialog();
   });
   dialog.addEventListener("cancel", (event) => {
-    if (state.submitting) {
-      event.preventDefault();
+    if (state.submitting) event.preventDefault();
+    else {
+      state.lifecycleController?.abort();
+      state.lifecycleController = null;
+      state.lifecycleRevision += 1;
+      state.idempotencyKey = "";
     }
   });
   form.addEventListener("submit", (event) => event.preventDefault());

@@ -8,11 +8,11 @@
     <title>リサイクルセンター</title>
     <link rel="stylesheet" href="./style.css?v=append-policy-15-final">
     <link rel="stylesheet" href="./site-header.css?v=recycle-ux-02a">
-    <link rel="stylesheet" href="./branch-tree-list.css?v=append-policy-15-final">
+    <link rel="stylesheet" href="./branch-tree-list.css?v=withdrawal-lifecycle-16b">
     <link rel="stylesheet" href="./list-ui-refresh.css?v=site-theme-14-final">
     <link rel="stylesheet" href="./chart-miniview.css?v=post-form-miniview-01">
     <link rel="stylesheet" href="./tree-progress-polish.css?v=tree-shape-fix-01">
-    <link rel="stylesheet" href="./version-management-ui.css?v=version-lifecycle-24h-01">
+    <link rel="stylesheet" href="./version-management-ui.css?v=withdrawal-lifecycle-16b">
     <link rel="stylesheet" href="./post-form-ui.css?v=append-policy-15-completion-toggle">
     <link rel="stylesheet" href="./chart-detail-link.css?v=site-theme-14-final">
     <link rel="stylesheet" href="./theme.css?v=site-theme-14-final">
@@ -417,16 +417,12 @@
             <dd id="versionManagementCreatedAt">-</dd>
           </div>
           <div>
-            <dt>経過時間</dt>
-            <dd id="versionManagementElapsed">-</dd>
+            <dt>処理予定</dt>
+            <dd id="versionManagementSchedule">-</dd>
           </div>
           <div>
-            <dt>24時間期限</dt>
-            <dd id="versionManagementDeadline">-</dd>
-          </div>
-          <div>
-            <dt>派生版</dt>
-            <dd id="versionManagementDescendants">-</dd>
+            <dt>ダウンロード</dt>
+            <dd id="versionManagementDownload">-</dd>
           </div>
           <div>
             <dt>追記受付</dt>
@@ -440,28 +436,11 @@
           <span class="field-help">投稿時の管理パスワードを入力してください。公開されず、再発行できません。</span>
         </label>
 
-        <section class="version-management-action" aria-labelledby="withdrawActionTitle">
-          <h3 id="withdrawActionTitle">取り下げ</h3>
-          <p id="versionWithdrawDescription">対象の状態を確認しています。</p>
-          <label class="version-management-confirm">
-            <input id="versionWithdrawConfirm" type="checkbox">
-            <span>操作後はこの画面から復旧できないことを確認しました。</span>
-          </label>
+        <section class="version-management-action" aria-labelledby="withdrawalActionTitle">
+          <h3 id="withdrawalActionTitle">投稿を取り下げる</h3>
+          <p id="versionWithdrawalDescription">対象の状態を確認しています。</p>
           <div class="version-management-buttons">
-            <button class="version-withdraw-button" id="versionWithdrawButton" type="button">取り下げる</button>
-          </div>
-        </section>
-
-        <section class="version-management-action" aria-labelledby="deleteRequestActionTitle">
-          <h3 id="deleteRequestActionTitle">削除申請</h3>
-          <p id="versionDeleteDescription">対象の状態を確認しています。</p>
-          <label class="field">
-            <span class="field-label">申請理由（任意）</span>
-            <textarea id="versionDeleteReason" rows="3" maxlength="500" placeholder="削除を希望する理由"></textarea>
-            <span class="field-help">500文字以内。</span>
-          </label>
-          <div class="version-management-buttons">
-            <button class="version-delete-request-button" id="versionDeleteRequestButton" type="button">削除を申請</button>
+            <button class="version-withdrawal-action-button" id="versionWithdrawalActionButton" type="button" disabled>確認中…</button>
           </div>
         </section>
 
@@ -499,11 +478,11 @@
     <script src="./branch-append-ui.js?v=append-policy-15-completion-toggle"></script>
     <script src="./progress-image-preview.js?v=post-form-ux-09a"></script>
     <script src="./progress-image-formdata.js?v=ui-tree-overlay-01"></script>
-    <script src="./branch-tree-list.js?v=append-policy-15-final"></script>
+    <script src="./branch-tree-list.js?v=withdrawal-lifecycle-16b"></script>
     <script src="./tree-progress-polish.js?v=post-form-tree-12"></script>
-    <script src="./favorites-list.js?v=top-detail-recency-07"></script>
-    <script src="./version-management-ui.js?v=append-policy-15"></script>
+    <script src="./favorites-list.js?v=withdrawal-lifecycle-16b-final"></script>
+    <script src="./version-management-ui.js?v=withdrawal-lifecycle-16b"></script>
     <script src="./post-form-ui.js?v=post-form-tree-12"></script>
-    <script src="./chart-detail-link.js?v=top-detail-recency-07"></script>
+    <script src="./chart-detail-link.js?v=withdrawal-lifecycle-16b-final"></script>
   </body>
 </html>

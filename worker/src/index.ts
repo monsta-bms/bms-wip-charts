@@ -8,8 +8,13 @@ import {
 } from "./routes/difficultyTables";
 import { handleFileRoute } from "./routes/files";
 import { handleVersionLifecycleRoute } from "./routes/versionLifecycle";
+import { handleVersionWithdrawalRoute } from "./routes/versionWithdrawal";
 import { handlePublicVersionListRoute } from "./routes/versionList";
 import { runScheduledR2Cleanup } from "./routes/r2Cleanup";
+import {
+  observeDueVersionWithdrawals,
+  resolveWithdrawalCronMode
+} from "./services/versionWithdrawalObserver";
 import { enforcePreMultipartPostingProtection } from "./routes/postingProtection";
 import {
   addProgressImagesToChartsResponse,
@@ -168,6 +173,36 @@ async function routeRequest(request: Request, env: Env): Promise<Response> {
     return handlePublicVersionListRoute(request, env, true);
   }
 
+  const withdrawalCancelMatch = path.match(/^\/api\/versions\/([^/]+)\/withdrawal\/cancel$/);
+  if (withdrawalCancelMatch) {
+    return handleVersionWithdrawalRoute(
+      request,
+      env,
+      decodeURIComponent(withdrawalCancelMatch[1]),
+      "cancel"
+    );
+  }
+
+  const withdrawalMatch = path.match(/^\/api\/versions\/([^/]+)\/withdrawal$/);
+  if (withdrawalMatch) {
+    return handleVersionWithdrawalRoute(
+      request,
+      env,
+      decodeURIComponent(withdrawalMatch[1]),
+      "withdrawal"
+    );
+  }
+
+  const lifecycleStateMatch = path.match(/^\/api\/versions\/([^/]+)\/lifecycle$/);
+  if (lifecycleStateMatch) {
+    return handleVersionWithdrawalRoute(
+      request,
+      env,
+      decodeURIComponent(lifecycleStateMatch[1]),
+      "lifecycle"
+    );
+  }
+
   const versionLifecycleMatch = path.match(/^\/api\/versions\/([^/]+)\/(withdraw|delete-request)$/);
   if (versionLifecycleMatch) {
     return handleVersionLifecycleRoute(
@@ -233,16 +268,39 @@ export default {
     env: Env,
     _ctx: ExecutionContext
   ): Promise<void> {
-    try {
-      await runScheduledR2Cleanup(env, controller.scheduledTime, controller.cron);
-    } catch (error) {
-      console.error("[r2-cleanup-cron] scheduled run failed", {
-        code: "R2_CLEANUP_CRON_FAILED",
-        scheduledTime: controller.scheduledTime,
-        cron: controller.cron,
-        message: errorDetail(error)
-      });
-      throw error;
+    if (controller.cron === "0 18 * * *") {
+      try {
+        await runScheduledR2Cleanup(env, controller.scheduledTime, controller.cron);
+      } catch (error) {
+        console.error("[r2-cleanup-cron] scheduled run failed", {
+          code: "R2_CLEANUP_CRON_FAILED",
+          scheduledTime: controller.scheduledTime,
+          cron: controller.cron,
+          message: errorDetail(error)
+        });
+        throw error;
+      }
+      return;
     }
+
+    if (controller.cron === "0 * * * *") {
+      const mode = resolveWithdrawalCronMode(env.WITHDRAWAL_CRON_MODE);
+      if (mode.source === "invalid") {
+        console.warn("[withdrawal-observer] invalid cron mode; observer remains off", {
+          code: "WITHDRAWAL_CRON_MODE_INVALID"
+        });
+      }
+      if (mode.mode === "observe") {
+        await observeDueVersionWithdrawals(env, {
+          now: new Date(controller.scheduledTime)
+        });
+      }
+      return;
+    }
+
+    console.warn("[scheduled] unknown cron expression ignored", {
+      code: "UNKNOWN_CRON_EXPRESSION",
+      cron: controller.cron
+    });
   }
 } satisfies ExportedHandler<Env>;

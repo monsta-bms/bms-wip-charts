@@ -121,6 +121,29 @@
     const recentBadge = options.isLatest && createdAt
       ? `<span class="recent-activity-badge" data-created-at="${html(createdAt)}" hidden></span>`
       : "";
+    const lifecycleStatus = getLifecycleStatus(version);
+    if (lifecycleStatus === "withdrawal_pending") {
+      if (getLifecycleRequestMode(version) === "immediate") {
+        return `
+          <span class="version-posted-at">${html(postedAt)}</span>
+          <span class="version-withdrawal-detail">削除処理待ち / 取消不可</span>
+          ${recentBadge}
+        `;
+      }
+      const scheduledAt = parseApiDate(getLifecycleScheduledAt(version));
+      return `
+        <span class="version-posted-at">${html(postedAt)}</span>
+        <span class="version-withdrawal-detail">自動処理予定：${html(formatPostedAt({ createdAt: scheduledAt?.toISOString() || "" }).replace(/^投稿/, ""))}以降</span>
+        <span class="version-withdrawal-help">申請期間中は既知のURLからDL・追記できます。</span>
+        ${recentBadge}
+      `;
+    }
+    if (lifecycleStatus === "processing") {
+      return `<span class="version-posted-at">${html(postedAt)}</span><span class="version-withdrawal-detail">取り下げ処理中</span>${recentBadge}`;
+    }
+    if (lifecycleStatus === "tombstoned") {
+      return `<span class="version-posted-at">${html(postedAt)}</span><span class="version-withdrawal-detail">派生版を維持するため、版ツリー上の履歴だけ残っています。</span>${recentBadge}`;
+    }
     if (!isWithin24Hours(version)) {
       return `<span class="version-posted-at">${html(postedAt)}</span>${recentBadge}`;
     }
@@ -450,7 +473,25 @@
   }
 
   function isDownloadBlocked(version) {
-    return version?.downloadBlocked === true || version?.download_blocked === true;
+    return version?.downloadBlocked === true
+      || version?.download_blocked === true
+      || ["processing", "tombstoned"].includes(getLifecycleStatus(version));
+  }
+
+  function getLifecycleStatus(version) {
+    return String(version?.lifecycleStatus || version?.lifecycle_status || "active");
+  }
+
+  function getLifecycleRequestMode(version) {
+    return String(version?.requestMode || version?.request_mode || "");
+  }
+
+  function getLifecycleScheduledAt(version) {
+    return version?.scheduledAt || version?.scheduled_at || "";
+  }
+
+  function lifecycleBlocksAppend(version) {
+    return ["processing", "tombstoned"].includes(getLifecycleStatus(version));
   }
 
   function isDeleteRequested(version) {
@@ -562,8 +603,17 @@
   function renderStateBadges(node, progress) {
     const version = node.version;
     const badges = [];
+    const lifecycleStatus = getLifecycleStatus(version);
 
-    if (isWithdrawn(version)) {
+    if (lifecycleStatus === "withdrawal_pending") {
+      badges.push(`<span class="withdrawal-pending-badge">取り下げ申請中</span>`);
+    } else if (lifecycleStatus === "processing") {
+      badges.push(`<span class="withdrawal-processing-badge">取り下げ処理中</span>`);
+    } else if (lifecycleStatus === "tombstoned") {
+      badges.push(`<span class="withdrawal-tombstone-badge">履歴のみ</span>`);
+    }
+
+    if (lifecycleStatus === "legacy_withdrawn" || isWithdrawn(version)) {
       badges.push(`<span class="withdrawn-badge">取り下げ済み</span>`);
     } else {
       if (isRejected(version)) {
@@ -572,7 +622,7 @@
         badges.push(`<span class="completed-badge compact">完成</span>`);
       }
 
-      if (isDeleteRequested(version)) {
+      if (lifecycleStatus === "legacy_delete_pending" || isDeleteRequested(version)) {
         badges.push(`<span class="delete-requested-badge">削除申請中</span>`);
       } else if (isHiddenVersion(version)) {
         badges.push(`<span class="hidden-badge">非表示</span>`);
@@ -650,7 +700,7 @@
 
   function ensureManagementControl(row, version, chartId, displayVersionLabel) {
     const actions = row.querySelector(".version-actions");
-    if (!actions || actions.querySelector(".version-management-button")) {
+    if (!actions || lifecycleBlocksAppend(version) || actions.querySelector(".version-management-button")) {
       return;
     }
 
@@ -667,6 +717,12 @@
     button.dataset.withdrawn = isWithdrawn(version) ? "true" : "false";
     button.dataset.deleteRequested = isDeleteRequested(version) ? "true" : "false";
     button.dataset.allowAppend = resolveAllowAppend(version) ? "true" : "false";
+    button.dataset.appendAvailable = resolveAllowAppend(version) && !lifecycleBlocksAppend(version) ? "true" : "false";
+    button.dataset.downloadAvailable = !isDownloadBlocked(version) && !isHiddenVersion(version) ? "true" : "false";
+    button.dataset.lifecycleStatus = getLifecycleStatus(version);
+    button.dataset.requestMode = getLifecycleRequestMode(version);
+    button.dataset.scheduledAt = String(getLifecycleScheduledAt(version));
+    button.dataset.canCancelWithdrawal = version?.canCancelWithdrawal === true ? "true" : "false";
     button.dataset.createdAt = String(version?.createdAt || version?.created_at || "");
     button.dataset.within24Hours = isWithin24Hours(version) ? "true" : "false";
     button.dataset.hasDescendants = hasChildVersions(version) ? "true" : "false";
@@ -750,6 +806,8 @@
     const deleteRequested = isDeleteRequested(version);
     const withdrawn = isWithdrawn(version);
     const hidden = isHiddenVersion(version);
+    const lifecycleStatus = getLifecycleStatus(version);
+    const publicDataRedacted = lifecycleStatus === "processing" || lifecycleStatus === "tombstoned";
     const supersededIntermediate = isSupersededIntermediateNode(node);
     const tag = row.querySelector(".version-tag");
     const progressBlock = [...row.querySelectorAll(".meta-block")]
@@ -767,6 +825,9 @@
     row.classList.toggle("is-delete-requested", deleteRequested);
     row.classList.toggle("is-withdrawn", withdrawn);
     row.classList.toggle("is-hidden-version", hidden);
+    row.classList.toggle("is-withdrawal-pending", lifecycleStatus === "withdrawal_pending");
+    row.classList.toggle("is-withdrawal-processing", lifecycleStatus === "processing");
+    row.classList.toggle("is-withdrawal-tombstone", lifecycleStatus === "tombstoned");
     row.classList.toggle("is-intermediate-history", supersededIntermediate);
     row.dataset.versionId = getVersionId(version);
     row.dataset.parentVersionId = getParentVersionId(version);
@@ -800,7 +861,20 @@
       tag.classList.add("version-tree-tag");
       tag.style.setProperty("--tree-depth", String(node.depth));
       tag.title = titleText;
-      tag.innerHTML = `
+      tag.innerHTML = publicDataRedacted ? `
+        ${renderTreeConnector(node.depth)}
+        <span class="version-label-stack">
+          <span class="version-title-line">
+            <span class="version-main-label">${html(displayVersionLabel)}</span>
+            <span class="version-state-badges">${renderStateBadges(node, progress)}</span>
+          </span>
+          <span class="version-redacted-message">${html(lifecycleStatus === "tombstoned"
+            ? "投稿者により取り下げられました"
+            : "取り下げ処理中")}</span>
+          <span class="version-parent-line" title="${html(titleText)}">${html(parentText)}</span>
+          <span class="version-lifecycle-line">${renderLifecycleMeta(version, { isLatest: options.isLatest })}</span>
+        </span>
+      ` : `
         ${renderTreeConnector(node.depth)}
         <span class="version-label-stack">
           <span class="version-title-line">
@@ -818,6 +892,16 @@
       `;
     }
 
+    if (publicDataRedacted) {
+      const cells = Array.from(row.querySelectorAll(":scope > .meta-block"));
+      cells.forEach((cell) => {
+        cell.replaceChildren();
+        cell.setAttribute("aria-hidden", "true");
+      });
+      row.querySelector(":scope > .version-actions")?.replaceChildren();
+      return;
+    }
+
     if (progressBlock) {
       const progressPill = progressBlock.querySelector(".progress-pill");
       if (progressPill) {
@@ -831,7 +915,9 @@
 
     enhanceDownloadControl(row, version, displayVersionLabel, supersededIntermediate);
     ensureManagementControl(row, version, getChartId(options.entry), displayVersionLabel);
-    if (supersededIntermediate) {
+    if (lifecycleBlocksAppend(version)) {
+      lockAppendControl(row, "取り下げ処理中のため追記できません");
+    } else if (supersededIntermediate) {
       lockAppendControl(row, "完成版に置き換え済みの中間履歴のため追記できません");
     }
   }

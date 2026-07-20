@@ -1122,3 +1122,115 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - `list.html`の表示・検索・ページングに追記可否UIが追加されず、新しいAPIフィールドでも既存表示が壊れないこと。
 - 通常投稿、通常追記、branch採番、ツリー展開/折り畳み、追加読込、検索、ページング、お気に入り、DL、管理操作、取り下げ、削除申請、Turnstile、rate limit、進捗Canvas、miniView、生成PNGに回帰がないこと。
 - Pages JavaScript構文検査、HTML ID重複検査、Worker typecheck、Worker dry-run、`git diff --check`が成功すること。
+
+## WITHDRAWAL-LIFECYCLE-16A
+
+### migration
+
+- 隔離D1へ`0001`～`0007`を順番に適用でき、適用直後の`version_withdrawals`が空であること。
+- 不正status、不正request_mode、不正processing_mode、`scheduled_at < requested_at`、負のattempt_countがCHECK制約で拒否されること。
+- idempotency hash重複と、同一versionのpending/processing二重作成が拒否されること。
+- canceled後は新しいpendingを作成でき、processing中は別pendingを作成できないこと。
+- 既存version、`withdrawn_at`、`delete_requests`、R2 objectにmigration由来の変更がないこと。
+
+### API
+
+- 23時間59分および24時間ちょうどで依存なしはimmediate、24時間1秒後はdeferredになること。
+- 公開・非表示を問わない直接子、`collapsed_by_version_id`参照、旧delete requestがある場合はimmediateにならないこと。旧pending requestは`LEGACY_LIFECYCLE_ACTIVE`になること。
+- 同じidempotency keyの再送が既存結果を返し、別versionへの再利用は`IDEMPOTENCY_KEY_REUSED`になること。生key/hashをレスポンス・ログへ出さないこと。
+- パスワード不一致、version不存在、非表示、file削除済み、legacy、processing、tombstonedを固定コード・固定文言で拒否すること。
+- deferred pendingを予定時刻未満に取消でき、version本体のDL・追記状態を変更しないこと。immediate、7日ちょうど以降、processingは取消できないこと。
+- 二重申請は`already_pending`、二重取消は`already_canceled`として安全に再実行できること。取消後のlifecycle応答はactiveで、申請日時・予定日時が`null`になること。
+- 分類とINSERTの間に依存状態が変わった場合、immediateを誤作成せずdeferredまたは`WITHDRAWAL_STATE_CONFLICT`へ倒れること。
+
+### 公開範囲・回帰
+
+- pending/processing/tombstonedが最近の投稿、`list.html`、通常検索、COUNT、ページング、お気に入りquery、RC★/RC★★から除外されること。
+- pendingは直接chart詳細の版ツリーに残り、状態バッジ、申請日時、予定時刻または削除処理待ちを表示すること。
+- pendingのfile APIと追記APIは既存`download_blocked/allow_append`に従い、processing/tombstoned/deletedはDL・追記を拒否すること。
+- pending中に子versionを作成しても申請行が変化しないこと。取消後は一般一覧とお気に入りへ再表示されること。
+- lifecycle変更後に一覧・難易度表のETag/再取得結果が古い掲載を維持しないこと。
+- 旧withdraw/delete-request API、旧管理承認・却下、既存R2 cleanup、生成PNG、progressMap、branch採番、版固有差分名を変更していないこと。
+
+### Pages
+
+- active immediate/deferredで操作が一本化され、理由入力がなく、確認後の二重送信を防止すること。
+- deferred pendingだけ取消ボタンを表示し、immediate pending、processing、legacy、tombstonedは読み取り専用になること。
+- ネットワーク再試行は同じidempotency keyを使い、成功、明示キャンセル、dialog close、対象version変更で破棄すること。別versionの遅いlifecycle応答が現在dialogを上書きしないこと。
+- 取消後に予定情報とバッジが消え、対象chartと一般一覧を再取得すること。旧Workerの404時に旧APIへfallbackしないこと。
+- white/default/dark、390/760/1366/1920pxで予定時刻、disabled、aria-live、focus、DL/追記/管理操作列、折り畳み、SVGツリーが崩れず横overflowがないこと。
+- Pages JavaScript構文、HTML重複ID、Worker typecheck、Wrangler dry-run、`git diff --check`が成功すること。
+- 16B完成前は本番migration、deploy、commit、push、本番D1/R2/Secret、Cron変更を実施しないこと。
+
+## WITHDRAWAL-LIFECYCLE-16B
+
+### claim・lease・再試行
+
+- dueなpendingを1件だけclaimし、`status=processing`、一意なlease、`attempt_count + 1`になること。
+- 有効なprocessing leaseは別処理がclaimできず、attempt countも変わらないこと。
+- 期限切れprocessing leaseは再claimできること。
+- 同じ要求を複数回finalizeしても、R2/D1/監査行が壊れないこと。
+
+### 物理削除・墓標化
+
+- 直接子、collapsed参照、legacy delete requestがないleafは譜面とprogressImageを削除し、versionを物理削除すること。最後のversion/chart/songなら空chart/songも削除すること。
+- 非表示を含む直接子、collapsed参照、legacy delete requestのいずれかがある場合は墓標化すること。
+- 墓標はversion行を残し、`allow_append=0`、`download_blocked=1`、`file_deleted_at`を持ち、譜面とprogressImageが存在しないこと。
+- dependency確認後からD1確定前に子または参照が増えた場合、物理削除せず墓標化へ切り替わること。
+
+### R2・D1異常系
+
+- 譜面objectまたはprogressImage objectの削除に失敗した場合、残りobjectも処理を試みるがD1を終端更新せず、再試行可能なprocessingに残ること。
+- R2 objectが最初からない場合も正常完了できること。
+- R2削除成功後にD1更新が失敗した場合、次回にobject不在を検出してdeletedまたはtombstonedへ修復できること。
+- 依存のない末端versionだけが物理削除され、version削除件数は1件で、同じchartの他versionは残ること。
+- 公開・非表示を問わない直接子、`collapsed_by_version_id`参照、旧`delete_requests`の各ケースで対象versionが墓標化されること。
+- 事前依存検査後、D1確定直前に直接子が追加された場合はDELETEが0件となり、同じleaseのまま墓標化へ切り替わること。
+- 失敗が1件あっても`processDueVersionWithdrawals`が後続候補を処理し、最大20件を超えないこと。
+- admin log失敗がcleanup結果を巻き戻さず、ログにraw R2 key、パスワード、Secret、生IP、生UA、完全hashがないこと。
+
+### API・公開表示
+
+- immediate要求が同期finalizeされ、leafではHTTP 200 `immediate_deleted`、依存ありではHTTP 200 `tombstoned`を返すこと。
+- 同じidempotency keyの再送が、version物理削除後かつ異なるpassword入力でも同じ終端結果を返すこと。別versionへの同じkeyは409になること。
+- processing/tombstonedが通常一覧、検索、version一覧、難易度表、お気に入りqueryへ出ないこと。
+- 直接chart詳細の墓標は親子接続を保ちつつ固定文言だけを返し、作者、コメント、URL、hash、進捗、ファイル、miniView、progressImage、管理操作を公開しないこと。
+- processing/tombstonedの譜面、progressImage、miniViewは404、追記と旧lifecycle操作は拒否されること。
+- Pagesで`immediate_deleted`は対象詳細を閉じ、`tombstoned`は固定履歴表示へ更新し、`processing`は処理中表示になること。
+- 削除済みversionの旧URLを開いた場合、同じchartに公開versionが残れば安全な残存versionへ`replaceState`で移動し、最後のversionとchartが削除済みなら選択を解除して一覧へ戻ること。
+- processing/tombstoned行ではversion単位のお気に入り星を表示しないが、localStorageの既存お気に入りIDは削除しないこと。
+
+### 回帰
+
+- pendingの取消、通常投稿・追記、版ツリー、検索、ページング、お気に入り、DL、miniView、progressMap、生成PNG、管理承認・却下、手動R2 cleanup、既存cleanup Cronが変わらないこと。
+- Worker typecheck、Pages JavaScript構文検査、Wrangler dry-run、`git diff --check`が成功すること。
+- deploy、commit、push、本番D1/R2/Secret操作を実施しないこと。
+
+## WITHDRAWAL-LIFECYCLE-16C
+
+### モードとScheduled handler
+
+- `WITHDRAWAL_CRON_MODE=off`および未設定では候補検索・監視集計ログ・lifecycle変更がないこと。
+- 厳密な`observe`だけが監視を実行し、`active`、`OBSERVE`、` observe `、空文字、`true`、`1`は不正値としてoffになること。
+- 毎時`0 * * * *`ではobserverだけ、毎日`0 18 * * *`では既存R2 cleanupだけが1回実行されること。同時刻の別Scheduled Eventで処理が混線しないこと。
+- Scheduled Eventの`scheduledTime`が候補検索と全候補の期限判定で共有され、未処理Promise rejectionがないこと。
+
+### 候補と分類fixture
+
+- 期限到達deferred・依存なしは`would_delete`、直接子あり、非表示直接子あり、collapsed参照あり、旧delete requestありは`would_tombstone`になること。
+- 期限前deferredは候補外、immediate pendingは`scheduled_at`にかかわらず候補になること。
+- lease期限切れまたはlease NULLのprocessingは、依存なしで`would_retry_delete`、依存ありで`would_retry_tombstone`になること。
+- 有効lease中processing、canceled、deleted、tombstonedは候補外になること。
+- version不存在の非terminal lifecycleは`manual_review`になり、chart不整合、legacy競合、外部状態競合も安全なreason codeで`manual_review`になること。
+- 候補取得後の取消、terminal化、lease更新は`ignored`になり、1候補の読取例外が残りの分類を停止しないこと。
+- 21件以上の候補で20件だけを分類し、`scanned_count=21`、`candidate_count=20`、`truncated=true`になること。
+
+### 非変更・ログ・回帰
+
+- observe前後で`songs`、`charts`、`versions`、`version_withdrawals`、`delete_requests`、`post_logs`の行内容が完全一致し、status、processing/lease、attempt、last error、resolved、allow append、download blocked、file deletedが変わらないこと。
+- R2 objectの件数・内容・metadataが変わらず、observer経路からHEAD/GET/LIST/DELETE/PUTが呼ばれないこと。
+- 実行単位の集計ログが1件だけ増え、通常候補の個別ログはなく、manual reviewと予期しない候補エラーの個別ログが合計最大5件であること。
+- ログにパスワード、idempotency hash、lease token、IP/UA hash、R2 key、SQL、stack、作者、コメント、URL、ファイル名、譜面hash、progressMap、Secretがないこと。
+- observer全体失敗でも安全な集計を試み、別イベントの既存cleanupに影響しないこと。既存cleanup失敗も別イベントのobserverへ影響しないこと。
+- 隔離D1へmigration `0001`～`0007`を適用し、ローカルScheduled Event、既存R2 cleanup、Worker typecheck、Wrangler dry-run、`git diff --check`が成功すること。
+- Pages差分、公開route、migration、Secret、active処理が16Cによって追加されていないこと。本番migration、deploy、commit、push、本番D1/R2/Secret操作を実施しないこと。

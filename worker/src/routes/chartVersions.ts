@@ -7,6 +7,7 @@ import { hashWithSecret, sha256HexFromBuffer } from "../utils/hash";
 import { hasUsableStoredProgressMap, prepareAppendProgressMap } from "../utils/progressMap";
 import { buildRequestFingerprint } from "../utils/requestFingerprint";
 import { apiError, Env, errorDetail, methodNotAllowed, ok } from "../utils/response";
+import { appendLifecycleAllowedSql, WithdrawalDbStatus } from "../utils/versionWithdrawal";
 import { buildZipInspectionLogDetail, inspectZipUpload } from "../utils/zipValidation";
 import { findActiveFileBan } from "./bans";
 
@@ -61,6 +62,7 @@ type ParentVersionRow = {
   collapsed_by_completion: number;
   file_deleted_at: string | null;
   allow_append: number;
+  lifecycle_status: WithdrawalDbStatus | null;
 };
 
 type ExistingVersionRow = { id: string };
@@ -504,7 +506,14 @@ async function selectParentVersion(env: Env, parentVersionId: string): Promise<P
       is_rejected,
       collapsed_by_completion,
       file_deleted_at,
-      allow_append
+      allow_append,
+      (
+        SELECT lifecycle.status
+        FROM version_withdrawals AS lifecycle
+        WHERE lifecycle.version_id = versions.id
+        ORDER BY lifecycle.requested_at DESC, lifecycle.id DESC
+        LIMIT 1
+      ) AS lifecycle_status
     FROM versions
     WHERE id = ?
     LIMIT 1
@@ -576,6 +585,18 @@ async function validateChartAndParent(
         code: "PARENT_VERSION_CHART_MISMATCH",
         message: "追記元のバージョンが指定差分に属していません。",
         detail: `parentVersionId belongs to chart ${parent.chart_id}, not ${chartId}.`
+      })
+    };
+  }
+
+  if (["processing", "tombstoned", "deleted"].includes(parent.lifecycle_status || "")) {
+    return {
+      ok: false,
+      response: await failAppendVersion(request, env, context, {
+        status: 409,
+        code: "PARENT_LIFECYCLE_UNAVAILABLE",
+        message: "この版は取り下げ処理中のため追記できません。別の版を選択してください。",
+        detail: `parentVersionId lifecycle is unavailable: ${parent.lifecycle_status}`
       })
     };
   }
@@ -985,6 +1006,7 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
             AND json_array_length(parent.progress_map_json, '$.blocks') = json_extract(parent.progress_map_json, '$.targetBlockCount')
             AND json_type(parent.progress_map_json, '$.layers') = 'array'
             AND parent.allow_append = 1
+            AND ${appendLifecycleAllowedSql("parent")}
             AND COALESCE(parent_chart.is_hidden, 0) = 0
         )
       `).bind(
@@ -1047,6 +1069,7 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
           updated_at = CURRENT_TIMESTAMP
         WHERE chart_id = ?
           AND is_hidden = 0
+          AND ${appendLifecycleAllowedSql("versions")}
           AND progress BETWEEN 1 AND 99
           AND branch_path <> ?
           AND ? LIKE branch_path || '/%'

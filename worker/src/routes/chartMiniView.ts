@@ -79,6 +79,12 @@ export async function handleChartMiniViewRoute(
       WHERE versions.id = ?
         AND COALESCE(versions.is_hidden, 0) = 0
         AND COALESCE(charts.is_hidden, 0) = 0
+        AND NOT EXISTS (
+          SELECT 1
+          FROM version_withdrawals AS lifecycle
+          WHERE lifecycle.version_id = versions.id
+            AND lifecycle.status IN ('processing', 'tombstoned', 'deleted')
+        )
       LIMIT 1
     `).bind(versionId).first<MiniViewRow>();
   } catch (error) {

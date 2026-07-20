@@ -165,6 +165,12 @@
     return version?.id || version?.versionId || "";
   }
 
+  function isVersionFavoriteAvailable(version) {
+    const lifecycleStatus = String(version?.lifecycleStatus || version?.lifecycle_status || "active");
+    return version?.publicDataRedacted !== true
+      && !["processing", "tombstoned", "deleted"].includes(lifecycleStatus);
+  }
+
   function getParentVersionId(version) {
     return version?.parentVersionId || version?.parent_version_id || "";
   }
@@ -282,7 +288,7 @@
     const lookup = buildLookup(versions);
     versions.forEach((version) => {
       const versionId = getVersionId(version);
-      if (!favoriteIds.has(versionId)) {
+      if (!favoriteIds.has(versionId) || !isVersionFavoriteAvailable(version)) {
         return;
       }
 
@@ -396,6 +402,12 @@
 
         const version = versionsByLabel.get(mainLabel.textContent.trim());
         if (!version) {
+          return;
+        }
+
+        if (!isVersionFavoriteAvailable(version)) {
+          titleLine.querySelector(".favorite-version-button")?.remove();
+          row.classList.remove("is-favorite-version");
           return;
         }
 

@@ -43,6 +43,59 @@
     return isValidId(selection.chartId) && isValidId(selection.versionId);
   }
 
+  function getVersionId(version) {
+    return String(version?.id || version?.versionId || "");
+  }
+
+  function isPublicReplacementVersion(version) {
+    const lifecycleStatus = String(version?.lifecycleStatus || version?.lifecycle_status || "active");
+    return isValidId(getVersionId(version))
+      && version?.publicDataRedacted !== true
+      && lifecycleStatus === "active"
+      && version?.hidden !== true
+      && version?.isHidden !== true
+      && version?.is_hidden !== true;
+  }
+
+  function versionSortTime(version) {
+    const createdAt = Date.parse(String(version?.createdAt || version?.created_at || ""));
+    const updatedAt = Date.parse(String(version?.updatedAt || version?.updated_at || ""));
+    return Math.max(Number.isFinite(createdAt) ? createdAt : 0, Number.isFinite(updatedAt) ? updatedAt : 0);
+  }
+
+  function chooseReplacementVersion(chartEntry, preferredParentVersionId = "") {
+    const versions = (Array.isArray(chartEntry?.versions) ? chartEntry.versions : [])
+      .filter(isPublicReplacementVersion);
+    if (versions.length === 0) {
+      return null;
+    }
+
+    const byId = new Map(versions.map((version) => [getVersionId(version), version]));
+    if (preferredParentVersionId && byId.has(preferredParentVersionId)) {
+      return byId.get(preferredParentVersionId);
+    }
+
+    const chart = chartEntry?.chart || {};
+    const representativeVersionId = String(
+      chart.representativeVersionId
+      || chart.representative_version_id
+      || chartEntry?.representativeVersionId
+      || chartEntry?.representative_version_id
+      || ""
+    );
+    if (representativeVersionId && byId.has(representativeVersionId)) {
+      return byId.get(representativeVersionId);
+    }
+
+    const latest = versions.filter((version) => versionSortTime(version) > 0).sort((left, right) => {
+      const timeDifference = versionSortTime(right) - versionSortTime(left);
+      return timeDifference || getVersionId(left).localeCompare(getVersionId(right));
+    })[0];
+    return latest
+      || versions.find((version) => String(version?.branchPath || version?.branch_path || "") === "root")
+      || versions[0];
+  }
+
   function updateBackLink() {
     const returnUrl = new URL(window.location.href);
     returnUrl.searchParams.delete("chartId");
@@ -180,6 +233,10 @@
   async function loadDetail(options = {}) {
     const postSuccess = options.postSuccess === true;
     const managementRefresh = options.managementRefresh === true;
+    const recoverDeletedVersion = options.recoverDeletedVersion === true;
+    const preferredParentVersionId = recoverDeletedVersion
+      ? String(findTargetRow()?.dataset.parentVersionId || "")
+      : "";
     setStatus(postSuccess ? successMessage : "指定された投稿を読み込んでいます。", {
       loading: true,
       success: postSuccess && Boolean(successMessage)
@@ -193,6 +250,10 @@
       });
       const body = await readResponse(response);
       if (!response.ok) {
+        if (response.status === 404 && recoverDeletedVersion) {
+          clearDeletedSelection();
+          return true;
+        }
         if (response.status === 404 && managementRefresh) {
           detailReady = false;
           cardSlot.replaceChildren();
@@ -219,6 +280,21 @@
       const selectedVersionVisible = (Array.isArray(charts[0]?.versions) ? charts[0].versions : [])
         .some((version) => String(version?.id || version?.versionId || "") === selection.versionId);
       if (!selectedVersionVisible) {
+        if (recoverDeletedVersion) {
+          const replacementVersion = chooseReplacementVersion(charts[0], preferredParentVersionId);
+          const replacement = getVersionId(replacementVersion);
+          if (!replacement) {
+            clearDeletedSelection();
+            return true;
+          }
+          selection = { chartId: selection.chartId, versionId: replacement, paramsPresent: true };
+          successMessage = "指定された版は削除されたため、残っている版を表示しました。";
+          updateDetailUrl("replace");
+          window.BmsRecentActivity?.setServerTime?.(body?.serverTime);
+          renderDetailCard(body);
+          await focusTargetVersion();
+          return true;
+        }
         detailReady = false;
         cardSlot.replaceChildren();
         setStatus(
@@ -300,13 +376,32 @@
       return;
     }
 
-    await loadDetail();
+    await loadDetail({ recoverDeletedVersion: true });
     await window.loadCharts?.({ selectedChartId: selection.chartId });
   }
 
-  async function refreshAfterManagement({ chartId } = {}) {
+  function clearDeletedSelection() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("chartId");
+    url.searchParams.delete("versionId");
+    url.hash = "list";
+    window.history.replaceState({}, "", url);
+    selection = { chartId: "", versionId: "", paramsPresent: false };
+    detailRequested = false;
+    detailReady = false;
+    shouldFocusTarget = false;
+    successMessage = "";
+    cardSlot.replaceChildren();
+    section.hidden = true;
+  }
+
+  async function refreshAfterManagement({ chartId, outcome } = {}) {
     if (!detailRequested || String(chartId || "") !== selection.chartId) {
       return true;
+    }
+    if (outcome === "immediate_deleted") {
+      successMessage = "投稿を削除しました。";
+      return loadDetail({ managementRefresh: true, recoverDeletedVersion: true });
     }
     successMessage = "";
     return loadDetail({ managementRefresh: true });
@@ -335,11 +430,14 @@
     });
     window.chartDetailInitialRenderPromise = Promise.resolve();
   } else {
-    window.chartDetailInitialRenderPromise = loadDetail();
+    window.chartDetailInitialRenderPromise = loadDetail({ recoverDeletedVersion: true });
   }
 
   retryButton.addEventListener("click", async () => {
-    const loaded = await loadDetail({ postSuccess: Boolean(successMessage) });
+    const loaded = await loadDetail({
+      postSuccess: Boolean(successMessage),
+      recoverDeletedVersion: true
+    });
     if (loaded) {
       await window.loadCharts?.({ selectedChartId: selection.chartId });
     }

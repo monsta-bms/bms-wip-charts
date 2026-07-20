@@ -1,6 +1,7 @@
 import { sha256Hex } from "../utils/hash";
 import { normalizeOriginUrl } from "../utils/originUrl";
 import { Env } from "../utils/response";
+import { publicWithdrawalExclusionSql } from "../utils/versionWithdrawal";
 
 const TABLE_PATH_PREFIX = "/difficulty-tables/";
 const API_PATH_PREFIX = "/api/difficulty-tables/";
@@ -296,6 +297,7 @@ async function selectEligibleRows(env: Env): Promise<DifficultyTableRow[]> {
       AND versions.file_deleted_at IS NULL
       AND versions.withdrawn_at IS NULL
       AND versions.delete_requested_at IS NULL
+      AND ${publicWithdrawalExclusionSql("versions")}
       AND COALESCE(versions.is_rejected, 0) = 0
       AND COALESCE(versions.collapsed_by_completion, 0) = 0
       AND versions.md5 IS NOT NULL

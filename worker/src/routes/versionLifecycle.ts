@@ -18,6 +18,7 @@ type VersionLifecycleRow = {
   withdrawn_at: string | null;
   delete_requested_at: string | null;
   created_at: string;
+  lifecycle_status: string | null;
 };
 
 type LifecycleSnapshot = {
@@ -269,7 +270,14 @@ async function selectVersion(env: Env, versionId: string): Promise<VersionLifecy
       versions.is_hidden,
       versions.withdrawn_at,
       versions.delete_requested_at,
-      versions.created_at
+      versions.created_at,
+      (
+        SELECT lifecycle.status
+        FROM version_withdrawals AS lifecycle
+        WHERE lifecycle.version_id = versions.id
+        ORDER BY lifecycle.requested_at DESC, lifecycle.id DESC
+        LIMIT 1
+      ) AS lifecycle_status
     FROM versions
     INNER JOIN charts ON charts.id = versions.chart_id
     WHERE versions.id = ?
@@ -384,6 +392,11 @@ async function tryImmediateHide(
       updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
       AND is_hidden = 0
+      AND NOT EXISTS (
+        SELECT 1 FROM version_withdrawals AS lifecycle
+        WHERE lifecycle.version_id = versions.id
+          AND lifecycle.status IN ('pending', 'processing', 'tombstoned', 'deleted')
+      )
       ${markWithdrawn ? "AND withdrawn_at IS NULL" : ""}
       AND created_at >= datetime('now', '-24 hours')
       AND NOT EXISTS (
@@ -471,7 +484,7 @@ async function authenticateVersion(
     };
   }
 
-  if (!version || version.is_hidden === 1) {
+  if (!version || version.is_hidden === 1 || ["tombstoned", "deleted"].includes(version.lifecycle_status || "")) {
     return {
       ok: false,
       response: await failLifecycle(request, env, context, action, {
@@ -479,6 +492,18 @@ async function authenticateVersion(
         code: "VERSION_NOT_FOUND",
         message: "対象のversionが見つかりません。",
         detail: "versionId was not found or is hidden."
+      })
+    };
+  }
+
+  if (["pending", "processing"].includes(version.lifecycle_status || "")) {
+    return {
+      ok: false,
+      response: await failLifecycle(request, env, context, action, {
+        status: 409,
+        code: "LIFECYCLE_OPERATION_IN_PROGRESS",
+        message: "取り下げ処理中のため、この管理操作は利用できません。",
+        detail: "A version_withdrawals lifecycle is active for this version."
       })
     };
   }
@@ -565,6 +590,11 @@ async function handleWithdraw(
       WHERE id = ?
         AND withdrawn_at IS NULL
         AND is_hidden = 0
+        AND NOT EXISTS (
+          SELECT 1 FROM version_withdrawals AS lifecycle
+          WHERE lifecycle.version_id = versions.id
+            AND lifecycle.status IN ('pending', 'processing', 'tombstoned', 'deleted')
+        )
     `).bind(version.id).run();
 
     if (Number(result.meta.changes ?? 0) === 0) {
@@ -680,6 +710,11 @@ async function handleDeleteRequest(
             FROM versions
             WHERE id = ?
               AND is_hidden = 0
+              AND NOT EXISTS (
+                SELECT 1 FROM version_withdrawals AS lifecycle
+                WHERE lifecycle.version_id = versions.id
+                  AND lifecycle.status IN ('pending', 'processing', 'tombstoned', 'deleted')
+              )
           )
       `).bind(
         requestId,

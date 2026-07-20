@@ -51,6 +51,7 @@ type ProgressImageRow = {
 type ProgressImageFetchRow = ProgressImageRow & {
   version_is_hidden: number;
   chart_is_hidden: number;
+  lifecycle_status: string | null;
 };
 
 function isFormFile(value: FormDataEntryValue | null): value is File {
@@ -310,6 +311,11 @@ async function selectProgressImageRows(env: Env, versionIds: string[]): Promise<
       FROM versions
       WHERE id IN (${placeholders})
         AND progress_image_key IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM version_withdrawals AS lifecycle
+          WHERE lifecycle.version_id = versions.id
+            AND lifecycle.status IN ('processing', 'tombstoned', 'deleted')
+        )
     `).bind(...chunk).all<ProgressImageRow>();
 
     rows.push(...(result.results ?? []));
@@ -487,7 +493,14 @@ async function selectProgressImageFetchRow(env: Env, versionId: string): Promise
       versions.progress_image_sha256 AS progress_image_sha256,
       versions.progress_image_created_at AS progress_image_created_at,
       versions.is_hidden AS version_is_hidden,
-      charts.is_hidden AS chart_is_hidden
+      charts.is_hidden AS chart_is_hidden,
+      (
+        SELECT lifecycle.status
+        FROM version_withdrawals AS lifecycle
+        WHERE lifecycle.version_id = versions.id
+        ORDER BY lifecycle.requested_at DESC, lifecycle.id DESC
+        LIMIT 1
+      ) AS lifecycle_status
     FROM versions
     INNER JOIN charts ON charts.id = versions.chart_id
     WHERE versions.id = ?
@@ -534,7 +547,29 @@ export async function handleProgressImageRoute(
     );
   }
 
-  if (!row || !row.progress_image_key) {
+  if (!row) {
+    return apiError(
+      request,
+      env,
+      404,
+      "PROGRESS_IMAGE_NOT_FOUND",
+      "進捗画像が見つかりません。",
+      "The version does not exist."
+    );
+  }
+
+  if (["processing", "tombstoned", "deleted"].includes(row.lifecycle_status || "")) {
+    return apiError(
+      request,
+      env,
+      404,
+      "PROGRESS_IMAGE_NOT_FOUND",
+      "この投稿のファイルは公開されていません。",
+      "The progress image is not public."
+    );
+  }
+
+  if (!row.progress_image_key) {
     return apiError(
       request,
       env,

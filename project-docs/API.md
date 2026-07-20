@@ -1299,6 +1299,77 @@ dataは譜面objectの配列を返す。対象なしはHTTP 200の`[]`。
 
 `url`は、MD5重複排除後に採用されたversion自身に有効な`origin_url`がある場合だけ出力し、未登録時はキー自体を省略する。`name_diff`と`bms_wip_chart_name`は採用version自身の`chart_name`を使用し、NULLの既存行だけ`charts.chart_name`へfallbackする。`url_diff`は常に従来どおり出力する。`org_md5`と外側ZIPのSHA-256は出力しない。header/取込HTMLは`Cache-Control: public, max-age=3600, must-revalidate`、dataは`public, max-age=60, must-revalidate`とし、すべてETagと`If-None-Match`による304応答に対応する。エラー応答は`Cache-Control: no-store`とする。
 
+## WITHDRAWAL-LIFECYCLE-16A
+
+### `POST /api/versions/:versionId/withdrawal`
+
+管理パスワードを検証し、利用者向けの取り下げ申請を作成する。`Content-Type: application/json`を使用する。
+
+```json
+{
+  "password": "management password",
+  "idempotencyKey": "client-generated-uuid"
+}
+```
+
+`idempotencyKey`は16～200文字の英数字と`._:-`だけを許可する。Workerは`HASH_SECRET`でhash化した値だけを保存し、生値をログ・D1・レスポンスへ出さない。同じkeyの再送は既存結果を返し、別versionへの再利用はHTTP 409 `IDEMPOTENCY_KEY_REUSED`とする。
+
+投稿から24時間以内で、DB上の直接子、`collapsed_by_version_id`参照、旧`delete_requests`、activeなlifecycle処理がなく、version/chartが公開中かつファイル未削除なら`requestMode=immediate`となる。それ以外は`requestMode=deferred`で、`scheduledAt`はD1現在時刻から7日後になる。分類と作成は条件付きINSERTで再確認し、immediate条件が競合で外れた場合はdeferredへ安全に切り替える。
+
+```json
+{
+  "ok": true,
+  "outcome": "withdrawal_pending",
+  "lifecycleStatus": "withdrawal_pending",
+  "requestMode": "deferred",
+  "requestedAt": "2026-07-20 12:00:00",
+  "scheduledAt": "2026-07-27 12:00:00",
+  "canRequestWithdrawal": false,
+  "canCancelWithdrawal": true,
+  "requestPreview": "unavailable",
+  "downloadAvailable": true,
+  "appendAvailable": true
+}
+```
+
+immediateの`outcome`は`immediate_delete_pending`、既存pendingへの冪等応答は`already_pending`。16Aではどちらも物理削除せず、pending行の作成だけを行う。
+
+### `POST /api/versions/:versionId/withdrawal/cancel`
+
+```json
+{ "password": "management password" }
+```
+
+最新行が`pending`かつ`deferred`で、D1現在時刻が`scheduledAt`未満の場合だけ取消可能。成功時は`status=canceled`、`canceled_at/resolved_at/updated_at=CURRENT_TIMESTAMP`とし、version本体の`allow_append`、`download_blocked`、`withdrawn_at`、`is_hidden`は変更しない。7日ちょうど以降はHTTP 409 `WITHDRAWAL_CANCEL_EXPIRED`、immediateは`WITHDRAWAL_NOT_ALLOWED`、processingは`LIFECYCLE_OPERATION_IN_PROGRESS`。同じ取消の再送は`already_canceled`として成功してよい。
+
+### `GET /api/versions/:versionId/lifecycle`
+
+公開中versionの安全なlifecycle情報を認証なしで返す。内部の依存件数、lease、hashは返さない。応答は`Cache-Control: no-store`。
+
+- `lifecycleStatus`: `active` / `withdrawal_pending` / `processing` / `legacy_withdrawn` / `legacy_delete_pending` / `tombstoned`
+- `requestMode`, `requestedAt`, `scheduledAt`: activeまたは取消済みでは`null`
+- `canRequestWithdrawal`, `canCancelWithdrawal`
+- `requestPreview`: `immediate_delete` / `deferred_delete_or_tombstone` / `unavailable` / `legacy_process`
+- `downloadAvailable`, `appendAvailable`
+
+`GET /api/charts`、chart詳細、`GET /api/versions`、`POST /api/versions/query`が返すversionには`lifecycleStatus`、`requestMode`、`withdrawalRequestedAt`、`scheduledAt`、`canCancelWithdrawal`を追加する。一般一覧・検索・件数・お気に入り・RC★/RC★★は`pending/processing/tombstoned/deleted`を除外する。chart詳細だけはpendingをツリー文脈付きで返す。
+
+pending中は既存のDL状態と`allow_append`を維持する。processing/tombstoned/deletedはfile APIと追記APIで拒否する。
+
+### エラーコード
+
+- `INVALID_IDEMPOTENCY_KEY` (400)
+- `IDEMPOTENCY_KEY_REUSED` (409)
+- `WITHDRAWAL_NOT_ALLOWED` (409)
+- `WITHDRAWAL_NOT_PENDING` (409)
+- `WITHDRAWAL_CANCEL_EXPIRED` (409)
+- `WITHDRAWAL_STATE_CONFLICT` (409)
+- `LIFECYCLE_OPERATION_IN_PROGRESS` (409)
+- `LEGACY_LIFECYCLE_ACTIVE` (409)
+- `WITHDRAWAL_FAILED` (500)
+
+既存の`POST /api/versions/:id/withdraw`と`POST /api/versions/:id/delete-request`は互換用として変更しない。新Pagesは新3routeだけを使用し、404時に旧APIへ自動fallbackしない。
+
 ### 取込HTMLのtheme query
 
 `GET /difficulty-tables/:tableId`の取込HTMLは、任意の`theme` queryを受け付ける。
@@ -1310,3 +1381,54 @@ dataは譜面objectの配列を返す。対象なしはHTTP 200の`[]`。
 ```
 
 省略または不正値は`default`として扱う。queryは取込HTMLの背景・文字・リンク配色だけに適用し、`meta[name="bmstable"]`、header/data JSON、難易度表データ、ETag、キャッシュ時間、CORS、D1 queryへ影響しない。
+
+## WITHDRAWAL-LIFECYCLE-16B
+
+### `POST /api/versions/:versionId/withdrawal`
+
+即時要求は受付だけでなく、共通finalizerによるR2 cleanupとD1終端処理まで同期実行する。
+
+物理削除が完了した場合:
+
+```json
+{
+  "ok": true,
+  "outcome": "immediate_deleted",
+  "lifecycleStatus": "deleted",
+  "requestMode": "immediate",
+  "canRequestWithdrawal": false,
+  "canCancelWithdrawal": false,
+  "downloadAvailable": false,
+  "appendAvailable": false
+}
+```
+
+派生または参照を維持する墓標になった場合は`outcome="tombstoned"`、`lifecycleStatus="tombstoned"`を返す。claim済みで完了待ちの場合はHTTP 202、`outcome="processing"`を返す。
+
+同じ`idempotencyKey`の再送では、`version_withdrawals`の既存結果をversion取得・パスワード照合より先に返す。物理削除後も同じ終端結果を返す。別versionへのkey再利用はHTTP 409 `IDEMPOTENCY_KEY_REUSED`とする。
+
+### 公開APIのlifecycle制御
+
+- 通常の`GET /api/charts`、version一覧、検索、難易度表は`processing/tombstoned/deleted`を返さない。
+- `GET /api/charts/:chartId`は版ツリー接続のため`processing/tombstoned`を含められるが、作者、コメント、原曲URL、hash、進捗map、miniView、progressImage、ファイル情報を返さず、固定lifecycle文言だけを返す。
+- `GET /api/files/:fileId`、`GET /api/progress-images/:versionId`、`GET /api/versions/:versionId/mini-view`はprocessing/tombstoned/deletedを404で扱い、内部状態、削除時刻、R2 keyを返さない。
+- pendingは16Aどおり、既存の`download_blocked`と`allow_append`に従う。
+
+### finalizerエラー
+
+- `WITHDRAWAL_R2_DELETE_FAILED`: 譜面またはprogressImageのR2削除失敗。D1終端更新を行わず再試行可能にする。
+- `WITHDRAWAL_D1_FINALIZE_FAILED`: R2処理後のD1終端更新失敗。次回はobject不在を修復経路として処理する。
+- `WITHDRAWAL_LEASE_CONFLICT`: 有効なleaseまたは別処理との競合によりclaimできない。
+- `LEGACY_LIFECYCLE_CONFLICT`: legacy lifecycle状態との競合。
+- `EXTERNAL_VERSION_STATE_CONFLICT`: finalizer中に対象versionの状態が外部更新された。
+- `PARENT_LIFECYCLE_UNAVAILABLE`: 追記親がprocessing/tombstoned/deletedで利用できない。
+
+これらの内部detail、lease token、idempotency hash、raw R2 keyは公開レスポンスやログへ出さない。16Bはfinalizer用の公開APIおよびCronを追加しない。
+
+## WITHDRAWAL-LIFECYCLE-16C
+
+16Cでは公開HTTP route、手動observe API、手動finalizer APIを追加しない。毎時Cron `0 * * * *`は、通常変数`WITHDRAWAL_CRON_MODE`が厳密に`observe`である場合だけ、期限到達済みの取り下げ候補を読み取り専用で分類する。リポジトリ既定値、未設定、不正値は`off`であり、`active`処理は未実装とする。
+
+observeは`versions`、`version_withdrawals`、`charts`、`songs`、`delete_requests`、`post_logs`およびR2 objectを変更しない。既存finalizer、claim、lease更新、R2操作は呼び出さず、監視結果だけを既存`admin_logs.action='version_withdrawal_finalize'`へ`operation='withdrawal_cron_observe'`として記録する。通常候補の個別ログは作らず、`manual_review`または予期しない候補エラーだけを1実行最大5件記録する。公開レスポンスへの新しいエラーコード追加はない。
+
+既存R2 cleanup Cron `0 18 * * *`は従来どおりR2 cleanupだけを実行する。Scheduled handlerは発火したCron式を完全一致で振り分け、同時刻に別イベントとして発火しても1 invocationで両処理を実行しない。

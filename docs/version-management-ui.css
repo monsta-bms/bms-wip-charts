@@ -25,6 +25,41 @@
   white-space: nowrap;
 }
 
+.withdrawal-pending-badge,
+.withdrawal-processing-badge,
+.withdrawal-tombstone-badge {
+  align-items: center;
+  border: 1px solid var(--time-badge-border);
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.2;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+
+.withdrawal-pending-badge {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.withdrawal-processing-badge,
+.withdrawal-tombstone-badge {
+  background: var(--surface-strong);
+  color: var(--muted);
+}
+
+.version-withdrawal-detail {
+  color: var(--warning);
+  font-weight: 800;
+}
+
+.version-withdrawal-help {
+  color: var(--muted);
+  flex-basis: 100%;
+}
+
 .version-lifecycle-line {
   align-items: center;
   color: #74828d;
@@ -91,8 +126,8 @@ button.version-management-button:focus-visible {
 }
 
 .version-management-panel {
-  background: #fff;
-  border: 1px solid #d8e1e7;
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
   border-radius: 8px;
   box-shadow: 0 20px 60px rgba(24, 39, 52, 0.2);
   display: grid;
@@ -127,8 +162,8 @@ button.version-management-close {
 }
 
 .version-management-summary {
-  background: #f7f9fb;
-  border: 1px solid #e0e6eb;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
   border-radius: 6px;
   display: grid;
   gap: 8px;
@@ -142,7 +177,7 @@ button.version-management-close {
 }
 
 .version-management-summary dt {
-  color: #71808c;
+  color: var(--muted);
   font-size: 0.72rem;
   font-weight: 800;
 }
@@ -154,7 +189,7 @@ button.version-management-close {
 }
 
 .version-management-action {
-  border-top: 1px solid #e4eaee;
+  border-top: 1px solid var(--line);
   display: grid;
   gap: 10px;
   padding-top: 14px;
@@ -166,7 +201,7 @@ button.version-management-close {
 }
 
 .version-management-action p {
-  color: #5f6e79;
+  color: var(--muted);
   line-height: 1.55;
   margin: 0;
 }
@@ -190,22 +225,16 @@ button.version-management-close {
   justify-content: flex-end;
 }
 
-button.version-withdraw-button {
-  background: #8a4458;
-  border-color: #8a4458;
+button.version-withdrawal-action-button {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--surface-raised);
 }
 
-button.version-delete-request-button {
-  background: #fff;
-  border-color: #c8872e;
-  color: #8a5300;
-}
-
-button.version-withdraw-button:disabled,
-button.version-delete-request-button:disabled {
-  background: #eef2f5;
-  border-color: #d4dde4;
-  color: #7a8791;
+button.version-withdrawal-action-button:disabled {
+  background: var(--disabled-bg);
+  border-color: var(--line);
+  color: var(--disabled-text);
 }
 
 .version-management-message {
@@ -218,15 +247,15 @@ button.version-delete-request-button:disabled {
 }
 
 .version-management-message[data-kind="error"] {
-  background: #fff0f2;
-  border: 1px solid #efc8d0;
-  color: #82384c;
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+  color: var(--danger);
 }
 
 .version-management-message[data-kind="success"] {
-  background: #ecf8f2;
-  border: 1px solid #b9dfcf;
-  color: #1b664f;
+  background: var(--success-bg);
+  border: 1px solid var(--success);
+  color: var(--success);
 }
 
 @media (max-width: 960px) {

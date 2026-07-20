@@ -7,6 +7,7 @@ export type Env = {
   ADMIN_TOKEN?: string;
   TURNSTILE_SECRET?: string;
   TURNSTILE_MODE?: string;
+  WITHDRAWAL_CRON_MODE?: string;
 };
 
 export type ApiErrorBody = {
