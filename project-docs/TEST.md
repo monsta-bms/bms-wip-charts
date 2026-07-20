@@ -1099,6 +1099,14 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 旧APIレスポンスで`allowAppend`欠落時、Pagesは非没譜面をtrue、没譜面をfalseとして表示すること。
 - 投稿状態パネルが完成版・没譜面・追記受付の3行を同じ構造で表示し、390pxでは各行が縦積みになること。
 - 初回の完成版ボタンは常にdisabledで、通常初回のprogress=100は`INITIAL_COMPLETION_NOT_ALLOWED`になること。
+- 完成版ボタンは初回投稿、追記対象なし、フォーム閉鎖、ファイル未選択、解析中、解析失敗、progressMap未生成、進捗79%以下、没譜面でdisabled属性と`aria-disabled=true`になり、追記対象・解析済みファイル・利用可能なprogressMap・非没譜面・進捗80%以上が揃った場合だけenabledになること。
+- 未指定時は`完成版にする`と`aria-pressed=false`、指定中は`完成版を解除`と`aria-pressed=true`になり、指定中も解除ボタンがenabledであること。
+- 完成版指定時に押下直前のprogressMap、layers/ranges、contributor色、透明ブロック、進捗度、編集中layer状態をメモリ上のdeep copyへ保持し、未塗りを`completion_fill`で埋めてprogress=100にすること。snapshotがlocalStorage、FormData、D1、R2、生成PNGへ含まれないこと。
+- 完成版指定中は進捗ブロックを編集できず、解除を案内する固定文が表示されること。解除時は色、ranges、透明ブロック、進捗度、編集状態が押下直前と同一に復元され、snapshotが破棄されること。
+- 完成版指定中のファイル変更/解除、追記対象変更、追記キャンセル、form reset、投稿成功で指定状態とsnapshotが破棄され、古いsnapshotが新しいファイルや対象へ適用されないこと。
+- ファイル未選択、解析中、解析失敗、80%未満、設定可能、完成版指定中で状態バッジと説明文が動的に切り替わり、`aria-live=polite`でフォーカスを奪わないこと。
+- 完成版指定中の送信直前に、追記モード、選択ファイル、解析完了、有効なprogressMap、snapshot、progress=100、非没譜面を再検証し、不整合時はAPIへ送信せず「完成版の状態を確認できません。譜面ファイルを選択し直してください。」と表示すること。
+- 完成版指定の解除後は未完成扱いへ戻り、追記受付がchecked・disabled・trueへ戻ること。同一フォーム内で再度完成版を指定した場合だけ、完成版用の追記受付選択を再利用できること。
 - 追記の進捗79%では完成版ボタンがdisabled、80%以上ではenabledになり、押下時だけ`completion_fill`と`completionBaseRanges`を送ること。
 - `completionBaseRanges`と親layerのunionが80%未満なら`COMPLETION_PROGRESS_TOO_LOW`、未完成親から完成指定なしで100%なら`COMPLETION_ACTION_REQUIRED`になること。
 - 初回通常版と追記未完成版の追記受付はchecked・disabled・true、初回没譜面は初回OFF、追記完成版は初回ONで設定可能になること。

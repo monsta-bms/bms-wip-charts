@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="./chart-miniview.css?v=post-form-miniview-01">
     <link rel="stylesheet" href="./tree-progress-polish.css?v=tree-shape-fix-01">
     <link rel="stylesheet" href="./version-management-ui.css?v=version-lifecycle-24h-01">
-    <link rel="stylesheet" href="./post-form-ui.css?v=append-policy-15-final">
+    <link rel="stylesheet" href="./post-form-ui.css?v=append-policy-15-completion-toggle">
     <link rel="stylesheet" href="./chart-detail-link.css?v=site-theme-14-final">
     <link rel="stylesheet" href="./theme.css?v=site-theme-14-final">
   </head>
@@ -277,11 +277,12 @@
                   <div class="progress-policy-item post-state-row completion-state-row" id="completionStateControl">
                     <span class="progress-policy-heading post-state-name">完成版</span>
                     <div class="post-state-control">
-                      <button class="secondary progress-complete-button" id="completeProgressButton" type="button" disabled aria-disabled="true">完成版にする</button>
+                      <button class="secondary progress-complete-button" id="completeProgressButton" type="button" disabled aria-disabled="true" aria-pressed="false">完成版にする</button>
                     </div>
                     <div class="post-state-message">
                       <span class="post-state-badge" id="completionStateBadge">利用不可</span>
                       <p class="post-state-description" id="completionStateDescription" aria-live="polite">初回投稿では完成版にできません。</p>
+                      <p class="post-state-description completion-edit-notice" id="completionEditNotice" hidden>完成版指定中は進捗範囲を編集できません。編集する場合は完成版を解除してください。</p>
                     </div>
                   </div>
 
@@ -491,11 +492,11 @@
     <script src="./local-bms-analysis.js?v=post-form-miniview-01"></script>
     <script src="./turnstile-controller.js?v=turnstile-01"></script>
     <script src="./post-form-preferences.js?v=post-form-ux-11"></script>
-    <script src="./app.js?v=append-policy-15-final"></script>
+    <script src="./app.js?v=append-policy-15-completion-toggle"></script>
     <script src="./progress-song-end-analysis.js?v=chart-miniview-position-01"></script>
     <script src="./progress-thumbnail-list.js?v=site-theme-14-final"></script>
     <script src="./chart-miniview.js?v=post-form-miniview-01"></script>
-    <script src="./branch-append-ui.js?v=append-policy-15-final"></script>
+    <script src="./branch-append-ui.js?v=append-policy-15-completion-toggle"></script>
     <script src="./progress-image-preview.js?v=post-form-ux-09a"></script>
     <script src="./progress-image-formdata.js?v=ui-tree-overlay-01"></script>
     <script src="./branch-tree-list.js?v=append-policy-15-final"></script>

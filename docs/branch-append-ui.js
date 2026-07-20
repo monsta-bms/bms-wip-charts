@@ -6,6 +6,7 @@
 
   const submitPanel = document.querySelector(".submit-panel");
   const form = document.querySelector("#chartForm");
+  const postFormBody = document.querySelector("#postFormBody");
   const submitTitle = document.querySelector("#submitTitle");
   const formModeBadge = document.querySelector("#formModeBadge");
   const appendContext = document.querySelector("#appendContext");
@@ -68,8 +69,11 @@
     parentPainted: new Set(),
     currentPainted: new Set(),
     completionBasePainted: null,
+    completionRestoreSnapshot: null,
     layerKind: "followup",
     fileGridMismatch: false,
+    fileAnalysisStatus: "empty",
+    hasUsableFileProgressMap: false,
     fileAnalysisRevision: 0,
     isSubmitting: false,
     isDragging: false,
@@ -194,6 +198,36 @@
 
   function cloneJson(value) {
     return JSON.parse(JSON.stringify(value));
+  }
+
+  function syncAppendPolicyReadiness(options = {}) {
+    return window.BmsAppendPolicy?.setAppendReadiness?.({
+      hasTarget: appendState.active && Boolean(appendState.chartId && appendState.parentVersionId),
+      formOpen: appendState.active && !postFormBody?.hidden,
+      fileSelected: Boolean(fileInput?.files?.[0]),
+      analysisStatus: appendState.fileAnalysisStatus,
+      hasProgressMap: appendState.hasUsableFileProgressMap,
+      hasAnalysisError: appendState.fileAnalysisStatus === "error" || appendState.fileGridMismatch
+    }, options);
+  }
+
+  function setAppendFileAnalysisState(status, { hasProgressMap = false, progress } = {}) {
+    appendState.fileAnalysisStatus = status;
+    appendState.hasUsableFileProgressMap = Boolean(hasProgressMap);
+    syncAppendPolicyReadiness({
+      progress: Number.isFinite(Number(progress)) ? Number(progress) : calculateProgress()
+    });
+  }
+
+  function discardCompletionState() {
+    appendState.completionRestoreSnapshot = null;
+    appendState.completionBasePainted = null;
+    appendState.layerKind = "followup";
+    appendState.isDragging = false;
+    appendState.dragAnchorIndex = null;
+    appendState.dragMode = null;
+    appendState.originalCurrentPainted = null;
+    window.BmsAppendPolicy?.setCompletionRequested?.(false, { progress: calculateProgress() });
   }
 
   function parseProgressMap(progressMapValue) {
@@ -508,6 +542,8 @@
     }
 
     const union = collectUnionPainted();
+    const completionLocked = appendState.layerKind === "completion_fill";
+    progressMap?.classList.toggle("is-completion-locked", completionLocked);
     progressMapBlocks.querySelectorAll(".progress-map-block").forEach((block) => {
       const index = Number(block.dataset.blockIndex);
       const parentPainted = appendState.parentPainted.has(index);
@@ -517,7 +553,9 @@
       block.classList.toggle("is-current-painted", currentPainted);
       block.classList.toggle("is-painted", painted);
       block.setAttribute("aria-pressed", painted ? "true" : "false");
-      block.disabled = Boolean(isRejectedInput?.checked);
+      const disabled = Boolean(isRejectedInput?.checked) || completionLocked;
+      block.disabled = disabled;
+      block.setAttribute("aria-disabled", disabled ? "true" : "false");
     });
   }
 
@@ -589,6 +627,7 @@
     appendState.parentPainted = collectPaintedIndexes(parentLayers, blocks.length);
     appendState.currentPainted = new Set();
     appendState.completionBasePainted = null;
+    appendState.completionRestoreSnapshot = null;
     appendState.layerKind = "followup";
     appendState.fileGridMismatch = false;
     appendState.isDragging = false;
@@ -635,6 +674,46 @@
     return payload;
   }
 
+  function createCompletionRestoreSnapshot() {
+    return cloneJson({
+      progressMap: buildAppendProgressMapPayload(),
+      parentMap: appendState.parentMap,
+      parentLayers: appendState.parentLayers,
+      parentPainted: [...appendState.parentPainted],
+      currentPainted: [...appendState.currentPainted],
+      uiState: {
+        layerKind: appendState.layerKind,
+        fileGridMismatch: appendState.fileGridMismatch,
+        progress: calculateProgress()
+      }
+    });
+  }
+
+  function restoreCompletionSnapshot() {
+    const snapshot = appendState.completionRestoreSnapshot;
+    if (!snapshot?.progressMap || !Array.isArray(snapshot.progressMap.blocks)) {
+      showText("完成版の状態を確認できません。譜面ファイルを選択し直してください。");
+      return false;
+    }
+
+    appendState.parentMap = cloneJson(snapshot.parentMap);
+    appendState.parentLayers = cloneJson(snapshot.parentLayers).map((layer) => normalizeLayer(layer, parentLayerColor));
+    appendState.blocks = cloneJson(snapshot.progressMap.blocks).map(normalizeBlock);
+    appendState.parentPainted = new Set(snapshot.parentPainted);
+    appendState.currentPainted = new Set(snapshot.currentPainted);
+    appendState.completionBasePainted = null;
+    appendState.layerKind = snapshot.uiState?.layerKind || "followup";
+    appendState.fileGridMismatch = Boolean(snapshot.uiState?.fileGridMismatch);
+    appendState.isDragging = false;
+    appendState.dragAnchorIndex = null;
+    appendState.dragMode = null;
+    appendState.originalCurrentPainted = null;
+    renderAppendProgressMap();
+    appendState.completionRestoreSnapshot = null;
+    clearMessage();
+    return true;
+  }
+
   function applyAppendDragRange(currentBlockIndex) {
     if (!appendState.originalCurrentPainted || !Number.isInteger(currentBlockIndex)) {
       return;
@@ -673,9 +752,8 @@
     }
 
     if (appendState.layerKind === "completion_fill") {
-      appendState.layerKind = "followup";
-      appendState.completionBasePainted = null;
-      window.BmsAppendPolicy?.setCompletionRequested?.(false, { progress: calculateProgress() });
+      showText("完成版指定中は進捗範囲を編集できません。編集する場合は完成版を解除してください。");
+      return;
     }
     const currentPainted = appendState.currentPainted.has(blockIndex);
     appendState.isDragging = true;
@@ -700,11 +778,22 @@
     appendState.originalCurrentPainted = null;
   }
 
-  function paintAppendCompletion() {
+  function toggleAppendCompletion() {
     if (!appendState.active || isRejectedInput?.checked || !appendState.blocks.length) {
       return;
     }
 
+    if (appendState.layerKind === "completion_fill") {
+      restoreCompletionSnapshot();
+      return;
+    }
+
+    const policyState = window.BmsAppendPolicy?.snapshot?.();
+    if (!policyState?.hasValidAppendFile || calculateProgress() < 80) {
+      return;
+    }
+
+    appendState.completionRestoreSnapshot = createCompletionRestoreSnapshot();
     appendState.completionBasePainted = new Set(appendState.currentPainted);
     appendState.layerKind = "completion_fill";
     for (const block of appendState.blocks) {
@@ -714,6 +803,7 @@
     }
     updateAppendBlockClasses();
     updateAppendProgressSummary();
+    clearMessage();
   }
 
   function setAppendSubmitting(nextValue) {
@@ -812,6 +902,8 @@
       return;
     }
 
+    discardCompletionState();
+
     appendState.active = true;
     appendState.entry = entry;
     appendState.song = song;
@@ -819,6 +911,8 @@
     appendState.parentVersion = parentVersion;
     appendState.chartId = chartId;
     appendState.parentVersionId = parentVersionId;
+    appendState.fileAnalysisStatus = "empty";
+    appendState.hasUsableFileProgressMap = false;
     appendState.fileAnalysisRevision += 1;
     window.BmsFormMiniView?.clear();
 
@@ -863,6 +957,7 @@
     setAppendFieldMode(true);
     setDifficultyValue(parentVersion.difficulty || "");
     initializeAppendProgressMap(parentMap, { render: false });
+    syncAppendPolicyReadiness({ progress: calculateProgress() });
     if (typeof resetProgressMap === "function") {
       resetProgressMap();
     }
@@ -881,6 +976,7 @@
   }
 
   function exitAppendMode({ resetForm = true } = {}) {
+    discardCompletionState();
     appendState.active = false;
     appendState.entry = null;
     appendState.song = null;
@@ -894,13 +990,17 @@
     appendState.parentPainted = new Set();
     appendState.currentPainted = new Set();
     appendState.completionBasePainted = null;
+    appendState.completionRestoreSnapshot = null;
     appendState.layerKind = "followup";
     appendState.fileGridMismatch = false;
+    appendState.fileAnalysisStatus = "empty";
+    appendState.hasUsableFileProgressMap = false;
     appendState.fileAnalysisRevision += 1;
     window.BmsFormMiniView?.clear();
     window.BmsPostFileUi?.setEmpty?.();
     appendState.isDragging = false;
     appendState.originalCurrentPainted = null;
+    syncAppendPolicyReadiness({ progress: 0 });
 
     submitPanel?.classList.remove("is-append-mode");
     if (submitTitle) submitTitle.textContent = "投稿フォーム";
@@ -952,11 +1052,15 @@
 
   async function handleAppendFileChange(file) {
     const analysisRevision = ++appendState.fileAnalysisRevision;
+    discardCompletionState();
+    appendState.currentPainted = new Set();
+    appendState.fileGridMismatch = false;
+    appendState.hasUsableFileProgressMap = false;
     window.BmsFormMiniView?.clear();
     if (!file) {
       setInvalid(fileInput, false);
       appendState.currentPainted = new Set();
-      appendState.fileGridMismatch = false;
+      setAppendFileAnalysisState("empty", { progress: calculateProgress() });
       if (typeof resetProgressMap === "function") {
         resetProgressMap();
       }
@@ -973,6 +1077,7 @@
         resetProgressMap();
       }
       window.BmsPostFileUi?.setError?.(fileValidation.message, file);
+      setAppendFileAnalysisState("error", { progress: calculateProgress() });
       clearMessage();
       return;
     }
@@ -982,6 +1087,7 @@
       fileInput.value = "";
       setInvalid(fileInput, true);
       window.BmsPostFileUi?.setError?.("投稿できるのは .bms / .bme / .bml / .zip です。", file);
+      setAppendFileAnalysisState("error", { progress: calculateProgress() });
       clearMessage();
       return;
     }
@@ -989,6 +1095,7 @@
     setInvalid(fileInput, false);
 
     try {
+      setAppendFileAnalysisState("loading", { progress: calculateProgress() });
       window.BmsPostFileUi?.setAnalyzing?.(file);
       if (typeof setProgressMapMessage === "function") {
         setProgressMapMessage(extension === ".zip" ? "ZIP内の譜面を解析しています" : "譜面を解析しています", "loading");
@@ -1015,11 +1122,16 @@
           setProgressMapMessage("選択した譜面の進捗ブロック格子が追記元と一致しません", "unavailable");
         }
         window.BmsPostFileUi?.setError?.("追記元と進捗ブロックの構成が一致しません。", file);
+        setAppendFileAnalysisState("error", { progress: calculateProgress() });
         clearMessage();
         return;
       }
 
       appendState.blocks = analyzedBlocks;
+      setAppendFileAnalysisState("ready", {
+        hasProgressMap: analyzedBlocks.length > 0,
+        progress: calculateProgress()
+      });
       renderAppendProgressMap();
       if (localAnalysis.miniView?.status === "ready") {
         window.BmsFormMiniView?.setAnalysis(localAnalysis.miniView, analyzedBlocks);
@@ -1050,6 +1162,7 @@
         return;
       }
       appendState.fileGridMismatch = true;
+      setAppendFileAnalysisState("error", { progress: calculateProgress() });
       window.BmsFormMiniView?.clear();
       if (typeof setProgressMapMessage === "function") {
         setProgressMapMessage("BMS解析に失敗しました", "unavailable");
@@ -1096,6 +1209,26 @@
     if (missing.length > 0) {
       showText(`未入力の項目があります: ${missing.join(", ")}`);
       return false;
+    }
+
+    if (appendState.layerKind === "completion_fill") {
+      const policyState = window.BmsAppendPolicy?.snapshot?.();
+      const completionStateValid = Boolean(
+        appendState.active
+        && fileInput?.files?.[0]
+        && appendState.fileAnalysisStatus === "ready"
+        && appendState.hasUsableFileProgressMap
+        && !appendState.fileGridMismatch
+        && appendState.completionRestoreSnapshot?.progressMap
+        && calculateProgress() === 100
+        && !isRejectedInput?.checked
+        && policyState?.isCompleted
+        && policyState?.hasValidAppendFile
+      );
+      if (!completionStateValid) {
+        showText("完成版の状態を確認できません。譜面ファイルを選択し直してください。");
+        return false;
+      }
     }
 
     if (appendState.currentPainted.size === 0) {
@@ -1481,7 +1614,7 @@
 
     event.preventDefault();
     event.stopImmediatePropagation();
-    paintAppendCompletion();
+    toggleAppendCompletion();
   }, true);
 
   window.addEventListener("resize", () => {

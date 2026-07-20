@@ -276,10 +276,13 @@ round(塗られた標準化ブロック数のunion / 標準化ブロック総数
 ### 完成版にするボタン
 
 - 初回投稿では常にdisabledとし、初回通常版を完成版として保存しない。
-- 追記投稿では `progress >= 80` かつ `progress <= 100` の未指定時に有効化する。
-- 押すと未塗りブロックをすべて塗る。
-- `progress=100` にする。
+- 追記対象と譜面ファイルが選択され、ファイル解析が完了し、利用可能なprogressMapがあり、解析エラーがなく、現在のmap計算結果が `progress >= 80` かつ `progress <= 100` で、没譜面ではない場合だけ有効化する。初回投稿、ファイル未選択、解析中、解析失敗、progressMap未生成、80%未満、追記対象なし、フォームを閉じた状態、没譜面ではdisabled属性と `aria-disabled=true` を付ける。
+- 未指定時は `完成版にする` / `aria-pressed=false`、指定中は `完成版を解除` / `aria-pressed=true` とする。指定中もファイルとprogressMapが有効ならボタンを有効に保ち、解除操作を可能にする。
+- 指定時は押下直前のprogressMap全体、layers/ranges、色と透明ブロック、進捗度、編集中layer状態をメモリ上のdeep copyとして保持してから、未塗りブロックをすべて塗り、`progress=100` にする。snapshotはlocalStorage、FormData、D1、R2、生成PNGへ保存しない。
+- 指定中は進捗ブロック編集を無効化し、解除が必要であることを常時表示する。解除時はsnapshotから色、ranges、透明ブロック、進捗度、編集状態を指定直前と同一の状態へ戻してCanvasを再描画し、snapshotを破棄する。
+- ファイル変更/解除、追記対象変更、追記キャンセル、form reset、投稿成功では、完成版指定とsnapshotを破棄し、新しいフォーム状態から判定し直す。
 - 追記投稿では今回追記layerを `completion_fill` とし、押下直前のrangesを検証用 `completionBaseRanges` として送る。Workerは親layerとのunionが80%以上であることを検証し、保存するprogressMapから一時検証値を除外する。
+- 送信直前にも、追記モード、選択ファイル、解析完了、有効なprogressMap、snapshot、`progress=100`、非没譜面を再確認する。不整合時はAPIへ送信せず、ファイルの再選択を案内する。Pages側の追加検証はWorker側の既存検証を代替しない。
 - 完成版指定を経由せず、未完成親から送られた `progress=100` は完成版として保存しない。
 
 ### 没譜面との連動

@@ -583,9 +583,15 @@ button.difficulty-change-button {
 }
 
 .progress-operation-row .progress-complete-button:not(:disabled) {
-  background: #c4d8d1;
-  border-color: #71998e;
-  color: #144c3d;
+  background: var(--secondary-bg);
+  border-color: var(--post-accent);
+  color: var(--secondary-text);
+}
+
+.progress-operation-row .progress-complete-button[aria-pressed="true"]:not(:disabled) {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
 }
 
 .progress-value-field {
@@ -659,6 +665,20 @@ button.difficulty-change-button {
 
 .post-state-message {
   align-items: flex-start;
+}
+
+.completion-state-row .post-state-message {
+  flex-wrap: wrap;
+}
+
+.completion-edit-notice {
+  flex-basis: 100%;
+  font-weight: 700;
+  padding-left: 0;
+}
+
+.progress-map.is-completion-locked .progress-block-layer {
+  cursor: not-allowed;
 }
 
 .post-state-description {

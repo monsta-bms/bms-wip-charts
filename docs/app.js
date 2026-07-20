@@ -39,6 +39,7 @@ const progressMapPopover = document.querySelector("#progressMapPopover");
 const completeProgressButton = document.querySelector("#completeProgressButton");
 const completionStateBadge = document.querySelector("#completionStateBadge");
 const completionStateDescription = document.querySelector("#completionStateDescription");
+const completionEditNotice = document.querySelector("#completionEditNotice");
 const commentInput = document.querySelector("#comment");
 const isRejectedInput = document.querySelector("#isRejected");
 const rejectedStateBadge = document.querySelector("#rejectedStateBadge");
@@ -64,6 +65,14 @@ let difficultyPickerExpanded = true;
 const postStateUi = {
   mode: "initial",
   completionRequested: false,
+  appendReadiness: {
+    hasTarget: false,
+    formOpen: false,
+    fileSelected: false,
+    analysisStatus: "empty",
+    hasProgressMap: false,
+    hasAnalysisError: false
+  },
   initialRejectedChoice: false,
   initialRejectedChoiceInitialized: false,
   appendCompletedChoice: true,
@@ -217,11 +226,23 @@ function getPostStateSnapshot() {
   const allowAppendUserChoice = isRejected
     ? postStateUi.initialRejectedChoice
     : postStateUi.appendCompletedChoice;
+  const readiness = postStateUi.appendReadiness;
+  const hasValidAppendFile = Boolean(
+    isAppend
+    && readiness.hasTarget
+    && readiness.formOpen
+    && readiness.fileSelected
+    && readiness.analysisStatus === "ready"
+    && readiness.hasProgressMap
+    && !readiness.hasAnalysisError
+  );
 
   return {
     isAppend,
     isRejected,
     isCompleted,
+    hasValidAppendFile,
+    appendReadiness: { ...readiness },
     isAllowAppendConfigurable,
     effectiveAllowAppend: isAllowAppendConfigurable ? allowAppendUserChoice : true
   };
@@ -237,20 +258,34 @@ function updatePostStateUi({ progress = Number(progressInput?.value) } = {}) {
   }
 
   if (completeProgressButton) {
-    const completionAvailable = state.isAppend && !state.isCompleted && numericProgress >= 80 && numericProgress <= 100;
+    const completionAvailable = state.hasValidAppendFile
+      && (state.isCompleted || (numericProgress >= 80 && numericProgress <= 100));
     setControlDisabled(completeProgressButton, !completionAvailable);
     completeProgressButton.hidden = false;
-    completeProgressButton.textContent = state.isCompleted ? "完成版指定中" : "完成版にする";
+    completeProgressButton.textContent = state.isCompleted ? "完成版を解除" : "完成版にする";
+    completeProgressButton.setAttribute("aria-pressed", state.isCompleted ? "true" : "false");
+  }
+  if (completionEditNotice) {
+    completionEditNotice.hidden = !state.isCompleted;
   }
 
   if (!state.isAppend) {
     setPostStateBadge(completionStateBadge, "利用不可", "unavailable");
     if (completionStateDescription) completionStateDescription.textContent = "初回投稿では完成版にできません。";
-  } else if (state.isCompleted) {
-    setPostStateBadge(completionStateBadge, "設定済み", "selected");
-    if (completionStateDescription) completionStateDescription.textContent = "完成版として投稿します。透明部分はすべて塗りつぶされます。";
+  } else if (state.isCompleted && state.hasValidAppendFile) {
+    setPostStateBadge(completionStateBadge, "完成版指定中", "selected");
+    if (completionStateDescription) completionStateDescription.textContent = "完成版として投稿します。解除すると、進捗マップを指定直前の状態へ戻します。";
+  } else if (!state.appendReadiness.fileSelected) {
+    setPostStateBadge(completionStateBadge, "譜面未選択", "unavailable");
+    if (completionStateDescription) completionStateDescription.textContent = "譜面ファイルを選択し、解析が完了すると完成版を設定できます。";
+  } else if (state.appendReadiness.analysisStatus === "loading") {
+    setPostStateBadge(completionStateBadge, "解析中", "unavailable");
+    if (completionStateDescription) completionStateDescription.textContent = "譜面を解析しています。解析完了後に完成版の条件を判定します。";
+  } else if (state.appendReadiness.analysisStatus === "error" || state.appendReadiness.hasAnalysisError || !state.appendReadiness.hasProgressMap) {
+    setPostStateBadge(completionStateBadge, "解析失敗", "unavailable");
+    if (completionStateDescription) completionStateDescription.textContent = "譜面を解析できないため、完成版を設定できません。";
   } else if (numericProgress < 80) {
-    setPostStateBadge(completionStateBadge, "利用不可", "unavailable");
+    setPostStateBadge(completionStateBadge, "進捗不足", "unavailable");
     if (completionStateDescription) completionStateDescription.textContent = "完成版にするには、進捗度を80%以上にしてください。";
   } else {
     setPostStateBadge(completionStateBadge, "設定可能", "configurable");
@@ -300,6 +335,14 @@ function updatePostStateUi({ progress = Number(progressInput?.value) } = {}) {
 function resetAllowAppendForForm(isRejected = false, { mode = "initial" } = {}) {
   postStateUi.mode = mode === "append" ? "append" : "initial";
   postStateUi.completionRequested = false;
+  postStateUi.appendReadiness = {
+    hasTarget: false,
+    formOpen: false,
+    fileSelected: false,
+    analysisStatus: "empty",
+    hasProgressMap: false,
+    hasAnalysisError: false
+  };
   postStateUi.initialRejectedChoice = false;
   postStateUi.initialRejectedChoiceInitialized = false;
   postStateUi.appendCompletedChoice = true;
@@ -312,6 +355,13 @@ window.BmsAppendPolicy = {
   resolve: resolveAllowAppend,
   resetForForm: resetAllowAppendForForm,
   setMode: (mode) => resetAllowAppendForForm(false, { mode }),
+  setAppendReadiness: (readiness = {}, options = {}) => {
+    postStateUi.appendReadiness = {
+      ...postStateUi.appendReadiness,
+      ...readiness
+    };
+    return updatePostStateUi(options);
+  },
   setCompletionRequested: (requested, options = {}) => {
     postStateUi.completionRequested = Boolean(requested);
     if (postStateUi.completionRequested && !postStateUi.appendCompletedChoiceInitialized) {
