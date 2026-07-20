@@ -1104,12 +1104,6 @@ function setProgressMapMessage(message, state = "empty") {
   if (progressControls) {
     progressControls.hidden = true;
   }
-  if (rejectedProgressControl) {
-    rejectedProgressControl.hidden = true;
-  }
-  if (allowAppendControl) {
-    allowAppendControl.hidden = true;
-  }
   completeProgressButton.hidden = true;
   progressMapGraphWrap.hidden = true;
   progressMapSummary.hidden = true;

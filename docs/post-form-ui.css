@@ -606,25 +606,81 @@ button.difficulty-change-button {
 }
 
 .progress-policy-controls {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin-top: 8px;
-}
-
-.progress-policy-controls .checkbox-field {
   background: var(--post-operation-bg);
   border: 1px solid var(--post-line-soft);
   border-radius: 5px;
-  margin: 0;
-  max-width: none;
-  padding: 9px 10px;
+  display: grid;
+  gap: 0;
+  margin-top: 8px;
+  padding: 2px 10px;
 }
 
-.progress-policy-controls .checkbox-copy {
+.progress-policy-item {
   align-items: start;
   display: grid;
-  gap: 1px;
+  gap: 12px;
+  grid-template-columns: minmax(88px, 0.16fr) minmax(0, 1fr);
+  min-width: 0;
+  padding: 10px 0;
+}
+
+.progress-policy-item + .progress-policy-item {
+  border-top: 1px solid var(--post-line-soft);
+}
+
+.progress-policy-heading {
+  color: var(--post-muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.4;
+  padding-top: 1px;
+}
+
+.progress-policy-controls .form-check {
+  align-items: start;
+  color: var(--post-text);
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 18px minmax(0, 1fr);
+  min-width: 0;
+}
+
+.progress-policy-controls .form-check > input[type="checkbox"] {
+  accent-color: var(--post-accent);
+  block-size: 16px;
+  inline-size: 16px;
+  margin: 2px 0 0;
+  min-height: 0;
+}
+
+.progress-policy-controls .form-check > input[type="checkbox"]:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.progress-policy-controls .form-check-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.progress-policy-controls .form-check-label {
+  color: var(--post-text);
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.progress-policy-controls .form-check-help {
+  color: var(--post-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.progress-policy-controls .form-check:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.66;
 }
 
 .submission-subtitle {
@@ -815,7 +871,8 @@ button.difficulty-change-button {
     display: grid;
   }
 
-  .progress-policy-controls {
+  .progress-policy-item {
+    gap: 4px;
     grid-template-columns: 1fr;
   }
 

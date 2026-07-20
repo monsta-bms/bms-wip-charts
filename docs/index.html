@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="./chart-miniview.css?v=post-form-miniview-01">
     <link rel="stylesheet" href="./tree-progress-polish.css?v=tree-shape-fix-01">
     <link rel="stylesheet" href="./version-management-ui.css?v=version-lifecycle-24h-01">
-    <link rel="stylesheet" href="./post-form-ui.css?v=append-policy-15">
+    <link rel="stylesheet" href="./post-form-ui.css?v=append-policy-15-ui-finish">
     <link rel="stylesheet" href="./chart-detail-link.css?v=site-theme-14-final">
     <link rel="stylesheet" href="./theme.css?v=site-theme-14-final">
   </head>
@@ -272,22 +272,28 @@
                   <button class="secondary progress-complete-button" id="completeProgressButton" type="button" disabled hidden>完成版にする</button>
                 </div>
 
-                <div class="progress-policy-controls">
-                  <label class="field checkbox-field rejected-field" id="rejectedProgressControl" hidden>
-                    <input id="isRejected" name="isRejected" type="checkbox" value="true">
-                    <span class="checkbox-copy">
-                      <span class="checkbox-title">没譜面</span>
-                      <span class="field-help">100%の没譜面として登録します。</span>
-                    </span>
-                  </label>
+                <div class="progress-policy-controls" aria-label="制作状態と追記可否">
+                  <div class="progress-policy-item rejected-field" id="rejectedProgressControl">
+                    <span class="progress-policy-heading">没譜面</span>
+                    <label class="form-check">
+                      <input id="isRejected" name="isRejected" type="checkbox" value="true">
+                      <span class="form-check-body">
+                        <span class="form-check-label">没譜面</span>
+                        <span class="form-check-help">自分での制作を打ち切った版として登録します。進捗は100%になります。</span>
+                      </span>
+                    </label>
+                  </div>
 
-                  <label class="field checkbox-field append-policy-field" id="allowAppendControl" hidden>
-                    <input id="allowAppend" name="allowAppend" type="checkbox" value="true" checked>
-                    <span class="checkbox-copy">
-                      <span class="checkbox-title">この版からの追記・分岐を許可する</span>
-                      <span class="field-help">他の利用者が、この版を親として新しい版を投稿できます。</span>
-                    </span>
-                  </label>
+                  <div class="progress-policy-item append-policy-field" id="allowAppendControl">
+                    <span class="progress-policy-heading">追記可否</span>
+                    <label class="form-check">
+                      <input id="allowAppend" name="allowAppend" type="checkbox" value="true" checked>
+                      <span class="form-check-body">
+                        <span class="form-check-label">この版からの追記・分岐を許可する</span>
+                        <span class="form-check-help">他の利用者が、この版を親として新しい版を投稿できます。没譜面でも許可できます。</span>
+                      </span>
+                    </label>
+                  </div>
                 </div>
               </section>
 
@@ -467,7 +473,7 @@
     <script src="./local-bms-analysis.js?v=post-form-miniview-01"></script>
     <script src="./turnstile-controller.js?v=turnstile-01"></script>
     <script src="./post-form-preferences.js?v=post-form-ux-11"></script>
-    <script src="./app.js?v=append-policy-15"></script>
+    <script src="./app.js?v=append-policy-15-ui-finish"></script>
     <script src="./progress-song-end-analysis.js?v=chart-miniview-position-01"></script>
     <script src="./progress-thumbnail-list.js?v=site-theme-14-final"></script>
     <script src="./chart-miniview.js?v=post-form-miniview-01"></script>
