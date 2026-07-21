@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="./list-ui-refresh.css?v=site-theme-14-final">
     <link rel="stylesheet" href="./chart-miniview.css?v=post-form-miniview-01">
     <link rel="stylesheet" href="./tree-progress-polish.css?v=tree-shape-fix-01">
-    <link rel="stylesheet" href="./version-management-ui.css?v=withdrawal-lifecycle-16b">
+    <link rel="stylesheet" href="./version-management-ui.css?v=withdrawal-lifecycle-16r">
     <link rel="stylesheet" href="./post-form-ui.css?v=append-policy-15-completion-toggle">
     <link rel="stylesheet" href="./chart-detail-link.css?v=site-theme-14-final">
     <link rel="stylesheet" href="./theme.css?v=site-theme-14-final">
@@ -439,6 +439,11 @@
         <section class="version-management-action" aria-labelledby="withdrawalActionTitle">
           <h3 id="withdrawalActionTitle">投稿を取り下げる</h3>
           <p id="versionWithdrawalDescription">対象の状態を確認しています。</p>
+          <label class="field version-withdrawal-reason" id="versionWithdrawalReasonField" hidden>
+            <span class="field-label">取り下げ理由 <span class="required-mark">*</span></span>
+            <textarea id="versionWithdrawalReason" rows="4" minlength="10" maxlength="500"></textarea>
+            <span class="field-help">管理者確認や、申請期間中に派生版・参照が追加された場合の判断に使用します。</span>
+          </label>
           <div class="version-management-buttons">
             <button class="version-withdrawal-action-button" id="versionWithdrawalActionButton" type="button" disabled>確認中…</button>
           </div>
@@ -478,10 +483,10 @@
     <script src="./branch-append-ui.js?v=append-policy-15-completion-toggle"></script>
     <script src="./progress-image-preview.js?v=post-form-ux-09a"></script>
     <script src="./progress-image-formdata.js?v=ui-tree-overlay-01"></script>
-    <script src="./branch-tree-list.js?v=withdrawal-lifecycle-16b"></script>
+    <script src="./branch-tree-list.js?v=withdrawal-lifecycle-16r"></script>
     <script src="./tree-progress-polish.js?v=post-form-tree-12"></script>
     <script src="./favorites-list.js?v=withdrawal-lifecycle-16b-final"></script>
-    <script src="./version-management-ui.js?v=withdrawal-lifecycle-16b"></script>
+    <script src="./version-management-ui.js?v=withdrawal-lifecycle-16r"></script>
     <script src="./post-form-ui.js?v=post-form-tree-12"></script>
     <script src="./chart-detail-link.js?v=withdrawal-lifecycle-16b-final"></script>
   </body>

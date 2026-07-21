@@ -4,6 +4,7 @@ import {
   hasDeletionBlockers,
   inspectVersionDeletionDependencies
 } from "./versionWithdrawalFinalizer";
+import { WithdrawalHandlingMode } from "../utils/withdrawalHandling";
 
 const DEFAULT_OBSERVE_LIMIT = 20;
 const MAX_OBSERVE_LIMIT = 20;
@@ -19,7 +20,7 @@ export type WithdrawalCronModeResolution = {
 
 export type WithdrawalObserveClassification =
   | "would_delete"
-  | "would_tombstone"
+  | "would_move_to_manual_review"
   | "would_retry_delete"
   | "would_retry_tombstone"
   | "manual_review"
@@ -31,6 +32,7 @@ type ObservableWithdrawalRow = {
   chart_id: string;
   status: "pending" | "processing" | "canceled" | "deleted" | "tombstoned";
   request_mode: "immediate" | "deferred";
+  handling_mode: WithdrawalHandlingMode;
   scheduled_at: string;
   processing_mode: "delete" | "tombstone" | null;
   processing_at: string | null;
@@ -47,6 +49,7 @@ export type WithdrawalObserveResult = {
   versionId: string;
   status: ObservableWithdrawalRow["status"];
   requestMode: ObservableWithdrawalRow["request_mode"];
+  handlingMode: WithdrawalHandlingMode;
   scheduledAt: string;
   classification: WithdrawalObserveClassification;
   safeReasonCodes: string[];
@@ -61,7 +64,7 @@ export type WithdrawalObserveSummary = {
   scannedCount: number;
   candidateCount: number;
   wouldDeleteCount: number;
-  wouldTombstoneCount: number;
+  wouldMoveToManualReviewCount: number;
   wouldRetryDeleteCount: number;
   wouldRetryTombstoneCount: number;
   manualReviewCount: number;
@@ -105,10 +108,11 @@ export function resolveWithdrawalCronMode(value: string | undefined): Withdrawal
 
 function isObservableCandidate(row: ObservableWithdrawalRow, nowSql: string): boolean {
   if (row.status === "pending") {
-    return row.request_mode === "immediate"
-      || (row.request_mode === "deferred" && row.scheduled_at <= nowSql);
+    return row.handling_mode === "immediate_delete"
+      || (row.handling_mode === "grace_auto_delete" && row.scheduled_at <= nowSql);
   }
   return row.status === "processing"
+    && row.handling_mode !== "manual_review"
     && (row.lease_expires_at === null || row.lease_expires_at <= nowSql);
 }
 
@@ -126,6 +130,7 @@ export async function findObservableWithdrawalCandidates(
       chart_id,
       status,
       request_mode,
+      COALESCE(handling_mode, CASE WHEN request_mode = 'immediate' THEN 'immediate_delete' ELSE 'grace_auto_delete' END) AS handling_mode,
       scheduled_at,
       processing_mode,
       processing_at,
@@ -134,11 +139,12 @@ export async function findObservableWithdrawalCandidates(
     WHERE (
       status = 'pending'
       AND (
-        request_mode = 'immediate'
-        OR (request_mode = 'deferred' AND scheduled_at <= ?)
+        handling_mode = 'immediate_delete'
+        OR (handling_mode = 'grace_auto_delete' AND scheduled_at <= ?)
       )
     ) OR (
       status = 'processing'
+      AND handling_mode IN ('immediate_delete', 'grace_auto_delete')
       AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
     )
     ORDER BY scheduled_at ASC, id ASC
@@ -163,6 +169,7 @@ async function selectObservableWithdrawal(
       chart_id,
       status,
       request_mode,
+      COALESCE(handling_mode, CASE WHEN request_mode = 'immediate' THEN 'immediate_delete' ELSE 'grace_auto_delete' END) AS handling_mode,
       scheduled_at,
       processing_mode,
       processing_at,
@@ -193,6 +200,7 @@ function makeResult(
     versionId: row.version_id,
     status: row.status,
     requestMode: row.request_mode,
+    handlingMode: row.handling_mode,
     scheduledAt: row.scheduled_at,
     classification,
     safeReasonCodes,
@@ -241,9 +249,9 @@ export async function previewWithdrawalOutcome(
 
   const blocked = hasDeletionBlockers(snapshot);
   if (current.status === "processing") {
-    return makeResult(current, blocked ? "would_retry_tombstone" : "would_retry_delete");
+    return makeResult(current, blocked ? "would_move_to_manual_review" : "would_retry_delete");
   }
-  return makeResult(current, blocked ? "would_tombstone" : "would_delete");
+  return makeResult(current, blocked ? "would_move_to_manual_review" : "would_delete");
 }
 
 async function writeObserverLog(
@@ -296,6 +304,7 @@ async function writeWithdrawalObserveDiagnostics(
           version_id: result.versionId,
           status: result.status,
           request_mode: result.requestMode,
+          handling_mode: result.handlingMode,
           scheduled_at: result.scheduledAt,
           classification: result.classification,
           safe_reason_codes: result.safeReasonCodes
@@ -332,7 +341,7 @@ export async function writeWithdrawalObserveSummary(
       scanned_count: summary.scannedCount,
       candidate_count: summary.candidateCount,
       would_delete_count: summary.wouldDeleteCount,
-      would_tombstone_count: summary.wouldTombstoneCount,
+      would_move_to_manual_review_count: summary.wouldMoveToManualReviewCount,
       would_retry_delete_count: summary.wouldRetryDeleteCount,
       would_retry_tombstone_count: summary.wouldRetryTombstoneCount,
       manual_review_count: summary.manualReviewCount,
@@ -348,7 +357,7 @@ export async function writeWithdrawalObserveSummary(
 function countClassifications(summary: WithdrawalObserveSummary): void {
   for (const result of summary.results) {
     if (result.classification === "would_delete") summary.wouldDeleteCount += 1;
-    else if (result.classification === "would_tombstone") summary.wouldTombstoneCount += 1;
+    else if (result.classification === "would_move_to_manual_review") summary.wouldMoveToManualReviewCount += 1;
     else if (result.classification === "would_retry_delete") summary.wouldRetryDeleteCount += 1;
     else if (result.classification === "would_retry_tombstone") summary.wouldRetryTombstoneCount += 1;
     else if (result.classification === "manual_review") summary.manualReviewCount += 1;
@@ -374,7 +383,7 @@ export async function observeDueVersionWithdrawals(
     scannedCount: 0,
     candidateCount: 0,
     wouldDeleteCount: 0,
-    wouldTombstoneCount: 0,
+    wouldMoveToManualReviewCount: 0,
     wouldRetryDeleteCount: 0,
     wouldRetryTombstoneCount: 0,
     manualReviewCount: 0,

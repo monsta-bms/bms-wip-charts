@@ -16,6 +16,7 @@ export type PublicLifecycleStatus =
 export type LifecycleProjection = {
   lifecycle_withdrawal_status: WithdrawalDbStatus | null;
   lifecycle_request_mode: "immediate" | "deferred" | null;
+  lifecycle_handling_mode: "immediate_delete" | "grace_auto_delete" | "manual_review" | null;
   lifecycle_requested_at: string | null;
   lifecycle_scheduled_at: string | null;
   lifecycle_can_cancel: number | null;
@@ -101,6 +102,7 @@ export function sanitizePublicVersion<T extends Record<string, unknown>>(
     deleteRequested: false,
     deleteRequestedAt: null,
     requestMode: null,
+    handlingMode: null,
     withdrawalRequestedAt: null,
     scheduledAt: null,
     canCancelWithdrawal: false,
@@ -144,7 +146,16 @@ export function publicWithdrawalExclusionSql(versionAlias = "versions"): string 
     SELECT 1
     FROM version_withdrawals AS public_withdrawals
     WHERE public_withdrawals.version_id = ${versionAlias}.id
-      AND public_withdrawals.status IN ('pending', 'processing', 'tombstoned', 'deleted')
+      AND public_withdrawals.status IN ('processing', 'tombstoned', 'deleted')
+  )`;
+}
+
+export function difficultyTableWithdrawalExclusionSql(versionAlias = "versions"): string {
+  return `NOT EXISTS (
+    SELECT 1
+    FROM version_withdrawals AS difficulty_withdrawals
+    WHERE difficulty_withdrawals.version_id = ${versionAlias}.id
+      AND difficulty_withdrawals.status IN ('pending', 'processing', 'tombstoned', 'deleted')
   )`;
 }
 
@@ -169,12 +180,25 @@ export function lifecycleProjectionSql(versionAlias = "versions"): string {
   return `
     ${latest("status")} AS lifecycle_withdrawal_status,
     ${latest("request_mode")} AS lifecycle_request_mode,
+    COALESCE(
+      ${latest("handling_mode")},
+      CASE
+        WHEN ${latest("request_mode")} = 'immediate' THEN 'immediate_delete'
+        WHEN ${latest("request_mode")} = 'deferred' THEN 'grace_auto_delete'
+        ELSE NULL
+      END
+    ) AS lifecycle_handling_mode,
     ${latest("requested_at")} AS lifecycle_requested_at,
     ${latest("scheduled_at")} AS lifecycle_scheduled_at,
     CASE
       WHEN ${latest("status")} = 'pending'
-        AND ${latest("request_mode")} = 'deferred'
-        AND CURRENT_TIMESTAMP < ${latest("scheduled_at")}
+        AND (
+          COALESCE(${latest("handling_mode")}, CASE WHEN ${latest("request_mode")} = 'deferred' THEN 'grace_auto_delete' END) = 'manual_review'
+          OR (
+            COALESCE(${latest("handling_mode")}, CASE WHEN ${latest("request_mode")} = 'deferred' THEN 'grace_auto_delete' END) = 'grace_auto_delete'
+            AND CURRENT_TIMESTAMP < ${latest("scheduled_at")}
+          )
+        )
       THEN 1
       ELSE 0
     END AS lifecycle_can_cancel

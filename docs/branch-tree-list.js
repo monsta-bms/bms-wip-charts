@@ -123,18 +123,27 @@
       : "";
     const lifecycleStatus = getLifecycleStatus(version);
     if (lifecycleStatus === "withdrawal_pending") {
-      if (getLifecycleRequestMode(version) === "immediate") {
+      const handlingMode = getLifecycleHandlingMode(version);
+      if (handlingMode === "immediate_delete") {
         return `
           <span class="version-posted-at">${html(postedAt)}</span>
           <span class="version-withdrawal-detail">削除処理待ち / 取消不可</span>
           ${recentBadge}
         `;
       }
+      if (handlingMode === "manual_review") {
+        return `
+          <span class="version-posted-at">${html(postedAt)}</span>
+          <span class="version-withdrawal-detail">DL停止・管理者確認待ち</span>
+          <span class="version-withdrawal-help">申請理由と派生版の状態を管理者が確認します。</span>
+          ${recentBadge}
+        `;
+      }
       const scheduledAt = parseApiDate(getLifecycleScheduledAt(version));
       return `
         <span class="version-posted-at">${html(postedAt)}</span>
-        <span class="version-withdrawal-detail">自動処理予定：${html(formatPostedAt({ createdAt: scheduledAt?.toISOString() || "" }).replace(/^投稿/, ""))}以降</span>
-        <span class="version-withdrawal-help">申請期間中は既知のURLからDL・追記できます。</span>
+        <span class="version-withdrawal-detail">DL停止・自動削除待ち</span>
+        <span class="version-withdrawal-help">${html(formatPostedAt({ createdAt: scheduledAt?.toISOString() || "" }).replace(/^投稿/, ""))}以降、追記や参照がなければ自動削除します。</span>
         ${recentBadge}
       `;
     }
@@ -486,6 +495,10 @@
     return String(version?.requestMode || version?.request_mode || "");
   }
 
+  function getLifecycleHandlingMode(version) {
+    return String(version?.handlingMode || version?.handling_mode || "");
+  }
+
   function getLifecycleScheduledAt(version) {
     return version?.scheduledAt || version?.scheduled_at || "";
   }
@@ -606,7 +619,13 @@
     const lifecycleStatus = getLifecycleStatus(version);
 
     if (lifecycleStatus === "withdrawal_pending") {
-      badges.push(`<span class="withdrawal-pending-badge">取り下げ申請中</span>`);
+      const handlingMode = getLifecycleHandlingMode(version);
+      const label = handlingMode === "grace_auto_delete"
+        ? "DL停止・自動削除待ち"
+        : handlingMode === "manual_review"
+          ? "DL停止・管理者確認待ち"
+          : "取り下げ申請中";
+      badges.push(`<span class="withdrawal-pending-badge">${label}</span>`);
     } else if (lifecycleStatus === "processing") {
       badges.push(`<span class="withdrawal-processing-badge">取り下げ処理中</span>`);
     } else if (lifecycleStatus === "tombstoned") {
@@ -721,6 +740,7 @@
     button.dataset.downloadAvailable = !isDownloadBlocked(version) && !isHiddenVersion(version) ? "true" : "false";
     button.dataset.lifecycleStatus = getLifecycleStatus(version);
     button.dataset.requestMode = getLifecycleRequestMode(version);
+    button.dataset.handlingMode = getLifecycleHandlingMode(version);
     button.dataset.scheduledAt = String(getLifecycleScheduledAt(version));
     button.dataset.canCancelWithdrawal = version?.canCancelWithdrawal === true ? "true" : "false";
     button.dataset.createdAt = String(version?.createdAt || version?.created_at || "");

@@ -12,6 +12,7 @@ type FileRow = {
   version_is_hidden: number;
   version_hidden_reason: string | null;
   download_blocked: number;
+  withdrawal_download_blocked: number;
   download_block_reason: string | null;
   chart_is_hidden: number;
   chart_hidden_reason: string | null;
@@ -74,6 +75,7 @@ async function selectFileRow(env: Env, fileId: string): Promise<FileRow | null> 
       versions.is_hidden AS version_is_hidden,
       versions.hidden_reason AS version_hidden_reason,
       versions.download_blocked AS download_blocked,
+      versions.withdrawal_download_blocked AS withdrawal_download_blocked,
       versions.download_block_reason AS download_block_reason,
       charts.is_hidden AS chart_is_hidden,
       charts.hidden_reason AS chart_hidden_reason,
@@ -183,6 +185,17 @@ export async function handleFileRoute(request: Request, env: Env, fileId: string
       "FILE_DELETED",
       "この譜面ファイルは削除済みです。",
       `The R2 chart file was deleted at ${fileRow.file_deleted_at}.`
+    );
+  }
+
+  if (toBoolean(fileRow.withdrawal_download_blocked)) {
+    return apiError(
+      request,
+      env,
+      404,
+      "FILE_NOT_FOUND",
+      "この投稿のファイルは公開されていません。",
+      "The requested file is blocked by a pending withdrawal."
     );
   }
 

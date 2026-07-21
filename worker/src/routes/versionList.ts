@@ -54,6 +54,7 @@ type VersionListRow = LifecycleProjection & {
   withdrawn_at: string | null;
   delete_requested_at: string | null;
   download_blocked: number;
+  withdrawal_download_blocked: number;
   download_block_reason: string | null;
   branch_path: string;
   new_until: string;
@@ -458,10 +459,11 @@ function mapVersionRow(row: VersionListRow) {
     deleteRequested: row.delete_requested_at !== null || row.download_block_reason === "delete_requested",
     lifecycleStatus,
     requestMode: row.lifecycle_request_mode,
+    handlingMode: row.lifecycle_handling_mode,
     withdrawalRequestedAt: row.lifecycle_requested_at,
     scheduledAt: row.lifecycle_scheduled_at,
     canCancelWithdrawal: lifecycleStatus === "withdrawal_pending" && row.lifecycle_can_cancel === 1,
-    downloadBlocked: row.download_blocked === 1,
+    downloadBlocked: row.download_blocked === 1 || row.withdrawal_download_blocked === 1,
     branchPath: row.branch_path,
     versionLabel: buildVersionPathLabel(row.branch_path),
     isNew: row.is_new === 1,
@@ -511,6 +513,7 @@ async function selectVersionList(env: Env, params: VersionListParams): Promise<{
       versions.withdrawn_at AS withdrawn_at,
       versions.delete_requested_at AS delete_requested_at,
       versions.download_blocked AS download_blocked,
+      versions.withdrawal_download_blocked AS withdrawal_download_blocked,
       versions.download_block_reason AS download_block_reason,
       versions.branch_path AS branch_path,
       ${lifecycleProjectionSql("versions")},

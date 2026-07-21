@@ -1,5 +1,6 @@
 import { Env, errorDetail } from "../utils/response";
 import { WithdrawalDbStatus } from "../utils/versionWithdrawal";
+import { WithdrawalHandlingMode } from "../utils/withdrawalHandling";
 
 const DEFAULT_LEASE_MINUTES = 10;
 const DEFAULT_RETRY_DELAY_MINUTES = 5;
@@ -27,6 +28,7 @@ type WithdrawalRow = {
   chart_id: string;
   status: WithdrawalDbStatus;
   request_mode: "immediate" | "deferred";
+  handling_mode: WithdrawalHandlingMode;
   scheduled_at: string;
   processing_mode: ProcessingMode | null;
   processing_at: string | null;
@@ -68,8 +70,9 @@ export type WithdrawalFinalizerResult = {
   withdrawalId: string;
   versionId: string;
   requestMode: "immediate" | "deferred";
+  handlingMode: WithdrawalHandlingMode;
   status: WithdrawalDbStatus;
-  outcome: "deleted" | "tombstoned" | "processing" | "pending" | "canceled" | "not_claimed";
+  outcome: "deleted" | "tombstoned" | "manual_review" | "processing" | "pending" | "canceled" | "not_claimed";
   processingMode: ProcessingMode | null;
   attemptCount: number;
   retryable: boolean;
@@ -81,6 +84,7 @@ export type ProcessDueWithdrawalSummary = {
   processedCount: number;
   deletedCount: number;
   tombstonedCount: number;
+  manualReviewCount: number;
   processingCount: number;
   skippedCount: number;
   results: WithdrawalFinalizerResult[];
@@ -131,7 +135,9 @@ function positiveInteger(value: number | undefined, fallback: number): number {
 async function selectWithdrawal(env: Env, withdrawalId: string): Promise<WithdrawalRow | null> {
   return env.DB.prepare(`
     SELECT
-      id, version_id, chart_id, status, request_mode, scheduled_at,
+      id, version_id, chart_id, status, request_mode,
+      COALESCE(handling_mode, CASE WHEN request_mode = 'immediate' THEN 'immediate_delete' ELSE 'grace_auto_delete' END) AS handling_mode,
+      scheduled_at,
       processing_mode, processing_at, lease_token, lease_expires_at,
       attempt_count, last_error_code, resolved_at
     FROM version_withdrawals
@@ -146,6 +152,7 @@ function resultFromRow(row: WithdrawalRow | null): WithdrawalFinalizerResult {
       withdrawalId: "",
       versionId: "",
       requestMode: "deferred",
+      handlingMode: "grace_auto_delete",
       status: "processing",
       outcome: "not_claimed",
       processingMode: null,
@@ -169,6 +176,7 @@ function resultFromRow(row: WithdrawalRow | null): WithdrawalFinalizerResult {
     withdrawalId: row.id,
     versionId: row.version_id,
     requestMode: row.request_mode,
+    handlingMode: row.handling_mode,
     status: row.status,
     outcome,
     processingMode: row.processing_mode,
@@ -200,8 +208,18 @@ export async function claimVersionWithdrawal(
       updated_at = ?
     WHERE id = ?
       AND (
-        (status = 'pending' AND (request_mode = 'immediate' OR scheduled_at <= ?))
-        OR (status = 'processing' AND (lease_expires_at IS NULL OR lease_expires_at <= ?))
+        (
+          status = 'pending'
+          AND (
+            handling_mode = 'immediate_delete'
+            OR (handling_mode = 'grace_auto_delete' AND scheduled_at <= ?)
+          )
+        )
+        OR (
+          status = 'processing'
+          AND handling_mode IN ('immediate_delete', 'grace_auto_delete')
+          AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
+        )
       )
   `).bind(nowSql, leaseToken, leaseExpiresSql, nowSql, withdrawalId, nowSql, nowSql).run();
   const row = await selectWithdrawal(env, withdrawalId);
@@ -389,6 +407,52 @@ async function setProcessingMode(
   }
 }
 
+async function moveWithdrawalToManualReview(
+  env: Env,
+  withdrawal: WithdrawalRow,
+  leaseToken: string,
+  now: Date
+): Promise<WithdrawalFinalizerResult | null> {
+  const nowSql = toSqlTimestamp(now);
+  const results = await env.DB.batch([
+    env.DB.prepare(`
+      UPDATE versions
+      SET withdrawal_download_blocked = 1, updated_at = ?
+      WHERE id = ?
+        AND EXISTS (
+          SELECT 1 FROM version_withdrawals
+          WHERE id = ? AND status = 'processing' AND lease_token = ?
+        )
+    `).bind(nowSql, withdrawal.version_id, withdrawal.id, leaseToken),
+    env.DB.prepare(`
+      UPDATE version_withdrawals
+      SET
+        status = 'pending',
+        handling_mode = 'manual_review',
+        request_reason = COALESCE(
+          request_reason,
+          '申請確定後に派生版または参照が追加されたため、管理者確認へ移行しました。'
+        ),
+        processing_mode = NULL,
+        lease_token = NULL,
+        lease_expires_at = NULL,
+        last_error_code = NULL,
+        updated_at = ?
+      WHERE id = ? AND status = 'processing' AND lease_token = ?
+        AND EXISTS (
+          SELECT 1 FROM versions
+          WHERE id = ? AND withdrawal_download_blocked = 1
+        )
+    `).bind(nowSql, withdrawal.id, leaseToken, withdrawal.version_id)
+  ]);
+  if (Number(results[0]?.meta.changes ?? 0) !== 1 || Number(results[1]?.meta.changes ?? 0) !== 1) {
+    return null;
+  }
+  const row = await selectWithdrawal(env, withdrawal.id);
+  if (!row || row.status !== "pending" || row.handling_mode !== "manual_review") return null;
+  return { ...resultFromRow(row), outcome: "manual_review", retryable: false };
+}
+
 export async function finalizeVersionDeletion(
   env: Env,
   withdrawal: WithdrawalRow,
@@ -398,25 +462,6 @@ export async function finalizeVersionDeletion(
 ): Promise<WithdrawalFinalizerResult | null> {
   const nowSql = toSqlTimestamp(now);
   const results = await env.DB.batch([
-    env.DB.prepare(`
-      UPDATE version_withdrawals
-      SET
-        status = 'deleted', processing_mode = 'delete', resolved_at = ?,
-        lease_token = NULL, lease_expires_at = NULL, last_error_code = NULL, updated_at = ?
-      WHERE id = ? AND status = 'processing' AND lease_token = ?
-        AND EXISTS (
-          SELECT 1
-          FROM versions
-          INNER JOIN charts ON charts.id = versions.chart_id
-          WHERE versions.id = ?
-            AND versions.is_hidden = 0
-            AND charts.is_hidden = 0
-            AND versions.withdrawn_at IS NULL
-            AND versions.delete_requested_at IS NULL
-            AND versions.file_deleted_at IS NULL
-            AND ${noDeletionBlockersSql("versions")}
-        )
-    `).bind(nowSql, nowSql, withdrawal.id, leaseToken, snapshot.versionId),
     env.DB.prepare(`
       DELETE FROM versions
       WHERE id = ?
@@ -431,9 +476,17 @@ export async function finalizeVersionDeletion(
         AND ${noDeletionBlockersSql("versions")}
         AND EXISTS (
           SELECT 1 FROM version_withdrawals
-          WHERE id = ? AND status = 'deleted' AND processing_mode = 'delete'
+          WHERE id = ? AND status = 'processing' AND lease_token = ? AND processing_mode = 'delete'
         )
-    `).bind(snapshot.versionId, withdrawal.id),
+    `).bind(snapshot.versionId, withdrawal.id, leaseToken),
+    env.DB.prepare(`
+      UPDATE version_withdrawals
+      SET
+        status = 'deleted', processing_mode = 'delete', resolved_at = ?,
+        lease_token = NULL, lease_expires_at = NULL, last_error_code = NULL, updated_at = ?
+      WHERE id = ? AND status = 'processing' AND lease_token = ?
+        AND NOT EXISTS (SELECT 1 FROM versions WHERE versions.id = ?)
+    `).bind(nowSql, nowSql, withdrawal.id, leaseToken, snapshot.versionId),
     env.DB.prepare(`
       DELETE FROM charts
       WHERE id = ? AND NOT EXISTS (SELECT 1 FROM versions WHERE versions.chart_id = charts.id)
@@ -442,52 +495,6 @@ export async function finalizeVersionDeletion(
       DELETE FROM songs
       WHERE id = ? AND NOT EXISTS (SELECT 1 FROM charts WHERE charts.song_id = songs.id)
     `).bind(snapshot.songId)
-  ]);
-  if (Number(results[0]?.meta.changes ?? 0) === 1 && Number(results[1]?.meta.changes ?? 0) === 1) {
-    return resultFromRow(await selectWithdrawal(env, withdrawal.id));
-  }
-  return null;
-}
-
-export async function finalizeVersionTombstone(
-  env: Env,
-  withdrawal: WithdrawalRow,
-  leaseToken: string,
-  snapshot: VersionDeletionDependencies,
-  now: Date
-): Promise<WithdrawalFinalizerResult | null> {
-  const nowSql = toSqlTimestamp(now);
-  const results = await env.DB.batch([
-    env.DB.prepare(`
-      UPDATE versions
-      SET
-        allow_append = 0,
-        download_blocked = 1,
-        download_block_reason = CASE
-          WHEN download_blocked = 0 OR download_block_reason IS NULL THEN 'withdrawn'
-          ELSE download_block_reason
-        END,
-        download_blocked_at = COALESCE(download_blocked_at, ?),
-        file_deleted_at = COALESCE(file_deleted_at, ?),
-        file_delete_reason = COALESCE(file_delete_reason, 'withdrawal_tombstoned'),
-        updated_at = ?
-      WHERE id = ?
-        AND EXISTS (
-          SELECT 1 FROM version_withdrawals
-          WHERE id = ? AND status = 'processing' AND lease_token = ?
-        )
-    `).bind(nowSql, nowSql, nowSql, snapshot.versionId, withdrawal.id, leaseToken),
-    env.DB.prepare(`
-      UPDATE version_withdrawals
-      SET
-        status = 'tombstoned', processing_mode = 'tombstone', resolved_at = ?,
-        lease_token = NULL, lease_expires_at = NULL, last_error_code = NULL, updated_at = ?
-      WHERE id = ? AND status = 'processing' AND lease_token = ?
-        AND EXISTS (
-          SELECT 1 FROM versions
-          WHERE id = ? AND allow_append = 0 AND download_blocked = 1 AND file_deleted_at IS NOT NULL
-        )
-    `).bind(nowSql, nowSql, withdrawal.id, leaseToken, snapshot.versionId)
   ]);
   if (Number(results[0]?.meta.changes ?? 0) === 1 && Number(results[1]?.meta.changes ?? 0) === 1) {
     return resultFromRow(await selectWithdrawal(env, withdrawal.id));
@@ -520,6 +527,7 @@ async function writeFinalizerLog(
         withdrawalId: withdrawal.id,
         versionId: withdrawal.version_id,
         requestMode: withdrawal.request_mode,
+        handlingMode: withdrawal.handling_mode,
         processingMode: withdrawal.processing_mode,
         outcome,
         stage,
@@ -593,9 +601,49 @@ export async function finalizeVersionWithdrawal(
     }
     assertNoExternalLifecycleConflict(snapshot);
 
-    let mode: ProcessingMode = hasDeletionBlockers(snapshot) ? "tombstone" : "delete";
+    if (hasDeletionBlockers(snapshot)) {
+      const moved = await moveWithdrawalToManualReview(env, withdrawal, leaseToken, now);
+      if (!moved) {
+        throw new FinalizerError(
+          "WITHDRAWAL_D1_FINALIZE_FAILED",
+          "move_to_manual_review",
+          true,
+          "The withdrawal could not be moved to manual review."
+        );
+      }
+      const finalRow = await selectWithdrawal(env, withdrawal.id) ?? withdrawal;
+      await writeFinalizerLog(env, finalRow, "info", "manual_review", "dependency_recheck", null, false);
+      return moved;
+    }
+
+    let mode: ProcessingMode = "delete";
     await setProcessingMode(env, withdrawal.id, leaseToken, mode, now);
     withdrawal.processing_mode = mode;
+
+    snapshot = await inspectVersionDeletionDependencies(env, withdrawal.version_id);
+    if (!snapshot) {
+      throw new FinalizerError(
+        "WITHDRAWAL_VERSION_MISSING",
+        "pre_r2_reinspection",
+        false,
+        "The processing withdrawal has no version row before R2 cleanup."
+      );
+    }
+    assertNoExternalLifecycleConflict(snapshot);
+    if (hasDeletionBlockers(snapshot)) {
+      const moved = await moveWithdrawalToManualReview(env, withdrawal, leaseToken, now);
+      if (!moved) {
+        throw new FinalizerError(
+          "WITHDRAWAL_D1_FINALIZE_FAILED",
+          "move_to_manual_review",
+          true,
+          "The withdrawal could not be moved to manual review."
+        );
+      }
+      const finalRow = await selectWithdrawal(env, withdrawal.id) ?? withdrawal;
+      await writeFinalizerLog(env, finalRow, "info", "manual_review", "pre_r2_reinspection", null, false);
+      return moved;
+    }
 
     try {
       r2Summary = await deleteVersionR2Objects(
@@ -623,11 +671,13 @@ export async function finalizeVersionWithdrawal(
       );
     }
     assertNoExternalLifecycleConflict(snapshot);
-    const finalMode: ProcessingMode = hasDeletionBlockers(snapshot) ? "tombstone" : "delete";
-    if (finalMode !== mode) {
-      mode = finalMode;
-      await setProcessingMode(env, withdrawal.id, leaseToken, mode, now);
-      withdrawal.processing_mode = mode;
+    if (hasDeletionBlockers(snapshot)) {
+      throw new FinalizerError(
+        "WITHDRAWAL_DEPENDENCY_RACE_AFTER_R2",
+        "post_r2_dependency_recheck",
+        false,
+        "A deletion dependency appeared after R2 cleanup."
+      );
     }
 
     await options.hooks?.beforeD1Finalize?.({
@@ -636,16 +686,17 @@ export async function finalizeVersionWithdrawal(
       mode
     });
 
-    let terminal = mode === "delete"
-      ? await finalizeVersionDeletion(env, withdrawal, leaseToken, snapshot, now)
-      : await finalizeVersionTombstone(env, withdrawal, leaseToken, snapshot, now);
+    let terminal = await finalizeVersionDeletion(env, withdrawal, leaseToken, snapshot, now);
 
-    if (!terminal && mode === "delete") {
+    if (!terminal) {
       const refreshed = await inspectVersionDeletionDependencies(env, withdrawal.version_id);
       if (refreshed && hasDeletionBlockers(refreshed)) {
-        await setProcessingMode(env, withdrawal.id, leaseToken, "tombstone", now);
-        withdrawal.processing_mode = "tombstone";
-        terminal = await finalizeVersionTombstone(env, withdrawal, leaseToken, refreshed, now);
+        throw new FinalizerError(
+          "WITHDRAWAL_DEPENDENCY_RACE_AFTER_R2",
+          "d1_finalize",
+          false,
+          "A deletion dependency appeared before the terminal D1 update."
+        );
       }
     }
 
@@ -715,9 +766,14 @@ export async function processDueVersionWithdrawals(
     SELECT id
     FROM version_withdrawals
     WHERE (
-      status = 'pending' AND (request_mode = 'immediate' OR scheduled_at <= ?)
+      status = 'pending' AND (
+        handling_mode = 'immediate_delete'
+        OR (handling_mode = 'grace_auto_delete' AND scheduled_at <= ?)
+      )
     ) OR (
-      status = 'processing' AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
+      status = 'processing'
+      AND handling_mode IN ('immediate_delete', 'grace_auto_delete')
+      AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
     )
     ORDER BY scheduled_at ASC, id ASC
     LIMIT ?
@@ -732,6 +788,7 @@ export async function processDueVersionWithdrawals(
     processedCount: results.filter((item) => item.outcome !== "not_claimed").length,
     deletedCount: results.filter((item) => item.outcome === "deleted").length,
     tombstonedCount: results.filter((item) => item.outcome === "tombstoned").length,
+    manualReviewCount: results.filter((item) => item.outcome === "manual_review").length,
     processingCount: results.filter((item) => item.outcome === "processing").length,
     skippedCount: results.filter((item) => ["not_claimed", "pending", "canceled"].includes(item.outcome)).length,
     results

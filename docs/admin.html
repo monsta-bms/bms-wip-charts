@@ -6,7 +6,7 @@
     <script src="./theme-init.js?v=site-theme-14"></script>
     <meta name="robots" content="noindex,nofollow">
     <title>管理 | BMS制作途中譜面共有</title>
-    <link rel="stylesheet" href="./admin.css?v=ban-01">
+    <link rel="stylesheet" href="./admin.css?v=withdrawal-lifecycle-16r">
     <link rel="stylesheet" href="./theme.css?v=site-theme-14-final">
   </head>
   <body>
@@ -59,6 +59,25 @@
           <button id="adminPreviousPage" type="button" class="secondary-button" disabled>前へ</button>
           <span id="adminPageStatus">1 / 1</span>
           <button id="adminNextPage" type="button" class="secondary-button" disabled>次へ</button>
+        </nav>
+      </section>
+
+      <section class="admin-queue" aria-labelledby="adminWithdrawalTitle">
+        <div class="admin-queue-header">
+          <div>
+            <h2 id="adminWithdrawalTitle">取り下げ・管理者確認待ち</h2>
+            <p id="adminWithdrawalSummary">認証後に一覧を読み込みます。</p>
+          </div>
+          <button id="adminWithdrawalRefreshButton" type="button" class="secondary-button" disabled>再読み込み</button>
+        </div>
+        <div class="admin-list-header admin-withdrawal-list-header" aria-hidden="true">
+          <span>申請</span><span>対象version</span><span>申請理由</span><span>依存</span>
+        </div>
+        <div id="adminWithdrawalList" class="admin-request-list"></div>
+        <nav class="admin-pagination" aria-label="管理者確認待ち取り下げ申請ページ">
+          <button id="adminWithdrawalPreviousPage" type="button" class="secondary-button" disabled>前へ</button>
+          <span id="adminWithdrawalPageStatus">1 / 1</span>
+          <button id="adminWithdrawalNextPage" type="button" class="secondary-button" disabled>次へ</button>
         </nav>
       </section>
 
@@ -215,7 +234,7 @@
     </dialog>
 
     <script src="./theme-controller.js?v=site-theme-14"></script>
-    <script src="./admin.js?v=ban-01"></script>
+    <script src="./admin.js?v=withdrawal-lifecycle-16r"></script>
     <script src="./admin-ban.js?v=ban-01"></script>
   </body>
 </html>

@@ -16,6 +16,8 @@
   const allowAppendValue = dialog.querySelector("#versionManagementAllowAppend");
   const actionTitle = dialog.querySelector("#withdrawalActionTitle");
   const description = dialog.querySelector("#versionWithdrawalDescription");
+  const reasonField = dialog.querySelector("#versionWithdrawalReasonField");
+  const reasonInput = dialog.querySelector("#versionWithdrawalReason");
   const passwordInput = dialog.querySelector("#versionManagementPassword");
   const actionButton = dialog.querySelector("#versionWithdrawalActionButton");
   const closeButtons = Array.from(dialog.querySelectorAll("[data-version-management-close]"));
@@ -32,7 +34,9 @@
     LEGACY_LIFECYCLE_ACTIVE: "この投稿は従来方式の取り下げ・削除処理中です。",
     INVALID_PASSWORD: "管理パスワードが違います。",
     PASSWORD_REQUIRED: "管理パスワードを入力してください。",
-    RATE_LIMITED: "管理パスワードの試行回数が上限を超えました。しばらく待ってから再試行してください。"
+    RATE_LIMITED: "管理パスワードの試行回数が上限を超えました。しばらく待ってから再試行してください。",
+    INVALID_WITHDRAWAL_REASON: "取り下げ理由を10文字以上で入力してください。",
+    WITHDRAWAL_REASON_TOO_LONG: "取り下げ理由は500文字以内で入力してください。"
   };
 
   const state = {
@@ -43,6 +47,7 @@
     createdAt: null,
     lifecycleStatus: "active",
     requestMode: null,
+    handlingMode: null,
     requestedAt: null,
     scheduledAt: null,
     requestPreview: "unavailable",
@@ -98,9 +103,18 @@
   }
 
   function describeState() {
+    if (state.lifecycleStatus === "active" && state.canRequestWithdrawal) {
+      if (state.requestPreview === "immediate_delete") return "24時間以内の投稿なので即時削除できます。";
+      if (state.requestPreview === "grace_auto_delete") return "即時削除はできません。7日間に追記がなければ自動削除します。";
+      if (state.requestPreview === "manual_review") return "派生版があるため、DLを停止して管理者確認へ進みます。";
+    }
     switch (state.lifecycleStatus) {
       case "withdrawal_pending":
-        return state.requestMode === "immediate" ? "削除処理待ち" : "取り下げ申請中";
+        return state.handlingMode === "manual_review"
+          ? "DL停止・管理者確認待ち"
+          : state.handlingMode === "grace_auto_delete"
+            ? "DL停止・自動削除待ち"
+            : "削除処理待ち";
       case "processing": return "取り下げ処理中";
       case "legacy_withdrawn": return "従来方式の取り下げ中";
       case "legacy_delete_pending": return "従来方式の削除申請中";
@@ -111,7 +125,7 @@
 
   function renderLifecycle() {
     stateValue.textContent = describeState();
-    scheduleValue.textContent = state.scheduledAt
+    scheduleValue.textContent = state.handlingMode === "grace_auto_delete" && state.scheduledAt
       ? `${formatDateTime(state.scheduledAt)}以降`
       : "-";
     downloadValue.textContent = state.downloadAvailable ? "利用可能" : "利用不可";
@@ -119,6 +133,8 @@
 
     actionButton.hidden = false;
     actionButton.disabled = state.loading || state.submitting;
+    reasonField.hidden = true;
+    reasonInput.required = false;
     if (state.loading) {
       actionTitle.textContent = "投稿を取り下げる";
       description.textContent = "対象の状態を確認しています。";
@@ -127,20 +143,34 @@
     }
 
     if (state.lifecycleStatus === "active" && state.canRequestWithdrawal) {
-      actionTitle.textContent = "投稿を取り下げる";
       if (state.requestPreview === "immediate_delete") {
-        description.textContent = "この投稿は24時間以内で、現在は派生版や参照がありません。取り下げると削除処理へ進み、元に戻せません。";
+        actionTitle.textContent = "即時削除";
+        description.textContent = "投稿から24時間以内で、派生版や参照がありません。取り下げると直ちに削除され、元に戻せません。";
         actionButton.textContent = "取り下げて削除する";
+      } else if (state.requestPreview === "grace_auto_delete") {
+        actionTitle.textContent = "DL停止・7日後に自動削除";
+        description.textContent = "投稿から24時間を超えているため、すぐには削除されません。ダウンロードを停止し、申請後7日間に新しい追記や参照がなければ自動削除します。";
+        actionButton.textContent = "DL停止と自動削除を申請する";
+        reasonField.hidden = false;
+        reasonInput.required = true;
       } else {
-        description.textContent = "取り下げ後、7日間は申請を取り消せます。申請期間中は一般一覧から非表示になります。派生版や参照がある場合は、期限後も版ツリー上の履歴だけ残ります。";
-        actionButton.textContent = "取り下げを申請する";
+        actionTitle.textContent = "DL停止・管理者確認";
+        description.textContent = "派生版または参照があるため、自動削除できません。ダウンロードを停止し、申請理由を管理者が確認します。版ツリーの関係を保つため、履歴が残る場合があります。";
+        actionButton.textContent = "DL停止を申請する";
+        reasonField.hidden = false;
+        reasonInput.required = true;
       }
       return;
     }
 
-    if (state.lifecycleStatus === "withdrawal_pending" && state.requestMode === "deferred") {
-      actionTitle.textContent = "取り下げ申請中";
-      description.textContent = `自動処理予定：${formatDateTime(state.scheduledAt)}以降。申請期間中は、詳細画面や既知のURLからダウンロード・追記できます。`;
+    if (state.lifecycleStatus === "withdrawal_pending" && state.handlingMode !== "immediate_delete") {
+      if (state.handlingMode === "manual_review") {
+        actionTitle.textContent = "DL停止・管理者確認待ち";
+        description.textContent = "ダウンロードを停止しています。申請理由と派生版の状態を管理者が確認します。取り消すと、今回の申請によるDL停止を解除します。";
+      } else {
+        actionTitle.textContent = "DL停止・自動削除待ち";
+        description.textContent = `ダウンロードを停止しています。${formatDateTime(state.scheduledAt)}以降、申請後の追記や参照がなければ自動削除します。取り消すと、今回の申請によるDL停止を解除します。`;
+      }
       if (state.canCancelWithdrawal) {
         actionButton.textContent = "取り下げ申請を取り消す";
       } else {
@@ -172,6 +202,7 @@
   function setSubmitting(submitting) {
     state.submitting = submitting;
     passwordInput.disabled = submitting;
+    reasonInput.disabled = submitting;
     closeButtons.forEach((button) => { button.disabled = submitting; });
     dialog.classList.toggle("is-submitting", submitting);
     renderLifecycle();
@@ -181,6 +212,9 @@
     state.lifecycleStatus = String(body?.lifecycleStatus || "active");
     state.requestMode = body?.requestMode === "immediate" || body?.requestMode === "deferred"
       ? body.requestMode
+      : null;
+    state.handlingMode = ["immediate_delete", "grace_auto_delete", "manual_review"].includes(body?.handlingMode)
+      ? body.handlingMode
       : null;
     state.requestedAt = parseApiDate(body?.requestedAt);
     state.scheduledAt = parseApiDate(body?.scheduledAt);
@@ -246,6 +280,7 @@
     state.createdAt = parseApiDate(button.dataset.createdAt);
     state.lifecycleStatus = button.dataset.lifecycleStatus || "active";
     state.requestMode = button.dataset.requestMode || null;
+    state.handlingMode = button.dataset.handlingMode || null;
     state.scheduledAt = parseApiDate(button.dataset.scheduledAt);
     state.requestPreview = "unavailable";
     state.canRequestWithdrawal = false;
@@ -253,6 +288,7 @@
     state.downloadAvailable = button.dataset.downloadAvailable === "true";
     state.appendAvailable = button.dataset.appendAvailable === "true";
     state.idempotencyKey = "";
+    reasonInput.value = "";
     state.loading = true;
     state.submitting = false;
 
@@ -312,14 +348,21 @@
     }
 
     const canceling = state.lifecycleStatus === "withdrawal_pending"
-      && state.requestMode === "deferred"
       && state.canCancelWithdrawal;
+    const reason = reasonInput.value.trim();
+    if (!canceling && state.requestPreview !== "immediate_delete" && reason.length < 10) {
+      setMessage("取り下げ理由を10文字以上で入力してください。");
+      reasonInput.focus();
+      return;
+    }
     const immediate = state.requestPreview === "immediate_delete";
     const confirmation = canceling
       ? "取り下げ申請を取り消しますか？"
       : immediate
-        ? "取り下げると削除処理待ちとなり、元に戻せません。続けますか？"
-        : "投稿を一般一覧から取り下げます。7日間は申請を取り消せます。続けますか？";
+        ? "取り下げると直ちに削除され、元に戻せません。続けますか？"
+        : state.requestPreview === "manual_review"
+          ? "ダウンロードを停止し、管理者確認を申請します。続けますか？"
+          : "ダウンロードを停止し、7日後の自動削除を申請します。続けますか？";
     if (!window.confirm(confirmation)) {
       if (!canceling) state.idempotencyKey = "";
       return;
@@ -338,7 +381,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(canceling
           ? { password }
-          : { password, idempotencyKey: state.idempotencyKey })
+          : { password, idempotencyKey: state.idempotencyKey, reason })
       });
       const body = await readJson(response);
       if (!response.ok) throw body || { code: "REQUEST_FAILED" };
@@ -354,7 +397,9 @@
             ? "投稿者により取り下げられました。派生版を維持するため、版ツリー上の履歴だけ残っています。"
             : outcome === "processing"
               ? "取り下げ処理を受け付けました。処理完了までしばらくお待ちください。"
-              : "取り下げ申請を受け付けました。7日間は取り消せます。";
+              : state.handlingMode === "manual_review"
+                ? "ダウンロードを停止し、管理者確認の申請を受け付けました。"
+                : "ダウンロードを停止し、自動削除の申請を受け付けました。";
       setSubmitting(false);
       setMessage(successText, "success");
       const failures = await refreshPublicViews(outcome);

@@ -1384,6 +1384,8 @@ pending中は既存のDL状態と`allow_append`を維持する。processing/tomb
 
 ## WITHDRAWAL-LIFECYCLE-16B
 
+> 履歴仕様。pending中のDL可否と依存ありfinalizerは、後述の16Rを現行仕様として優先する。
+
 ### `POST /api/versions/:versionId/withdrawal`
 
 即時要求は受付だけでなく、共通finalizerによるR2 cleanupとD1終端処理まで同期実行する。
@@ -1427,8 +1429,42 @@ pending中は既存のDL状態と`allow_append`を維持する。processing/tomb
 
 ## WITHDRAWAL-LIFECYCLE-16C
 
+> 履歴仕様。候補分類は、後述の16Rのhandling mode基準を現行仕様として優先する。
+
 16Cでは公開HTTP route、手動observe API、手動finalizer APIを追加しない。毎時Cron `0 * * * *`は、通常変数`WITHDRAWAL_CRON_MODE`が厳密に`observe`である場合だけ、期限到達済みの取り下げ候補を読み取り専用で分類する。リポジトリ既定値、未設定、不正値は`off`であり、`active`処理は未実装とする。
 
 observeは`versions`、`version_withdrawals`、`charts`、`songs`、`delete_requests`、`post_logs`およびR2 objectを変更しない。既存finalizer、claim、lease更新、R2操作は呼び出さず、監視結果だけを既存`admin_logs.action='version_withdrawal_finalize'`へ`operation='withdrawal_cron_observe'`として記録する。通常候補の個別ログは作らず、`manual_review`または予期しない候補エラーだけを1実行最大5件記録する。公開レスポンスへの新しいエラーコード追加はない。
 
 既存R2 cleanup Cron `0 18 * * *`は従来どおりR2 cleanupだけを実行する。Scheduled handlerは発火したCron式を完全一致で振り分け、同時刻に別イベントとして発火しても1 invocationで両処理を実行しない。
+
+## WITHDRAWAL-LIFECYCLE-16R
+
+16Rでは`POST /api/versions/:versionId/withdrawal`のJSON bodyを次とする。`reason`は`grace_auto_delete`と`manual_review`で必須、前後空白を除いた10～500文字とし、`immediate_delete`では省略できる。
+
+```json
+{
+  "password": "management password",
+  "idempotencyKey": "client-generated-key",
+  "reason": "取り下げを希望する理由"
+}
+```
+
+`GET /api/versions/:versionId/lifecycle`、preview相当の管理dialog取得、申請成功、取消成功は次の機械判定値を返す。
+
+- `handlingMode`: `immediate_delete` / `grace_auto_delete` / `manual_review` / `null`
+- `reasonRequired`: boolean
+- `requestPreview`: `immediate_delete` / `grace_auto_delete` / `manual_review` / `unavailable` / `legacy_process`
+- `scheduledAt`, `canCancelWithdrawal`, `downloadAvailable`, `appendAvailable`
+
+pendingのgrace/manualは通常のchart/version一覧APIへ残り、`handlingMode`を返す。`downloadBlocked`は既存停止または取り下げ専用停止のどちらかが有効ならtrue。file APIは取り下げ専用停止中をHTTP 404 `FILE_NOT_FOUND`として扱い、既存`download_blocked`だけの場合のHTTP 403は維持する。RC★/RC★★はpendingも除外する。
+
+理由エラー:
+
+- `INVALID_WITHDRAWAL_REASON` (400): 必須理由が未入力、空白のみ、または10文字未満
+- `WITHDRAWAL_REASON_TOO_LONG` (400): 500文字超過
+
+### `GET /api/admin/version-withdrawals`
+
+`Authorization: Bearer <ADMIN_TOKEN>`必須の読み取り専用一覧。現在は`handlingMode=manual_review`だけを受け付け、`page`、`pageSize`でページングする。返却項目はwithdrawal/version/chart識別情報、曲名・差分名・版表示、申請日時、申請理由、`handlingMode`、`status`、依存有無と直接子・折り畳み参照・旧削除申請の件数。公開APIから理由や内部依存件数は返さない。管理者の最終削除・墓標化操作は本APIに含めない。
+
+期限到達時の自動処理対象は`status='pending' AND handling_mode='grace_auto_delete' AND scheduled_at<=CURRENT_TIMESTAMP`と、lease期限切れのimmediate/grace processingだけ。依存なしは物理削除、依存ありは`status=pending/handling_mode=manual_review`へ移し、R2・versionを削除しない。manual reviewはpending/processingともclaimしない。

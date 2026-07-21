@@ -7,10 +7,18 @@ import {
   resolvePublicLifecycleStatus,
   WithdrawalDbStatus
 } from "../utils/versionWithdrawal";
+import {
+  classifyWithdrawalHandling,
+  requestModeForHandling,
+  WithdrawalHandlingMode,
+  withdrawalHandlingRequiresReason
+} from "../utils/withdrawalHandling";
 
 const INVALID_PASSWORD_LIMIT = 5;
 const INVALID_PASSWORD_WINDOW_MINUTES = 10;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{16,200}$/;
+const MIN_WITHDRAWAL_REASON_LENGTH = 10;
+const MAX_WITHDRAWAL_REASON_LENGTH = 500;
 
 export type VersionWithdrawalRouteAction = "withdrawal" | "cancel" | "lifecycle";
 
@@ -44,6 +52,7 @@ type ManagedVersionRow = {
   collapsed_by_completion: number;
   progress_map_json: string | null;
   download_blocked: number;
+  withdrawal_download_blocked: number;
   created_at: string;
 };
 
@@ -53,6 +62,8 @@ type WithdrawalRow = {
   chart_id: string;
   status: WithdrawalDbStatus;
   request_mode: "immediate" | "deferred";
+  handling_mode: WithdrawalHandlingMode;
+  request_reason: string | null;
   requested_at: string;
   scheduled_at: string;
   canceled_at: string | null;
@@ -73,7 +84,9 @@ type LifecycleView = {
   withdrawal: WithdrawalRow | null;
   dependencies: DependencySnapshot;
   lifecycleStatus: PublicLifecycleStatus;
-  requestPreview: "immediate_delete" | "deferred_delete_or_tombstone" | "unavailable" | "legacy_process";
+  handlingMode: WithdrawalHandlingMode | null;
+  requestPreview: WithdrawalHandlingMode | "unavailable" | "legacy_process";
+  reasonRequired: boolean;
   canRequestWithdrawal: boolean;
   canCancelWithdrawal: boolean;
   downloadAvailable: boolean;
@@ -83,6 +96,7 @@ type LifecycleView = {
 type RequestBody = {
   password: string;
   idempotencyKey: string;
+  reason: string;
 };
 
 function makeId(prefix: string): string {
@@ -107,7 +121,8 @@ async function writeLifecycleLog(
   errorCode: string | null,
   operation: "request" | "cancel",
   outcome: string,
-  requestMode: string | null = null
+  requestMode: string | null = null,
+  handlingMode: string | null = null
 ): Promise<void> {
   await env.DB.prepare(`
     INSERT INTO post_logs (
@@ -127,6 +142,7 @@ async function writeLifecycleLog(
     [
       `operation=${operation}`,
       `requestMode=${requestMode ?? "none"}`,
+      `handlingMode=${handlingMode ?? "none"}`,
       `outcome=${outcome}`,
       `errorCode=${errorCode ?? "none"}`
     ].join("; ")
@@ -185,7 +201,8 @@ async function parseRequestBody(request: Request): Promise<RequestBody | Failure
       message: "取り下げ操作を確認できません。管理画面を開き直してください。"
     };
   }
-  return { password, idempotencyKey };
+  const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+  return { password, idempotencyKey, reason };
 }
 
 async function parseCancelBody(request: Request): Promise<{ password: string } | Failure> {
@@ -220,6 +237,7 @@ async function selectManagedVersion(env: Env, versionId: string): Promise<Manage
       versions.collapsed_by_completion,
       versions.progress_map_json,
       versions.download_blocked,
+      versions.withdrawal_download_blocked,
       versions.created_at
     FROM versions
     INNER JOIN charts ON charts.id = versions.chart_id
@@ -231,12 +249,19 @@ async function selectManagedVersion(env: Env, versionId: string): Promise<Manage
 async function selectLatestWithdrawal(env: Env, versionId: string): Promise<WithdrawalRow | null> {
   return env.DB.prepare(`
     SELECT
-      id, version_id, chart_id, status, request_mode, requested_at, scheduled_at,
+      id, version_id, chart_id, status, request_mode,
+      COALESCE(handling_mode, CASE WHEN request_mode = 'immediate' THEN 'immediate_delete' ELSE 'grace_auto_delete' END) AS handling_mode,
+      request_reason, requested_at, scheduled_at,
       canceled_at, resolved_at,
       CASE
         WHEN status = 'pending'
-          AND request_mode = 'deferred'
-          AND CURRENT_TIMESTAMP < scheduled_at
+          AND (
+            COALESCE(handling_mode, CASE WHEN request_mode = 'deferred' THEN 'grace_auto_delete' END) = 'manual_review'
+            OR (
+              COALESCE(handling_mode, CASE WHEN request_mode = 'deferred' THEN 'grace_auto_delete' END) = 'grace_auto_delete'
+              AND CURRENT_TIMESTAMP < scheduled_at
+            )
+          )
         THEN 1 ELSE 0
       END AS can_cancel
     FROM version_withdrawals
@@ -249,12 +274,19 @@ async function selectLatestWithdrawal(env: Env, versionId: string): Promise<With
 async function selectWithdrawalByIdempotencyHash(env: Env, hash: string): Promise<WithdrawalRow | null> {
   return env.DB.prepare(`
     SELECT
-      id, version_id, chart_id, status, request_mode, requested_at, scheduled_at,
+      id, version_id, chart_id, status, request_mode,
+      COALESCE(handling_mode, CASE WHEN request_mode = 'immediate' THEN 'immediate_delete' ELSE 'grace_auto_delete' END) AS handling_mode,
+      request_reason, requested_at, scheduled_at,
       canceled_at, resolved_at,
       CASE
         WHEN status = 'pending'
-          AND request_mode = 'deferred'
-          AND CURRENT_TIMESTAMP < scheduled_at
+          AND (
+            COALESCE(handling_mode, CASE WHEN request_mode = 'deferred' THEN 'grace_auto_delete' END) = 'manual_review'
+            OR (
+              COALESCE(handling_mode, CASE WHEN request_mode = 'deferred' THEN 'grace_auto_delete' END) = 'grace_auto_delete'
+              AND CURRENT_TIMESTAMP < scheduled_at
+            )
+          )
         THEN 1 ELSE 0
       END AS can_cancel
     FROM version_withdrawals
@@ -308,6 +340,7 @@ function deriveLifecycleStatus(
     const status = resolvePublicLifecycleStatus({
       lifecycle_withdrawal_status: withdrawal.status,
       lifecycle_request_mode: withdrawal.request_mode,
+      lifecycle_handling_mode: withdrawal.handling_mode,
       lifecycle_requested_at: withdrawal.requested_at,
       lifecycle_scheduled_at: withdrawal.scheduled_at,
       lifecycle_can_cancel: withdrawal.can_cancel,
@@ -335,13 +368,17 @@ async function buildLifecycleView(env: Env, version: ManagedVersionRow): Promise
     || Number(dependencies.legacy_delete_request_count) > 0;
   const legacy = lifecycleStatus === "legacy_withdrawn" || lifecycleStatus === "legacy_delete_pending";
   const canRequestWithdrawal = publicVersion && lifecycleStatus === "active" && !legacy;
+  const handlingMode = canRequestWithdrawal
+    ? classifyWithdrawalHandling({
+        within24Hours: Number(dependencies.within_24_hours) === 1,
+        hasDeletionDependencies
+      })
+    : withdrawal?.handling_mode ?? null;
   const requestPreview = legacy
     ? "legacy_process"
     : !canRequestWithdrawal
       ? "unavailable"
-      : Number(dependencies.within_24_hours) === 1 && !hasDeletionDependencies
-        ? "immediate_delete"
-        : "deferred_delete_or_tombstone";
+      : handlingMode!;
   const blocksAccess = lifecycleStatus === "processing" || lifecycleStatus === "tombstoned";
 
   return {
@@ -349,10 +386,15 @@ async function buildLifecycleView(env: Env, version: ManagedVersionRow): Promise
     withdrawal,
     dependencies,
     lifecycleStatus,
+    handlingMode,
     requestPreview,
+    reasonRequired: handlingMode ? withdrawalHandlingRequiresReason(handlingMode) : false,
     canRequestWithdrawal,
     canCancelWithdrawal: withdrawal?.can_cancel === 1 && lifecycleStatus === "withdrawal_pending",
-    downloadAvailable: publicVersion && version.download_blocked === 0 && !blocksAccess,
+    downloadAvailable: publicVersion
+      && version.download_blocked === 0
+      && version.withdrawal_download_blocked === 0
+      && !blocksAccess,
     appendAvailable: publicVersion
       && version.allow_append === 1
       && version.collapsed_by_completion === 0
@@ -368,11 +410,13 @@ function lifecycleResponseBody(view: LifecycleView): Record<string, unknown> {
   return {
     lifecycleStatus: view.lifecycleStatus,
     requestMode: exposesWithdrawalRequest ? view.withdrawal?.request_mode ?? null : null,
+    handlingMode: view.handlingMode,
     requestedAt: exposesWithdrawalRequest ? view.withdrawal?.requested_at ?? null : null,
     scheduledAt: exposesWithdrawalRequest ? view.withdrawal?.scheduled_at ?? null : null,
     canRequestWithdrawal: view.canRequestWithdrawal,
     canCancelWithdrawal: view.canCancelWithdrawal,
     requestPreview: view.requestPreview,
+    reasonRequired: view.reasonRequired,
     downloadAvailable: view.downloadAvailable,
     appendAvailable: view.appendAvailable
   };
@@ -386,11 +430,11 @@ function requestSuccessBody(view: LifecycleView, outcome: string): Record<string
   };
 }
 
-function respondFromWithdrawalRow(
+async function respondFromWithdrawalRow(
   request: Request,
   env: Env,
   withdrawal: WithdrawalRow
-): Response {
+): Promise<Response> {
   const lifecycleStatus = withdrawal.status === "deleted"
     ? "deleted"
     : withdrawal.status === "tombstoned"
@@ -409,16 +453,27 @@ function respondFromWithdrawalRow(
         : withdrawal.status === "pending"
           ? "already_pending"
           : "already_canceled";
+  if (withdrawal.status === "pending" || withdrawal.status === "canceled") {
+    const version = await selectManagedVersion(env, withdrawal.version_id);
+    if (version) {
+      const view = await buildLifecycleView(env, version);
+      return ok(request, env, requestSuccessBody(view, outcome), {
+        headers: { "Cache-Control": "no-store" }
+      });
+    }
+  }
   return jsonResponse(request, env, {
     ok: true,
     outcome,
     lifecycleStatus,
     requestMode: withdrawal.request_mode,
+    handlingMode: withdrawal.handling_mode,
     requestedAt: withdrawal.requested_at,
     scheduledAt: withdrawal.scheduled_at,
     canRequestWithdrawal: false,
     canCancelWithdrawal: withdrawal.can_cancel === 1,
     requestPreview: "unavailable",
+    reasonRequired: withdrawalHandlingRequiresReason(withdrawal.handling_mode),
     // A terminal/idempotent replay may run after the version row is gone. Do not
     // infer current public capabilities from the audit row alone.
     downloadAvailable: false,
@@ -503,29 +558,61 @@ function publicEligibilityFailure(view: LifecycleView): Failure | null {
   return null;
 }
 
+function withdrawalReasonFailure(
+  mode: WithdrawalHandlingMode,
+  reason: string
+): Failure | null {
+  if (!withdrawalHandlingRequiresReason(mode)) return null;
+  if (reason.length < MIN_WITHDRAWAL_REASON_LENGTH) {
+    return {
+      status: 400,
+      code: "INVALID_WITHDRAWAL_REASON",
+      message: "取り下げ理由を10文字以上で入力してください。"
+    };
+  }
+  if (reason.length > MAX_WITHDRAWAL_REASON_LENGTH) {
+    return {
+      status: 400,
+      code: "WITHDRAWAL_REASON_TOO_LONG",
+      message: "取り下げ理由は500文字以内で入力してください。"
+    };
+  }
+  return null;
+}
+
 async function insertWithdrawal(
   env: Env,
   view: LifecycleView,
   idempotencyHash: string,
   context: LogContext,
-  mode: "immediate" | "deferred"
+  handlingMode: WithdrawalHandlingMode,
+  reason: string
 ): Promise<string | null> {
   const id = makeId("withdrawal");
-  const immediateConditions = mode === "immediate" ? `
-      AND versions.created_at >= datetime('now', '-24 hours')
-      AND NOT EXISTS (SELECT 1 FROM versions AS children WHERE children.parent_version_id = versions.id)
-      AND NOT EXISTS (SELECT 1 FROM versions AS refs WHERE refs.collapsed_by_version_id = versions.id)
-      AND NOT EXISTS (SELECT 1 FROM delete_requests AS requests WHERE requests.version_id = versions.id)
-  ` : "";
-  const result = await env.DB.prepare(`
+  const requestMode = requestModeForHandling(handlingMode);
+  const hasDependenciesSql = `(
+    EXISTS (SELECT 1 FROM versions AS children WHERE children.parent_version_id = versions.id)
+    OR EXISTS (SELECT 1 FROM versions AS refs WHERE refs.collapsed_by_version_id = versions.id)
+    OR EXISTS (SELECT 1 FROM delete_requests AS requests WHERE requests.version_id = versions.id)
+  )`;
+  const handlingConditions = handlingMode === "manual_review"
+    ? `AND ${hasDependenciesSql}`
+    : handlingMode === "immediate_delete"
+      ? `AND versions.created_at >= datetime('now', '-24 hours') AND NOT ${hasDependenciesSql}`
+      : `AND versions.created_at < datetime('now', '-24 hours') AND NOT ${hasDependenciesSql}`;
+  const scheduledAtSql = handlingMode === "grace_auto_delete"
+    ? "datetime('now', '+7 days')"
+    : "CURRENT_TIMESTAMP";
+  const insert = env.DB.prepare(`
     INSERT INTO version_withdrawals (
       id, version_id, chart_id, status, request_mode, requested_at, scheduled_at,
+      handling_mode, request_reason,
       processing_mode, attempt_count, idempotency_key_hash,
       requester_ip_hash, requester_ua_hash, created_at, updated_at
     )
     SELECT
       ?, versions.id, versions.chart_id, 'pending', ?, CURRENT_TIMESTAMP,
-      ${mode === "immediate" ? "CURRENT_TIMESTAMP" : "datetime('now', '+7 days')"},
+      ${scheduledAtSql}, ?, ?,
       NULL, 0, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     FROM versions
     INNER JOIN charts ON charts.id = versions.chart_id
@@ -543,16 +630,37 @@ async function insertWithdrawal(
         WHERE active.version_id = versions.id
           AND active.status IN ('pending', 'processing', 'tombstoned', 'deleted')
       )
-      ${immediateConditions}
+      ${handlingConditions}
   `).bind(
     id,
-    mode,
+    requestMode,
+    handlingMode,
+    handlingMode === "immediate_delete" ? null : reason,
     idempotencyHash,
     context.ipHash,
     context.uaHash,
     view.version.id
-  ).run();
-  return Number(result.meta.changes ?? 0) === 1 ? id : null;
+  );
+  const statements = [insert];
+  if (handlingMode !== "immediate_delete") {
+    statements.push(env.DB.prepare(`
+      UPDATE versions
+      SET withdrawal_download_blocked = 1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+        AND EXISTS (
+          SELECT 1 FROM version_withdrawals
+          WHERE id = ? AND status = 'pending' AND handling_mode = ?
+        )
+    `).bind(view.version.id, id, handlingMode));
+  }
+  const results = await env.DB.batch(statements);
+  const inserted = Number(results[0]?.meta.changes ?? 0) === 1;
+  const blocked = handlingMode === "immediate_delete"
+    || Number(results[1]?.meta.changes ?? 0) === 1;
+  if (inserted && !blocked) {
+    throw new Error("The withdrawal was created without its dedicated download block.");
+  }
+  return inserted ? id : null;
 }
 
 async function respondFromExisting(
@@ -573,7 +681,16 @@ async function respondFromExisting(
       ? "already_canceled"
       : existing.status;
   try {
-    await writeLifecycleLog(env, context, "accepted", null, operation, outcome, existing.request_mode);
+    await writeLifecycleLog(
+      env,
+      context,
+      "accepted",
+      null,
+      operation,
+      outcome,
+      existing.request_mode,
+      existing.handling_mode
+    );
   } catch (error) {
     console.error("[version-withdrawal-log] failed to write idempotent result", {
       code: "POST_LOG_WRITE_FAILED",
@@ -590,7 +707,8 @@ async function handleRequest(
   env: Env,
   context: LogContext,
   version: ManagedVersionRow,
-  idempotencyHash: string
+  idempotencyHash: string,
+  reason: string
 ): Promise<Response> {
   const sameKey = await selectWithdrawalByIdempotencyHash(env, idempotencyHash);
   if (sameKey) {
@@ -611,21 +729,22 @@ async function handleRequest(
     return respondFromExisting(request, env, context, version, view.withdrawal, "request");
   }
 
-  const preferredMode = view.requestPreview === "immediate_delete" ? "immediate" : "deferred";
   try {
-    let insertedId = preferredMode === "immediate"
-      ? await insertWithdrawal(env, view, idempotencyHash, context, "immediate")
-      : null;
-    let mode: "immediate" | "deferred" = preferredMode;
+    let handlingMode = view.handlingMode!;
+    let reasonFailure = withdrawalReasonFailure(handlingMode, reason);
+    if (reasonFailure) return fail(request, env, context, "request", reasonFailure);
+    let insertedId = await insertWithdrawal(env, view, idempotencyHash, context, handlingMode, reason);
     if (!insertedId) {
-      mode = "deferred";
       view = await buildLifecycleView(env, version);
       const refreshedFailure = publicEligibilityFailure(view);
       if (refreshedFailure) return fail(request, env, context, "request", refreshedFailure);
       if (view.lifecycleStatus === "withdrawal_pending" && view.withdrawal) {
         return respondFromExisting(request, env, context, version, view.withdrawal, "request");
       }
-      insertedId = await insertWithdrawal(env, view, idempotencyHash, context, "deferred");
+      handlingMode = view.handlingMode!;
+      reasonFailure = withdrawalReasonFailure(handlingMode, reason);
+      if (reasonFailure) return fail(request, env, context, "request", reasonFailure);
+      insertedId = await insertWithdrawal(env, view, idempotencyHash, context, handlingMode, reason);
     }
 
     if (!insertedId) {
@@ -642,7 +761,16 @@ async function handleRequest(
 
     const created = await selectLatestWithdrawal(env, version.id);
     try {
-      await writeLifecycleLog(env, context, "accepted", null, "request", "pending", mode);
+      await writeLifecycleLog(
+        env,
+        context,
+        "accepted",
+        null,
+        "request",
+        "pending",
+        requestModeForHandling(handlingMode),
+        handlingMode
+      );
     } catch (error) {
       console.error("[version-withdrawal-log] failed to write request result", {
         code: "POST_LOG_WRITE_FAILED",
@@ -650,7 +778,7 @@ async function handleRequest(
         message: errorDetail(error)
       });
     }
-    if (mode === "immediate") {
+    if (handlingMode === "immediate_delete") {
       const finalized = await finalizeVersionWithdrawal(env, insertedId);
       const latest = await selectWithdrawalByIdempotencyHash(env, idempotencyHash);
       if (latest) {
@@ -668,7 +796,8 @@ async function handleRequest(
       }, { status: 202, headers: { "Cache-Control": "no-store" } });
     }
 
-    const resultView = await buildLifecycleView(env, version);
+    const refreshedVersion = await selectManagedVersion(env, version.id);
+    const resultView = await buildLifecycleView(env, refreshedVersion ?? version);
     return ok(request, env, requestSuccessBody(
       resultView,
       created ? "withdrawal_pending" : "already_pending"
@@ -729,7 +858,7 @@ async function handleCancel(
       message: "取り消せる取り下げ申請がありません。"
     });
   }
-  if (latest.request_mode === "immediate") {
+  if (latest.handling_mode === "immediate_delete") {
     return fail(request, env, context, "cancel", {
       status: 409,
       code: "WITHDRAWAL_NOT_ALLOWED",
@@ -744,18 +873,37 @@ async function handleCancel(
     });
   }
 
-  const updated = await env.DB.prepare(`
-    UPDATE version_withdrawals
-    SET
-      status = 'canceled',
-      canceled_at = CURRENT_TIMESTAMP,
-      resolved_at = CURRENT_TIMESTAMP,
-      updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-      AND status = 'pending'
-      AND request_mode = 'deferred'
-      AND CURRENT_TIMESTAMP < scheduled_at
-  `).bind(latest.id).run();
+  const results = await env.DB.batch([
+    env.DB.prepare(`
+      UPDATE version_withdrawals
+      SET
+        status = 'canceled',
+        canceled_at = CURRENT_TIMESTAMP,
+        resolved_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+        AND status = 'pending'
+        AND (
+          handling_mode = 'manual_review'
+          OR (handling_mode = 'grace_auto_delete' AND CURRENT_TIMESTAMP < scheduled_at)
+        )
+    `).bind(latest.id),
+    env.DB.prepare(`
+      UPDATE versions
+      SET withdrawal_download_blocked = 0, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+        AND EXISTS (
+          SELECT 1 FROM version_withdrawals
+          WHERE id = ? AND status = 'canceled'
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM version_withdrawals AS active
+          WHERE active.version_id = versions.id
+            AND active.status IN ('pending', 'processing')
+        )
+    `).bind(version.id, latest.id)
+  ]);
+  const updated = results[0];
 
   if (Number(updated.meta.changes ?? 0) === 0) {
     latest = await selectLatestWithdrawal(env, version.id);
@@ -784,9 +932,19 @@ async function handleCancel(
   }
 
   const canceled = await selectLatestWithdrawal(env, version.id);
-  const view = await buildLifecycleView(env, version);
+  const refreshedVersion = await selectManagedVersion(env, version.id);
+  const view = await buildLifecycleView(env, refreshedVersion ?? version);
   try {
-    await writeLifecycleLog(env, context, "accepted", null, "cancel", "canceled", canceled?.request_mode ?? "deferred");
+    await writeLifecycleLog(
+      env,
+      context,
+      "accepted",
+      null,
+      "cancel",
+      "canceled",
+      canceled?.request_mode ?? "deferred",
+      canceled?.handling_mode ?? null
+    );
   } catch (error) {
     console.error("[version-withdrawal-log] failed to write cancellation", {
       code: "POST_LOG_WRITE_FAILED",
@@ -881,7 +1039,14 @@ export async function handleVersionWithdrawalRoute(
     if ("response" in authenticated) return authenticated.response;
 
     if (action === "withdrawal") {
-      return handleRequest(request, env, context, authenticated.version, idempotencyHash!);
+      return handleRequest(
+        request,
+        env,
+        context,
+        authenticated.version,
+        idempotencyHash!,
+        (parsed as RequestBody).reason
+      );
     }
     return handleCancel(request, env, context, authenticated.version);
   } catch (error) {

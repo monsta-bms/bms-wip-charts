@@ -30,11 +30,19 @@
   const cleanupPreviousButton = document.querySelector("#adminCleanupPreviousPage");
   const cleanupNextButton = document.querySelector("#adminCleanupNextPage");
   const cleanupPageStatus = document.querySelector("#adminCleanupPageStatus");
+  const withdrawalRefreshButton = document.querySelector("#adminWithdrawalRefreshButton");
+  const withdrawalSummary = document.querySelector("#adminWithdrawalSummary");
+  const withdrawalList = document.querySelector("#adminWithdrawalList");
+  const withdrawalPreviousButton = document.querySelector("#adminWithdrawalPreviousPage");
+  const withdrawalNextButton = document.querySelector("#adminWithdrawalNextPage");
+  const withdrawalPageStatus = document.querySelector("#adminWithdrawalPageStatus");
 
   if (
     !authForm || !tokenInput || !listElement || !dialog || !decisionForm
     || !cleanupOlderThanDays || !cleanupRefreshButton || !cleanupSummary || !cleanupList
     || !cleanupPreviousButton || !cleanupNextButton || !cleanupPageStatus
+    || !withdrawalRefreshButton || !withdrawalSummary || !withdrawalList
+    || !withdrawalPreviousButton || !withdrawalNextButton || !withdrawalPageStatus
   ) {
     return;
   }
@@ -50,7 +58,11 @@
     cleanupPage: 1,
     cleanupTotal: 0,
     cleanupItems: [],
-    cleanupLoading: false
+    cleanupLoading: false,
+    withdrawalPage: 1,
+    withdrawalTotal: 0,
+    withdrawalItems: [],
+    withdrawalLoading: false
   };
 
   function createElement(tagName, className, text) {
@@ -106,7 +118,17 @@
     const pageCount = Math.max(1, Math.ceil(state.total / pageSize));
     nextButton.disabled = loading || state.page >= pageCount;
     cleanupRefreshButton.disabled = loading || state.cleanupLoading || !state.token;
+    withdrawalRefreshButton.disabled = loading || state.withdrawalLoading || !state.token;
     listElement.classList.toggle("is-loading", loading);
+  }
+
+  function setWithdrawalLoading(loading) {
+    state.withdrawalLoading = loading;
+    withdrawalRefreshButton.disabled = loading || state.loading || !state.token;
+    withdrawalPreviousButton.disabled = loading || state.withdrawalPage <= 1;
+    const pageCount = Math.max(1, Math.ceil(state.withdrawalTotal / pageSize));
+    withdrawalNextButton.disabled = loading || state.withdrawalPage >= pageCount;
+    withdrawalList.classList.toggle("is-loading", loading);
   }
 
   function setCleanupLoading(loading) {
@@ -258,6 +280,78 @@
       }
     } finally {
       setLoading(false);
+    }
+  }
+
+  function buildWithdrawalRow(item) {
+    const row = createElement("article", "admin-request-row admin-withdrawal-row");
+    const requestCell = createElement("div", "admin-cell");
+    requestCell.append(
+      createElement("p", "admin-primary", formatDateTime(item.requestedAt)),
+      createElement("p", "admin-secondary", `申請ID: ${item.withdrawalId}`),
+      createElement("p", "admin-secondary", item.status === "pending" ? "管理者確認待ち" : String(item.status || "状態不明"))
+    );
+
+    const versionCell = createElement("div", "admin-cell");
+    versionCell.append(
+      createElement("p", "admin-primary", `${item.songTitle} / ${item.chartName}`),
+      createElement("p", "admin-secondary", `版 ${item.versionLabel} / ${item.versionId}`)
+    );
+
+    const reasonCell = createElement("div", "admin-cell");
+    reasonCell.append(
+      createElement("p", "admin-primary", item.reason || "理由なし"),
+      createElement("p", "admin-secondary", `処理区分: ${item.handlingMode}`)
+    );
+
+    const dependencyCell = createElement("div", "admin-cell");
+    const dependencyList = createElement("p", "admin-state-list");
+    addState(
+      dependencyList,
+      item.hasDependencies ? "派生版・参照あり" : "依存なし",
+      item.hasDependencies ? "is-warning" : ""
+    );
+    dependencyCell.append(
+      dependencyList,
+      createElement("p", "admin-secondary", `直接子 ${Number(item.directChildCount || 0)}件`),
+      createElement("p", "admin-secondary", `折り畳み参照 ${Number(item.collapsedReferenceCount || 0)}件`),
+      createElement("p", "admin-secondary", `旧削除申請 ${Number(item.legacyDeleteRequestCount || 0)}件`)
+    );
+
+    row.append(requestCell, versionCell, reasonCell, dependencyCell);
+    return row;
+  }
+
+  function renderWithdrawalList() {
+    withdrawalList.replaceChildren();
+    if (state.withdrawalItems.length === 0) {
+      withdrawalList.append(createElement("p", "admin-empty", "管理者確認待ちの取り下げ申請はありません。"));
+    } else {
+      state.withdrawalItems.forEach((item) => withdrawalList.append(buildWithdrawalRow(item)));
+    }
+    const pageCount = Math.max(1, Math.ceil(state.withdrawalTotal / pageSize));
+    withdrawalSummary.textContent = `${state.withdrawalTotal}件 · 古い申請から表示`;
+    withdrawalPageStatus.textContent = `${state.withdrawalPage} / ${pageCount}`;
+    withdrawalPreviousButton.disabled = state.withdrawalLoading || state.withdrawalPage <= 1;
+    withdrawalNextButton.disabled = state.withdrawalLoading || state.withdrawalPage >= pageCount;
+  }
+
+  async function loadWithdrawalRequests() {
+    if (!state.token) return;
+    setWithdrawalLoading(true);
+    try {
+      const body = await requestJson(
+        `/api/admin/version-withdrawals?handlingMode=manual_review&page=${state.withdrawalPage}&pageSize=${pageSize}`
+      );
+      state.withdrawalItems = Array.isArray(body?.items) ? body.items : [];
+      state.withdrawalTotal = Number(body?.total || 0);
+      renderWithdrawalList();
+    } catch (error) {
+      const code = error?.code || "REQUEST_FAILED";
+      setStatus(`${error?.message || "取り下げ申請一覧の取得に失敗しました。"}\ncode: ${code}`, "error");
+      if (code === "ADMIN_AUTH_REQUIRED") state.token = "";
+    } finally {
+      setWithdrawalLoading(false);
     }
   }
 
@@ -511,12 +605,31 @@
     tokenInput.value = "";
     state.page = 1;
     state.cleanupPage = 1;
+    state.withdrawalPage = 1;
     await loadRequests();
+    if (state.token) await loadWithdrawalRequests();
     if (state.token) {
       window.dispatchEvent(new CustomEvent("admin-authenticated"));
     }
   });
   refreshButton.addEventListener("click", loadRequests);
+  withdrawalRefreshButton.addEventListener("click", async () => {
+    state.withdrawalPage = 1;
+    await loadWithdrawalRequests();
+  });
+  withdrawalPreviousButton.addEventListener("click", async () => {
+    if (state.withdrawalPage > 1) {
+      state.withdrawalPage -= 1;
+      await loadWithdrawalRequests();
+    }
+  });
+  withdrawalNextButton.addEventListener("click", async () => {
+    const pageCount = Math.max(1, Math.ceil(state.withdrawalTotal / pageSize));
+    if (state.withdrawalPage < pageCount) {
+      state.withdrawalPage += 1;
+      await loadWithdrawalRequests();
+    }
+  });
   previousButton.addEventListener("click", async () => {
     if (state.page > 1) {
       state.page -= 1;

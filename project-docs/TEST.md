@@ -1125,6 +1125,8 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 
 ## WITHDRAWAL-LIFECYCLE-16A
 
+> 以下は16A時点の履歴試験。pendingの公開範囲・DL可否・理由入力は16R節を現行期待値として優先する。
+
 ### migration
 
 - 隔離D1へ`0001`～`0007`を順番に適用でき、適用直後の`version_withdrawals`が空であること。
@@ -1163,6 +1165,8 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 16B完成前は本番migration、deploy、commit、push、本番D1/R2/Secret、Cron変更を実施しないこと。
 
 ## WITHDRAWAL-LIFECYCLE-16B
+
+> 以下は16B時点の履歴試験。依存ありの自動墓標化期待値は16R節で廃止されている。
 
 ### claim・lease・再試行
 
@@ -1208,6 +1212,8 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 
 ## WITHDRAWAL-LIFECYCLE-16C
 
+> 以下は16C時点の履歴試験。Observer分類は16R節のhandling mode基準を現行期待値として優先する。
+
 ### モードとScheduled handler
 
 - `WITHDRAWAL_CRON_MODE=off`および未設定では候補検索・監視集計ログ・lifecycle変更がないこと。
@@ -1234,3 +1240,30 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - observer全体失敗でも安全な集計を試み、別イベントの既存cleanupに影響しないこと。既存cleanup失敗も別イベントのobserverへ影響しないこと。
 - 隔離D1へmigration `0001`～`0007`を適用し、ローカルScheduled Event、既存R2 cleanup、Worker typecheck、Wrangler dry-run、`git diff --check`が成功すること。
 - Pages差分、公開route、migration、Secret、active処理が16Cによって追加されていないこと。本番migration、deploy、commit、push、本番D1/R2/Secret操作を実施しないこと。
+
+## WITHDRAWAL-LIFECYCLE-16R
+
+### migration・分類
+
+- 隔離D1へ0001～0008を適用でき、既存行を壊さないこと。既存immediateは`immediate_delete`、既存deferredは全直接子・collapsed参照・旧delete requestの有無により`grace_auto_delete/manual_review`へ分類されること。
+- 23:59・依存なしと24:00ちょうど・依存なしは`immediate_delete`、24:00:01・依存なしは`grace_auto_delete`になること。
+- 23:59/24時間超過の直接子あり、非表示直接子あり、collapsed参照あり、旧delete requestありは`manual_review`になること。
+- preview後から確定までに依存が増減した場合、申請INSERT時のWorker再判定が優先されること。
+
+### 申請・取消・DL
+
+- immediateは理由なしで同期物理削除され、取消できないこと。
+- grace/manualは理由10～500文字が必須で、空白のみ、短すぎ、長すぎを固定400コードで拒否すること。理由本文が公開API、post_logs、consoleへ出ないこと。
+- grace/manual申請直後は`withdrawal_download_blocked=1`となり、file APIが404、一覧のDL操作が無効になること。追記は既存`allow_append`に従うこと。
+- grace期限前とmanual処理開始前は取消でき、専用DL停止だけが0へ戻ること。既存`download_blocked=1`は取消後も維持されること。
+- 申請・取消レスポンスがDB更新後の`downloadAvailable`、`appendAvailable`を返すこと。
+
+### 公開範囲・7日後・observer
+
+- grace/manual pendingは最近の投稿、list、検索、COUNT、お気に入り、chart詳細へ残り、RC★/RC★★だけから除外されること。processing/tombstoned/deletedは通常公開対象外であること。
+- 期限前graceは処理せず、期限到達graceの依存なしはdeletedになること。期限到達までに依存が増えた場合はR2を触らずpending/manual_reviewへ移り、自動墓標化されないこと。
+- manual reviewはpending/processingともfinalizer/observer候補外であること。observerはdue graceまたは期限切れprocessingの依存なしを`would_delete`/`would_retry_delete`、依存ありを`would_move_to_manual_review`とし、observe前後でD1/R2本体が不変であること。
+- 管理画面でmanual reviewのversion、申請日時、理由、handling mode、依存内訳を確認でき、公開画面には理由を表示しないこと。
+- 4条件すべてで指定された見出し・説明・状態文・確認ボタンを表示し、pendingでは「DL停止・自動削除待ち」または「DL停止・管理者確認待ち」と取消説明を表示すること。
+- white/default/dark、390/760/1366px、Pages構文、HTML重複ID、Worker typecheck、Wrangler dry-run、`git diff --check`を確認すること。
+- `WITHDRAWAL_CRON_MODE=off`を維持し、active、deploy、commit、push、本番D1/R2/Secret操作を行わないこと。

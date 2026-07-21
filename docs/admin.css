@@ -204,10 +204,16 @@ select:focus {
 }
 
 .admin-list-header,
-.admin-request-row {
+.admin-request-row,
+.admin-withdrawal-row {
   display: grid;
   gap: 18px;
   grid-template-columns: minmax(190px, 0.9fr) minmax(280px, 1.35fr) minmax(210px, 0.9fr) 168px;
+}
+
+.admin-withdrawal-row,
+.admin-withdrawal-list-header {
+  grid-template-columns: minmax(180px, 0.8fr) minmax(250px, 1.15fr) minmax(280px, 1.4fr) minmax(180px, 0.75fr);
 }
 
 .admin-cleanup-list-header,
@@ -620,6 +626,7 @@ select:focus {
 
 @media (max-width: 860px) {
   .admin-list-header,
+  .admin-withdrawal-list-header,
   .admin-cleanup-list-header,
   .admin-ban-log-header,
   .admin-ban-list-header {
@@ -627,6 +634,7 @@ select:focus {
   }
 
   .admin-request-row,
+  .admin-withdrawal-row,
   .admin-cleanup-row,
   .admin-ban-log-row,
   .admin-ban-row {
@@ -653,6 +661,7 @@ select:focus {
   .admin-auth,
   .admin-auth-controls,
   .admin-request-row,
+  .admin-withdrawal-row,
   .admin-cleanup-row,
   .admin-cleanup-controls,
   .admin-ban-log-row,

@@ -68,6 +68,21 @@ type AdminLogContext = {
   adminNoteLength?: number;
 };
 
+type ManualWithdrawalRow = {
+  withdrawal_id: string;
+  version_id: string;
+  chart_id: string;
+  status: "pending";
+  branch_path: string;
+  song_title: string;
+  chart_name: string;
+  requested_at: string;
+  request_reason: string | null;
+  direct_child_count: number;
+  collapsed_reference_count: number;
+  legacy_delete_request_count: number;
+};
+
 function makeId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID()}`;
 }
@@ -357,6 +372,95 @@ async function listPendingDeleteRequests(request: Request, env: Env): Promise<Re
       "DELETE_REQUEST_LIST_FAILED",
       "削除申請一覧の取得に失敗しました。",
       `D1 pending delete request query failed: ${errorDetail(error)}`
+    );
+  }
+}
+
+async function listManualWithdrawalRequests(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "GET") return methodNotAllowed(request, env, request.method);
+  const url = new URL(request.url);
+  const handlingMode = url.searchParams.get("handlingMode")?.trim() || "manual_review";
+  if (handlingMode !== "manual_review") {
+    return apiError(
+      request,
+      env,
+      400,
+      "INVALID_REQUEST",
+      "一覧条件が不正です。",
+      "Only handlingMode=manual_review is supported."
+    );
+  }
+  const page = parsePositiveInteger(url.searchParams.get("page"), 1);
+  const pageSize = Math.min(
+    parsePositiveInteger(url.searchParams.get("pageSize"), DEFAULT_PAGE_SIZE),
+    MAX_PAGE_SIZE
+  );
+  const offset = (page - 1) * pageSize;
+  try {
+    const totalRow = await env.DB.prepare(`
+      SELECT COUNT(*) AS total
+      FROM version_withdrawals
+      WHERE status = 'pending' AND handling_mode = 'manual_review'
+    `).first<{ total: number }>();
+    const result = await env.DB.prepare(`
+      SELECT
+        withdrawals.id AS withdrawal_id,
+        withdrawals.version_id,
+        withdrawals.chart_id,
+        withdrawals.status,
+        withdrawals.requested_at,
+        withdrawals.request_reason,
+        versions.branch_path,
+        songs.title AS song_title,
+        COALESCE(versions.chart_name, charts.chart_name) AS chart_name,
+        (SELECT COUNT(*) FROM versions AS children WHERE children.parent_version_id = versions.id) AS direct_child_count,
+        (SELECT COUNT(*) FROM versions AS refs WHERE refs.collapsed_by_version_id = versions.id) AS collapsed_reference_count,
+        (SELECT COUNT(*) FROM delete_requests AS requests WHERE requests.version_id = versions.id) AS legacy_delete_request_count
+      FROM version_withdrawals AS withdrawals
+      INNER JOIN versions ON versions.id = withdrawals.version_id
+      INNER JOIN charts ON charts.id = versions.chart_id
+      INNER JOIN songs ON songs.id = charts.song_id
+      WHERE withdrawals.status = 'pending'
+        AND withdrawals.handling_mode = 'manual_review'
+      ORDER BY withdrawals.requested_at ASC, withdrawals.id ASC
+      LIMIT ? OFFSET ?
+    `).bind(pageSize, offset).all<ManualWithdrawalRow>();
+    return ok(request, env, {
+      ok: true,
+      items: result.results.map((row) => ({
+        withdrawalId: row.withdrawal_id,
+        versionId: row.version_id,
+        chartId: row.chart_id,
+        songTitle: row.song_title,
+        chartName: row.chart_name,
+        versionLabel: buildVersionPathLabel(row.branch_path),
+        requestedAt: row.requested_at,
+        reason: row.request_reason || "理由未登録（旧申請または即時処理中の競合）",
+        handlingMode: "manual_review",
+        status: row.status,
+        hasDependencies: Number(row.direct_child_count) > 0
+          || Number(row.collapsed_reference_count) > 0
+          || Number(row.legacy_delete_request_count) > 0,
+        directChildCount: Number(row.direct_child_count),
+        collapsedReferenceCount: Number(row.collapsed_reference_count),
+        legacyDeleteRequestCount: Number(row.legacy_delete_request_count)
+      })),
+      page,
+      pageSize,
+      total: Number(totalRow?.total ?? 0)
+    });
+  } catch (error) {
+    console.error("[admin-withdrawal-list] failed", {
+      code: "WITHDRAWAL_LIST_FAILED",
+      message: errorDetail(error)
+    });
+    return apiError(
+      request,
+      env,
+      500,
+      "WITHDRAWAL_LIST_FAILED",
+      "取り下げ申請一覧の取得に失敗しました。",
+      `D1 manual withdrawal query failed: ${errorDetail(error)}`
     );
   }
 }
@@ -904,6 +1008,10 @@ export async function handleAdminRoute(
       return methodNotAllowed(request, env, request.method);
     }
     return listPendingDeleteRequests(request, env);
+  }
+
+  if (segments.length === 1 && segments[0] === "version-withdrawals") {
+    return listManualWithdrawalRequests(request, env);
   }
 
   if (segments.length === 1 && segments[0] === "post-logs") {

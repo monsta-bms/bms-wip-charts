@@ -891,6 +891,8 @@ RC★★変換:
 
 ## WITHDRAWAL-LIFECYCLE-16A 取り下げ申請
 
+> 履歴仕様。pending中の公開範囲・DL可否・分類は、後述の16Rを現行仕様として優先する。
+
 - 利用者向け操作を「投稿を取り下げる」へ一本化し、新規`version_withdrawals`へ監査可能な申請履歴を保存する。`active`は行を作らず、最新の新方式行と旧`withdrawn_at/delete_requests`から公開状態を導出する。
 - statusは`pending/processing/canceled/deleted/tombstoned`、request modeは`immediate/deferred`。16Aが作成するのはpendingだけで、processing、削除、墓標化、R2 cleanup、Cronは16B以降の責任とする。
 - immediateは投稿から24時間以内、DB上の全直接子0、完成版置換参照0、旧delete request 0、active lifecycle 0、公開中、ファイル未削除をすべて満たす場合。予定時刻は申請時刻と同じで取消不可。16Aでは実削除されず処理待ちになる。
@@ -916,6 +918,8 @@ RC★★変換:
 - RC★/RC★★の取込リンクは現在テーマを`theme` queryへ付与する。Workerの取込HTMLだけが`white`/`default`/`dark`を反映し、header JSON、data JSON、キャッシュ条件、D1 queryは変更しない。
 
 ## WITHDRAWAL-LIFECYCLE-16B
+
+> 履歴仕様。依存ありの自動墓標化経路は16Rで廃止され、現行finalizerはmanual reviewへ移行する。
 
 ### 取り下げ要求の確定処理
 
@@ -944,6 +948,8 @@ RC★★変換:
 
 ## WITHDRAWAL-LIFECYCLE-16C 毎時observe
 
+> 履歴仕様。候補と分類は、後述の16Rで定義するhandling mode基準を現行仕様として優先する。
+
 ### Cronとモード
 
 - 既存の毎日R2 cleanup `0 18 * * *`は変更せず、取り下げ監視用に毎時`0 * * * *`を追加する。Scheduled handlerは`event.cron`を完全一致で振り分け、各invocationでは対応する一方だけを実行する。
@@ -965,3 +971,28 @@ RC★★変換:
 - 実行ごとに、予定時刻、取得・分類件数、各分類件数、要確認・無視・エラー件数、上限超過、所要時間を集計記録する。個別診断はmanual reviewまたは予期しない候補エラーだけを最大5件記録する。
 - ログにはパスワード、idempotency key/hash、lease token、IP/UA hash、R2 key、SQL、stack、作者、コメント、origin URL、ファイル名、譜面hash、progressMap、Secret、Binding値を保存しない。
 - Pages、公開API、D1 schema、migration、Secret、R2保存形式は変更しない。active処理は16Dの別レビュー対象とする。
+
+## WITHDRAWAL-LIFECYCLE-16R 現行取り下げ仕様
+
+この節は16A～16Cの取り下げ分類、pending公開範囲、自動処理方針を上書きする。`WITHDRAWAL_CRON_MODE`のリポジトリ既定値は引き続き`off`で、active実行は未実装とする。
+
+- Workerは申請previewと申請確定の両方で共通分類を使う。投稿から24時間以内（24時間ちょうどを含む）かつ削除阻止依存なしは`immediate_delete`、24時間超過かつ依存なしは`grace_auto_delete`、経過時間を問わず依存ありは`manual_review`とする。
+- 削除阻止依存は、公開状態を問わない全直接子version、`collapsed_by_version_id`参照、旧`delete_requests`参照とする。`allow_append`は分類条件に使わず、Pagesが表示中の子件数だけで確定しない。
+- `immediate_delete`は理由不要・取消不可で、既存finalizerを同期実行して譜面R2、progressImage、versionを物理削除する。
+- `grace_auto_delete`は理由を必須とし、申請から7日後を`scheduled_at`へ保存する。期限前は取消可能で、期限到達時に依存なしなら物理削除する。期限までに依存が増えた場合はR2やversionを削除せず、pendingのまま`manual_review`へ移す。通常の自動経路では墓標化しない。
+- `manual_review`は理由を必須とし、自動処理候補および自動墓標化対象から除外する。管理画面には理由・申請日時・version識別情報・依存内訳を読み取り専用で表示し、最終判断操作は後続フェーズとする。
+- 非即時申請の理由は前後空白を除去し、10～500文字とする。公開API、公開一覧、post_logs、consoleへ理由本文を出さず、ADMIN_TOKEN認証済み管理APIだけが返す。
+- `versions.withdrawal_download_blocked`を取り下げ専用DL停止として使う。`downloadAvailable`は既存`download_blocked`と専用停止の両方が0の場合だけtrue。取消時は専用停止だけを0へ戻し、既存の管理者停止等を解除しない。
+- `grace_auto_delete`と`manual_review`のpendingは、最近の投稿、`list.html`、検索、件数、お気に入り、詳細版ツリーへ残す。DLは404で停止し、追記は`allow_append`に従う。RC★/RC★★からは除外する。processing/tombstoned/deletedは従来どおり通常公開対象外とする。
+- 取消は、期限前のgrace pendingまたはprocessing開始前のmanual pendingで可能とする。取消後は状態バッジを外し、専用DL停止だけを解除する。
+- observerは、期限到達graceの依存なしを`would_delete`、依存ありを`would_move_to_manual_review`と分類する。期限切れprocessingも依存ありなら`would_move_to_manual_review`、依存なしなら`would_retry_delete`とする。manual reviewはpending/processingとも候補外にし、observeはD1/R2本体を変更しない。
+- migration 0008は`version_withdrawals.handling_mode/request_reason`と`versions.withdrawal_download_blocked`を追加する。既存immediateは`immediate_delete`、既存deferredは適用時点の依存有無でmanual/graceへ分類し、pendingのmanual/graceだけに専用DL停止を設定する。
+
+利用者向けの申請前表示は次を固定文言とする。
+
+- 24時間以内・依存なし: 見出し「即時削除」、状態文「24時間以内の投稿なので即時削除できます。」、説明「投稿から24時間以内で、派生版や参照がありません。取り下げると直ちに削除され、元に戻せません。」、ボタン「取り下げて削除する」。理由欄は表示しない。
+- 24時間以内・依存あり: 見出し「DL停止・管理者確認」、状態文「派生版があるため、DLを停止して管理者確認へ進みます。」、説明「派生版または参照があるため、自動削除できません。ダウンロードを停止し、申請理由を管理者が確認します。版ツリーの関係を保つため、履歴が残る場合があります。」、ボタン「DL停止を申請する」。理由欄を表示する。
+- 24時間超過・依存なし: 見出し「DL停止・7日後に自動削除」、状態文「即時削除はできません。7日間に追記がなければ自動削除します。」、説明「投稿から24時間を超えているため、すぐには削除されません。ダウンロードを停止し、申請後7日間に新しい追記や参照がなければ自動削除します。」、ボタン「DL停止と自動削除を申請する」。理由欄を表示する。
+- 24時間超過・依存あり: 24時間以内・依存ありと同じ見出し、状態文、説明、ボタン、理由欄を表示する。
+
+申請後のgraceは状態・見出しを「DL停止・自動削除待ち」とし、「ダウンロードを停止しています。YYYY/MM/DD HH:mm以降、申請後の追記や参照がなければ自動削除します。」を表示する。manual reviewは状態・見出しを「DL停止・管理者確認待ち」とし、「ダウンロードを停止しています。申請理由と派生版の状態を管理者が確認します。」を表示する。どちらも取消ボタンを「取り下げ申請を取り消す」とし、「取り消すと、今回の申請によるDL停止を解除します。」を併記する。

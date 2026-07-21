@@ -86,6 +86,7 @@ type VersionRow = LifecycleProjection & {
   file_size: number;
   file_sha256: string;
   download_blocked: number;
+  withdrawal_download_blocked: number;
   download_block_reason: string | null;
   collapsed_by_completion: number;
   collapsed_reason: string | null;
@@ -424,7 +425,9 @@ function projectMeasureNotes(value: string | null, versionId: string): {
 function buildVersion(row: VersionRow) {
   const lifecycleStatus = resolvePublicLifecycleStatus(row);
   const lifecycleBlocksAccess = lifecycleStatus === "processing" || lifecycleStatus === "tombstoned";
-  const downloadBlocked = toBoolean(row.download_blocked) || lifecycleBlocksAccess;
+  const downloadBlocked = toBoolean(row.download_blocked)
+    || toBoolean(row.withdrawal_download_blocked)
+    || lifecycleBlocksAccess;
   const measureNotesProjection = projectMeasureNotes(row.measure_notes_json, row.version_id);
 
   const version = {
@@ -453,6 +456,7 @@ function buildVersion(row: VersionRow) {
     deleteRequestedAt: row.delete_requested_at,
     lifecycleStatus,
     requestMode: row.lifecycle_request_mode,
+    handlingMode: row.lifecycle_handling_mode,
     withdrawalRequestedAt: row.lifecycle_requested_at,
     scheduledAt: row.lifecycle_scheduled_at,
     canCancelWithdrawal: lifecycleStatus === "withdrawal_pending" && toBoolean(row.lifecycle_can_cancel ?? 0),
@@ -809,6 +813,7 @@ async function selectVisibleVersionRows(
       versions.file_size AS file_size,
       versions.file_sha256 AS file_sha256,
       versions.download_blocked AS download_blocked,
+      versions.withdrawal_download_blocked AS withdrawal_download_blocked,
       versions.download_block_reason AS download_block_reason,
       versions.collapsed_by_completion AS collapsed_by_completion,
       versions.collapsed_reason AS collapsed_reason,
