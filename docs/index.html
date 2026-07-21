@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="./chart-miniview.css?v=post-form-miniview-01">
     <link rel="stylesheet" href="./tree-progress-polish.css?v=tree-shape-fix-01">
     <link rel="stylesheet" href="./version-management-ui.css?v=withdrawal-lifecycle-16r">
-    <link rel="stylesheet" href="./post-form-ui.css?v=phase-9c-post-errors">
+    <link rel="stylesheet" href="./post-form-ui.css?v=chart-metadata-extract-01">
     <link rel="stylesheet" href="./chart-detail-link.css?v=site-theme-14-final">
     <link rel="stylesheet" href="./theme.css?v=site-theme-14-final">
   </head>
@@ -131,25 +131,45 @@
               <section class="form-section song-info-section" aria-labelledby="songInfoSectionTitle">
                 <h3 class="form-section-title" id="songInfoSectionTitle">楽曲情報</h3>
                 <div class="section-fields two-column-fields">
-                  <label class="field">
-                    <span class="field-label">曲名 <span class="required-mark">*</span></span>
-                    <input id="title" name="title" type="text" autocomplete="off" placeholder="一致していない場合修正してください。" required>
-                  </label>
+                  <div class="field metadata-field" data-metadata-field="title">
+                    <label class="field-label" for="title">曲名 <span class="required-mark">*</span></label>
+                    <div class="metadata-input-wrap">
+                      <input id="title" name="title" type="text" autocomplete="off" placeholder="一致していない場合修正してください。" required>
+                      <button class="metadata-bubble-reopen" type="button" aria-label="候補操作を表示" hidden></button>
+                    </div>
+                    <div class="metadata-candidate-host" aria-label="曲名の候補操作" hidden></div>
+                    <span class="metadata-candidate-status visually-hidden" id="metadataCandidateStatus-title"></span>
+                  </div>
 
-                  <label class="field">
-                    <span class="field-label">サブタイトル</span>
-                    <input id="subtitle" name="subtitle" type="text" autocomplete="off">
-                  </label>
+                  <div class="field metadata-field" data-metadata-field="subtitle">
+                    <label class="field-label" for="subtitle">サブタイトル</label>
+                    <div class="metadata-input-wrap">
+                      <input id="subtitle" name="subtitle" type="text" autocomplete="off">
+                      <button class="metadata-bubble-reopen" type="button" aria-label="候補操作を表示" hidden></button>
+                    </div>
+                    <div class="metadata-candidate-host" aria-label="サブタイトルの候補操作" hidden></div>
+                    <span class="metadata-candidate-status visually-hidden" id="metadataCandidateStatus-subtitle"></span>
+                  </div>
 
-                  <label class="field">
-                    <span class="field-label">アーティスト <span class="required-mark">*</span></span>
-                    <input id="artist" name="artist" type="text" autocomplete="off" placeholder="一致していない場合修正してください。" required>
-                  </label>
+                  <div class="field metadata-field" data-metadata-field="artist">
+                    <label class="field-label" for="artist">アーティスト <span class="required-mark">*</span></label>
+                    <div class="metadata-input-wrap">
+                      <input id="artist" name="artist" type="text" autocomplete="off" placeholder="一致していない場合修正してください。" required>
+                      <button class="metadata-bubble-reopen" type="button" aria-label="候補操作を表示" hidden></button>
+                    </div>
+                    <div class="metadata-candidate-host" aria-label="アーティストの候補操作" hidden></div>
+                    <span class="metadata-candidate-status visually-hidden" id="metadataCandidateStatus-artist"></span>
+                  </div>
 
-                  <label class="field">
-                    <span class="field-label">サブアーティスト</span>
-                    <input id="subartist" name="subartist" type="text" autocomplete="off">
-                  </label>
+                  <div class="field metadata-field" data-metadata-field="subartist">
+                    <label class="field-label" for="subartist">サブアーティスト</label>
+                    <div class="metadata-input-wrap">
+                      <input id="subartist" name="subartist" type="text" autocomplete="off">
+                      <button class="metadata-bubble-reopen" type="button" aria-label="候補操作を表示" hidden></button>
+                    </div>
+                    <div class="metadata-candidate-host" aria-label="サブアーティストの候補操作" hidden></div>
+                    <span class="metadata-candidate-status visually-hidden" id="metadataCandidateStatus-subartist"></span>
+                  </div>
 
                   <label class="field origin-url-field">
                     <span class="field-label">原曲配布URL（任意）</span>
@@ -477,11 +497,12 @@
     <script src="./turnstile-controller.js?v=turnstile-01"></script>
     <script src="./post-form-preferences.js?v=post-form-ux-11"></script>
     <script src="./post-form-error-ui.js?v=phase-9c-post-errors"></script>
-    <script src="./app.js?v=phase-9c-post-errors"></script>
+    <script src="./chart-metadata-extract.js?v=chart-metadata-extract-01"></script>
+    <script src="./app.js?v=chart-metadata-extract-01"></script>
     <script src="./progress-song-end-analysis.js?v=chart-miniview-position-01"></script>
     <script src="./progress-thumbnail-list.js?v=site-theme-14-final"></script>
     <script src="./chart-miniview.js?v=post-form-miniview-01"></script>
-    <script src="./branch-append-ui.js?v=phase-9c-post-errors"></script>
+    <script src="./branch-append-ui.js?v=chart-metadata-extract-01"></script>
     <script src="./progress-image-preview.js?v=post-form-ux-09a"></script>
     <script src="./progress-image-formdata.js?v=ui-tree-overlay-01"></script>
     <script src="./branch-tree-list.js?v=withdrawal-lifecycle-16r"></script>

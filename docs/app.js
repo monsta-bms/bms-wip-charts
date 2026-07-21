@@ -1709,6 +1709,8 @@ async function fillMetaFromFile(file, analysisRevision) {
       subartistInput.value = meta.subartist;
     }
 
+    window.BmsChartMetadataExtract?.mount?.();
+
     if (analysis.standardBlocks.length > 0) {
       initializeProgressMap(analysis);
       if (localAnalysis.miniView?.status === "ready") {
@@ -1749,6 +1751,7 @@ async function fillMetaFromFile(file, analysisRevision) {
 }
 
 function clearInitialFileMetadata() {
+  window.BmsChartMetadataExtract?.reset?.();
   titleInput.value = "";
   subtitleInput.value = "";
   artistInput.value = "";
@@ -2457,6 +2460,7 @@ async function submitChart() {
       saveAuthor: Boolean(saveAuthorInput?.checked),
       savePassword: Boolean(savePasswordInput?.checked)
     });
+    window.BmsChartMetadataExtract?.reset?.();
     form.reset();
     resetAllowAppendForForm(false);
     window.BmsPostPreferences?.restore?.();

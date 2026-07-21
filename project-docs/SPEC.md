@@ -1006,3 +1006,17 @@ RC★★変換:
 - 対象DOMがない場合は例外化せず`#errorBox`へフォールバックし、consoleへ`POST_ERROR_TARGET_NOT_FOUND`とfieldKeyだけを警告する。入力値、パスワード、API detailは出さない。
 - Worker応答は安定した`error.code`だけでfieldKeyへ対応付ける。ファイル形式・容量・ZIP検査結果・重複、原曲URL、進捗Map、完成版、没譜面、追記受付、パスワード、Turnstile、追記元状態を各欄へ案内する。曖昧な`INVALID_FORM`、サーバー／DB／R2障害、BAN、rate limit、network、JSON解析失敗など対応不能なcodeは従来どおり`#errorBox`へcode/messageだけを表示する。
 - ファイル欄は既存`#chartFileDropError`を再利用する。解析失敗は新しいファイルの解析成功まで保持し、API再送信前は前回のAPI由来エラーだけを整理する。
+
+## CHART-METADATA-EXTRACT 初回投稿のメタ情報候補
+
+- BMS解析後の初回投稿フォームだけを対象に、`title/subtitle/artist/subartist`を生フィールド単位で解析する。追記モード開始時は候補・Undo・区切り状態を破棄して停止し、終了後は空の初回フォームへ戻して再開する。既存`parseBmsMeta()`と`local-bms-analysis.js`の責務は変更しない。
+- `title/subtitle`の末尾に連続する`[差分名]`、`(差分名)`、`-差分名-`、`--差分名--`、`ー差分名ー`を差分名候補とする。ASCIIハイフンは左右1個または2個で個数一致、内部trim後1文字以上とし、3個以上・左右不一致・末尾でない表記は採用しない。転記値は囲みを含む元表記とする。
+- 4欄共通で、ASCII大文字小文字を区別せず`obj`の`:/：/./．/;/；/@/水平空白`、`note/notes/chart/charter`の`:/：/;/；`を作者markerとして扱う。記号前後には半角・全角の水平空白を許可し、`object/objective/notebook/chartreuse`等の単語内一致は除外する。作者名は次の有効marker、同じ欄の次の差分名候補、または欄末尾の最も手前までとする。
+- candidate配列は元文字列の`start`昇順とする。初期選択は最も右の作者候補、作者候補がなければ最も右の差分名候補とし、処理後は一時的に有効化された`/`を含む最も右の候補を選択する。左右矢印は端でdisabledになり、循環しない。
+- 有効な作者markerの直前に同一欄の`/`がある場合、作者処理後に最後の関連`/`だけを除去専用候補として有効化する。作者と同時には削除せず、生フィールドをまたいで関連付けない。候補本体と境界空白だけを整理し、文字列全体、他候補、他の`/`や区切り記号はnormalizeしない。
+- 候補UIは対象入力直下のinline panelに置き、`前の候補/次の候補/転記して除去/除去のみ/元に戻す/候補操作を閉じる`をbuttonとして提供する。閉じた欄は入力右端の「候補操作を表示」buttonから再表示できる。候補文字列は`textContent`で描画し、focusを奪わず、入力欄全体と吹き出しを`info`系semantic tokenで強調する。
+- 「転記して除去」は差分名候補を`chartName`へ元表記のまま、作者候補を`author`へ名前部分だけ上書きして元欄から除去する。「除去のみ」は元欄だけを変更する。どちらもbubblingする`input`イベントを発火し、Phase 9Cの検証解除とdirty判定を維持する。
+- Undoはsource fieldごとに直前1操作を保持し、最後の候補を処理した後もUndo専用panelを残す。destinationごとのoperation ID・revision・所有操作を管理し、より新しい転記または手入力がある場合はsourceだけを戻してdestinationを維持し、その旨を`aria-live`で通知する。
+- source手入力は120ms debounceで再解析し、IME composition中は停止して`compositionend`で即時再解析する。source手入力はその欄のUndoと一時`/`候補を破棄し、destination手入力は自動復元権を失効させる。内部操作の`input`ではUndoを誤破棄しない。
+- 吹き出し開閉設定だけを`localStorage`の`bms-wip-charts:chart-metadata-extract:v1`へ欄別に保存し、候補、入力値、ファイル、Undoは保存しない。初期値は全欄openとし、JSON破損、SecurityError、quota errorは安全に既定値へ戻す。新しいファイル、ファイル解除、form reset、投稿成功では一時状態だけを破棄し、開閉設定は維持する。
+- Phase 9Cの`aria-invalid`とdanger色は候補表示に流用せず、既存`aria-describedby`へ候補status IDを集合追加する。candidate hostは動的な欄別エラーより前に置き、エラー強調との同時表示を許可する。390/760/1366px、`white/default/dark`、focus-visible、reduced motionへ対応する。

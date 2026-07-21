@@ -308,6 +308,162 @@
   gap: 4px;
 }
 
+.metadata-input-wrap {
+  min-width: 0;
+  position: relative;
+}
+
+.metadata-input-wrap > input {
+  width: 100%;
+}
+
+.metadata-input-wrap.has-metadata-reopen > input {
+  padding-inline-end: 42px;
+}
+
+.submit-panel.is-form-open button.metadata-bubble-reopen {
+  align-items: center;
+  background: var(--info-bg);
+  border: 1px solid var(--info);
+  border-radius: 999px;
+  color: var(--info);
+  display: inline-flex;
+  height: 30px;
+  inset-block-start: 50%;
+  inset-inline-end: 6px;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0;
+  position: absolute;
+  transform: translateY(-50%);
+  width: 30px;
+}
+
+.submit-panel.is-form-open button.metadata-bubble-reopen::before {
+  border: 2px solid currentColor;
+  border-radius: 4px;
+  content: "";
+  height: 10px;
+  width: 14px;
+}
+
+.submit-panel.is-form-open button.metadata-bubble-reopen::after {
+  border-block-start: 4px solid currentColor;
+  border-inline-end: 4px solid transparent;
+  content: "";
+  inset-block-end: 6px;
+  inset-inline-start: 8px;
+  position: absolute;
+}
+
+.submit-panel.is-form-open button.metadata-bubble-reopen:hover,
+.submit-panel.is-form-open button.metadata-bubble-reopen:focus-visible {
+  background: color-mix(in srgb, var(--info-bg) 72%, var(--info));
+  border-color: var(--info);
+  color: var(--info);
+}
+
+.metadata-candidate-host {
+  min-width: 0;
+}
+
+.metadata-candidate-panel {
+  align-items: center;
+  background: var(--info-bg);
+  border: 1px solid color-mix(in srgb, var(--info) 58%, var(--line));
+  border-inline-start: 4px solid var(--info);
+  border-radius: 6px;
+  display: grid;
+  gap: 7px;
+  grid-template-areas:
+    "previous candidate candidate close next"
+    ". transfer remove undo .";
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  max-width: 100%;
+  padding: 8px;
+}
+
+.metadata-candidate-panel.is-undo-only {
+  grid-template-areas: "undo";
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.metadata-candidate-text {
+  color: var(--info);
+  font-size: 0.9rem;
+  font-weight: 800;
+  grid-area: candidate;
+  line-height: 1.4;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding-inline: 4px;
+}
+
+.submit-panel.is-form-open button.metadata-candidate-button {
+  background: var(--surface-raised);
+  border: 1px solid color-mix(in srgb, var(--info) 55%, var(--line));
+  color: var(--info);
+  font-size: 0.82rem;
+  min-height: 34px;
+  padding: 4px 9px;
+  white-space: nowrap;
+}
+
+.submit-panel.is-form-open button.metadata-candidate-button:hover,
+.submit-panel.is-form-open button.metadata-candidate-button:focus-visible {
+  background: color-mix(in srgb, var(--info-bg) 70%, var(--surface-raised));
+  border-color: var(--info);
+  color: var(--info);
+}
+
+.submit-panel.is-form-open button.metadata-candidate-button:disabled,
+.submit-panel.is-form-open button.metadata-candidate-button:disabled:hover,
+.submit-panel.is-form-open button.metadata-candidate-button:disabled:focus-visible {
+  background: var(--disabled-bg);
+  border-color: var(--line);
+  color: var(--disabled-text);
+}
+
+.metadata-candidate-previous {
+  grid-area: previous;
+}
+
+.metadata-candidate-transfer {
+  grid-area: transfer;
+}
+
+.metadata-candidate-remove {
+  grid-area: remove;
+}
+
+.metadata-candidate-undo {
+  grid-area: undo;
+}
+
+.metadata-candidate-close {
+  grid-area: close;
+  padding-inline: 8px !important;
+}
+
+.metadata-candidate-next {
+  grid-area: next;
+}
+
+.metadata-candidate-panel.is-undo-only .metadata-candidate-undo {
+  justify-self: start;
+}
+
+.metadata-field[data-metadata-candidate] .metadata-input-wrap > input {
+  border-color: var(--info);
+  box-shadow: inset 4px 0 0 var(--info);
+}
+
+.submit-panel.is-form-open input[data-metadata-transfer="true"] {
+  border-color: var(--info);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--info) 24%, transparent);
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
 .submit-panel.is-form-open .file-info-section {
   border-left-color: #5f9183;
 }
@@ -1082,5 +1238,35 @@ button.difficulty-change-button {
 
   .submit-panel.is-form-open button.post-preferences-clear {
     min-height: 44px;
+  }
+
+  .metadata-candidate-panel {
+    align-items: stretch;
+    grid-template-areas:
+      "previous candidate close next"
+      "transfer transfer transfer transfer"
+      "remove remove undo undo";
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+  }
+
+  .submit-panel.is-form-open button.metadata-candidate-button {
+    min-width: 0;
+    white-space: normal;
+  }
+}
+
+@media (max-width: 420px) {
+  .metadata-candidate-panel {
+    grid-template-areas:
+      "previous candidate close next"
+      "transfer transfer transfer transfer"
+      "remove remove remove remove"
+      "undo undo undo undo";
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .submit-panel.is-form-open input[data-metadata-transfer="true"] {
+    transition: none;
   }
 }

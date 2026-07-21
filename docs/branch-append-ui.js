@@ -912,6 +912,7 @@
       return;
     }
 
+    window.BmsChartMetadataExtract?.suspend?.();
     discardCompletionState();
 
     appendState.active = true;
@@ -1045,6 +1046,7 @@
     }
 
     setAppendSubmitting(false);
+    window.BmsChartMetadataExtract?.resume?.();
     clearMessage();
   }
 

@@ -1290,3 +1290,38 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 動的error要素は16 fieldKeyで各1件、全要素に`role=alert`を付けた。ブラウザ上で重複ID 0、欠落した`aria-describedby`参照0、hidden inputへのフォーカス0を確認した。
 - smooth scroll、`block=center`、focus時`preventScroll`、2回の`requestAnimationFrame`、`prefers-reduced-motion: reduce`時のauto、対象欠落時の安全な共通欄fallbackをコード確認した。
 - `node --check`（app、branch append、post form、共通error UI）、Worker`tsc --noEmit`、HTML重複ID／script順序検査、`git diff --check`を実行する。ローカル検証中のfixtureは削除し、Worker、D1、R2、Cron、本番環境を変更しない。
+
+## CHART-METADATA-EXTRACT
+
+### parser fixture
+
+- `node scripts/test-chart-metadata-extract.js`で、差分名の`[]/()/-/--/ー`、末尾連続候補、空表記、末尾外、左右不一致、ASCIIハイフン3個を確認する。
+- `obj`の半角・全角記号、`@`、半角・全角空白、記号前後空白と、`note/notes/chart/charter`の半角・全角区切り、大文字小文字を確認する。`object/objective/notebook/chartreuse`、名前なしmarkerは候補外になること。
+- 次marker、次の差分名候補、欄末尾で作者名が終了し、複数候補がsource位置順になること。title/subtitle/artist/subartistを独立解析し、別欄の`/`を作者へ関連付けないこと。
+- 空白あり・なしの候補除去と関連`/`除去で他の`/`を維持し、XSS文字列を文字列のまま返し、128KiBを超えるsourceを候補外として即時終了すること。
+- `scripts/fixtures/chart-metadata-extract-utf8.bms`の4メタ欄から期待候補を取得できること。
+
+### 操作・状態
+
+- 2026-07-21、ローカルPagesで`Faraway Sky (All I C Is U) [Nebula]`を入力し、初期選択`[Nebula]`、←で`(All I C Is U)`、端のdisabled、非循環、矢印操作でsource不変を確認した。
+- `転記して除去`で差分名・作者を上書きし、sourceだけから選択rangeを除去すること。`除去のみ`ではdestination不変、処理後は再解析後の最も右の候補になること。
+- `not Project Nirvana / obj:potechang`で作者処理後に`/`だけが除去専用候補となり、`/`除去後はUndo専用panel、Undo後は`/`だけが復元されること。
+- titleからA、subtitleからBを同じ`chartName`へ転記した後にtitleをUndoしてもBを維持すること。destinationを手入力後にsourceをUndoしても手入力値を維持し、`aria-live`へ安全な通知を出すこと。
+- source手入力でその欄のUndoと一時`/`候補を破棄し、通常inputは120ms debounce、composition中は停止、compositionendで即時解析すること。内部inputではUndoを破棄しないこと。
+- ×とEscapeで候補を処理せず閉じ、入力右端の「候補操作を表示」buttonから再表示できること。欄別開閉設定だけがlocalStorageへ残り、候補・source・Undoは保存されないこと。破損JSON、SecurityError、quota errorはcatchして全欄openへ戻ること。
+- 新しいファイルで旧Undo・旧候補・旧`/`状態を破棄し、ファイル解除とform resetで候補host、再表示button、強調属性を消すこと。投稿成功経路でもresetすること。
+- 追記開始前に`suspend()`、追記終了後に`resume()`を呼び、module自身も`.is-append-mode`中のmountを拒否すること。
+
+### ファイル・Phase 9C・表示
+
+- ローカル実ブラウザで単体UTF-8 fixture、UTF-8 BOM、CP932日本語メタ情報、UTF-8 BMSを1件含むZIPを順に選択し、4欄への反映、候補mount、ZIP内部名、解析完了を確認した。検証用一時BOM/CP932/ZIPは終了後に削除する。
+- 空送信でPhase 9C欄別エラー3件と候補panelを同時表示し、candidate側が`aria-invalid`を変更せず、重複IDが0であることを確認した。candidate hostは動的error要素より前に残ること。
+- white/default/darkの各テーマを390/760/1366pxで確認し、9組すべて横overflowなし、panelがviewport内、info系panel色とdanger系error色が分離されることを確認した。
+- 全操作は`type=button`で、前後候補、閉じる、再表示に明示的なaccessible nameがあること。候補文字列と競合通知をlive regionで読め、候補表示でfocusを奪わず、focus-visibleとreduced motionへ対応すること。
+- ブラウザconsoleはローカルoriginから本番一覧APIを取得できない既存`api-charts-list`エラーだけで、metadata候補の未捕捉例外がないこと。
+
+### 静的検査
+
+- `node --check docs/chart-metadata-extract.js`、`docs/app.js`、`docs/branch-append-ui.js`、`docs/post-form-ui.js`、`docs/post-form-error-ui.js`が成功すること。
+- HTML重複ID、`aria-describedby`参照、script順序を検査し、`chart-metadata-extract.js`がPhase 9C共通UIの後、`app.js`の前に読み込まれること。
+- `git diff --check`が成功し、`worker/**`と`worker/wrangler.toml`に差分がなく、`WITHDRAWAL_CRON_MODE=observe`、Cron式が維持されること。
