@@ -953,7 +953,7 @@ RC★★変換:
 ### Cronとモード
 
 - 既存の毎日R2 cleanup `0 18 * * *`は変更せず、取り下げ監視用に毎時`0 * * * *`を追加する。Scheduled handlerは`event.cron`を完全一致で振り分け、各invocationでは対応する一方だけを実行する。
-- 通常変数`WITHDRAWAL_CRON_MODE`が厳密に`observe`の場合だけ監視する。`off`、未設定、空文字、大文字、前後空白、`active`を含むその他の値はすべて安全側のoffとする。リポジトリ既定値は`off`で、active分岐、claim、finalizer実行は16Cに存在しない。
+- 通常変数`WITHDRAWAL_CRON_MODE`が厳密に`observe`の場合だけ監視する。`off`、未設定、空文字、大文字、前後空白、`active`を含むその他の値はすべて安全側のoffとする。16C observe段階のリポジトリ設定は`observe`とし、active分岐、claim、finalizer実行は16Cに存在しない。
 - 判定時刻はScheduled Eventの`scheduledTime`から一度だけ生成し、候補検索、lease期限、分類の全処理で共有する。単体試験では同じ`now`を注入できる。
 
 ### 候補と分類
@@ -974,7 +974,7 @@ RC★★変換:
 
 ## WITHDRAWAL-LIFECYCLE-16R 現行取り下げ仕様
 
-この節は16A～16Cの取り下げ分類、pending公開範囲、自動処理方針を上書きする。`WITHDRAWAL_CRON_MODE`のリポジトリ既定値は引き続き`off`で、active実行は未実装とする。
+この節は16A～16Cの取り下げ分類、pending公開範囲、自動処理方針を上書きする。16C observe段階では`WITHDRAWAL_CRON_MODE=observe`とし、active実行は未実装とする。
 
 - Workerは申請previewと申請確定の両方で共通分類を使う。投稿から24時間以内（24時間ちょうどを含む）かつ削除阻止依存なしは`immediate_delete`、24時間超過かつ依存なしは`grace_auto_delete`、経過時間を問わず依存ありは`manual_review`とする。
 - 削除阻止依存は、公開状態を問わない全直接子version、`collapsed_by_version_id`参照、旧`delete_requests`参照とする。`allow_append`は分類条件に使わず、Pagesが表示中の子件数だけで確定しない。

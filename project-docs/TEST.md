@@ -1266,4 +1266,4 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 管理画面でmanual reviewのversion、申請日時、理由、handling mode、依存内訳を確認でき、公開画面には理由を表示しないこと。
 - 4条件すべてで指定された見出し・説明・状態文・確認ボタンを表示し、pendingでは「DL停止・自動削除待ち」または「DL停止・管理者確認待ち」と取消説明を表示すること。
 - white/default/dark、390/760/1366px、Pages構文、HTML重複ID、Worker typecheck、Wrangler dry-run、`git diff --check`を確認すること。
-- `WITHDRAWAL_CRON_MODE=off`を維持し、active、deploy、commit、push、本番D1/R2/Secret操作を行わないこと。
+- `WITHDRAWAL_CRON_MODE=observe`へ切り替え、active、deploy、push、本番D1/R2/Secretの変更操作を行わないこと。検査成功後は指定メッセージでローカルコミットだけを作成すること。

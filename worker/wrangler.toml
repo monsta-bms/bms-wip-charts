@@ -9,7 +9,7 @@ crons = ["0 18 * * *", "0 * * * *"]
 [vars]
 # カンマ区切りで複数Originを許可する。ブラウザのOriginはパスを含まない。
 ALLOWED_ORIGINS = "https://monsta-bms.github.io,http://localhost:8787"
-WITHDRAWAL_CRON_MODE = "off"
+WITHDRAWAL_CRON_MODE = "observe"
 
 [[d1_databases]]
 binding = "DB"
