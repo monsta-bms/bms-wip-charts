@@ -376,7 +376,7 @@
   display: grid;
   gap: 7px;
   grid-template-areas:
-    "previous candidate candidate close next"
+    "previous candidate candidate next close"
     ". transfer remove undo .";
   grid-template-columns: auto minmax(0, 1fr) auto auto auto;
   max-width: 100%;
@@ -440,9 +440,34 @@
   grid-area: undo;
 }
 
-.metadata-candidate-close {
+.submit-panel.is-form-open button.metadata-candidate-button.metadata-candidate-close {
+  background: color-mix(in srgb, var(--info) 14%, var(--surface-raised));
+  border: 2px solid var(--info);
+  border-radius: 8px;
+  color: var(--info);
+  font-size: 1.15rem;
+  font-weight: 900;
   grid-area: close;
-  padding-inline: 8px !important;
+  line-height: 1;
+  min-height: 40px;
+  min-width: 40px;
+  padding: 0 !important;
+}
+
+.submit-panel.is-form-open button.metadata-candidate-button.metadata-candidate-close:hover,
+.submit-panel.is-form-open button.metadata-candidate-button.metadata-candidate-close:focus-visible {
+  background: var(--info);
+  border-color: var(--info);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--info) 24%, transparent);
+  color: var(--info-bg);
+}
+
+.submit-panel.is-form-open button.metadata-candidate-button.metadata-candidate-close:active {
+  background: color-mix(in srgb, var(--info) 82%, var(--text));
+  border-color: color-mix(in srgb, var(--info) 82%, var(--text));
+  box-shadow: none;
+  color: var(--info-bg);
+  transform: translateY(1px);
 }
 
 .metadata-candidate-next {
@@ -1243,7 +1268,7 @@ button.difficulty-change-button {
   .metadata-candidate-panel {
     align-items: stretch;
     grid-template-areas:
-      "previous candidate close next"
+      "previous candidate next close"
       "transfer transfer transfer transfer"
       "remove remove undo undo";
     grid-template-columns: auto minmax(0, 1fr) auto auto;
@@ -1258,7 +1283,7 @@ button.difficulty-change-button {
 @media (max-width: 420px) {
   .metadata-candidate-panel {
     grid-template-areas:
-      "previous candidate close next"
+      "previous candidate next close"
       "transfer transfer transfer transfer"
       "remove remove remove remove"
       "undo undo undo undo";

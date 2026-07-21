@@ -1295,7 +1295,7 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 
 ### parser fixture
 
-- `node scripts/test-chart-metadata-extract.js`で、差分名の`[]/()/-/--/ー`、末尾連続候補、空表記、末尾外、左右不一致、ASCIIハイフン3個を確認する。
+- `node scripts/test-chart-metadata-extract.js`で、差分名の`[]/()/（）/-/--/ー`、末尾連続候補、空表記、末尾外、左右不一致、ASCIIハイフン3個を確認する。`曲名 （最終決戦）`、`曲名 [ANOTHER] （改造版）`、`曲名 （TT mix）`は候補となり、`曲名 （）`と`曲名 （最終決戦)`は候補外になること。
 - `obj`の半角・全角記号、`@`、半角・全角空白、記号前後空白と、`note/notes/chart/charter`の半角・全角区切り、大文字小文字を確認する。`object/objective/notebook/chartreuse`、名前なしmarkerは候補外になること。
 - 次marker、次の差分名候補、欄末尾で作者名が終了し、複数候補がsource位置順になること。title/subtitle/artist/subartistを独立解析し、別欄の`/`を作者へ関連付けないこと。
 - 空白あり・なしの候補除去と関連`/`除去で他の`/`を維持し、XSS文字列を文字列のまま返し、128KiBを超えるsourceを候補外として即時終了すること。
@@ -1308,7 +1308,7 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - `not Project Nirvana / obj:potechang`で作者処理後に`/`だけが除去専用候補となり、`/`除去後はUndo専用panel、Undo後は`/`だけが復元されること。
 - titleからA、subtitleからBを同じ`chartName`へ転記した後にtitleをUndoしてもBを維持すること。destinationを手入力後にsourceをUndoしても手入力値を維持し、`aria-live`へ安全な通知を出すこと。
 - source手入力でその欄のUndoと一時`/`候補を破棄し、通常inputは120ms debounce、composition中は停止、compositionendで即時解析すること。内部inputではUndoを破棄しないこと。
-- ×とEscapeで候補を処理せず閉じ、入力右端の「候補操作を表示」buttonから再表示できること。欄別開閉設定だけがlocalStorageへ残り、候補・source・Undoは保存されないこと。破損JSON、SecurityError、quota errorはcatchして全欄openへ戻ること。
+- ×はpanel右上で他操作と区別できる40pxのbuttonとして表示し、3テーマで枠・背景・文字、hover/focus-visible/activeを判別できること。×とEscapeで候補を処理せず閉じ、入力右端の「候補操作を表示」buttonから再表示できること。欄別開閉設定だけがlocalStorageへ残り、候補・source・Undoは保存されないこと。破損JSON、SecurityError、quota errorはcatchして全欄openへ戻ること。
 - 新しいファイルで旧Undo・旧候補・旧`/`状態を破棄し、ファイル解除とform resetで候補host、再表示button、強調属性を消すこと。投稿成功経路でもresetすること。
 - 追記開始前に`suspend()`、追記終了後に`resume()`を呼び、module自身も`.is-append-mode`中のmountを拒否すること。
 

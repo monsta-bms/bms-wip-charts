@@ -24,6 +24,11 @@ assert.deepEqual(raws("3.14 (TT mix) [yumether]", "title"), ["(TT mix)", "[yumet
 assert.deepEqual(raws("3.14 (TT mix) (yumether)", "title"), ["(TT mix)", "(yumether)"]);
 assert.deepEqual(raws("3.14 (TT mix)", "title"), ["(TT mix)"]);
 assert.deepEqual(raws("[ANOTHER] (改造版)", "title"), ["[ANOTHER]", "(改造版)"]);
+assert.deepEqual(raws("曲名 （最終決戦）", "title"), ["（最終決戦）"]);
+assert.deepEqual(raws("曲名 [ANOTHER] （改造版）", "title"), ["[ANOTHER]", "（改造版）"]);
+assert.deepEqual(raws("曲名 （TT mix）", "title"), ["（TT mix）"]);
+assert.deepEqual(raws("曲名 （）", "title"), []);
+assert.deepEqual(raws("曲名 （最終決戦)", "title"), []);
 assert.deepEqual(raws("Song -ANOTHER-", "title"), ["-ANOTHER-"]);
 assert.deepEqual(raws("Song --INSANE--", "title"), ["--INSANE--"]);
 assert.deepEqual(raws("Song ー黒ー", "title"), ["ー黒ー"]);

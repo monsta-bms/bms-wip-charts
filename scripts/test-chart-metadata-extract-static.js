@@ -36,8 +36,14 @@ assert.ok(appScriptIndex > metadataScriptIndex, "metadata script must load befor
 
 assert.match(moduleSource, /button\.type = "button";/);
 assert.match(moduleSource, /candidateText\.textContent = candidate\.raw;/);
+assert.match(moduleSource, /closing === "）"/);
 assert.doesNotMatch(moduleSource, /\.innerHTML\s*=/);
 assert.equal((postFormCss.match(/{/g) || []).length, (postFormCss.match(/}/g) || []).length, "post form CSS braces");
+assert.match(postFormCss, /button\.metadata-candidate-button\.metadata-candidate-close/);
+assert.match(postFormCss, /min-height: 40px;/);
+assert.match(postFormCss, /min-width: 40px;/);
+assert.match(postFormCss, /metadata-candidate-close:focus-visible/);
+assert.match(postFormCss, /metadata-candidate-close:active/);
 assert.match(postFormCss, /@media \(prefers-reduced-motion: reduce\)/);
 assert.match(wranglerConfig, /WITHDRAWAL_CRON_MODE\s*=\s*"observe"/);
 assert.match(wranglerConfig, /crons\s*=\s*\["0 18 \* \* \*", "0 \* \* \* \*"\]/);

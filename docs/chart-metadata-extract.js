@@ -176,6 +176,9 @@
     } else if (closing === ")") {
       start = value.lastIndexOf("(", end - 2);
       if (start < 0 || hasDelimiterInside(value, start + 1, end - 1, "(", ")")) return null;
+    } else if (closing === "）") {
+      start = value.lastIndexOf("（", end - 2);
+      if (start < 0 || hasDelimiterInside(value, start + 1, end - 1, "（", "）")) return null;
     } else if (closing === "ー") {
       start = value.lastIndexOf("ー", end - 2);
       if (start < 0 || value.slice(start + 1, end - 1).includes("ー")) return null;
