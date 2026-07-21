@@ -90,6 +90,16 @@
       return;
     }
 
+    const retainedPostError = fileDropError?.dataset.postErrorSource && fileDropError.textContent
+      ? { message: fileDropError.textContent, source: fileDropError.dataset.postErrorSource }
+      : null;
+    const restoreRetainedPostError = () => {
+      if (!retainedPostError || !fileDropError) return;
+      fileDropError.textContent = retainedPostError.message;
+      fileDropError.dataset.postErrorSource = retainedPostError.source;
+      fileDropError.hidden = false;
+    };
+
     if (state !== "drag") {
       lastDropDetail = detail;
     }
@@ -121,6 +131,7 @@
       fileDropFileName.title = fileDropFileName.textContent;
       fileDropFileName.hidden = false;
       fileDropHelp.textContent = "譜面情報と進捗ブロックを確認しています";
+      restoreRetainedPostError();
       return;
     }
 
@@ -164,6 +175,14 @@
     fileDropControl.dataset.state = "empty";
     fileDropPrimary.textContent = "クリックまたはドロップ";
     fileDropHelp.innerHTML = ".bms / .bme / .bml / .zip<br>最大5MB（BMS単体は2MB）";
+    restoreRetainedPostError();
+  }
+
+  function setFileError(message, file = fileInput?.files?.[0]) {
+    setDropState("error", { file, message });
+    window.BmsPostErrorUi?.showValidationErrors?.([
+      { fieldKey: "file", message, code: "FILE_ANALYSIS_FAILED" }
+    ], { source: "local", reveal: false, showSummary: false, replace: false });
   }
 
   function assignDroppedFile(file) {
@@ -171,7 +190,7 @@
     if (!validation.valid) {
       console.warn("[post-file-drop] rejected", { code: validation.code });
       setOpen(true);
-      setDropState("error", { file: fileInput?.files?.[0] || file, message: validation.message });
+      setFileError(validation.message, fileInput?.files?.[0] || file);
       return;
     }
 
@@ -183,7 +202,7 @@
     } catch (_error) {
       console.warn("[post-file-drop] assignment failed", { code: "FILE_ASSIGN_FAILED" });
       setOpen(true);
-      setDropState("error", { message: "ファイルを選択欄へ反映できませんでした。クリックして選択してください。" });
+      setFileError("ファイルを選択欄へ反映できませんでした。クリックして選択してください。");
     }
   }
 
@@ -197,7 +216,7 @@
     if (files.length !== 1) {
       console.warn("[post-file-drop] rejected", { code: "FILE_COUNT_INVALID", count: files.length });
       setOpen(true);
-      setDropState("error", { message: "譜面ファイルは1件だけドロップしてください。" });
+      setFileError("譜面ファイルは1件だけドロップしてください。");
       return;
     }
     setOpen(true);
@@ -525,8 +544,11 @@
   window.BmsPostFileUi = {
     setAnalyzing: (file) => setDropState("analyzing", { file }),
     setEmpty: () => setDropState("empty"),
-    setError: (message, file = fileInput?.files?.[0]) => setDropState("error", { file, message }),
-    setReady: (detail = {}) => setDropState("ready", detail),
+    setError: setFileError,
+    setReady: (detail = {}) => {
+      setDropState("ready", detail);
+      window.BmsPostErrorUi?.clearField?.("file");
+    },
     validateFile: validateSelectedFile
   };
 

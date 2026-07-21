@@ -460,6 +460,7 @@ function updateDifficultyValue() {
 
   if (value) {
     setFieldInvalid(difficultyInput, false);
+    window.BmsPostErrorUi?.clearField?.("difficulty");
   }
 }
 
@@ -1407,6 +1408,9 @@ function updateProgressFromMap({ updateBlocks = true } = {}) {
 
   progressInput.value = String(progressValue);
   setFieldInvalid(progressInput, false);
+  window.BmsPostErrorUi?.clearField?.("progress");
+  window.BmsPostErrorUi?.clearField?.("progressMap");
+  if (progressValue < 100) window.BmsPostErrorUi?.clearField?.("completion");
   updateProgressSummary(progressValue);
   updateCompleteButtonState();
 
@@ -1688,6 +1692,7 @@ async function fillMetaFromFile(file, analysisRevision) {
     if (meta.title) {
       titleInput.value = meta.title;
       setFieldInvalid(titleInput, false);
+      window.BmsPostErrorUi?.clearField?.("title");
     }
 
     if (meta.subtitle) {
@@ -1697,6 +1702,7 @@ async function fillMetaFromFile(file, analysisRevision) {
     if (meta.artist) {
       artistInput.value = meta.artist;
       setFieldInvalid(artistInput, false);
+      window.BmsPostErrorUi?.clearField?.("artist");
     }
 
     if (meta.subartist) {
@@ -1769,38 +1775,94 @@ function validateProgress() {
   setFieldInvalid(progressInput, !valid);
 
   if (!valid) {
-    showTextError("進捗度は0から100までの整数で入力してください。");
+    window.BmsPostErrorUi?.showValidationErrors?.([
+      { fieldKey: "progress", message: "進捗度は0から100までの整数で入力してください。" }
+    ], { source: "local", reveal: false, showSummary: false, replace: false });
     return false;
   }
 
-  clearError();
+  window.BmsPostErrorUi?.clearField?.("progress");
   updateCompleteButtonState();
   return true;
 }
 
 function validateRequiredFields() {
-  const missingFields = [];
+  const errors = [];
+  const addError = (fieldKey, message, code = "FIELD_REQUIRED") => {
+    errors.push({ fieldKey, message, code });
+  };
+  const selectedFile = fileInput.files?.[0];
+  const fileState = document.querySelector("#chartFileDropControl")?.dataset.state || "empty";
 
-  for (const field of requiredFieldChecks) {
-    const missing = field.isMissing();
-    setFieldInvalid(field.input, missing);
-
-    if (missing) {
-      missingFields.push(field.name);
-    }
+  if (fileState === "error") {
+    addError(
+      "file",
+      document.querySelector("#chartFileDropError")?.textContent?.trim()
+        || "譜面ファイルを解析できませんでした。別のファイルを選択してください。",
+      "FILE_ANALYSIS_FAILED"
+    );
+  } else if (!selectedFile) {
+    addError("file", "譜面ファイルを選択してください。");
+  } else if (fileState === "analyzing") {
+    addError("file", "譜面ファイルの解析が完了するまでお待ちください。", "FILE_ANALYSIS_PENDING");
   }
 
-  if (missingFields.length > 0) {
-    showTextError(`未入力の項目があります: ${missingFields.join(", ")}`);
-    return false;
+  const requiredFields = [
+    ["title", titleInput, "曲名を入力してください。"],
+    ["artist", artistInput, "アーティストを入力してください。"],
+    ["difficulty", difficultyInput, "想定難易度を選択または入力してください。"],
+    ["chartName", chartNameInput, "差分名を入力してください。"],
+    ["author", authorInput, "差分作者を入力してください。"],
+    ["progress", progressInput, "進捗度を入力してください。"],
+    ["password", passwordInput, "管理パスワードを入力してください。"]
+  ];
+  for (const [fieldKey, input, message] of requiredFields) {
+    const missing = !input.value.trim();
+    setFieldInvalid(input, missing);
+    if (missing) addError(fieldKey, message);
   }
 
-  if (Array.from(chartNameInput.value.trim()).length > 100) {
+  if (chartNameInput.value.trim() && Array.from(chartNameInput.value.trim()).length > 100) {
     setFieldInvalid(chartNameInput, true);
-    showTextError("差分名は100文字以内で入力してください。");
+    addError("chartName", "差分名は100文字以内で入力してください。", "CHART_NAME_TOO_LONG");
+  }
+
+  const originUrl = originUrlInput.value;
+  const originUrlIsValid = window.BmsPostErrorUi?.isValidOriginUrl
+    ? window.BmsPostErrorUi.isValidOriginUrl(originUrl)
+    : true;
+  if (originUrl.trim().length > 2048) {
+    addError("originUrl", "原曲配布URLは2048文字以内で入力してください。", "ORIGIN_URL_TOO_LONG");
+  } else if (!originUrlIsValid) {
+    addError("originUrl", "原曲配布URLは認証情報を含まないHTTPまたはHTTPSのURLで入力してください。", "INVALID_ORIGIN_URL");
+  }
+
+  if (progressInput.value.trim() && !isValidProgress(progressInput.value)) {
+    setFieldInvalid(progressInput, true);
+    addError("progress", "進捗度は0から100までの整数で入力してください。", "INVALID_PROGRESS");
+  }
+
+  const state = getPostStateSnapshot();
+  if (selectedFile && fileState === "ready" && !state.isRejected && Number(progressInput.value) === 100) {
+    addError("completion", "初回投稿は完成版にできません。進捗度を99以下にするか、没譜面として投稿してください。", "INITIAL_COMPLETION_NOT_ALLOWED");
+  }
+  if (!state.isRejected && !state.effectiveAllowAppend) {
+    addError("allowAppend", "未完成版では追記受付を停止できません。", "APPEND_POLICY_LOCKED_FOR_INCOMPLETE");
+  }
+
+  if (errors.length > 0) {
+    if (window.BmsPostErrorUi?.showValidationErrors) {
+      window.BmsPostErrorUi.showValidationErrors(errors, {
+        source: "local"
+      });
+    } else {
+      showTextError(`入力内容を確認してください（${errors.length}件）`);
+    }
     return false;
   }
 
+  window.BmsPostErrorUi?.clearAll?.({ source: "local" });
+  clearRequiredFieldIndicators();
   return true;
 }
 
@@ -2364,7 +2426,8 @@ async function submitChart() {
     return;
   }
 
-  if (!validateRequiredFields() || !validateProgress()) {
+  window.BmsPostErrorUi?.clearAll?.({ source: "api" });
+  if (!validateRequiredFields()) {
     return;
   }
 
@@ -2406,6 +2469,7 @@ async function submitChart() {
     window.BmsTurnstile?.reset();
     window.BmsPostFormUi?.markClean?.();
     window.BmsPostFormUi?.close?.();
+    window.BmsPostErrorUi?.clearAll?.();
     if (window.BmsChartDetail?.showCreatedVersion) {
       await window.BmsChartDetail.showCreatedVersion({
         chartId: created?.chartId,
@@ -2422,7 +2486,11 @@ async function submitChart() {
       status: Number(error?.status) || null,
       errorType: error?.name || typeof error
     });
-    showError(error);
+    if (window.BmsPostErrorUi?.showApiError) {
+      window.BmsPostErrorUi.showApiError(error, { mode: "initial" });
+    } else {
+      showError(error);
+    }
   } finally {
     window.BmsTurnstile?.reset();
     setSubmitting(false);

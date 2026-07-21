@@ -1267,3 +1267,26 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 4条件すべてで指定された見出し・説明・状態文・確認ボタンを表示し、pendingでは「DL停止・自動削除待ち」または「DL停止・管理者確認待ち」と取消説明を表示すること。
 - white/default/dark、390/760/1366px、Pages構文、HTML重複ID、Worker typecheck、Wrangler dry-run、`git diff --check`を確認すること。
 - `WITHDRAWAL_CRON_MODE=observe`へ切り替え、active、deploy、push、本番D1/R2/Secretの変更操作を行わないこと。検査成功後は指定メッセージでローカルコミットだけを作成すること。
+
+## POST-ERROR-UI-9C
+
+### ローカル入力・移動
+
+- 2026-07-21、ローカルPagesを新規タブで開き、初回投稿を空送信した。ファイル、曲名、アーティスト、難易度、差分名、作者、パスワードの7件が同時表示され、フォームが開いたままDrop Zoneだけへフォーカスし、重複error IDがないことを確認した。
+- 有効なBMS fixtureでタイトル・アーティスト・進捗Mapが解析され、該当エラーだけが解除されることを確認した。他項目を有効にして難易度だけ未選択にするとPickerが展開され、利用可能な難易度タブへフォーカスした。
+- 進捗`101`、`1.5`、空欄で進捗欄へ移動し、範囲／整数または必須の具体文を表示した。差分名101文字は差分名、不正な原曲配布URLはURL欄へ移動した。
+- 無効拡張子では既存`#chartFileDropError`だけを使用して形式エラーを表示し、`aria-invalid=true`と`aria-describedby`を設定した。次の有効BMSが解析成功した時点でファイルエラーだけが解除された。
+- 1項目を修正したとき、その項目だけ`aria-invalid=false`とhiddenへ戻り、他項目の表示を維持した。最後の同一sourceエラーを解除した場合だけ共通概要を閉じる。
+
+### 追記・Worker code
+
+- 追記送信前検証は、追記元、ファイル未選択／解析中／解析失敗、難易度、差分名必須／100文字、作者、パスワード、完成版状態、追記範囲0、格子不一致、追記受付禁止を単一errors配列へ追加し、途中returnが最終の1か所だけであることを静的検査した。初回と同じ`BmsPostErrorUi.showValidationErrors`へ渡す。
+- Worker実装の安定codeを照合し、ファイル、原曲URL、差分名重複、進捗／進捗Map、完成版、没譜面、追記受付、パスワード、Turnstile、追記元状態の対応を確認した。ローカルTurnstile失敗ではTurnstile欄のinline表示になった。
+- `INVALID_FORM`はfile未添付・必須項目・差分名など複数用途のためdetailから推測せず共通欄へ送る。`SERVER_CONFIG_ERROR`、DB/R2障害、BAN、rate limit、network、JSON解析失敗、`ZIP_INSPECTION_FAILED`も共通欄とする。
+
+### 表示・アクセシビリティ・静的検査
+
+- white/default/darkの各テーマを390/760/1366pxで確認し、9組すべて横overflow 0、error文の表示領域あり、テーマ別danger文字色・背景・左枠を確認した。390pxでもerror文は折り返される。
+- 動的error要素は16 fieldKeyで各1件、全要素に`role=alert`を付けた。ブラウザ上で重複ID 0、欠落した`aria-describedby`参照0、hidden inputへのフォーカス0を確認した。
+- smooth scroll、`block=center`、focus時`preventScroll`、2回の`requestAnimationFrame`、`prefers-reduced-motion: reduce`時のauto、対象欠落時の安全な共通欄fallbackをコード確認した。
+- `node --check`（app、branch append、post form、共通error UI）、Worker`tsc --noEmit`、HTML重複ID／script順序検査、`git diff --check`を実行する。ローカル検証中のfixtureは削除し、Worker、D1、R2、Cron、本番環境を変更しない。

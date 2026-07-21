@@ -518,6 +518,60 @@ button.file-drop-zone:is(:hover, :active, :focus-visible),
   margin: 0;
 }
 
+.post-field-error {
+  background: var(--danger-bg);
+  border-inline-start: 4px solid var(--danger);
+  border-radius: 4px;
+  color: var(--danger);
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.55;
+  margin: 7px 0 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  padding: 6px 9px;
+  white-space: normal;
+}
+
+.post-field-error[hidden] {
+  display: none;
+}
+
+.file-drop-error.post-field-error {
+  font-size: 0.9rem;
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+[data-post-error-invalid="true"] {
+  scroll-margin-block: 88px;
+}
+
+.field[data-post-error-invalid="true"],
+.file-drop-control[data-post-error-invalid="true"],
+.difficulty-picker[data-post-error-invalid="true"],
+.progress-map[data-post-error-invalid="true"],
+.post-state-control[data-post-error-invalid="true"],
+.turnstile-control[data-post-error-invalid="true"],
+.append-context[data-post-error-invalid="true"] {
+  outline: 2px solid var(--danger);
+  outline-offset: 3px;
+}
+
+.file-drop-control[data-post-error-invalid="true"] button.file-drop-zone,
+.difficulty-picker[aria-invalid="true"],
+.progress-map[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+@media (max-width: 480px) {
+  .post-field-error {
+    font-size: 0.88rem;
+    padding-inline: 8px;
+  }
+}
+
 .difficulty-compact {
   align-items: center;
   background: #f3f8f6;

@@ -996,3 +996,13 @@ RC★★変換:
 - 24時間超過・依存あり: 24時間以内・依存ありと同じ見出し、状態文、説明、ボタン、理由欄を表示する。
 
 申請後のgraceは状態・見出しを「DL停止・自動削除待ち」とし、「ダウンロードを停止しています。YYYY/MM/DD HH:mm以降、申請後の追記や参照がなければ自動削除します。」を表示する。manual reviewは状態・見出しを「DL停止・管理者確認待ち」とし、「ダウンロードを停止しています。申請理由と派生版の状態を管理者が確認します。」を表示する。どちらも取消ボタンを「取り下げ申請を取り消す」とし、「取り消すと、今回の申請によるDL停止を解除します。」を併記する。
+
+## POST-ERROR-UI-9C 投稿フォームのエラー案内
+
+- 初回投稿と追記投稿は共通の`BmsPostErrorUi`を使い、送信前に判定可能な入力不備をすべて収集する。同じfieldKeyは1件へまとめ、各欄の直下または欄内に具体文を表示して`aria-invalid`と`aria-describedby`を設定する。
+- fieldKeyは`file/title/artist/originUrl/difficulty/chartName/author/progress/progressMap/completion/isRejected/allowAppend/comment/password/turnstile/appendContext`を扱う。テキスト・数値・checkbox・難易度・進捗範囲・ファイル解析・Turnstileは、現在値が有効になった時点でその欄だけを解除し、他欄のエラーを消さない。
+- 送信1回につきDOM上で最初の不正欄へだけ移動する。投稿フォームを既存open処理で展開し、2回の`requestAnimationFrame`後に中央へスクロールして、スクロールを増やさずフォーカスする。通常はsmooth、reduced motionではautoとする。
+- ファイル欄は全体へ移動してDrop Zoneをフォーカスする。難易度はPickerを展開して利用可能なタブまたは手入力欄、進捗Mapは全体と利用可能な先頭block、Turnstileは表示中の再試行ボタンを使用する。hidden/disabled入力は直接フォーカスしない。
+- 対象DOMがない場合は例外化せず`#errorBox`へフォールバックし、consoleへ`POST_ERROR_TARGET_NOT_FOUND`とfieldKeyだけを警告する。入力値、パスワード、API detailは出さない。
+- Worker応答は安定した`error.code`だけでfieldKeyへ対応付ける。ファイル形式・容量・ZIP検査結果・重複、原曲URL、進捗Map、完成版、没譜面、追記受付、パスワード、Turnstile、追記元状態を各欄へ案内する。曖昧な`INVALID_FORM`、サーバー／DB／R2障害、BAN、rate limit、network、JSON解析失敗など対応不能なcodeは従来どおり`#errorBox`へcode/messageだけを表示する。
+- ファイル欄は既存`#chartFileDropError`を再利用する。解析失敗は新しいファイルの解析成功まで保持し、API再送信前は前回のAPI由来エラーだけを整理する。

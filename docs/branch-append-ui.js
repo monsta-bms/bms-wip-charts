@@ -113,6 +113,10 @@
   }
 
   function showApiError(error) {
+    if (window.BmsPostErrorUi?.showApiError) {
+      window.BmsPostErrorUi.showApiError(error, { mode: "append" });
+      return;
+    }
     if (typeof showError === "function") {
       showError(error);
       return;
@@ -776,6 +780,9 @@
     appendState.dragAnchorIndex = null;
     appendState.dragMode = null;
     appendState.originalCurrentPainted = null;
+    if (appendState.currentPainted.size > 0 && !appendState.fileGridMismatch) {
+      window.BmsPostErrorUi?.clearField?.("progressMap");
+    }
   }
 
   function toggleAppendCompletion() {
@@ -803,6 +810,8 @@
     }
     updateAppendBlockClasses();
     updateAppendProgressSummary();
+    window.BmsPostErrorUi?.clearField?.("completion");
+    window.BmsPostErrorUi?.clearField?.("progressMap");
     clearMessage();
   }
 
@@ -869,6 +878,7 @@
   }
 
   function enterAppendMode(entry, parentVersion) {
+    window.BmsPostErrorUi?.clearAll?.();
     const song = entry.song || {};
     const chart = entry.chart || {};
     const chartId = chart.id || chart.chartId || entry.chartId;
@@ -976,6 +986,7 @@
   }
 
   function exitAppendMode({ resetForm = true } = {}) {
+    window.BmsPostErrorUi?.clearAll?.();
     discardCompletionState();
     appendState.active = false;
     appendState.entry = null;
@@ -1144,6 +1155,9 @@
         blockCount: analyzedBlocks.length,
         miniViewAvailable: localAnalysis.miniView?.status === "ready"
       });
+      if (appendState.hasUsableFileProgressMap && !appendState.fileGridMismatch) {
+        window.BmsPostErrorUi?.clearField?.("progressMap");
+      }
       const titleMatches = isCloseMetaMatch(meta.title, appendState.song?.title);
       const artistMatches = isCloseMetaMatch(meta.artist, appendState.song?.artist);
 
@@ -1177,38 +1191,49 @@
   }
 
   function validateAppendForm() {
-    const missing = [];
+    const errors = [];
+    const addError = (fieldKey, message, code = "FIELD_REQUIRED") => {
+      errors.push({ fieldKey, message, code });
+    };
+    const selectedFile = fileInput?.files?.[0];
 
-    if (!fileInput?.files?.[0]) {
-      missing.push("譜面ファイル");
-      setInvalid(fileInput, true);
+    if (!appendState.chartId || !appendState.parentVersionId) {
+      addError("appendContext", "追記元の情報を確認できません。版ツリーから追記先を選び直してください。", "APPEND_CONTEXT_MISSING");
     }
+    if (appendState.fileAnalysisStatus === "error") {
+      addError(
+        "file",
+        document.querySelector("#chartFileDropError")?.textContent?.trim()
+          || "譜面ファイルを解析できませんでした。別のファイルを選択してください。",
+        "FILE_ANALYSIS_FAILED"
+      );
+    } else if (!selectedFile) {
+      addError("file", "譜面ファイルを選択してください。");
+    } else if (appendState.fileAnalysisStatus === "loading") {
+      addError("file", "譜面ファイルの解析が完了するまでお待ちください。", "FILE_ANALYSIS_PENDING");
+    }
+    setInvalid(fileInput, !selectedFile || appendState.fileAnalysisStatus === "error");
+
     if (!difficultyInput?.value?.trim()) {
-      missing.push("想定難易度");
+      addError("difficulty", "想定難易度を選択または入力してください。");
       setInvalid(difficultyInput, true);
     }
     if (!chartNameInput?.value?.trim()) {
-      missing.push("今回の差分名");
+      addError("chartName", "今回の差分名を入力してください。");
       setInvalid(chartNameInput, true);
     } else if (Array.from(chartNameInput.value.trim()).length > 100) {
-      showText("今回の差分名は100文字以内で入力してください。");
+      addError("chartName", "今回の差分名は100文字以内で入力してください。", "CHART_NAME_TOO_LONG");
       setInvalid(chartNameInput, true);
-      return false;
     } else {
       setInvalid(chartNameInput, false);
     }
     if (!authorInput?.value?.trim()) {
-      missing.push("差分作者");
+      addError("author", "差分作者を入力してください。");
       setInvalid(authorInput, true);
     }
     if (!passwordInput?.value?.trim()) {
-      missing.push("管理パスワード");
+      addError("password", "管理パスワードを入力してください。");
       setInvalid(passwordInput, true);
-    }
-
-    if (missing.length > 0) {
-      showText(`未入力の項目があります: ${missing.join(", ")}`);
-      return false;
     }
 
     if (appendState.layerKind === "completion_fill") {
@@ -1226,20 +1251,33 @@
         && policyState?.hasValidAppendFile
       );
       if (!completionStateValid) {
-        showText("完成版の状態を確認できません。譜面ファイルを選択し直してください。");
-        return false;
+        addError("completion", "完成版の状態を確認できません。譜面ファイルを選択し直してください。", "COMPLETION_ACTION_REQUIRED");
       }
     }
 
     if (appendState.currentPainted.size === 0) {
-      showText("追記範囲が追加されていません。");
-      return false;
+      addError("progressMap", "追記範囲が追加されていません。", "PROGRESS_MAP_UNCHANGED");
     }
     if (appendState.fileGridMismatch) {
-      showText("選択した譜面の進捗ブロック格子が追記元と一致しません。");
+      addError("progressMap", "選択した譜面の進捗ブロック格子が追記元と一致しません。", "PROGRESS_MAP_BLOCK_COUNT_MISMATCH");
+    }
+    const policyState = window.BmsAppendPolicy?.snapshot?.();
+    if (!policyState?.isCompleted && window.BmsAppendPolicy?.effectiveValue?.() === false) {
+      addError("allowAppend", "追記未完成版では追記受付を停止できません。", "APPEND_POLICY_LOCKED_FOR_INCOMPLETE");
+    }
+
+    if (errors.length > 0) {
+      if (window.BmsPostErrorUi?.showValidationErrors) {
+        window.BmsPostErrorUi.showValidationErrors(errors, {
+          source: "local"
+        });
+      } else {
+        showText(`入力内容を確認してください（${errors.length}件）`);
+      }
       return false;
     }
 
+    window.BmsPostErrorUi?.clearAll?.({ source: "local" });
     clearMessage();
     return true;
   }
@@ -1266,6 +1304,7 @@
       return;
     }
 
+    window.BmsPostErrorUi?.clearAll?.({ source: "api" });
     if (!validateAppendForm()) {
       return;
     }
