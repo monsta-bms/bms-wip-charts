@@ -323,15 +323,21 @@ try {
     await resetIsolation();
     const target = await createVersion();
     const withdrawal = await createWithdrawal(target);
+    const immediateTarget = await createVersion();
+    const immediateWithdrawal = await createWithdrawal(immediateTarget, {
+      handlingMode: "immediate_delete"
+    });
     const spy = makeR2Spy(env.FILES);
     const isolatedEnv = { ...env, FILES: spy.binding };
     await runIndexScheduled("off", isolatedEnv);
     assert.equal((await first("SELECT status FROM version_withdrawals WHERE id = ?", withdrawal.withdrawalId)).status, "pending");
+    assert.equal((await first("SELECT status FROM version_withdrawals WHERE id = ?", immediateWithdrawal.withdrawalId)).status, "pending");
     assert.equal(spy.deleteCalls.length, 0);
     assert.equal((await first("SELECT COUNT(*) AS count FROM admin_logs")).count, 0);
 
     await runIndexScheduled("observe", isolatedEnv);
     assert.equal((await first("SELECT COUNT(*) AS count FROM versions WHERE id = ?", target.versionId)).count, 1);
+    assert.equal((await first("SELECT COUNT(*) AS count FROM versions WHERE id = ?", immediateTarget.versionId)).count, 1);
     assert.equal(spy.deleteCalls.length, 0);
     assert.equal((await latestSystemSummary("withdrawal_cron_observe")).mode, "observe");
     const logsAfterObserve = (await first("SELECT COUNT(*) AS count FROM admin_logs")).count;
@@ -339,16 +345,22 @@ try {
     await runIndexScheduled("ACTIVE", isolatedEnv);
     assert.equal((await first("SELECT COUNT(*) AS count FROM admin_logs")).count, logsAfterObserve);
     assert.equal((await first("SELECT status FROM version_withdrawals WHERE id = ?", withdrawal.withdrawalId)).status, "pending");
+    assert.equal((await first("SELECT status FROM version_withdrawals WHERE id = ?", immediateWithdrawal.withdrawalId)).status, "pending");
 
     await runIndexScheduled("active", isolatedEnv);
     assert.equal((await first("SELECT COUNT(*) AS count FROM versions WHERE id = ?", target.versionId)).count, 0);
     assert.equal((await first("SELECT status FROM version_withdrawals WHERE id = ?", withdrawal.withdrawalId)).status, "deleted");
+    assert.equal((await first("SELECT COUNT(*) AS count FROM versions WHERE id = ?", immediateTarget.versionId)).count, 0);
+    assert.equal((await first("SELECT status FROM version_withdrawals WHERE id = ?", immediateWithdrawal.withdrawalId)).status, "deleted");
     assert.equal(await env.FILES.head(target.r2Key), null);
     assert.equal(await env.FILES.head(target.progressImageKey), null);
+    assert.equal(await env.FILES.head(immediateTarget.r2Key), null);
+    assert.equal(await env.FILES.head(immediateTarget.progressImageKey), null);
     assert.equal((await first("SELECT COUNT(*) AS count FROM charts WHERE id = ?", target.chartId)).count, 0);
     assert.equal((await first("SELECT COUNT(*) AS count FROM songs WHERE id = ?", target.songId)).count, 0);
     const summary = await latestSystemSummary("withdrawal_cron_active");
-    assert.equal(summary.deleted_count, 1);
+    assert.equal(summary.deleted_count, 2);
+    assert.equal(summary.immediate_recovery_selected_count, 1);
     assert.equal(summary.tombstoned_count, 0);
   });
 
@@ -387,7 +399,7 @@ try {
     }
   });
 
-  await check("future/manual/leased grace are excluded and immediate rows are diagnostic only", async () => {
+  await check("future/manual/leased rows are excluded while incomplete immediate rows recover", async () => {
     await resetIsolation();
     const future = await createVersion();
     const futureWithdrawal = await createWithdrawal(future, { scheduledAt: FUTURE_SQL });
@@ -401,6 +413,18 @@ try {
       status: "processing",
       leaseExpiresAt: "2026-07-22 01:00:00"
     });
+    const immediateLeaseNull = await createVersion();
+    const immediateLeaseNullWithdrawal = await createWithdrawal(immediateLeaseNull, {
+      handlingMode: "immediate_delete",
+      status: "processing"
+    });
+    const immediateLeased = await createVersion();
+    const immediateLeasedWithdrawal = await createWithdrawal(immediateLeased, {
+      handlingMode: "immediate_delete",
+      status: "processing",
+      leaseToken: "valid-immediate-lease",
+      leaseExpiresAt: "2026-07-22 04:00:00"
+    });
     const leased = await createVersion();
     const leasedWithdrawal = await createWithdrawal(leased, {
       status: "processing",
@@ -408,17 +432,24 @@ try {
       leaseExpiresAt: "2026-07-22 04:00:00"
     });
     const summary = await activeRunnerModule.runActiveDueVersionWithdrawals(env, { now: NOW });
-    assert.equal(summary.selectedCount, 0);
-    assert.equal(summary.excludedImmediateCount, 2);
+    assert.equal(summary.selectedCount, 3);
+    assert.equal(summary.deletedCount, 3);
+    assert.equal(summary.immediateRecoverySelectedCount, 3);
     assert.equal(summary.tombstonedCount, 0);
     for (const id of [
       futureWithdrawal.withdrawalId,
       manualWithdrawal.withdrawalId,
-      immediatePendingWithdrawal.withdrawalId,
-      immediateProcessingWithdrawal.withdrawalId,
+      immediateLeasedWithdrawal.withdrawalId,
       leasedWithdrawal.withdrawalId
     ]) {
       assert.notEqual((await first("SELECT status FROM version_withdrawals WHERE id = ?", id)).status, "deleted");
+    }
+    for (const id of [
+      immediatePendingWithdrawal.withdrawalId,
+      immediateProcessingWithdrawal.withdrawalId,
+      immediateLeaseNullWithdrawal.withdrawalId
+    ]) {
+      assert.equal((await first("SELECT status FROM version_withdrawals WHERE id = ?", id)).status, "deleted");
     }
   });
 
@@ -438,6 +469,143 @@ try {
     const immediateWithdrawal = await createWithdrawal(immediate, { handlingMode: "immediate_delete" });
     const immediateResult = await finalizerModule.finalizeVersionWithdrawal(env, immediateWithdrawal.withdrawalId, { now: NOW });
     assert.equal(immediateResult.outcome, "deleted");
+  });
+
+  await check("immediate R2 retryable failure is recovered by active after retry delay", async () => {
+    await resetIsolation();
+    const target = await createVersion();
+    const withdrawal = await createWithdrawal(target, { handlingMode: "immediate_delete" });
+    const spy = makeR2Spy(env.FILES, { failDeleteOnce: [target.progressImageKey] });
+    const retryEnv = { ...env, FILES: spy.binding };
+    const firstSummary = await activeRunnerModule.runActiveDueVersionWithdrawals(retryEnv, { now: NOW });
+    assert.equal(firstSummary.immediateRecoverySelectedCount, 1);
+    assert.equal(firstSummary.processingCount, 1);
+    const processing = await first(`
+      SELECT status, handling_mode, lease_token, lease_expires_at, last_error_code
+      FROM version_withdrawals WHERE id = ?
+    `, withdrawal.withdrawalId);
+    assert.equal(processing.status, "processing");
+    assert.equal(processing.handling_mode, "immediate_delete");
+    assert.equal(processing.lease_token, null);
+    assert.ok(processing.lease_expires_at > PAST_SQL);
+    assert.equal(processing.last_error_code, "WITHDRAWAL_R2_DELETE_FAILED");
+    assert.equal(await env.FILES.head(target.r2Key), null);
+    assert.notEqual(await env.FILES.head(target.progressImageKey), null);
+
+    const earlySummary = await activeRunnerModule.runActiveDueVersionWithdrawals(retryEnv, {
+      now: new Date(NOW.getTime() + 4 * 60_000)
+    });
+    assert.equal(earlySummary.selectedCount, 0);
+    assert.equal(earlySummary.immediateRecoverySelectedCount, 0);
+    assert.equal((await first(
+      "SELECT attempt_count FROM version_withdrawals WHERE id = ?",
+      withdrawal.withdrawalId
+    )).attempt_count, 1);
+
+    const retrySummary = await activeRunnerModule.runActiveDueVersionWithdrawals(retryEnv, {
+      now: new Date(NOW.getTime() + 6 * 60_000)
+    });
+    assert.equal(retrySummary.immediateRecoverySelectedCount, 1);
+    assert.equal(retrySummary.deletedCount, 1);
+    assert.equal((await first("SELECT status FROM version_withdrawals WHERE id = ?", withdrawal.withdrawalId)).status, "deleted");
+    assert.equal(await env.FILES.head(target.progressImageKey), null);
+  });
+
+  await check("immediate D1 retryable failure is recovered after already-missing R2 objects", async () => {
+    await resetIsolation();
+    const target = await createVersion();
+    const withdrawal = await createWithdrawal(target, { handlingMode: "immediate_delete" });
+    const firstSummary = await activeRunnerModule.runActiveDueVersionWithdrawals(env, {
+      now: NOW,
+      finalizeCandidate(candidateEnv, withdrawalId, now, handlingMode) {
+        return finalizerModule.finalizeVersionWithdrawal(candidateEnv, withdrawalId, {
+          now,
+          expectedHandlingMode: handlingMode,
+          hooks: {
+            beforeD1Finalize() {
+              throw new Error("injected immediate D1 terminal failure");
+            }
+          }
+        });
+      }
+    });
+    assert.equal(firstSummary.immediateRecoverySelectedCount, 1);
+    assert.equal(firstSummary.processingCount, 1);
+    assert.equal(await env.FILES.head(target.r2Key), null);
+    assert.equal(await env.FILES.head(target.progressImageKey), null);
+
+    const retrySummary = await activeRunnerModule.runActiveDueVersionWithdrawals(env, {
+      now: new Date(NOW.getTime() + 6 * 60_000)
+    });
+    assert.equal(retrySummary.immediateRecoverySelectedCount, 1);
+    assert.equal(retrySummary.deletedCount, 1);
+    assert.equal((await first("SELECT status FROM version_withdrawals WHERE id = ?", withdrawal.withdrawalId)).status, "deleted");
+  });
+
+  await check("immediate recovery dependencies move to manual review without R2 deletion", async () => {
+    await resetIsolation();
+    const fixtures = [];
+    for (const kind of ["direct_child", "collapsed_reference", "legacy_delete_request"]) {
+      const target = await createVersion();
+      const withdrawal = await createWithdrawal(target, { handlingMode: "immediate_delete" });
+      await addDependency(target, kind);
+      fixtures.push({ kind, target, withdrawal });
+    }
+    const spy = makeR2Spy(env.FILES);
+    const summary = await activeRunnerModule.runActiveDueVersionWithdrawals(
+      { ...env, FILES: spy.binding },
+      { now: NOW }
+    );
+    assert.equal(summary.immediateRecoverySelectedCount, 3);
+    assert.equal(summary.manualReviewCount, 3);
+    assert.equal(summary.tombstonedCount, 0);
+    assert.equal(spy.deleteCalls.length, 0);
+    for (const fixture of fixtures) {
+      const row = await first(`
+        SELECT withdrawals.status, withdrawals.handling_mode, withdrawals.request_reason,
+               withdrawals.processing_mode, withdrawals.lease_token,
+               versions.withdrawal_download_blocked
+        FROM version_withdrawals AS withdrawals
+        INNER JOIN versions ON versions.id = withdrawals.version_id
+        WHERE withdrawals.id = ?
+      `, fixture.withdrawal.withdrawalId);
+      assert.equal(row.status, "pending", fixture.kind);
+      assert.equal(row.handling_mode, "manual_review", fixture.kind);
+      assert.ok(row.request_reason, fixture.kind);
+      assert.equal(row.processing_mode, null, fixture.kind);
+      assert.equal(row.lease_token, null, fixture.kind);
+      assert.equal(row.withdrawal_download_blocked, 1, fixture.kind);
+      assert.notEqual(await env.FILES.head(fixture.target.r2Key), null, fixture.kind);
+    }
+  });
+
+  await check("immediate recovery completes with missing R2 and shares one claim with synchronous finalizer", async () => {
+    await resetIsolation();
+    const missing = await createVersion({ putR2: false });
+    const missingWithdrawal = await createWithdrawal(missing, { handlingMode: "immediate_delete" });
+    const missingSummary = await activeRunnerModule.runActiveDueVersionWithdrawals(env, { now: NOW });
+    assert.equal(missingSummary.immediateRecoverySelectedCount, 1);
+    assert.equal(missingSummary.deletedCount, 1);
+    assert.equal((await first("SELECT status FROM version_withdrawals WHERE id = ?", missingWithdrawal.withdrawalId)).status, "deleted");
+
+    await resetIsolation();
+    const concurrent = await createVersion();
+    const concurrentWithdrawal = await createWithdrawal(concurrent, { handlingMode: "immediate_delete" });
+    const [synchronousResult, activeSummary] = await Promise.all([
+      finalizerModule.finalizeVersionWithdrawal(env, concurrentWithdrawal.withdrawalId, { now: NOW }),
+      activeRunnerModule.runActiveDueVersionWithdrawals(env, { now: NOW })
+    ]);
+    const row = await first(
+      "SELECT status, attempt_count FROM version_withdrawals WHERE id = ?",
+      concurrentWithdrawal.withdrawalId
+    );
+    assert.equal(row.status, "deleted");
+    assert.equal(row.attempt_count, 1);
+    assert.equal(
+      Number(synchronousResult.outcome === "deleted") + activeSummary.deletedCount,
+      1
+    );
+    assert.equal(activeSummary.tombstonedCount, 0);
   });
 
   await check("concurrent finalizers claim a grace withdrawal once", async () => {
@@ -599,7 +767,7 @@ try {
     const changedWithdrawal = await createWithdrawal(changedTarget);
     const isolatedSummary = await activeRunnerModule.runActiveDueVersionWithdrawals(env, {
       now: NOW,
-      async finalizeCandidate(candidateEnv, withdrawalId, now) {
+      async finalizeCandidate(candidateEnv, withdrawalId, now, handlingMode) {
         if (withdrawalId === firstWithdrawal.withdrawalId) {
           throw new Error("injected isolated candidate failure");
         }
@@ -610,7 +778,7 @@ try {
         }
         return finalizerModule.finalizeVersionWithdrawal(candidateEnv, withdrawalId, {
           now,
-          expectedHandlingMode: "grace_auto_delete"
+          expectedHandlingMode: handlingMode
         });
       }
     });

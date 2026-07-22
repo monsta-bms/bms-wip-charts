@@ -12,12 +12,12 @@ type ActiveWithdrawalCandidate = {
   id: string;
   version_id: string;
   status: "pending" | "processing";
+  handling_mode: "grace_auto_delete" | "immediate_delete";
   scheduled_at: string;
 };
 
 export type ActiveWithdrawalCandidateSet = {
   rows: ActiveWithdrawalCandidate[];
-  excludedImmediateCount: number;
   truncated: boolean;
 };
 
@@ -33,7 +33,7 @@ export type WithdrawalActiveSummary = {
   processingCount: number;
   skippedCount: number;
   errorCount: number;
-  excludedImmediateCount: number;
+  immediateRecoverySelectedCount: number;
   tombstonedCount: number;
   truncated: boolean;
   durationMs: number;
@@ -53,7 +53,8 @@ export type WithdrawalActiveOptions = {
   finalizeCandidate?: (
     env: Env,
     withdrawalId: string,
-    now: Date
+    now: Date,
+    handlingMode: ActiveWithdrawalCandidate["handling_mode"]
   ) => Promise<WithdrawalFinalizerResult>;
 };
 
@@ -78,30 +79,25 @@ export async function findActiveWithdrawalCandidates(
   const normalizedLimit = normalizeActiveLimit(limit);
   const nowSql = toSqlTimestamp(now);
   const candidates = await env.DB.prepare(`
-    SELECT id, version_id, status, scheduled_at
+    SELECT id, version_id, status, handling_mode, scheduled_at
     FROM version_withdrawals
     WHERE (
       status = 'pending'
-      AND handling_mode = 'grace_auto_delete'
-      AND scheduled_at <= ?
+      AND (
+        handling_mode = 'immediate_delete'
+        OR (handling_mode = 'grace_auto_delete' AND scheduled_at <= ?)
+      )
     ) OR (
       status = 'processing'
-      AND handling_mode = 'grace_auto_delete'
+      AND handling_mode IN ('grace_auto_delete', 'immediate_delete')
       AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
     )
     ORDER BY scheduled_at ASC, id ASC
     LIMIT ?
   `).bind(nowSql, nowSql, normalizedLimit + 1).all<ActiveWithdrawalCandidate>();
-  const excludedImmediate = await env.DB.prepare(`
-    SELECT COUNT(*) AS excluded_count
-    FROM version_withdrawals
-    WHERE status IN ('pending', 'processing')
-      AND handling_mode = 'immediate_delete'
-  `).first<{ excluded_count: number }>();
   const rows = candidates.results ?? [];
   return {
     rows: rows.slice(0, normalizedLimit),
-    excludedImmediateCount: Number(excludedImmediate?.excluded_count ?? 0),
     truncated: rows.length > normalizedLimit
   };
 }
@@ -152,7 +148,7 @@ async function writeCandidateErrorLog(
         version_id: candidate.version_id,
         status: candidate.status,
         scheduled_at: candidate.scheduled_at,
-        handling_mode: "grace_auto_delete",
+        handling_mode: candidate.handling_mode,
         error_code: code
       }
     );
@@ -195,7 +191,7 @@ export async function writeWithdrawalActiveSummary(
       processing_count: summary.processingCount,
       skipped_count: summary.skippedCount,
       error_count: summary.errorCount,
-      excluded_immediate_count: summary.excludedImmediateCount,
+      immediate_recovery_selected_count: summary.immediateRecoverySelectedCount,
       tombstoned_count: summary.tombstonedCount,
       truncated: summary.truncated,
       duration_ms: summary.durationMs,
@@ -224,10 +220,10 @@ export async function runActiveDueVersionWithdrawals(
 ): Promise<WithdrawalActiveSummary> {
   const durationNow = options.durationNow ?? (() => Date.now());
   const selectCandidates = options.selectCandidates ?? findActiveWithdrawalCandidates;
-  const finalizeCandidate = options.finalizeCandidate ?? ((candidateEnv, withdrawalId, now) => (
+  const finalizeCandidate = options.finalizeCandidate ?? ((candidateEnv, withdrawalId, now, handlingMode) => (
     finalizeVersionWithdrawal(candidateEnv, withdrawalId, {
       now,
-      expectedHandlingMode: "grace_auto_delete"
+      expectedHandlingMode: handlingMode
     })
   ));
   const startedAt = durationNow();
@@ -245,7 +241,7 @@ export async function runActiveDueVersionWithdrawals(
     processingCount: 0,
     skippedCount: 0,
     errorCount: 0,
-    excludedImmediateCount: 0,
+    immediateRecoverySelectedCount: 0,
     tombstonedCount: 0,
     truncated: false,
     durationMs: 0,
@@ -256,11 +252,13 @@ export async function runActiveDueVersionWithdrawals(
   try {
     const candidates = await selectCandidates(env, now, limit);
     summary.selectedCount = candidates.rows.length;
-    summary.excludedImmediateCount = candidates.excludedImmediateCount;
+    summary.immediateRecoverySelectedCount = candidates.rows.filter(
+      (candidate) => candidate.handling_mode === "immediate_delete"
+    ).length;
     summary.truncated = candidates.truncated;
     for (const candidate of candidates.rows) {
       try {
-        const result = await finalizeCandidate(env, candidate.id, now);
+        const result = await finalizeCandidate(env, candidate.id, now, candidate.handling_mode);
         countResult(summary, result);
         if (result.outcome === "tombstoned") {
           console.error("[withdrawal-active] unexpected tombstone result", {

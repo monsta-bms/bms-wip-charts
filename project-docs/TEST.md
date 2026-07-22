@@ -1268,18 +1268,21 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - white/default/dark、390/760/1366px、Pages構文、HTML重複ID、Worker typecheck、Wrangler dry-run、`git diff --check`を確認すること。
 - 16C observe検証後、16Dの隔離検証を完了してから`WITHDRAWAL_CRON_MODE=active`へ切り替える。deploy、push、本番D1/R2/Secretの変更操作を行わず、検査成功後は指定メッセージでローカルコミットだけを作成すること。
 
-## WITHDRAWAL-LIFECYCLE-16D
+## WITHDRAWAL-LIFECYCLE-16D / 16D-R
 
 ### mode・候補・summary
 
 - 未設定、不正値、`ACTIVE`はoffとなり、厳密なoff/observe/activeだけを分岐すること。offはdomain dataとadmin logを変更せず、observeはadmin log以外を変更せず、activeはobserverを同時実行しないこと。
-- active候補はdueなpending graceとlease NULL/期限切れprocessing graceだけで、`scheduled_at ASC, id ASC`、最大20件、`limit + 1`でtruncatedを判定すること。期限前grace、manual review、有効lease、canceled/deleted/tombstonedは候補外であること。
-- pending/processing immediateは処理せず、`excluded_immediate_count`へ含めること。即時申請APIからexpected handling modeを指定しない同期finalizerは引き続きimmediateを物理削除できること。
+- active候補はdueなpending grace、lease NULL/期限切れprocessing grace、未完了のpending immediate、lease NULL/期限切れprocessing immediateで、`scheduled_at ASC, id ASC`、最大20件、`limit + 1`でtruncatedを判定すること。期限前grace、manual review、有効lease、canceled/deleted/tombstonedは候補外であること。
+- immediateは同期申請finalizerを主経路として維持し、activeでは未開始pending、retryable error後または中断後のprocessingだけを回復すること。summaryの`immediate_recovery_selected_count`は、上限内で実際に選択したimmediate件数と一致すること。
 - 0件、deleted、manual review、retryable error、候補個別例外、fatal candidate選択、truncatedの各runでsystem summaryが1件増え、件数、reason、`fatal_error_code`が一致すること。`tombstoned_count`は常に0であること。
 
 ### lease・R2・D1・race
 
 - 同じdue graceを並行finalizeしてもclaimは1回、`attempt_count=1`となること。期限切れleaseは再claimでき、有効leaseは処理しないこと。候補取得後にhandling modeが変わればclaimせずskipすること。
+- pending immediateはactiveでdeletedとなり、R2またはD1のretryable error後はretry delay前に再claimせず、期限到達後のactiveでdeletedへ進むこと。有効lease中のprocessing immediateは処理しないこと。
+- immediate回復前に直接子、collapsed参照、旧delete requestが増えた場合は、R2を削除せずpending/manual review、専用DL停止1へ移ること。R2が既に不存在でもD1物理削除を冪等に完了すること。
+- 同じimmediateを同期finalizerとactiveが並行処理してもclaimは1回、`attempt_count=1`となり、片方だけがdeletedを確定すること。active summaryの`tombstoned_count`は0であること。
 - 依存なしdue graceは譜面とprogressImageを削除し、versionと不要なchart/songを物理削除してwithdrawalをdeletedへ確定すること。R2 objectが最初からない場合も成功し、同じchartに他versionがあればchart/songを残すこと。
 - R2片方失敗では他方の処理結果を保持してretryable processingとなり、retry delay後に不存在objectを正常扱いして残りを削除できること。R2削除後のD1終端失敗も同じ冪等経路で次回deletedへ進めること。
 - claim直後、processing mode保存後、R2削除直前に、直接子・非表示子・collapsed参照・旧delete requestが増えた場合、R2削除0でpending/manual reviewへ移ること。
@@ -1289,7 +1292,7 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 
 ### 隔離・公開回帰・Scheduled
 
-- `node worker/scripts/test-version-withdrawal-active.mjs`でWrangler TestHarnessの隔離D1/R2へ0001～0008を適用し、mode、Workerd scheduled dispatch、4依存、lease、並行claim、R2部分失敗、D1再試行、5段階race、non-retryable、summary、公開範囲を確認すること。
+- `node worker/scripts/test-version-withdrawal-active.mjs`でWrangler TestHarnessの隔離D1/R2へ0001～0008を適用し、mode、Workerd scheduled dispatch、graceの既存回帰、immediate pending回復、R2/D1再試行、有効lease除外、3依存、R2不存在、同期finalizerとの並行claim、5段階race、non-retryable、summary、公開範囲を確認すること。
 - manual reviewは一般version一覧とlifecycle APIへ残り、file APIは404、RC★/RC★★から除外、ADMIN_TOKEN認証済み管理APIで理由を確認できること。取消は専用DL停止だけを解除し、既存`download_blocked=1`を維持すること。
 - 一時persist領域へmigration後、`npx wrangler dev --test-scheduled --local --persist-to <temp>`を起動し、`/__scheduled?cron=0+*+*+*+*`がHTTP 200となり、`withdrawal_cron_active`の0件summaryを保存すること。本番D1/R2へ接続しないこと。
 - 毎日`0 18 * * *`は`r2_cleanup_cron_run`だけを記録し、active summaryを作らないこと。Cron式、Pages、migration、schema、Secretを変更しないこと。

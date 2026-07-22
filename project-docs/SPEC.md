@@ -974,7 +974,7 @@ RC★★変換:
 
 ## WITHDRAWAL-LIFECYCLE-16R 現行取り下げ仕様
 
-この節は16A～16Cの取り下げ分類、pending公開範囲、自動処理方針を上書きする。16Dでは同じhandling mode分類を維持したまま、`WITHDRAWAL_CRON_MODE=active`で期限到達graceだけを実処理する。
+この節は16A～16Cの取り下げ分類、pending公開範囲、自動処理方針を上書きする。16D-Rでは同じhandling mode分類を維持したまま、`WITHDRAWAL_CRON_MODE=active`で期限到達graceと未完了immediateの回復だけを実処理する。
 
 - Workerは申請previewと申請確定の両方で共通分類を使う。投稿から24時間以内（24時間ちょうどを含む）かつ削除阻止依存なしは`immediate_delete`、24時間超過かつ依存なしは`grace_auto_delete`、経過時間を問わず依存ありは`manual_review`とする。
 - 削除阻止依存は、公開状態を問わない全直接子version、`collapsed_by_version_id`参照、旧`delete_requests`参照とする。`allow_append`は分類条件に使わず、Pagesが表示中の子件数だけで確定しない。
@@ -997,19 +997,19 @@ RC★★変換:
 
 申請後のgraceは状態・見出しを「DL停止・自動削除待ち」とし、「ダウンロードを停止しています。YYYY/MM/DD HH:mm以降、申請後の追記や参照がなければ自動削除します。」を表示する。manual reviewは状態・見出しを「DL停止・管理者確認待ち」とし、「ダウンロードを停止しています。申請理由と派生版の状態を管理者が確認します。」を表示する。どちらも取消ボタンを「取り下げ申請を取り消す」とし、「取り消すと、今回の申請によるDL停止を解除します。」を併記する。
 
-## WITHDRAWAL-LIFECYCLE-16D 毎時active
+## WITHDRAWAL-LIFECYCLE-16D / 16D-R 毎時active
 
 - `WITHDRAWAL_CRON_MODE`は厳密な`off/observe/active`だけを受理し、未設定、空文字、大文字、前後空白、その他の値は`off`へ倒す。毎時`0 * * * *`はobserve時にobserverだけ、active時にactive runnerだけを実行し、毎日`0 18 * * *`のR2 cleanupは従来経路だけを実行する。16Dのリポジトリ設定は`active`とし、緊急停止は`off`へ戻してWorkerを再deployする。
-- activeの新規候補は`status='pending' AND handling_mode='grace_auto_delete' AND scheduled_at <= now`、再試行候補は`status='processing' AND handling_mode='grace_auto_delete' AND (lease_expires_at IS NULL OR lease_expires_at <= now)`だけとする。`scheduled_at ASC, id ASC`で`limit + 1`件を取得し、最大20件を処理して21件目で`truncated=true`とする。
-- 期限前grace、manual review、canceled/deleted/tombstoned、有効lease中processingは候補外とする。pending/processingの`immediate_delete`は毎時処理せず、同期API finalizerを維持したうえで`excluded_immediate_count`へ診断件数だけを記録する。
-- active runnerは候補ごとに既存finalizerを呼び、claim時にも`grace_auto_delete`一致を要求する。候補取得後にhandling modeや状態が変わってclaimできない場合はskipし、1候補の例外で後続候補を中断しない。
+- graceの新規候補は`status='pending' AND handling_mode='grace_auto_delete' AND scheduled_at <= now`、再試行候補は`status='processing' AND handling_mode='grace_auto_delete' AND (lease_expires_at IS NULL OR lease_expires_at <= now)`とする。16D-Rでは同期finalizerが完了しなかったimmediateの回復候補として、`status='pending' AND handling_mode='immediate_delete'`、または`status='processing' AND handling_mode='immediate_delete' AND (lease_expires_at IS NULL OR lease_expires_at <= now)`も同じ候補集合へ含める。`scheduled_at ASC, id ASC`で`limit + 1`件を取得し、最大20件を処理して21件目で`truncated=true`とする。
+- immediateの主経路は申請API内の同期finalizerのままとし、activeは同期開始前に残ったpending、retryable error後のprocessing、Worker中断後にleaseが失効したprocessingだけを回復する。期限前grace、manual review、canceled/deleted/tombstoned、有効lease中processingは候補外とする。
+- active runnerは候補ごとに既存finalizerを呼び、claim時にも候補取得時の`grace_auto_delete`または`immediate_delete`との一致を要求する。候補取得後にhandling modeや状態が変わってclaimできない場合はskipし、同期finalizerとの競合も同じleaseで片方だけを処理する。1候補の例外で後続候補を中断しない。
 - finalizerはclaim直後、processing mode保存後、各R2 object削除直前、R2削除後、D1物理DELETE条件内で削除阻止依存を再確認する。R2削除開始前の依存増加はR2を触らず、`pending/manual_review`、`withdrawal_download_blocked=1`、lease/processing mode解除へ移す。既存の申請理由は上書きしない。
 - R2譜面とprogressImageは個別にHEAD/DELETE/HEAD確認し、不存在は冪等成功とする。一部失敗またはD1終端失敗は`processing`のままlease tokenを解放し、retry delay後に再claimできるよう`last_error_code`と`lease_expires_at`を保存する。次回は削除済みobjectを正常な不存在として続行する。
 - R2削除後またはD1 DELETE確定直前に依存が増えた場合は、version行を残して`pending/manual_review`へ終端し、専用DL停止を維持する。`WITHDRAWAL_DEPENDENCY_RACE_AFTER_R2`、処理stage、R2削除件数を安全な個別ログへ記録し、自動墓標化も無限再試行も行わない。
 - version不存在、legacy lifecycle、外部状態競合などのnon-retryableエラーは、削除済みと推測せず`pending/manual_review`へ終端する。version行が存在すれば専用DL停止を1に保ち、存在しなくてもwithdrawal監査行を毎時再claimしない。理由がNULLの場合だけ固定fallback理由を保存する。
 - active通常経路は`processing_mode='delete'`だけを保存し、`finalizeVersionTombstone`、`processing_mode='tombstone'`、`status='tombstoned'`へ到達しない。互換用の型・過去ログ項目はschemaと履歴読取のため残せるが、active summaryの`tombstoned_count > 0`は異常としてerror記録する。
-- 毎回`admin_logs`へ`action='version_withdrawal_finalize'`、`target_type='system'`のsummaryを1件保存する。detailは`operation='withdrawal_cron_active'`、mode、scheduled time、selected/processed/deleted/manual review/processing/skipped/error/excluded immediate/tombstoned件数、truncated、duration、fatal error codeだけとし、0件runも`completed`で記録する。
-- 個別finalizerとactive summaryへ、パスワード、Secret、IP/UA、投稿本文、申請理由全文、不要なR2 key全文を保存しない。Pages、公開HTTP API、D1 schema、migration、Cron式、R2保存形式は16Dで変更しない。
+- 毎回`admin_logs`へ`action='version_withdrawal_finalize'`、`target_type='system'`のsummaryを1件保存する。detailは`operation='withdrawal_cron_active'`、mode、scheduled time、selected/processed/deleted/manual review/processing/skipped/error件数、active候補として実際に選択した`immediate_recovery_selected_count`、tombstoned件数、truncated、duration、fatal error codeだけとし、0件runも`completed`で記録する。
+- 個別finalizerとactive summaryへ、パスワード、Secret、IP/UA、投稿本文、申請理由全文、不要なR2 key全文を保存しない。Pages、公開HTTP API、D1 schema、migration、Cron式、R2保存形式は16D/16D-Rで変更しない。
 
 ## POST-ERROR-UI-9C 投稿フォームのエラー案内
 
