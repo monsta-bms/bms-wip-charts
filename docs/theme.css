@@ -685,6 +685,13 @@ button.progress-map-block.is-barline {
   color: var(--secondary-text);
 }
 
+.download-blocked-control {
+  background: var(--disabled-bg);
+  border-color: var(--line);
+  color: var(--disabled-text);
+  cursor: not-allowed;
+}
+
 .progress-thumbnail-graph,
 .progress-thumbnail-density,
 .progress-thumbnail-strip,

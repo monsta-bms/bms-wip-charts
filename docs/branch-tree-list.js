@@ -671,7 +671,7 @@
       return;
     }
 
-    const existingDownload = actions.querySelector("a[href], .download-disabled");
+    const existingDownload = actions.querySelector(".version-download-control");
     if (!existingDownload) {
       return;
     }
@@ -679,8 +679,9 @@
     const blocked = forceBlocked || isDownloadBlocked(version);
     if (blocked) {
       const disabled = document.createElement("span");
-      disabled.className = "download-disabled download-button download-blocked-control";
-      disabled.title = `download blocked: ${getDownloadBlockReason(version)}`;
+      disabled.className = "version-download-control download-disabled download-button download-blocked-control";
+      disabled.title = "この版はダウンロードできません";
+      disabled.setAttribute("aria-label", `${displayVersionLabel} はダウンロードできません`);
       disabled.textContent = "DL不可";
       existingDownload.replaceWith(disabled);
       return;
@@ -692,8 +693,19 @@
       existingDownload.setAttribute("aria-label", `${displayVersionLabel} をダウンロード`);
     } else {
       existingDownload.classList.add("download-blocked-control");
-      existingDownload.title = "download url is not available";
+      existingDownload.title = "この版はダウンロードできません";
+      existingDownload.setAttribute("aria-label", `${displayVersionLabel} はダウンロードできません`);
     }
+  }
+
+  function enhanceOriginControl(row, displayVersionLabel) {
+    const originLink = row.querySelector(".version-actions .version-origin-link");
+    if (!originLink) {
+      return;
+    }
+
+    originLink.title = "原曲・本体の配布ページを開く";
+    originLink.setAttribute("aria-label", `${displayVersionLabel} の原曲・本体の配布ページを開く（外部サイト）`);
   }
 
   function lockAppendControl(row, title = "完成版に置き換え済みの中間履歴のため追記できません") {
@@ -933,6 +945,7 @@
       progressBlock.insertAdjacentHTML("beforeend", renderProgressBadges(version));
     }
 
+    enhanceOriginControl(row, displayVersionLabel);
     enhanceDownloadControl(row, version, displayVersionLabel, supersededIntermediate);
     ensureManagementControl(row, version, getChartId(options.entry), displayVersionLabel);
     if (lifecycleBlocksAppend(version)) {

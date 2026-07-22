@@ -1355,3 +1355,32 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - `node --check docs/chart-metadata-extract.js`、`docs/app.js`、`docs/branch-append-ui.js`、`docs/post-form-ui.js`、`docs/post-form-error-ui.js`が成功すること。
 - HTML重複ID、`aria-describedby`参照、script順序を検査し、`chart-metadata-extract.js`がPhase 9C共通UIの後、`app.js`の前に読み込まれること。
 - `git diff --check`が成功し、`worker/**`と`worker/wrangler.toml`に差分がなく、`WITHDRAWAL_CRON_MODE=observe`、Cron式が維持されること。
+
+## SONG-AND-CHART-LINKS
+
+### 一覧API
+
+- 隔離D1へ0001～0008を適用し、`GET /api/versions`でorigin URLあり／なしと、通常停止／取り下げ専用停止あり／なしの4表示状態を確認する。DL可はURL encode済み`/api/files/{fileId}`、DL不可は`file.downloadUrl=null`となること。
+- hidden版とprocessing/tombstoned版は公開一覧へ出ず、レスポンスに`r2_key`、R2 object key、`file_id`自体が含まれないこと。
+- pagination、曲名・差分名・作者検索、未完成／完成／没譜面、JST日付範囲が既存条件を維持すること。
+- `POST /api/versions/query`もGETと同じ`originUrl`/`file.downloadUrl`形式を返し、重複ID除去、存在しないお気に入り件数、200件上限を維持すること。
+
+### 版ツリー・コンパクト一覧
+
+- 版ツリーは「曲 / DLまたはDL不可 / 追記 / 投稿管理」の順で、曲URLなしでは曲だけを省略する。取り下げpendingの曲は残し、processing/tombstonedでは操作欄を表示しない。完成版に置換された中間履歴は曲を残してDL不可にする。
+- 同じrowを複数回enhanceしても曲／DLを重複せず、`.version-download-control`だけがDL可否変換の対象となり、曲リンクのhrefとaccessible nameを壊さないこと。
+- コンパクト一覧は7列目「リンク」へ曲＋DL、DLのみ、曲＋DL不可、DL不可のみを表示する。曲名は当サイト詳細、曲は外部URL、DLはローカルWorker APIを開くこと。お気に入り絞り込みも同じ表示にする。
+- `javascript:`, `data:`, `file:`, `blob:`と不正URLは曲リンクにせず、HTML特殊文字を含むタイトル・差分名・URL属性をescapeする。曲リンクは`target=_blank`と`noopener noreferrer`、DL不可は非リンク・フォーカス不可とする。
+
+### 表示・回帰・静的検査
+
+- white/default/darkを390/760/1366pxで確認し、横overflow 0、曲／DLの重なりなし、リンクのhover/focus-visible、DL不可の無効表示、visited色、タッチ高を確認する。
+- `node scripts/test-song-and-chart-links-static.js`と`node worker/scripts/test-version-list-links.mjs`を実行し、HTML重複ID、専用class、外部URL制限、Worker URL制限、R2情報非公開を確認する。
+- `node --check`（app、branch tree、list）、Worker typecheck、Wrangler dry-run、既存metadata parser/static、withdrawal active隔離回帰、`git diff --check`を実行する。migration、schema、`worker/wrangler.toml`、Cron、16D active、D1/R2/Secret、本番環境を変更しない。
+
+### 実施結果（2026-07-22）
+
+- `worker/scripts/test-version-list-links.mjs`は4 check成功。4表示状態、URL encode、hidden/processing除外、R2情報非公開、pagination、検索、状態、日付、お気に入りGET/POST同形、重複除去、未取得件数、200/201件境界を隔離D1で確認した。
+- ローカルPages 8787と隔離D1/R2のWorker 8788を起動し、トップ版ツリー、通常コンパクト一覧、お気に入り1件絞り込みを確認した。曲名は詳細URL、曲は外部URL、DLはWorker URL、DL不可はspanとなり、不正`javascript:` URLとHTML文字列はリンク／要素へ解釈されなかった。
+- white/default/dark × 390/760/1366pxのトップ版ツリーとコンパクト一覧で、横overflow、操作重なり、画面外要素、曲／DL重複はいずれも0。外部属性欠落0、専用DL class欠落0、操作順一致、32px以上の一覧リンク操作高、focus-visible 2px、Console error/warning 0を確認した。
+- Node構文、専用static、metadata parser/static、Worker typecheck、Wrangler dry-run、`git diff --check`が成功した。`worker/scripts/test-version-withdrawal-active.mjs`は18件成功し、16D/16D-R、Cron、R2 cleanupの回帰なしを確認した。

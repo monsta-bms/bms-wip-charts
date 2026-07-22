@@ -35,6 +35,8 @@ type VersionListParams = {
 type VersionListRow = LifecycleProjection & {
   version_id: string;
   chart_id: string;
+  origin_url: string | null;
+  file_id: string;
   version_created_at: string;
   chart_created_at: string;
   chart_updated_at: string;
@@ -435,9 +437,17 @@ function buildCommentPreview(comment: string | null): { commentPreview: string; 
 function mapVersionRow(row: VersionListRow) {
   const comment = buildCommentPreview(row.comment);
   const lifecycleStatus = resolvePublicLifecycleStatus(row);
+  const lifecycleBlocksAccess = lifecycleStatus === "processing" || lifecycleStatus === "tombstoned";
+  const downloadBlocked = row.download_blocked === 1
+    || row.withdrawal_download_blocked === 1
+    || lifecycleBlocksAccess;
   return {
     versionId: row.version_id,
     chartId: row.chart_id,
+    originUrl: row.origin_url,
+    file: {
+      downloadUrl: downloadBlocked ? null : `/api/files/${encodeURIComponent(row.file_id)}`
+    },
     createdAt: row.version_created_at,
     chartCreatedAt: row.chart_created_at,
     chartUpdatedAt: row.chart_updated_at,
@@ -463,7 +473,7 @@ function mapVersionRow(row: VersionListRow) {
     withdrawalRequestedAt: row.lifecycle_requested_at,
     scheduledAt: row.lifecycle_scheduled_at,
     canCancelWithdrawal: lifecycleStatus === "withdrawal_pending" && row.lifecycle_can_cancel === 1,
-    downloadBlocked: row.download_blocked === 1 || row.withdrawal_download_blocked === 1,
+    downloadBlocked,
     branchPath: row.branch_path,
     versionLabel: buildVersionPathLabel(row.branch_path),
     isNew: row.is_new === 1,
@@ -494,6 +504,8 @@ async function selectVersionList(env: Env, params: VersionListParams): Promise<{
     SELECT
       versions.id AS version_id,
       versions.chart_id AS chart_id,
+      versions.origin_url AS origin_url,
+      versions.file_id AS file_id,
       versions.created_at AS version_created_at,
       charts.created_at AS chart_created_at,
       charts.updated_at AS chart_updated_at,

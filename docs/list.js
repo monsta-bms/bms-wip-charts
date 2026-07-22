@@ -67,6 +67,31 @@
       .replace(/'/g, "&#039;");
   }
 
+  function normalizeExternalHttpUrl(value) {
+    try {
+      const url = new URL(String(value || ""));
+      return url.protocol === "http:" || url.protocol === "https:"
+        ? url.toString()
+        : "";
+    } catch {
+      return "";
+    }
+  }
+
+  function buildWorkerDownloadUrl(value) {
+    try {
+      const apiBase = new URL(API_BASE_URL);
+      const url = new URL(String(value || ""), apiBase);
+      return ["http:", "https:"].includes(url.protocol)
+        && url.origin === apiBase.origin
+        && url.pathname.startsWith("/api/files/")
+        ? url.toString()
+        : "";
+    } catch {
+      return "";
+    }
+  }
+
   function normalizeQuery(value) {
     const normalized = String(value ?? "").normalize("NFKC").trim();
     return Array.from(normalized).slice(0, MAX_QUERY_LENGTH).join("");
@@ -393,6 +418,14 @@
     const stateBadges = buildStateBadges(item);
     const versionChartName = formatVersionChartName(chartName);
     const fullLabel = `${fullTitle} / 差分名: ${versionChartName} / 版: ${versionLabel}`;
+    const originHref = normalizeExternalHttpUrl(item.originUrl);
+    const downloadHref = buildWorkerDownloadUrl(item.file?.downloadUrl);
+    const originControl = originHref
+      ? `<a class="compact-link-control compact-origin-link" href="${escapeHtml(originHref)}" target="_blank" rel="noopener noreferrer" title="原曲・本体の配布ページを開く" aria-label="${escapeHtml(`${fullTitle} の原曲・本体の配布ページを開く（外部サイト）`)}">曲</a>`
+      : "";
+    const downloadControl = downloadHref
+      ? `<a class="compact-link-control compact-download-link" href="${escapeHtml(downloadHref)}" aria-label="${escapeHtml(`${fullTitle} / ${versionChartName} / ${versionLabel} をダウンロード`)}">DL</a>`
+      : `<span class="compact-link-control compact-download-disabled" aria-label="${escapeHtml(`${fullTitle} / ${versionChartName} / ${versionLabel} はダウンロードできません`)}">DL不可</span>`;
     const detailUrl = new URL("./index.html", document.baseURI);
     detailUrl.searchParams.set("chartId", String(item.chartId || ""));
     detailUrl.searchParams.set("versionId", String(item.versionId || ""));
@@ -424,6 +457,7 @@
         <div class="compact-author"><span class="compact-field-label">作者</span><span title="${escapeHtml(author)}">${escapeHtml(author)}</span></div>
         <div class="compact-comment"${hasComment ? "" : " aria-hidden=\"true\""}></div>
         <div class="compact-progress"><span class="compact-field-label">進捗</span><span>${escapeHtml(progress)}%</span></div>
+        <div class="compact-links"><span class="compact-field-label">リンク</span>${originControl}${downloadControl}</div>
       </article>
     `;
   }

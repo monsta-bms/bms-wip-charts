@@ -1,4 +1,7 @@
-const API_BASE_URL = "https://bms-wip-charts-worker.monsta3228gsl.workers.dev";
+const PRODUCTION_API_BASE_URL = "https://bms-wip-charts-worker.monsta3228gsl.workers.dev";
+const API_BASE_URL = ["localhost", "127.0.0.1"].includes(window.location.hostname)
+  ? "http://localhost:8788"
+  : PRODUCTION_API_BASE_URL;
 
 const allowedChartExtensions = new Set([".bms", ".bme", ".bml", ".zip"]);
 
@@ -1924,6 +1927,17 @@ function buildDownloadUrl(downloadUrl) {
   return new URL(downloadUrl, API_BASE_URL).toString();
 }
 
+function normalizeExternalHttpUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    return url.protocol === "http:" || url.protocol === "https:"
+      ? url.toString()
+      : "";
+  } catch {
+    return "";
+  }
+}
+
 function getChartEntryId(entry) {
   return String(entry?.chart?.id || entry?.chartId || "");
 }
@@ -2146,11 +2160,16 @@ function renderCharts(data) {
     const rows = versions.map((version) => {
       const difficulty = version.difficulty || "未入力";
       const progress = Number.isFinite(Number(version.progress)) ? Number(version.progress) : 0;
+      const displayVersionLabel = String(version.displayVersion || "ver?.?");
+      const originHref = normalizeExternalHttpUrl(version.originUrl);
       const downloadHref = buildDownloadUrl(version.file?.downloadUrl);
       const rejectedBadge = version.isRejected ? `<span class="rejected-badge">没譜面</span>` : "";
+      const originControl = originHref
+        ? `<a class="version-origin-link" href="${escapeHtml(originHref)}" target="_blank" rel="noopener noreferrer" title="原曲・本体の配布ページを開く" aria-label="${escapeHtml(`${displayVersionLabel} の原曲・本体の配布ページを開く（外部サイト）`)}">曲</a>`
+        : "";
       const downloadControl = downloadHref
-        ? `<a href="${escapeHtml(downloadHref)}">DL</a>`
-        : `<span class="download-disabled">DL不可</span>`;
+        ? `<a class="version-download-control" href="${escapeHtml(downloadHref)}">DL</a>`
+        : `<span class="version-download-control download-disabled">DL不可</span>`;
 
       return `
         <div class="version-row">
@@ -2173,6 +2192,7 @@ function renderCharts(data) {
             <span class="meta-value">${escapeHtml(version.comment || "")}</span>
           </div>
           <div class="version-actions">
+            ${originControl}
             ${downloadControl}
             <button class="secondary" type="button" disabled>追記投稿</button>
           </div>

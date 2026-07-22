@@ -373,6 +373,10 @@ versionレスポンスには以下を含める。
     {
       "versionId": "version_xxx",
       "chartId": "chart_xxx",
+      "originUrl": "https://example.com/song",
+      "file": {
+        "downloadUrl": "/api/files/file_xxx"
+      },
       "createdAt": "2026-07-17 01:02:03",
       "chartCreatedAt": "2026-07-10 00:00:00",
       "chartUpdatedAt": "2026-07-17 01:02:03",
@@ -410,6 +414,8 @@ versionレスポンスには以下を含める。
 
 `chartName`は一覧行の対象version自身の差分名であり、起点差分名とは限らない。`q`の差分名検索も`COALESCE(versions.normalized_chart_name, charts.normalized_chart_name)`を使用する。
 
+`originUrl`は対象version自身の原曲・本体URL snapshotで、未登録時は`null`。`file.downloadUrl`は既存Workerファイル配信APIの相対URLで、`file_id`をURL encodeして生成する。`download_blocked=1`、`withdrawal_download_blocked=1`、またはlifecycleが`processing/tombstoned`なら`null`とする。R2 URL、`r2_key`、`file_id`自体はレスポンスへ公開しない。
+
 `isNew` はchartの初回公開日時から168時間以内かをD1時刻で判定する。追記によってNEW期間は延長しない。COUNTとSELECTは同じ公開・検索・状態条件を使用する。
 
 ### POST /api/versions/query
@@ -435,7 +441,7 @@ request:
 - 非公開または存在しないversionは `items` へ返さず、`unavailableFavoriteCount` に含める。
 - 検索や状態で除外された公開お気に入りは `unavailableFavoriteCount` には含めない。
 - `dateFrom`, `dateTo`の検証・JST境界・`sort`との対応は `GET /api/versions` と同じ。
-- レスポンスのitemとpaginationは `GET /api/versions` と同じ形式。
+- レスポンスのitemとpaginationは `GET /api/versions` と同じ形式で、`originUrl`と`file.downloadUrl`も同じDL可否判定で返す。
 
 主なエラー:
 

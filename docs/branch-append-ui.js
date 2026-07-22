@@ -200,6 +200,19 @@
     return downloadUrl;
   }
 
+  function makeOriginUrl(originUrl) {
+    if (typeof normalizeExternalHttpUrl === "function") {
+      return normalizeExternalHttpUrl(originUrl);
+    }
+
+    try {
+      const url = new URL(String(originUrl || ""));
+      return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : "";
+    } catch {
+      return "";
+    }
+  }
+
   function cloneJson(value) {
     return JSON.parse(JSON.stringify(value));
   }
@@ -1450,11 +1463,16 @@
         const difficulty = version.difficulty || "未入力";
         const progress = Number.isFinite(Number(version.progress)) ? Number(version.progress) : 0;
         const thumbnail = renderProgressThumbnail(version);
+        const displayVersionLabel = String(version.displayVersion || "ver?.?");
+        const originHref = makeOriginUrl(version.originUrl);
         const downloadHref = makeDownloadUrl(version.file?.downloadUrl);
         const rejectedBadge = version.isRejected ? `<span class="rejected-badge">没譜面</span>` : "";
+        const originControl = originHref
+          ? `<a class="version-origin-link" href="${html(originHref)}" target="_blank" rel="noopener noreferrer" title="原曲・本体の配布ページを開く" aria-label="${html(`${displayVersionLabel} の原曲・本体の配布ページを開く（外部サイト）`)}">曲</a>`
+          : "";
         const downloadControl = downloadHref
-          ? `<a href="${html(downloadHref)}">DL</a>`
-          : `<span class="download-disabled">DL不可</span>`;
+          ? `<a class="version-download-control" href="${html(downloadHref)}">DL</a>`
+          : `<span class="version-download-control download-disabled">DL不可</span>`;
 
         return `
           <div class="version-row">
@@ -1480,6 +1498,7 @@
               <span class="meta-value">${html(version.comment || "")}</span>
             </div>
             <div class="version-actions">
+              ${originControl}
               ${downloadControl}
               ${buildAppendControl(entry, version)}
             </div>

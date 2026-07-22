@@ -548,7 +548,7 @@ MVPではサムネイルクリックによる拡大表示は実装しない。�
 `list.html` は大量の公開版を簡潔に確認するページとし、トップの詳細カード一覧とは別のversion単位APIを使用する。
 
 - `GET /api/versions` は公開versionを1件ずつ返す。`charts.is_hidden=0`, `versions.is_hidden=0`, `collapsed_by_completion=0`を共通条件とする。
-- 一覧の通常行は日付、タイトル、難易度、作者、コメント、進捗の6列とする。曲名の下に `[対象version自身の差分名] / 数字パス版ラベル` を表示する。タイトルを主列、進捗を64px固定列として扱う。
+- 一覧の通常行は日付、タイトル、難易度、作者、コメント、進捗、リンクの7列とする。曲名の下に `[対象version自身の差分名] / 数字パス版ラベル` を表示する。タイトルを主列、進捗を64px固定列として扱う。
 - コメントは`versions.comment`をtrimし、連続空白を1個へ畳んだ80 Unicode code pointまでの`commentPreview`だけを返す。80文字超過時だけ`…`を付け、全文・HTML・リンク化は一覧で扱わない。
 - `withdrawn`, `deleteRequested`, `downloadBlocked` は公開状態なら小さい状態ラベルを表示する。管理非表示versionと完成版に置き換えられた中間履歴は表示しない。
 - 検索対象は曲名、サブタイトル、アーティスト、サブアーティスト、対象version自身の差分名、そのversionの作者とする。
@@ -885,9 +885,18 @@ RC★★変換:
 - 追記投稿ではクライアント値を受け取らず、親versionの`origin_url`を新versionへコピーする。分岐後に親の値が将来訂正されても、既存子versionのsnapshotは自動変更しない。
 - URLは前後空白を除去し、絶対`http:`/`https:` URLだけを許可する。認証情報、制御文字、未エンコード空白を拒否し、fragmentを削除、queryを維持した`URL.toString()`結果を保存する。保存上限は2048文字とする。
 - WorkerはURLへfetchせず、DNS、存在、リダイレクト、リンク先内容、安全性、永続性を確認しない。URL全文はconsoleや`post_logs`へ記録しない。
-- `GET /api/charts`はversionごとに`originUrl`を返すが、公開一覧UIにはリンクやURL文字列を追加しない。
+- `GET /api/charts`、`GET /api/versions`、`POST /api/versions/query`はversionごとに`originUrl`を返す。公開画面は有効な`http:`/`https:` URLがある版だけ、URL文字列そのものではなく「曲」リンクを表示する。
 - RC★/RC★★では、MD5重複排除後に採用されたversion自身の有効な`origin_url`だけを`url`として出力する。URLなしでも掲載を継続し、`url_diff`と`md5`の既存仕様は変えない。`org_md5`は実装しない。
 - 既存versionへの追加・訂正・削除、追記フォームでの編集は後続フェーズとする。
+
+## SONG-AND-CHART-LINKS 公開版リンク
+
+- トップ／詳細の版ツリーは操作欄を「曲」「DLまたはDL不可」「追記」「投稿管理」の順にする。「曲」は対象version自身の`originUrl`を新しいタブで開き、`target="_blank" rel="noopener noreferrer"`と外部サイトであることを含むaccessible nameを付ける。URLなし・不正protocolでは表示しない。
+- 曲名リンクは従来どおり当サイトのchart/version詳細を開く。「曲」は原曲・本体の外部ページ、「DL」は当サイトへ投稿された譜面という役割を分離する。
+- DLはWorkerの`/api/files/{encoded file_id}`だけを使用し、Pages originやR2 URLへ直接つながない。`download_blocked`、`withdrawal_download_blocked`、processing/tombstonedでは一覧APIの`file.downloadUrl`を`null`にし、UIはフォーカスできない「DL不可」を表示する。ファイルAPI側の既存判定も維持する。
+- 曲リンクは譜面DL停止と独立して残す。完成版へ置換された中間履歴も「曲 / DL不可」とし、processing/tombstonedの公開データ伏せ状態では既存どおり操作欄全体を空にする。
+- 版ツリーの譜面操作は`.version-download-control`、曲リンクは`.version-origin-link`で識別する。共通enhanceを複数回実行しても曲をDLと誤認せず、リンクを重複させない。
+- コンパクト一覧とお気に入り絞り込みは同じAPI mapperと7列表示を使う。DL相対URLは`API_BASE_URL`を基準にWorker originへ絶対URL化し、曲URLは表示直前にも`http:`/`https:`だけを許可する。
 
 ## WITHDRAWAL-LIFECYCLE-16A 取り下げ申請
 

@@ -240,7 +240,8 @@
     76px
     minmax(110px, 0.65fr)
     minmax(160px, 0.9fr)
-    64px;
+    64px
+    92px;
   column-gap: 12px;
   align-items: center;
 }
@@ -449,6 +450,69 @@
   font-variant-numeric: tabular-nums;
 }
 
+.compact-links {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.compact-link-control {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.compact-origin-link,
+.compact-origin-link:visited {
+  background: var(--surface);
+  border-color: var(--primary);
+  border-style: dashed;
+  color: var(--primary-hover);
+}
+
+.compact-origin-link::after {
+  content: "↗";
+  font-size: 0.68em;
+  margin-left: 0.28em;
+}
+
+.compact-download-link,
+.compact-download-link:visited {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary-hover);
+}
+
+.compact-origin-link:hover,
+.compact-download-link:hover {
+  background: var(--surface-strong);
+  border-style: solid;
+}
+
+.compact-origin-link:focus-visible,
+.compact-download-link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.compact-download-disabled {
+  background: var(--surface-muted);
+  border-color: var(--line);
+  color: var(--disabled-text, var(--muted));
+  cursor: not-allowed;
+}
+
 .compact-list-head > :last-child {
   text-align: center;
 }
@@ -612,7 +676,8 @@
     grid-template-areas:
       "date difficulty"
       "title title"
-      "author progress";
+      "author progress"
+      "links links";
     gap: 7px 14px;
     min-height: 0;
     padding: 12px 10px;
@@ -623,7 +688,8 @@
       "date difficulty"
       "title title"
       "comment comment"
-      "author progress";
+      "author progress"
+      "links links";
   }
 
   .compact-date-cell {
@@ -664,6 +730,11 @@
 
   .compact-progress {
     grid-area: progress;
+  }
+
+  .compact-links {
+    grid-area: links;
+    justify-content: flex-start;
   }
 
   .compact-song-title,
