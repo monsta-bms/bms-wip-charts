@@ -9,7 +9,10 @@ const DEFAULT_DUE_LIMIT = 20;
 type ProcessingMode = "delete" | "tombstone";
 
 export type WithdrawalFinalizerHooks = {
+  afterClaim?: (context: { withdrawalId: string; versionId: string }) => void | Promise<void>;
+  afterProcessingMode?: (context: { withdrawalId: string; versionId: string }) => void | Promise<void>;
   beforeR2Delete?: (context: { withdrawalId: string; versionId: string; kind: R2ObjectKind }) => void | Promise<void>;
+  afterR2Delete?: (context: { withdrawalId: string; versionId: string }) => void | Promise<void>;
   beforeD1Finalize?: (context: { withdrawalId: string; versionId: string; mode: ProcessingMode }) => void | Promise<void>;
 };
 
@@ -17,6 +20,7 @@ export type WithdrawalFinalizerOptions = {
   now?: Date;
   leaseMinutes?: number;
   retryDelayMinutes?: number;
+  expectedHandlingMode?: WithdrawalHandlingMode;
   hooks?: WithdrawalFinalizerHooks;
 };
 
@@ -196,6 +200,7 @@ export async function claimVersionWithdrawal(
   const nowSql = toSqlTimestamp(now);
   const leaseExpiresSql = toSqlTimestamp(addMinutes(now, leaseMinutes));
   const leaseToken = crypto.randomUUID();
+  const expectedHandlingMode = options.expectedHandlingMode ?? null;
   const result = await env.DB.prepare(`
     UPDATE version_withdrawals
     SET
@@ -221,7 +226,18 @@ export async function claimVersionWithdrawal(
           AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
         )
       )
-  `).bind(nowSql, leaseToken, leaseExpiresSql, nowSql, withdrawalId, nowSql, nowSql).run();
+      AND (? IS NULL OR handling_mode = ?)
+  `).bind(
+    nowSql,
+    leaseToken,
+    leaseExpiresSql,
+    nowSql,
+    withdrawalId,
+    nowSql,
+    nowSql,
+    expectedHandlingMode,
+    expectedHandlingMode
+  ).run();
   const row = await selectWithdrawal(env, withdrawalId);
   const claimed = Number(result.meta.changes ?? 0) === 1
     && row?.status === "processing"
@@ -358,6 +374,31 @@ export async function deleteVersionR2Objects(
   for (const object of objects) {
     try {
       await hooks.beforeR2Delete?.({ withdrawalId, versionId, kind: object.kind });
+      const guardedSnapshot = await inspectVersionDeletionDependencies(env, versionId);
+      if (!guardedSnapshot) {
+        throw new FinalizerError(
+          "WITHDRAWAL_VERSION_MISSING",
+          "r2_delete_guard",
+          false,
+          "The processing withdrawal has no version row immediately before R2 cleanup.",
+          { objectCount: objects.length, deletedCount, alreadyMissingCount, failedCount }
+        );
+      }
+      assertNoExternalLifecycleConflict(guardedSnapshot);
+      if (hasDeletionBlockers(guardedSnapshot)) {
+        const cleanupStarted = deletedCount > 0 || alreadyMissingCount > 0;
+        throw new FinalizerError(
+          cleanupStarted
+            ? "WITHDRAWAL_DEPENDENCY_RACE_AFTER_R2"
+            : "WITHDRAWAL_DEPENDENCY_DETECTED_BEFORE_R2",
+          cleanupStarted ? "r2_delete_guard_after_cleanup" : "r2_delete_guard",
+          false,
+          cleanupStarted
+            ? "A deletion dependency appeared after R2 cleanup started."
+            : "A deletion dependency appeared immediately before R2 cleanup.",
+          { objectCount: objects.length, deletedCount, alreadyMissingCount, failedCount }
+        );
+      }
       const existing = await env.FILES.head(object.key);
       if (!existing) {
         alreadyMissingCount += 1;
@@ -368,7 +409,8 @@ export async function deleteVersionR2Objects(
         throw new Error(`R2 object remained after deletion for kind=${object.kind}.`);
       }
       deletedCount += 1;
-    } catch {
+    } catch (error) {
+      if (error instanceof FinalizerError) throw error;
       failedCount += 1;
     }
   }
@@ -411,9 +453,18 @@ async function moveWithdrawalToManualReview(
   env: Env,
   withdrawal: WithdrawalRow,
   leaseToken: string,
-  now: Date
+  now: Date,
+  options: {
+    errorCode?: string | null;
+    fallbackReason?: string;
+    requireVersion?: boolean;
+  } = {}
 ): Promise<WithdrawalFinalizerResult | null> {
   const nowSql = toSqlTimestamp(now);
+  const errorCode = options.errorCode ?? null;
+  const fallbackReason = options.fallbackReason
+    ?? "申請確定後に派生版または参照が追加されたため、管理者確認へ移行しました。";
+  const requireVersion = options.requireVersion ?? true;
   const results = await env.DB.batch([
     env.DB.prepare(`
       UPDATE versions
@@ -431,26 +482,41 @@ async function moveWithdrawalToManualReview(
         handling_mode = 'manual_review',
         request_reason = COALESCE(
           request_reason,
-          '申請確定後に派生版または参照が追加されたため、管理者確認へ移行しました。'
+          ?
         ),
         processing_mode = NULL,
         lease_token = NULL,
         lease_expires_at = NULL,
-        last_error_code = NULL,
+        last_error_code = ?,
         updated_at = ?
       WHERE id = ? AND status = 'processing' AND lease_token = ?
-        AND EXISTS (
+        ${requireVersion ? `AND EXISTS (
           SELECT 1 FROM versions
           WHERE id = ? AND withdrawal_download_blocked = 1
-        )
-    `).bind(nowSql, withdrawal.id, leaseToken, withdrawal.version_id)
+        )` : ""}
+    `).bind(
+      fallbackReason,
+      errorCode,
+      nowSql,
+      withdrawal.id,
+      leaseToken,
+      ...(requireVersion ? [withdrawal.version_id] : [])
+    )
   ]);
-  if (Number(results[0]?.meta.changes ?? 0) !== 1 || Number(results[1]?.meta.changes ?? 0) !== 1) {
+  if (
+    (requireVersion && Number(results[0]?.meta.changes ?? 0) !== 1)
+    || Number(results[1]?.meta.changes ?? 0) !== 1
+  ) {
     return null;
   }
   const row = await selectWithdrawal(env, withdrawal.id);
   if (!row || row.status !== "pending" || row.handling_mode !== "manual_review") return null;
-  return { ...resultFromRow(row), outcome: "manual_review", retryable: false };
+  return {
+    ...resultFromRow(row),
+    outcome: "manual_review",
+    retryable: false,
+    errorCode
+  };
 }
 
 export async function finalizeVersionDeletion(
@@ -583,6 +649,10 @@ export async function finalizeVersionWithdrawal(
   if (!claim.claimed || !claim.row || !claim.leaseToken) {
     const result = resultFromRow(claim.row);
     if (!claim.row) result.withdrawalId = withdrawalId;
+    if (options.expectedHandlingMode) {
+      result.outcome = "not_claimed";
+      result.retryable = false;
+    }
     return result;
   }
 
@@ -590,6 +660,10 @@ export async function finalizeVersionWithdrawal(
   const leaseToken = claim.leaseToken;
   let r2Summary: R2DeleteSummary | undefined;
   try {
+    await options.hooks?.afterClaim?.({
+      withdrawalId: withdrawal.id,
+      versionId: withdrawal.version_id
+    });
     let snapshot = await inspectVersionDeletionDependencies(env, withdrawal.version_id);
     if (!snapshot) {
       throw new FinalizerError(
@@ -619,6 +693,10 @@ export async function finalizeVersionWithdrawal(
     let mode: ProcessingMode = "delete";
     await setProcessingMode(env, withdrawal.id, leaseToken, mode, now);
     withdrawal.processing_mode = mode;
+    await options.hooks?.afterProcessingMode?.({
+      withdrawalId: withdrawal.id,
+      versionId: withdrawal.version_id
+    });
 
     snapshot = await inspectVersionDeletionDependencies(env, withdrawal.version_id);
     if (!snapshot) {
@@ -660,6 +738,10 @@ export async function finalizeVersionWithdrawal(
       }
       throw new FinalizerError("WITHDRAWAL_R2_DELETE_FAILED", "r2_delete", true, errorDetail(error));
     }
+    await options.hooks?.afterR2Delete?.({
+      withdrawalId: withdrawal.id,
+      versionId: withdrawal.version_id
+    });
 
     snapshot = await inspectVersionDeletionDependencies(env, withdrawal.version_id);
     if (!snapshot) {
@@ -728,30 +810,67 @@ export async function finalizeVersionWithdrawal(
     const failure = error instanceof FinalizerError
       ? error
       : new FinalizerError("WITHDRAWAL_D1_FINALIZE_FAILED", "unexpected", true, errorDetail(error));
+    if (!failure.retryable) {
+      let reviewed: WithdrawalFinalizerResult | null = null;
+      try {
+        reviewed = await moveWithdrawalToManualReview(
+          env,
+          withdrawal,
+          leaseToken,
+          now,
+          {
+            errorCode: failure.code,
+            fallbackReason: "自動削除処理で安全に完了できなかったため、管理者確認へ移行しました。",
+            requireVersion: false
+          }
+        );
+      } catch {
+        console.error("[version-withdrawal-finalizer] manual review transition failed", {
+          code: "WITHDRAWAL_REVIEW_TRANSITION_FAILED",
+          withdrawalId: withdrawal.id,
+          versionId: withdrawal.version_id,
+          stage: failure.stage
+        });
+      }
+      if (reviewed) {
+        const reviewedRow = await selectWithdrawal(env, withdrawal.id) ?? withdrawal;
+        await writeFinalizerLog(
+          env,
+          reviewedRow,
+          "error",
+          "manual_review",
+          failure.stage,
+          failure.code,
+          false,
+          r2Summary ?? failure.r2Summary
+        );
+        return reviewed;
+      }
+    }
     const failedRow = await releaseFailedLease(
       env,
       withdrawal,
       leaseToken,
-      failure.code,
+      failure.retryable ? failure.code : "WITHDRAWAL_REVIEW_TRANSITION_FAILED",
       now,
       retryDelayMinutes
     );
     await writeFinalizerLog(
       env,
       failedRow,
-      failure.retryable ? "warning" : "error",
+      "warning",
       "processing",
       failure.stage,
-      failure.code,
-      failure.retryable,
-      r2Summary
+      failure.retryable ? failure.code : "WITHDRAWAL_REVIEW_TRANSITION_FAILED",
+      true,
+      r2Summary ?? failure.r2Summary
     );
     return {
       ...resultFromRow(failedRow),
       outcome: "processing",
       status: "processing",
-      retryable: failure.retryable,
-      errorCode: failure.code
+      retryable: true,
+      errorCode: failure.retryable ? failure.code : "WITHDRAWAL_REVIEW_TRANSITION_FAILED"
     };
   }
 }

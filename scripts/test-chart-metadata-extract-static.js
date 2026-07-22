@@ -45,7 +45,7 @@ assert.match(postFormCss, /min-width: 40px;/);
 assert.match(postFormCss, /metadata-candidate-close:focus-visible/);
 assert.match(postFormCss, /metadata-candidate-close:active/);
 assert.match(postFormCss, /@media \(prefers-reduced-motion: reduce\)/);
-assert.match(wranglerConfig, /WITHDRAWAL_CRON_MODE\s*=\s*"observe"/);
+assert.match(wranglerConfig, /WITHDRAWAL_CRON_MODE\s*=\s*"active"/);
 assert.match(wranglerConfig, /crons\s*=\s*\["0 18 \* \* \*", "0 \* \* \* \*"\]/);
 
 console.log("chart metadata extract static checks: ok");

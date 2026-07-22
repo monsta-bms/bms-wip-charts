@@ -11,7 +11,7 @@ const MAX_OBSERVE_LIMIT = 20;
 const MAX_DIAGNOSTIC_LOGS = 5;
 const OBSERVE_LOG_ACTION = "version_withdrawal_finalize";
 
-export type WithdrawalCronMode = "off" | "observe";
+export type WithdrawalCronMode = "off" | "observe" | "active";
 
 export type WithdrawalCronModeResolution = {
   mode: WithdrawalCronMode;
@@ -102,7 +102,9 @@ function normalizeObserveLimit(value: number | undefined): number {
 
 export function resolveWithdrawalCronMode(value: string | undefined): WithdrawalCronModeResolution {
   if (value === undefined) return { mode: "off", source: "unset" };
-  if (value === "off" || value === "observe") return { mode: value, source: "configured" };
+  if (value === "off" || value === "observe" || value === "active") {
+    return { mode: value, source: "configured" };
+  }
   return { mode: "off", source: "invalid" };
 }
 

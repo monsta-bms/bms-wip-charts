@@ -15,6 +15,7 @@ import {
   observeDueVersionWithdrawals,
   resolveWithdrawalCronMode
 } from "./services/versionWithdrawalObserver";
+import { runActiveDueVersionWithdrawals } from "./services/versionWithdrawalActiveRunner";
 import { enforcePreMultipartPostingProtection } from "./routes/postingProtection";
 import {
   addProgressImagesToChartsResponse,
@@ -286,12 +287,16 @@ export default {
     if (controller.cron === "0 * * * *") {
       const mode = resolveWithdrawalCronMode(env.WITHDRAWAL_CRON_MODE);
       if (mode.source === "invalid") {
-        console.warn("[withdrawal-observer] invalid cron mode; observer remains off", {
+        console.warn("[withdrawal-cron] invalid cron mode; withdrawal cron remains off", {
           code: "WITHDRAWAL_CRON_MODE_INVALID"
         });
       }
       if (mode.mode === "observe") {
         await observeDueVersionWithdrawals(env, {
+          now: new Date(controller.scheduledTime)
+        });
+      } else if (mode.mode === "active") {
+        await runActiveDueVersionWithdrawals(env, {
           now: new Date(controller.scheduledTime)
         });
       }

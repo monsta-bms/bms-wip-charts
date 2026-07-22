@@ -1266,7 +1266,34 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 管理画面でmanual reviewのversion、申請日時、理由、handling mode、依存内訳を確認でき、公開画面には理由を表示しないこと。
 - 4条件すべてで指定された見出し・説明・状態文・確認ボタンを表示し、pendingでは「DL停止・自動削除待ち」または「DL停止・管理者確認待ち」と取消説明を表示すること。
 - white/default/dark、390/760/1366px、Pages構文、HTML重複ID、Worker typecheck、Wrangler dry-run、`git diff --check`を確認すること。
-- `WITHDRAWAL_CRON_MODE=observe`へ切り替え、active、deploy、push、本番D1/R2/Secretの変更操作を行わないこと。検査成功後は指定メッセージでローカルコミットだけを作成すること。
+- 16C observe検証後、16Dの隔離検証を完了してから`WITHDRAWAL_CRON_MODE=active`へ切り替える。deploy、push、本番D1/R2/Secretの変更操作を行わず、検査成功後は指定メッセージでローカルコミットだけを作成すること。
+
+## WITHDRAWAL-LIFECYCLE-16D
+
+### mode・候補・summary
+
+- 未設定、不正値、`ACTIVE`はoffとなり、厳密なoff/observe/activeだけを分岐すること。offはdomain dataとadmin logを変更せず、observeはadmin log以外を変更せず、activeはobserverを同時実行しないこと。
+- active候補はdueなpending graceとlease NULL/期限切れprocessing graceだけで、`scheduled_at ASC, id ASC`、最大20件、`limit + 1`でtruncatedを判定すること。期限前grace、manual review、有効lease、canceled/deleted/tombstonedは候補外であること。
+- pending/processing immediateは処理せず、`excluded_immediate_count`へ含めること。即時申請APIからexpected handling modeを指定しない同期finalizerは引き続きimmediateを物理削除できること。
+- 0件、deleted、manual review、retryable error、候補個別例外、fatal candidate選択、truncatedの各runでsystem summaryが1件増え、件数、reason、`fatal_error_code`が一致すること。`tombstoned_count`は常に0であること。
+
+### lease・R2・D1・race
+
+- 同じdue graceを並行finalizeしてもclaimは1回、`attempt_count=1`となること。期限切れleaseは再claimでき、有効leaseは処理しないこと。候補取得後にhandling modeが変わればclaimせずskipすること。
+- 依存なしdue graceは譜面とprogressImageを削除し、versionと不要なchart/songを物理削除してwithdrawalをdeletedへ確定すること。R2 objectが最初からない場合も成功し、同じchartに他versionがあればchart/songを残すこと。
+- R2片方失敗では他方の処理結果を保持してretryable processingとなり、retry delay後に不存在objectを正常扱いして残りを削除できること。R2削除後のD1終端失敗も同じ冪等経路で次回deletedへ進めること。
+- claim直後、processing mode保存後、R2削除直前に、直接子・非表示子・collapsed参照・旧delete requestが増えた場合、R2削除0でpending/manual reviewへ移ること。
+- R2削除後またはD1 DELETE直前に依存が増えた場合、R2削除済み件数と`WITHDRAWAL_DEPENDENCY_RACE_AFTER_R2`を記録し、versionをpending/manual review、専用DL停止1、lease/processing mode NULLへ安定させること。tombstone化・毎時無限retryをしないこと。
+- legacy/external lifecycle競合とversion不存在はnon-retryable manual reviewへ終端し、version不存在をdeletedと推測しないこと。同じ行を次回activeが再claimせず、attempt countが増えないこと。
+- 候補Aの予期しない例外で候補B以降を止めず、安全な固定codeだけを個別logへ保存すること。ログにパスワード、Secret、IP/UA、投稿本文、申請理由全文、R2 key全文がないこと。
+
+### 隔離・公開回帰・Scheduled
+
+- `node worker/scripts/test-version-withdrawal-active.mjs`でWrangler TestHarnessの隔離D1/R2へ0001～0008を適用し、mode、Workerd scheduled dispatch、4依存、lease、並行claim、R2部分失敗、D1再試行、5段階race、non-retryable、summary、公開範囲を確認すること。
+- manual reviewは一般version一覧とlifecycle APIへ残り、file APIは404、RC★/RC★★から除外、ADMIN_TOKEN認証済み管理APIで理由を確認できること。取消は専用DL停止だけを解除し、既存`download_blocked=1`を維持すること。
+- 一時persist領域へmigration後、`npx wrangler dev --test-scheduled --local --persist-to <temp>`を起動し、`/__scheduled?cron=0+*+*+*+*`がHTTP 200となり、`withdrawal_cron_active`の0件summaryを保存すること。本番D1/R2へ接続しないこと。
+- 毎日`0 18 * * *`は`r2_cleanup_cron_run`だけを記録し、active summaryを作らないこと。Cron式、Pages、migration、schema、Secretを変更しないこと。
+- `npx tsc --noEmit`、`npx wrangler deploy --dry-run`、利用可能な既存テスト、`git diff --check`が成功すること。本番deploy、push、本番D1/R2書換えを行わないこと。
 
 ## POST-ERROR-UI-9C
 
