@@ -1,6 +1,6 @@
 -- Canonical D1 schema for BMS WIP Charts.
--- This file mirrors worker/migrations/0001_initial.sql plus later migrations for Dashboard SQL execution.
--- Production data does not exist yet, but applied D1 databases should use migrations instead of replacing 0001.
+-- This file mirrors the completed structure produced by worker/migrations for
+-- new database setup and Dashboard SQL inspection. Existing databases must use migrations.
 
 PRAGMA foreign_keys = ON;
 
@@ -56,7 +56,12 @@ CREATE TABLE IF NOT EXISTS versions (
   artist TEXT NOT NULL,
   subartist TEXT NOT NULL DEFAULT '',
   md5 TEXT,
+  origin_url TEXT CHECK (
+    origin_url IS NULL OR
+    length(origin_url) BETWEEN 1 AND 2048
+  ),
   is_rejected INTEGER NOT NULL DEFAULT 0 CHECK (is_rejected IN (0, 1)),
+  allow_append INTEGER NOT NULL DEFAULT 1 CHECK (allow_append IN (0, 1)),
   file_id TEXT NOT NULL,
   file_name TEXT NOT NULL,
   file_size INTEGER NOT NULL CHECK (file_size >= 0),
@@ -71,6 +76,7 @@ CREATE TABLE IF NOT EXISTS versions (
   progress_image_created_at TEXT,
   password_hash TEXT NOT NULL,
   download_blocked INTEGER NOT NULL DEFAULT 0 CHECK (download_blocked IN (0, 1)),
+  withdrawal_download_blocked INTEGER NOT NULL DEFAULT 0 CHECK (withdrawal_download_blocked IN (0, 1)),
   download_block_reason TEXT CHECK (
     download_block_reason IS NULL OR download_block_reason IN (
       'superseded_by_completed_descendant',
@@ -88,6 +94,8 @@ CREATE TABLE IF NOT EXISTS versions (
   ),
   collapsed_at TEXT,
   collapsed_by_version_id TEXT,
+  chart_name TEXT,
+  normalized_chart_name TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   completed_at TEXT,
@@ -104,16 +112,6 @@ CREATE TABLE IF NOT EXISTS versions (
   CHECK (
     (download_blocked = 0 AND download_block_reason IS NULL) OR
     (download_blocked = 1 AND download_block_reason IS NOT NULL)
-  ),
-  CHECK (
-    first_note_measure IS NULL OR last_note_measure IS NULL OR last_note_measure >= first_note_measure
-  ),
-  CHECK (
-    target_measure_count IS NULL OR first_note_measure IS NOT NULL
-  ),
-  CHECK (
-    (collapsed_by_completion = 0 AND collapsed_reason IS NULL) OR
-    (collapsed_by_completion = 1 AND collapsed_reason IS NOT NULL)
   ),
   UNIQUE (chart_id, branch_path),
   UNIQUE (file_id),
@@ -178,6 +176,44 @@ CREATE TABLE IF NOT EXISTS admin_logs (
   reason TEXT,
   detail TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS version_withdrawals (
+  id TEXT PRIMARY KEY,
+  version_id TEXT NOT NULL,
+  chart_id TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (
+    status IN ('pending', 'processing', 'canceled', 'deleted', 'tombstoned')
+  ),
+  request_mode TEXT NOT NULL CHECK (request_mode IN ('immediate', 'deferred')),
+  requested_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  scheduled_at TEXT NOT NULL,
+  processing_at TEXT,
+  canceled_at TEXT,
+  resolved_at TEXT,
+  processing_mode TEXT CHECK (
+    processing_mode IS NULL OR processing_mode IN ('delete', 'tombstone')
+  ),
+  lease_token TEXT,
+  lease_expires_at TEXT,
+  attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+  last_error_code TEXT,
+  idempotency_key_hash TEXT NOT NULL UNIQUE,
+  requester_ip_hash TEXT NOT NULL,
+  requester_ua_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  handling_mode TEXT CHECK (
+    handling_mode IS NULL OR handling_mode IN (
+      'immediate_delete',
+      'grace_auto_delete',
+      'manual_review'
+    )
+  ),
+  request_reason TEXT CHECK (
+    request_reason IS NULL OR length(trim(request_reason)) BETWEEN 10 AND 500
+  ),
+  CHECK (scheduled_at >= requested_at)
 );
 
 CREATE INDEX IF NOT EXISTS idx_songs_normalized_identity
@@ -281,3 +317,16 @@ CREATE INDEX IF NOT EXISTS idx_admin_logs_target_created_at
 
 CREATE INDEX IF NOT EXISTS idx_admin_logs_level_created_at
   ON admin_logs (level, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_version_withdrawals_status_schedule
+  ON version_withdrawals (status, scheduled_at, id);
+
+CREATE INDEX IF NOT EXISTS idx_version_withdrawals_version_requested
+  ON version_withdrawals (version_id, requested_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_version_withdrawals_active_version
+  ON version_withdrawals (version_id)
+  WHERE status IN ('pending', 'processing');
+
+CREATE INDEX IF NOT EXISTS idx_version_withdrawals_handling_schedule
+  ON version_withdrawals (status, handling_mode, scheduled_at, id);

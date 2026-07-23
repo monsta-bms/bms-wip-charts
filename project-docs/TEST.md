@@ -1384,3 +1384,9 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - ローカルPages 8787と隔離D1/R2のWorker 8788を起動し、トップ版ツリー、通常コンパクト一覧、お気に入り1件絞り込みを確認した。曲名は詳細URL、曲は外部URL、DLはWorker URL、DL不可はspanとなり、不正`javascript:` URLとHTML文字列はリンク／要素へ解釈されなかった。
 - white/default/dark × 390/760/1366pxのトップ版ツリーとコンパクト一覧で、横overflow、操作重なり、画面外要素、曲／DL重複はいずれも0。外部属性欠落0、専用DL class欠落0、操作順一致、32px以上の一覧リンク操作高、focus-visible 2px、Console error/warning 0を確認した。
 - Node構文、専用static、metadata parser/static、Worker typecheck、Wrangler dry-run、`git diff --check`が成功した。`worker/scripts/test-version-withdrawal-active.mjs`は18件成功し、16D/16D-R、Cron、R2 cleanupの回帰なしを確認した。
+
+## DIFFICULTY-TABLE-VIEW Phase 0 canonical schema同期
+
+- `node scripts/test-canonical-d1-schema.mjs 8`で、Migration 0001～0008適用後と`schema/d1.sql`適用後のuser table、カラム名・型・NOT NULL・DEFAULT・主キー、外部キー、index名・列・unique・partial・並び順が一致すること。
+- `sqlite_master.sql`全文は比較せず、SQLite PRAGMAの構造情報を正規化して比較する。`d1_migrations`、`_cf_KV`、`sqlite_*`は対象外とする。
+- canonical schemaは既存Migrationの最終状態だけを表し、既存D1には引き続きMigrationを適用すること。
