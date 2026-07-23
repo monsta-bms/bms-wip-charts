@@ -9,6 +9,10 @@ import { prepareProgressMap } from "../utils/progressMap";
 import { buildRequestFingerprint } from "../utils/requestFingerprint";
 import { apiError, Env, errorDetail, methodNotAllowed, ok } from "../utils/response";
 import {
+  buildVersionSourceMetadataInsertStatement,
+  prepareVersionSourceMetadata
+} from "../utils/versionSourceMetadata";
+import {
   LifecycleProjection,
   lifecycleProjectionSql,
   publicWithdrawalExclusionSql,
@@ -1500,6 +1504,10 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
     const analysisDetail = input.bmsAnalysis
       ? `bmsAnalysis=ok; playNotes=${input.bmsAnalysis.playNotes}; firstNoteMeasure=${input.bmsAnalysis.firstNoteMeasure ?? "null"}; lastNoteMeasure=${input.bmsAnalysis.lastNoteMeasure ?? "null"}; targetMeasureCount=${input.bmsAnalysis.targetMeasureCount}`
       : `bmsAnalysis=skipped_or_failed; extension=${input.extension}`;
+    const sourceMetadata = prepareVersionSourceMetadata({
+      parsedMetadata: input.parsedMetadata,
+      metadataWarning: input.metadataWarning
+    });
 
     try {
       await env.FILES.put(r2Key, input.fileBytes, {
@@ -1640,6 +1648,12 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
       r2Key,
       input.passwordHash,
       completedAt
+    ));
+
+    statements.push(buildVersionSourceMetadataInsertStatement(
+      env.DB,
+      versionId,
+      sourceMetadata
     ));
 
     statements.push(env.DB.prepare(`

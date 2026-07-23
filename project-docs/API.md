@@ -1474,3 +1474,17 @@ pendingのgrace/manualは通常のchart/version一覧APIへ残り、`handlingMod
 `Authorization: Bearer <ADMIN_TOKEN>`必須の読み取り専用一覧。現在は`handlingMode=manual_review`だけを受け付け、`page`、`pageSize`でページングする。返却項目はwithdrawal/version/chart識別情報、曲名・差分名・版表示、申請日時、申請理由、`handlingMode`、`status`、依存有無と直接子・折り畳み参照・旧削除申請の件数。公開APIから理由や内部依存件数は返さない。管理者の最終削除・墓標化操作は本APIに含めない。
 
 期限到達時の自動処理対象は`status='pending' AND handling_mode='grace_auto_delete' AND scheduled_at<=CURRENT_TIMESTAMP`と、lease期限切れのimmediate/grace processingだけ。依存なしは物理削除、依存ありは`status=pending/handling_mode=manual_review`へ移し、R2・versionを削除しない。manual reviewはpending/processingともclaimしない。
+
+## DIFFICULTY-TABLE-VIEW Phase A API互換
+
+Migration `0009_version_source_metadata.sql`で、初回・追記ファイルから解析した元BMSメタ情報をD1内部へ保存する。Phase Aではこのテーブルを読む公開routeまたは管理routeを追加しない。
+
+次の既存response形式は変更しない。
+
+- `GET /api/charts`
+- `GET /api/versions`
+- `POST /api/versions/query`
+- `/api/difficulty-tables/:tableId/data.json`
+- 初回・追記の投稿成功response
+
+source metadata、解析状態、内部error codeは上記responseへ含めない。バックフィルAPIはPhase Aの対象外とする。

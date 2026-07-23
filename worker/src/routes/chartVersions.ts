@@ -7,6 +7,10 @@ import { hashWithSecret, sha256HexFromBuffer } from "../utils/hash";
 import { hasUsableStoredProgressMap, prepareAppendProgressMap } from "../utils/progressMap";
 import { buildRequestFingerprint } from "../utils/requestFingerprint";
 import { apiError, Env, errorDetail, methodNotAllowed, ok } from "../utils/response";
+import {
+  buildVersionSourceMetadataInsertStatement,
+  prepareVersionSourceMetadata
+} from "../utils/versionSourceMetadata";
 import { appendLifecycleAllowedSql, WithdrawalDbStatus } from "../utils/versionWithdrawal";
 import { buildZipInspectionLogDetail, inspectZipUpload } from "../utils/zipValidation";
 import { findActiveFileBan } from "./bans";
@@ -919,6 +923,10 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
     const analysisDetail = input.bmsAnalysis
       ? `bmsAnalysis=ok; playNotes=${input.bmsAnalysis.playNotes}; firstNoteMeasure=${input.bmsAnalysis.firstNoteMeasure ?? "null"}; lastNoteMeasure=${input.bmsAnalysis.lastNoteMeasure ?? "null"}; targetMeasureCount=${input.bmsAnalysis.targetMeasureCount}`
       : `bmsAnalysis=skipped_or_failed; extension=${input.extension}`;
+    const sourceMetadata = prepareVersionSourceMetadata({
+      parsedMetadata: input.parsedMetadata,
+      metadataWarning: input.metadataWarning
+    });
 
     try {
       await env.FILES.put(r2Key, input.fileBytes, {
@@ -1046,6 +1054,11 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
         completedAt,
         input.parentVersionId,
         chartId
+      ),
+      buildVersionSourceMetadataInsertStatement(
+        env.DB,
+        versionId,
+        sourceMetadata
       ),
       env.DB.prepare(`
         UPDATE charts

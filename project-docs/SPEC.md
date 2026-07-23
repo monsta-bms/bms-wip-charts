@@ -1043,3 +1043,14 @@ RC★★変換:
 - source手入力は120ms debounceで再解析し、IME composition中は停止して`compositionend`で即時再解析する。source手入力はその欄のUndoと一時`/`候補を破棄し、destination手入力は自動復元権を失効させる。内部操作の`input`ではUndoを誤破棄しない。
 - 吹き出し開閉設定だけを`localStorage`の`bms-wip-charts:chart-metadata-extract:v1`へ欄別に保存し、候補、入力値、ファイル、Undoは保存しない。初期値は全欄openとし、JSON破損、SecurityError、quota errorは安全に既定値へ戻す。新しいファイル、ファイル解除、form reset、投稿成功では一時状態だけを破棄し、開閉設定は維持する。
 - Phase 9Cの`aria-invalid`とdanger色は候補表示に流用せず、既存`aria-describedby`へ候補status IDを集合追加する。candidate hostは動的な欄別エラーより前に置き、エラー強調との同時表示を許可する。390/760/1366px、`white/default/dark`、focus-visible、reduced motionへ対応する。
+
+## DIFFICULTY-TABLE-VIEW Phase A 元BMSメタ情報保存
+
+- Migration `0009_version_source_metadata.sql`はversionと1対1の`version_source_metadata`を作る。`version_id`を主キーかつ`versions(id) ON DELETE CASCADE`とし、既存versionへの行はMigration時に作らない。
+- 保存対象はアップロードされたBMS/BME/BML、またはZIP安全検査で選ばれた内部BMSの最終解析結果に含まれる`TITLE`、`SUBTITLE`、`ARTIST`、`SUBARTIST`、文字コードである。初回・追記とも、R2から再読込せず既存の`parsedMetadata`と`metadataWarning`を使う。
+- source文字列はNFKC、小文字化、marker除去、差分名除去、表示用合成を行わない。parser値をそのまま保存し、未定義と空文字だけをNULLにできる。source各値はUnicodeコードポイント4096文字、encodingは64文字を上限とし、超過値を切り詰めない。
+- `metadataWarning`がなければ全source値がNULLでも`status='succeeded' / error_code=NULL`とする。ノーツ・小節・miniViewの`BMS_ANALYSIS_FAILED`だけでは元メタ解析をfailedにしない。
+- `metadataWarning`があれば`status='failed'`、source各値NULLとし、`^[A-Z0-9_]{1,128}$`に一致するwarning codeだけを保存する。不正codeは`SOURCE_METADATA_PARSE_FAILED`へ置換する。sourceまたはencodingの上限超過は`SOURCE_METADATA_VALUE_TOO_LONG`とし、sourceとencodingをNULLにする。warning message/detailは保存しない。
+- 初回・追記のversion INSERTと同じD1 batchへ、対象versionの存在を条件にしたmetadata INSERTを追加する。追記の条件付きversion INSERTはbatch index 0を維持し、親競合時はmetadata行を作らない。metadata解析・保存前検証のfailedは既存投稿の拒否条件に追加しないが、Migration未適用等のD1構成エラーは既存DB失敗処理とR2 cleanupへ送る。
+- 追記metadataは今回アップロードされた子ファイル自身の解析値であり、親metadataをコピーしない。`versions.title/subtitle/artist/subartist`、曲・差分同一判定、投稿response、warning、post_logs、MD5、進捗Map、R2形式は変更しない。
+- `unavailable`は将来のバックフィルで元ファイル不存在等を表す予約状態とし、Phase Aの通常投稿では使用しない。公開chart/version API、難易度表JSON、投稿成功responseへ`version_source_metadata`を追加しない。

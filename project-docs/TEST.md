@@ -1390,3 +1390,27 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - `node scripts/test-canonical-d1-schema.mjs 8`で、Migration 0001～0008適用後と`schema/d1.sql`適用後のuser table、カラム名・型・NOT NULL・DEFAULT・主キー、外部キー、index名・列・unique・partial・並び順が一致すること。
 - `sqlite_master.sql`全文は比較せず、SQLite PRAGMAの構造情報を正規化して比較する。`d1_migrations`、`_cf_KV`、`sqlite_*`は対象外とする。
 - canonical schemaは既存Migrationの最終状態だけを表し、既存D1には引き続きMigrationを適用すること。
+
+## DIFFICULTY-TABLE-VIEW Phase A 元BMSメタ情報保存
+
+### Migration・helper
+
+- `node worker/scripts/test-version-source-metadata.mjs`で、0001～0008後の0009、新規DBへの0001～0009、テーブル・index作成、既存versionを自動backfillしないことを確認する。
+- `status`は`succeeded/failed/unavailable`だけ、succeededは`error_code=NULL`、failed/unavailableは安全な`error_code`必須であること。source 4096/4097文字、encoding 64/65文字の境界を確認する。
+- version削除でmetadataがCASCADEされ、metadata削除からversion削除方向へ影響しないこと。`node scripts/test-canonical-d1-schema.mjs 9`で0001～0009とcanonical schemaのsemantic構造が一致すること。
+- helperは元の全角文字、全角括弧、`obj:`記法を加工せず、空値だけをNULLにすること。Unicodeコードポイント4096文字を保存でき、長すぎる値は切り詰めず`SOURCE_METADATA_VALUE_TOO_LONG`にすること。
+- metadata warningの安全codeを維持し、不正codeは`SOURCE_METADATA_PARSE_FAILED`へ置換する。warning message/detailをmetadata行や追加console logへ保存しないこと。
+
+### 初回・追記・分離
+
+- 単体UTF-8、UTF-8 BOM、CP932、ZIP内部BMSでsource metadataとencodingを保存すること。TITLE/SUBTITLE/ARTIST/SUBARTIST全項目と、SUBTITLE/SUBARTIST欠落時のNULLを確認する。
+- フォームでtitle/artist等を変更してもsourceは元ファイル値、versions側は従来のフォーム値を保つこと。R2 objectとaccepted post_logが従来どおり作られること。
+- 4097文字の元値でもversion投稿は成功しmetadataだけfailedになること。標準block上限超過で小節解析だけが失敗した場合はmetadataをsucceededのままにすること。metadata warningを模したhelper入力でもversionを残してfailed行を保存できること。
+- 単体BMS追記とZIP追記で子ファイル自身のsourceを保存し、親metadataをコピー・更新しないこと。versions側のsubtitle/subartist継承、完成版のprogress/completed_at更新、追記受付停止の拒否を維持すること。
+- 親状態が最終batch直前に変わる競合ではversion INSERTのbatch index 0が0件となり、子metadataも孤立R2も残らないこと。metadata table未適用を模したD1エラーではversion/song/chartをrollbackし、アップロード済みR2 objectをcleanupすること。
+
+### 公開回帰・静的検査
+
+- 公開version一覧へ内部source値やmetadata列を追加しないこと。metadata行追加前後でRC★の既存`data.json` snapshotが同一であること。
+- 曲・DLリンク、CHART-METADATA-EXTRACT、withdrawal active 18件、difficulty table、初回・追記・ZIP parserの既存回帰を実行すること。
+- `npx.cmd tsc --noEmit`、`npx.cmd wrangler deploy --dry-run`、両テストscriptの`node --check`、`git diff --check`を通すこと。`worker/wrangler.toml`、Cron、withdrawal service、`difficultyTables.ts`、`docs/**`、Pages、Secretを変更しないこと。
