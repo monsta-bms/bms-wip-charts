@@ -1054,3 +1054,15 @@ RC★★変換:
 - 初回・追記のversion INSERTと同じD1 batchへ、対象versionの存在を条件にしたmetadata INSERTを追加する。追記の条件付きversion INSERTはbatch index 0を維持し、親競合時はmetadata行を作らない。metadata解析・保存前検証のfailedは既存投稿の拒否条件に追加しないが、Migration未適用等のD1構成エラーは既存DB失敗処理とR2 cleanupへ送る。
 - 追記metadataは今回アップロードされた子ファイル自身の解析値であり、親metadataをコピーしない。`versions.title/subtitle/artist/subartist`、曲・差分同一判定、投稿response、warning、post_logs、MD5、進捗Map、R2形式は変更しない。
 - `unavailable`は将来のバックフィルで元ファイル不存在等を表す予約状態とし、Phase Aの通常投稿では使用しない。公開chart/version API、難易度表JSON、投稿成功responseへ`version_source_metadata`を追加しない。
+
+## DIFFICULTY-TABLE-VIEW Phase B 既存元メタ情報バックフィル
+
+- `POST /api/admin/version-source-metadata/backfill`は`handleAdminRoute()`の既存Bearer認証後だけ実行する。POST/JSON限定で、limitは1～20（初期5）、cursorは160文字以下、`dryRun`初期true、`retryFailed`初期falseとする。dry-runではR2読込・解析だけを行い、metadata、admin_logsを含むD1書込みを0件にする。
+- 対象は公開・非公開・制作状態・取り下げ状態を問わず、D1に物理的に存在する全version。通常はmetadata行なしだけ、`retryFailed=true`では行なしとfailed/unavailableを対象にし、succeededは常に除外する。必要列だけをLEFT JOINで取得し、`versions.id > cursor`、ID昇順、`limit + 1`で分割する。
+- cursorは成功・失敗に関係なく実際に走査した最後のversion IDまで進める。余剰1件がある場合だけ`hasMore=true`。候補0件は`nextAfterVersionId=NULL / hasMore=false`とする。
+- `file_deleted_at`、不明拡張子、保存済みサイズ上限違反はR2 GET前に判定する。単体BMS/BME/BMLはPhase Aと同じ`parseBmsMetadata()`、ZIPは投稿時と同じ`inspectZipUpload()`を使い、ノーツ全解析、進捗Map、miniViewを生成しない。UTF-8/BOM/CP932、source生値、4096文字境界、安全code規則はPhase A helperへ集約し、独自normalize・切り詰めを行わない。
+- バックフィルのR2 binding操作はGETだけ。PUT/DELETE/公開URL生成を禁止する。deleted/missingはunavailable、読込・形式・解析失敗はfailedへ安全な固定codeで分類し、候補単位の例外で後続候補を止めない。
+- 保存はversion存在条件付きINSERT + 条件付きON CONFLICT UPDATEとする。updateはretry指定時のfailed/unavailableだけで、succeededは不変。同時runが同一候補を選んでも一意制約エラーを出さず、先行succeededを上書きしない。解析中に16D等がversionを物理削除した場合は0変更を再確認し、`SOURCE_VERSION_STATE_CHANGED`でskipして孤立行を作らない。0009のON DELETE CASCADEを維持する。
+- responseはrun/request/cursor/集計とversion ID・status・安全code・actionだけを返す。source、encoding、ファイル名、R2 key、URL、hash、token、IP/UAは返さない。予期しない候補例外のconsole errorも固定codeとversion IDだけにする。
+- write runは`admin_logs.action='version_source_metadata_backfill'`のsystem summaryを必ず1件試行する。failed/unavailable診断は最大10件。dry-runはログ0件。admin log失敗は処理結果を失敗に変えず、ログdetailはrun条件・集計・cursor・所要時間と安全codeだけにする。
+- 本Phaseは管理APIと内部metadataだけを追加し、公開API、難易度表JSON/HTML、Pages、Migration、canonical schema、Cron、Queue、withdrawal active、R2 objectを変更しない。本番実行は0009とWorker反映後に、対象件数SELECT、少数dry-run、少数write、cursor巡回、failed再試行の順で別作業として行う。

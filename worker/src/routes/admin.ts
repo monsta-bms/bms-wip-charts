@@ -6,6 +6,7 @@ import {
   listAdminPostLogs
 } from "./bans";
 import { deleteR2CleanupFile, listR2CleanupCandidates } from "./r2Cleanup";
+import { backfillVersionSourceMetadata } from "./versionSourceMetadataBackfill";
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
@@ -1012,6 +1013,17 @@ export async function handleAdminRoute(
 
   if (segments.length === 1 && segments[0] === "version-withdrawals") {
     return listManualWithdrawalRequests(request, env);
+  }
+
+  if (
+    segments.length === 2
+    && segments[0] === "version-source-metadata"
+    && segments[1] === "backfill"
+  ) {
+    if (request.method !== "POST") {
+      return methodNotAllowed(request, env, request.method);
+    }
+    return backfillVersionSourceMetadata(request, env);
   }
 
   if (segments.length === 1 && segments[0] === "post-logs") {

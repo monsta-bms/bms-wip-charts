@@ -3,6 +3,7 @@ const MAX_SOURCE_ENCODING_LENGTH = 64;
 const SAFE_ERROR_CODE_PATTERN = /^[A-Z0-9_]{1,128}$/u;
 const FALLBACK_PARSE_ERROR_CODE = "SOURCE_METADATA_PARSE_FAILED";
 const VALUE_TOO_LONG_ERROR_CODE = "SOURCE_METADATA_VALUE_TOO_LONG";
+const FALLBACK_BACKFILL_ERROR_CODE = "SOURCE_METADATA_BACKFILL_FAILED";
 
 export type VersionSourceMetadataStatus = "succeeded" | "failed" | "unavailable";
 
@@ -27,6 +28,11 @@ export type PreparedVersionSourceMetadata = {
   errorCode: string | null;
 };
 
+export type VersionSourceMetadataFailureStatus = Exclude<
+  VersionSourceMetadataStatus,
+  "succeeded"
+>;
+
 function nullableSourceValue(value: string | null | undefined): string | null {
   return value === undefined || value === null || value === "" ? null : value;
 }
@@ -41,6 +47,23 @@ function isTooLong(value: string | null, maximumLength: number): boolean {
 
 function safeWarningCode(code: string): string {
   return SAFE_ERROR_CODE_PATTERN.test(code) ? code : FALLBACK_PARSE_ERROR_CODE;
+}
+
+export function prepareVersionSourceMetadataFailure(
+  status: VersionSourceMetadataFailureStatus,
+  errorCode: string
+): PreparedVersionSourceMetadata {
+  return {
+    sourceTitle: null,
+    sourceSubtitle: null,
+    sourceArtist: null,
+    sourceSubartist: null,
+    encoding: null,
+    status,
+    errorCode: SAFE_ERROR_CODE_PATTERN.test(errorCode)
+      ? errorCode
+      : FALLBACK_BACKFILL_ERROR_CODE
+  };
 }
 
 export function prepareVersionSourceMetadata(
@@ -130,5 +153,59 @@ export function buildVersionSourceMetadataInsertStatement(
     metadata.status,
     metadata.errorCode,
     versionId
+  );
+}
+
+export function buildVersionSourceMetadataBackfillStatement(
+  database: D1Database,
+  versionId: string,
+  metadata: PreparedVersionSourceMetadata,
+  retryFailed: boolean
+): D1PreparedStatement {
+  return database.prepare(`
+    INSERT INTO version_source_metadata (
+      version_id,
+      source_title,
+      source_subtitle,
+      source_artist,
+      source_subartist,
+      encoding,
+      status,
+      error_code,
+      analyzed_at,
+      created_at,
+      updated_at
+    )
+    SELECT
+      ?, ?, ?, ?, ?, ?, ?, ?,
+      CURRENT_TIMESTAMP,
+      CURRENT_TIMESTAMP,
+      CURRENT_TIMESTAMP
+    WHERE EXISTS (
+      SELECT 1 FROM versions WHERE id = ?
+    )
+    ON CONFLICT(version_id) DO UPDATE SET
+      source_title = excluded.source_title,
+      source_subtitle = excluded.source_subtitle,
+      source_artist = excluded.source_artist,
+      source_subartist = excluded.source_subartist,
+      encoding = excluded.encoding,
+      status = excluded.status,
+      error_code = excluded.error_code,
+      analyzed_at = CURRENT_TIMESTAMP,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE version_source_metadata.status IN ('failed', 'unavailable')
+      AND ? = 1
+  `).bind(
+    versionId,
+    metadata.sourceTitle,
+    metadata.sourceSubtitle,
+    metadata.sourceArtist,
+    metadata.sourceSubartist,
+    metadata.encoding,
+    metadata.status,
+    metadata.errorCode,
+    versionId,
+    retryFailed ? 1 : 0
   );
 }

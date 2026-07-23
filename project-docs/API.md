@@ -1488,3 +1488,35 @@ Migration `0009_version_source_metadata.sql`で、初回・追記ファイルか
 - 初回・追記の投稿成功response
 
 source metadata、解析状態、内部error codeは上記responseへ含めない。バックフィルAPIはPhase Aの対象外とする。
+
+## DIFFICULTY-TABLE-VIEW Phase B 管理バックフィルAPI
+
+### `POST /api/admin/version-source-metadata/backfill`
+
+既存のadmin route共通認証を使う管理者専用API。`Authorization: Bearer <ADMIN_TOKEN>`と`Content-Type: application/json`が必須で、GETは405とする。本文は次の形式。
+
+```json
+{
+  "limit": 5,
+  "afterVersionId": null,
+  "dryRun": true,
+  "retryFailed": false
+}
+```
+
+- `limit`: 整数1～20、省略時5
+- `afterVersionId`: 160文字以下のversion IDまたはNULL、省略時NULL。`versions.id > afterVersionId`の辞書順cursor
+- `dryRun`: boolean、省略時true。trueではmetadata、admin logを含むD1書込みを一切行わない
+- `retryFailed`: boolean、省略時false。trueのときだけ既存`failed` / `unavailable`を候補へ戻す。`succeeded`は常に候補外
+
+候補は公開状態に関係なくD1に存在する全versionから、metadata行なし（retry時はfailed/unavailableも含む）を`versions.id ASC`、`limit + 1`で取得する。レスポンスの`nextAfterVersionId`は今回実際に走査した最後のID、`hasMore`は余剰1件の有無。候補0件ではcursorはNULLになる。
+
+単体BMS/BME/BMLは既存`parseBmsMetadata()`、ZIPは既存`inspectZipUpload()`を使う。R2操作はGETだけで、PUT/DELETEは行わない。`file_deleted_at`ありはGETせず`unavailable/SOURCE_FILE_DELETED`、objectなしは`unavailable/SOURCE_R2_OBJECT_MISSING`、GETまたは本文読込失敗は`failed/SOURCE_FILE_READ_FAILED`、不明拡張子は`failed/SOURCE_FILE_TYPE_UNSUPPORTED`とする。ZIPの既存安全codeは`^[A-Z0-9_]{1,128}$`だけを許可し、それ以外は`SOURCE_ZIP_INSPECTION_FAILED`へ置換する。
+
+実書込みはversion存在を条件にしたINSERTと、`retryFailed=true`かつ既存statusがfailed/unavailableの場合だけのON CONFLICT UPDATEを1 statementで行う。並行実行で先にsucceededが保存された場合は上書きしない。解析中にversionが消えた場合は`action=skipped / errorCode=SOURCE_VERSION_STATE_CHANGED`とし、孤立metadataを作らない。
+
+成功responseは`ok`, `runId`, request値、selected/processed/succeeded/failed/unavailable/skipped/written各件数、`hasMore`, `nextAfterVersionId`, `results`を返す。個別resultは`versionId`, `status`, `errorCode`, `action`だけで、actionは`would_insert`, `would_update`, `inserted`, `updated`, `skipped`。source本文、encoding、R2 key、ファイル名・URL、hash、token、IP、UAは返さない。
+
+`dryRun=false`では`admin_logs.action='version_source_metadata_backfill'`へsystem summaryを1件保存する。個別failed/unavailable診断はversion単位で最大10件。summary detailはrun ID、request条件、各件数、cursor、所要時間だけをsnake_caseで保存する。全件正常は`info/completed`、個別問題ありは`warning/completed_with_errors`、候補SELECT失敗は`error/failed`。ログ失敗はAPI結果を上書きせず、本文・R2 key・ファイル名・URL・token・IP/UAをログへ含めない。
+
+入力不正は400 `INVALID_SOURCE_METADATA_BACKFILL_REQUEST`。候補SELECT等の実行全体失敗は500 `SOURCE_METADATA_BACKFILL_FAILED`を返し、内部例外、SQL、Secretはdetailへ出さない。既存の公開chart/version/難易度表responseは変更しない。

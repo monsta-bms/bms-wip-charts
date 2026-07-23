@@ -1414,3 +1414,21 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 公開version一覧へ内部source値やmetadata列を追加しないこと。metadata行追加前後でRC★の既存`data.json` snapshotが同一であること。
 - 曲・DLリンク、CHART-METADATA-EXTRACT、withdrawal active 18件、difficulty table、初回・追記・ZIP parserの既存回帰を実行すること。
 - `npx.cmd tsc --noEmit`、`npx.cmd wrangler deploy --dry-run`、両テストscriptの`node --check`、`git diff --check`を通すこと。`worker/wrangler.toml`、Cron、withdrawal service、`difficultyTables.ts`、`docs/**`、Pages、Secretを変更しないこと。
+
+## DIFFICULTY-TABLE-VIEW Phase B 既存元メタ情報バックフィル
+
+### 専用隔離テスト
+
+- `node worker/scripts/test-version-source-metadata-backfill.mjs`で必須82項目と性能5項目をWrangler TestHarnessの隔離D1/R2へ対して実行する。ADMIN_TOKEN未設定・Authorizationなし・不正/正常token、POST限定、JSON、limit 1/20と境界外、小数、cursor長、boolean型を確認する。
+- dry-runの単体/ZIP解析、`would_insert/would_update`、metadata書込み0、admin log 0、R2 PUT/DELETE 0、responseへのsource/encoding/R2/file情報非出力を確認する。
+- write runでUTF-8、BOM、CP932、ZIP、source 4項目、encoding、4097文字を確認する。file deleted、R2 missing/get error、壊れた/複数/譜面なしZIP、不明拡張子、parse warningをfailed/unavailableの安全codeへ分類し、1件失敗後も後続を処理する。
+- retryなしでfailed/unavailableを除外し、retryありで再解析・succeeded更新できること。succeededはretryありでも候補外で上書きしないこと。
+- ID昇順、limit+1、cursor、次ページ重複なし、最終ページ、0件、失敗後cursor進行を確認する。同一候補の並行runでmetadataが1行、解析中version削除でstate changed skip、16D相当削除を妨害せず、version削除CASCADEで孤立行がないことを確認する。
+- write summary 1件、dry-run log 0、info/completed、warning/completed_with_errors、fatal error/failed、個別診断最大10件を確認する。ログにR2 key、source本文、ADMIN_TOKEN、URL全文がないことを確認する。
+
+### 性能・回帰・静的検査
+
+- 2026-07-23の最終隔離計測では単体BMS limit 5が約339ms・D1 query 1・R2 GET 5・response 801 bytes、limit 20が約1380ms・query 1・GET 20・2185 bytes、ZIP 5件が約373ms・query 1・GET 5・801 bytes、通常5＋deleted5＋既知unavailable5の混在が約371ms・query 1・GET 5・1359 bytesだった。全ケースR2 PUT/DELETEは0。実行環境で時間は変動するため、件数と操作種別を回帰基準にする。
+- file deletedはGET 0、既知unavailableは通常巡回の候補外でGET 0。候補SELECTは必要列だけ、dry-runは1 queryとする。write runは候補ごとの条件付きupsertと安全ログ分だけD1 writeが増える。
+- Phase A元metadata、初回、追記、ZIP validation、canonical schema 0001～0009、difficulty table JSON、曲・DLリンク、withdrawal active 18件を再実行する。`difficultyTables.ts`、`charts.ts`、`chartVersions.ts`、withdrawal service、`worker/wrangler.toml`、migration、schema、`docs/**`にPhase B差分がないことを確認する。
+- `node --check worker/scripts/test-version-source-metadata-backfill.mjs`、`npx.cmd tsc --noEmit`、`npx.cmd wrangler deploy --dry-run`、`git diff --check`を通す。本番Migration、バックフィル、deploy、push、D1/R2/Secret/Cron/Queue/Pages操作は行わない。
