@@ -1,6 +1,14 @@
 import { sha256Hex } from "../utils/hash";
+import {
+  buildDifficultyTableViewModel,
+  DifficultyTableViewModel
+} from "../utils/difficultyTableDisplay";
 import { normalizeOriginUrl } from "../utils/originUrl";
 import { Env } from "../utils/response";
+import {
+  buildVersionAuthorHistoryMap,
+  selectVersionAuthorHistory
+} from "../utils/versionAuthorHistory";
 import { difficultyTableWithdrawalExclusionSql } from "../utils/versionWithdrawal";
 
 const TABLE_PATH_PREFIX = "/difficulty-tables/";
@@ -48,6 +56,7 @@ type DifficultyClassification = {
 
 type DifficultyTableRow = {
   version_id: string;
+  parent_version_id: string | null;
   branch_path: string;
   author: string;
   difficulty: string | null;
@@ -57,10 +66,24 @@ type DifficultyTableRow = {
   subartist: string;
   md5: string;
   file_id: string;
+  comment: string;
   completed_at: string | null;
   created_at: string;
+  updated_at: string;
   chart_name: string;
   origin_url: string | null;
+  source_title: string | null;
+  source_subtitle: string | null;
+  source_artist: string | null;
+  source_subartist: string | null;
+  source_metadata_encoding: string | null;
+  source_metadata_status: string | null;
+  source_metadata_updated_at: string | null;
+};
+
+type ClassifiedDifficultyTableRow = {
+  row: DifficultyTableRow;
+  classification: DifficultyClassification;
 };
 
 type ParsedDifficultyTablePath = {
@@ -274,6 +297,7 @@ async function selectEligibleRows(env: Env): Promise<DifficultyTableRow[]> {
   const result = await env.DB.prepare(`
     SELECT
       versions.id AS version_id,
+      versions.parent_version_id AS parent_version_id,
       versions.branch_path AS branch_path,
       versions.author AS author,
       versions.difficulty AS difficulty,
@@ -283,12 +307,23 @@ async function selectEligibleRows(env: Env): Promise<DifficultyTableRow[]> {
       versions.subartist AS subartist,
       versions.md5 AS md5,
       versions.file_id AS file_id,
+      versions.comment AS comment,
       versions.completed_at AS completed_at,
       versions.created_at AS created_at,
+      versions.updated_at AS updated_at,
       COALESCE(versions.chart_name, charts.chart_name) AS chart_name,
-      versions.origin_url AS origin_url
+      versions.origin_url AS origin_url,
+      version_source_metadata.source_title AS source_title,
+      version_source_metadata.source_subtitle AS source_subtitle,
+      version_source_metadata.source_artist AS source_artist,
+      version_source_metadata.source_subartist AS source_subartist,
+      version_source_metadata.encoding AS source_metadata_encoding,
+      version_source_metadata.status AS source_metadata_status,
+      version_source_metadata.updated_at AS source_metadata_updated_at
     FROM versions
     INNER JOIN charts ON charts.id = versions.chart_id
+    LEFT JOIN version_source_metadata
+      ON version_source_metadata.version_id = versions.id
     WHERE versions.progress = 100
       AND versions.completed_at IS NOT NULL
       AND COALESCE(versions.is_hidden, 0) = 0
@@ -325,26 +360,58 @@ function deduplicateRowsByMd5(rows: DifficultyTableRow[]): DifficultyTableRow[] 
   return uniqueRows;
 }
 
-function buildTableData(
-  request: Request,
+function selectRowsForTable(
   tableId: DifficultyTableId,
   rows: DifficultyTableRow[]
-): Array<Record<string, string | null>> {
+): ClassifiedDifficultyTableRow[] {
   return deduplicateRowsByMd5(rows).flatMap((row) => {
     const classification = classifyDifficulty(row.difficulty);
-    if (!classification || classification.tableId !== tableId) {
-      return [];
-    }
+    return classification?.tableId === tableId ? [{ row, classification }] : [];
+  });
+}
 
+function buildTableData(
+  request: Request,
+  table: DifficultyTableDefinition,
+  rows: ClassifiedDifficultyTableRow[],
+  authorHistories: Map<string, string[]>
+): Array<Record<string, string | null>> {
+  return rows.map(({ row, classification }) => {
     const versionLabel = buildVersionPathLabel(row.branch_path);
     const originUrl = normalizeOriginUrl(row.origin_url);
-    return [{
+    const normalizedOriginUrl = originUrl.ok ? originUrl.value : null;
+    const viewModel: DifficultyTableViewModel = buildDifficultyTableViewModel({
+      versionId: row.version_id,
+      md5: row.md5.toLowerCase(),
+      level: classification.level,
+      levelLabel: `${table.symbol}${classification.level}`,
+      originalDifficulty: classification.originalDifficulty,
+      storedTitle: row.title,
+      storedSubtitle: row.subtitle,
+      storedArtist: row.artist,
+      storedSubartist: row.subartist,
+      sourceMetadataStatus: row.source_metadata_status,
+      sourceTitle: row.source_title,
+      sourceSubtitle: row.source_subtitle,
+      sourceArtist: row.source_artist,
+      sourceSubartist: row.source_subartist,
+      chartName: row.chart_name,
+      versionLabel,
+      chainAuthors: authorHistories.get(row.version_id) ?? [row.author],
+      postComment: row.comment,
+      originUrl: normalizedOriginUrl,
+      downloadUrl: buildAbsoluteUrl(request, `/api/files/${encodeURIComponent(row.file_id)}`),
+      completedAt: row.completed_at,
+      versionUpdatedAt: row.updated_at,
+      sourceMetadataUpdatedAt: row.source_metadata_updated_at
+    });
+    return {
       md5: row.md5.toLowerCase(),
       level: classification.level,
       title: row.title,
       artist: row.artist,
-      url_diff: buildAbsoluteUrl(request, `/api/files/${encodeURIComponent(row.file_id)}`),
-      ...(originUrl.ok && originUrl.value ? { url: originUrl.value } : {}),
+      url_diff: viewModel.downloadUrl,
+      ...(viewModel.originUrl ? { url: viewModel.originUrl } : {}),
       name_diff: `${row.chart_name} / ${versionLabel}`,
       bms_wip_original_difficulty: classification.originalDifficulty,
       bms_wip_chart_name: row.chart_name,
@@ -352,8 +419,16 @@ function buildTableData(
       bms_wip_author: row.author,
       bms_wip_completed_at: row.completed_at,
       bms_wip_subtitle: row.subtitle,
-      bms_wip_subartist: row.subartist
-    }];
+      bms_wip_subartist: row.subartist,
+      comment: viewModel.comment,
+      bms_wip_display_title: viewModel.displayTitle,
+      bms_wip_display_artist: viewModel.displayArtist,
+      bms_wip_authors: viewModel.authorsText,
+      ...(viewModel.sourceTitle !== null ? { bms_wip_source_title: viewModel.sourceTitle } : {}),
+      ...(viewModel.sourceSubtitle !== null ? { bms_wip_source_subtitle: viewModel.sourceSubtitle } : {}),
+      ...(viewModel.sourceArtist !== null ? { bms_wip_source_artist: viewModel.sourceArtist } : {}),
+      ...(viewModel.sourceSubartist !== null ? { bms_wip_source_subartist: viewModel.sourceSubartist } : {})
+    };
   });
 }
 
@@ -478,7 +553,11 @@ export async function handleDifficultyTableRoute(
 
   try {
     const rows = await selectEligibleRows(env);
-    const data = buildTableData(request, table.id, rows);
+    const selectedRows = selectRowsForTable(table.id, rows);
+    const selectedVersionIds = selectedRows.map(({ row }) => row.version_id);
+    const authorRows = await selectVersionAuthorHistory(env.DB, selectedVersionIds);
+    const authorHistories = buildVersionAuthorHistoryMap(selectedVersionIds, authorRows);
+    const data = buildTableData(request, table, selectedRows, authorHistories);
     return contentResponse(
       request,
       JSON.stringify(data, null, 2),

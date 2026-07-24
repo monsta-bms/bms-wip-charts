@@ -814,9 +814,12 @@ async function runTests() {
     assert.match(schema, /version_source_metadata[\s\S]+ON DELETE CASCADE/u);
     assert.match(migration, /version_source_metadata[\s\S]+ON DELETE CASCADE/u);
   });
-  await check(77, "難易度表JSON routeへmetadataを公開しない", async () => {
+  await check(77, "Phase C難易度表は承認済みsource表示項目だけを公開する", async () => {
     const source = await readFile(resolve(workerRoot, "src/routes/difficultyTables.ts"), "utf8");
-    assert.doesNotMatch(source, /version_source_metadata|source_title|source_artist/u);
+    assert.match(source, /LEFT JOIN version_source_metadata/u);
+    assert.match(source, /bms_wip_source_title/u);
+    assert.match(source, /bms_wip_source_artist/u);
+    assert.doesNotMatch(source, /error_code AS|r2_key AS|password_hash AS|bms_wip_source_metadata_status/u);
   });
   await check(78, "曲・DLリンク回帰テスト入口を維持", async () => {
     const source = await readFile(resolve(workerRoot, "scripts/test-version-list-links.mjs"), "utf8");

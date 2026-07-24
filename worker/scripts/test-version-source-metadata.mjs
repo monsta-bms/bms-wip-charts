@@ -839,7 +839,7 @@ async function testWarningInsertAndPublicRegression() {
     assert.equal((await first("SELECT COUNT(*) AS count FROM versions WHERE id = ?", created.versionId)).count, 1);
   });
 
-  await check("difficulty table JSON is unchanged when internal source metadata changes", async () => {
+  await check("difficulty table legacy fields stay unchanged when source metadata becomes the display source", async () => {
     sequence += 1;
     const suffix = String(sequence);
     const songId = `difficulty_song_${suffix}`;
@@ -891,7 +891,20 @@ async function testWarningInsertAndPublicRegression() {
       "/api/difficulty-tables/rc-star/data.json"
     );
     assert.equal(afterResponse.status, 200);
-    assert.equal(await afterResponse.text(), before);
+    const [beforeItem] = JSON.parse(before);
+    const [afterItem] = await afterResponse.json();
+    const legacyKeys = [
+      "md5", "level", "title", "artist", "url", "url_diff", "name_diff",
+      "bms_wip_original_difficulty", "bms_wip_chart_name", "bms_wip_version",
+      "bms_wip_author", "bms_wip_completed_at", "bms_wip_subtitle", "bms_wip_subartist"
+    ];
+    for (const key of legacyKeys) {
+      assert.deepEqual(afterItem[key], beforeItem[key], `legacy difficulty-table field changed: ${key}`);
+    }
+    assert.equal(afterItem.bms_wip_display_title, "Internal Snapshot Source Snapshot Chart");
+    assert.equal(afterItem.bms_wip_display_artist, "Internal Snapshot Artist");
+    assert.equal(afterItem.bms_wip_source_title, "Internal Snapshot Source");
+    assert.equal(afterItem.bms_wip_source_artist, "Internal Snapshot Artist");
   });
 }
 

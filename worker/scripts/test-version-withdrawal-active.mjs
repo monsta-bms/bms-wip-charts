@@ -16,7 +16,8 @@ const migrationFiles = [
   "0005_version_chart_name.sql",
   "0006_append_policy.sql",
   "0007_version_withdrawals.sql",
-  "0008_withdrawal_handling.sql"
+  "0008_withdrawal_handling.sql",
+  "0009_version_source_metadata.sql"
 ];
 const NOW = new Date("2026-07-22T03:00:00.000Z");
 const PAST_SQL = "2026-07-22 02:00:00";

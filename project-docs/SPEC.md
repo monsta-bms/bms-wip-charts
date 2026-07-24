@@ -1053,7 +1053,7 @@ RC★★変換:
 - `metadataWarning`があれば`status='failed'`、source各値NULLとし、`^[A-Z0-9_]{1,128}$`に一致するwarning codeだけを保存する。不正codeは`SOURCE_METADATA_PARSE_FAILED`へ置換する。sourceまたはencodingの上限超過は`SOURCE_METADATA_VALUE_TOO_LONG`とし、sourceとencodingをNULLにする。warning message/detailは保存しない。
 - 初回・追記のversion INSERTと同じD1 batchへ、対象versionの存在を条件にしたmetadata INSERTを追加する。追記の条件付きversion INSERTはbatch index 0を維持し、親競合時はmetadata行を作らない。metadata解析・保存前検証のfailedは既存投稿の拒否条件に追加しないが、Migration未適用等のD1構成エラーは既存DB失敗処理とR2 cleanupへ送る。
 - 追記metadataは今回アップロードされた子ファイル自身の解析値であり、親metadataをコピーしない。`versions.title/subtitle/artist/subartist`、曲・差分同一判定、投稿response、warning、post_logs、MD5、進捗Map、R2形式は変更しない。
-- `unavailable`は将来のバックフィルで元ファイル不存在等を表す予約状態とし、Phase Aの通常投稿では使用しない。公開chart/version API、難易度表JSON、投稿成功responseへ`version_source_metadata`を追加しない。
+- `unavailable`は将来のバックフィルで元ファイル不存在等を表す予約状態とし、Phase Aの通常投稿では使用しない。Phase A時点では公開chart/version API、難易度表JSON、投稿成功responseへ`version_source_metadata`を追加しない。難易度表での表示利用は後述のPhase Cを現行仕様とする。
 
 ## DIFFICULTY-TABLE-VIEW Phase B 既存元メタ情報バックフィル
 
@@ -1065,4 +1065,15 @@ RC★★変換:
 - 保存はversion存在条件付きINSERT + 条件付きON CONFLICT UPDATEとする。updateはretry指定時のfailed/unavailableだけで、succeededは不変。同時runが同一候補を選んでも一意制約エラーを出さず、先行succeededを上書きしない。解析中に16D等がversionを物理削除した場合は0変更を再確認し、`SOURCE_VERSION_STATE_CHANGED`でskipして孤立行を作らない。0009のON DELETE CASCADEを維持する。
 - responseはrun/request/cursor/集計とversion ID・status・安全code・actionだけを返す。source、encoding、ファイル名、R2 key、URL、hash、token、IP/UAは返さない。予期しない候補例外のconsole errorも固定codeとversion IDだけにする。
 - write runは`admin_logs.action='version_source_metadata_backfill'`のsystem summaryを必ず1件試行する。failed/unavailable診断は最大10件。dry-runはログ0件。admin log失敗は処理結果を失敗に変えず、ログdetailはrun条件・集計・cursor・所要時間と安全codeだけにする。
-- 本Phaseは管理APIと内部metadataだけを追加し、公開API、難易度表JSON/HTML、Pages、Migration、canonical schema、Cron、Queue、withdrawal active、R2 objectを変更しない。本番実行は0009とWorker反映後に、対象件数SELECT、少数dry-run、少数write、cursor巡回、failed再試行の順で別作業として行う。
+- Phase B単体は管理APIと内部metadataだけを追加し、公開API、難易度表JSON/HTML、Pages、Migration、canonical schema、Cron、Queue、withdrawal active、R2 objectを変更しない。本番実行は0009とWorker反映後に、対象件数SELECT、少数dry-run、少数write、cursor巡回、failed再試行の順で別作業として行う。難易度表JSONの後方互換な拡張は後述のPhase Cを現行仕様とする。
+
+## DIFFICULTY-TABLE-VIEW Phase C 難易度表データ・表示用ViewModel
+
+- 掲載対象、MD5重複排除、並び順、`classifyDifficulty()`によるRC★/RC★★変換はDIFFICULTY-TABLE-01から変更しない。対象SELECTへversionの親ID・comment・updated_atと元metadataを`LEFT JOIN`で追加するが、metadata行なし、failed、unavailableを除外条件にしない。
+- 元metadataは`status='succeeded'`の場合だけ表示値へ優先採用し、欠けた項目はversionのtitle/subtitle/artist/subartistへ項目単位でfallbackする。metadata行なし、failed、unavailable、`SOURCE_FILE_DELETED`は全項目をversion保存値へfallbackし、内部status/error/encodingを公開しない。source値とversion値は更新・正規化しない。
+- 表示用タイトルはTITLE、SUBTITLE、差分名の順に、各表示用コピーだけtrimと連続空白・改行の単一空白化を行って結合する。TITLE/SUBTITLEのNFKC＋空白正規化後の完全一致は1回にし、末尾の`[]`, `()`, `（ ）`, `- -`, `-- --`, `ー ー`が差分名と同等なら差分名を再追加しない。一般単語の部分一致では省略しない。
+- 表示用アーティストはARTISTとSUBARTISTを` / `で結合し、NFKC＋空白正規化後の完全一致だけを1回にする。単語境界の`obj`（`:：.．;；@`または空白）と`note/notes/chart/charter`（`:：;；`）をASCII大文字小文字を区別せずmarkerとして扱い、marker部分と直前の不要な`/・,，`を表示用コピーから除く。空markerは作者へ追加しない。
+- 作者履歴は選出version ID配列を`json_each(?)`へbindする1回の再帰CTEで取得し、各versionのルート親から現在版へ並べる。親の公開・collapsed状態では絞り込まず、欠落親では取得済み部分を使い、visitedで循環を止め、最大64版とする。作者はtrim後の完全一致だけを除外し、大文字小文字・全半角は区別し、`A & B`を分割しない。履歴作者の後へmarker作者を同じ完全一致規則で追加する。対象0件では作者queryを省略し、通常は対象SELECTと作者CTEの固定2 queryでN+1を行わない。
+- ViewModelは変換後level、`RC★/RC★★`付きlevelLabel、元difficulty、保存title/artist、表示title/artist、採用可能なsource 4項目、差分名、版ラベル、authors配列と全角読点結合、合成comment、曲URL、Worker file URL、completed_at、version/metadataの最大updated_at候補を未escape文字列で保持する。HTML escapeはPhase Dの責任とする。
+- `comment`はプレーンテキストの`元難易度：{元difficulty}`を必ず先頭にし、投稿コメントがあれば改行して続ける。投稿コメント内の改行を維持し、行末空白と末尾空行だけを整理する。HTMLを解釈せず、本文をログへ出さない。
+- data JSONの標準項目と既存`bms_wip_*`は値・意味を変更しない。`comment`, `bms_wip_display_title`, `bms_wip_display_artist`, `bms_wip_authors`を常時追加し、succeeded metadataの非空sourceだけ`bms_wip_source_title/subtitle/artist/subartist`を追加する。metadata status/error/encoding、R2 key、password hash、BMS-IR URLは追加しない。曲URLは既存`normalizeOriginUrl()`、DL URLは既存Worker `/api/files/{encoded file_id}`を使い、R2操作を行わない。

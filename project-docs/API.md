@@ -1298,12 +1298,26 @@ dataは譜面objectの配列を返す。対象なしはHTTP 200の`[]`。
     "bms_wip_author": "差分作者",
     "bms_wip_completed_at": "2026-07-12T00:00:00.000Z",
     "bms_wip_subtitle": "サブタイトル",
-    "bms_wip_subartist": "サブアーティスト"
+    "bms_wip_subartist": "サブアーティスト",
+    "comment": "元難易度：st9\n配置を調整しました。",
+    "bms_wip_display_title": "元曲名 サブタイトル 差分名",
+    "bms_wip_display_artist": "元アーティスト / 元サブアーティスト",
+    "bms_wip_authors": "初版作者、差分作者、obj作者",
+    "bms_wip_source_title": "元曲名",
+    "bms_wip_source_subtitle": "サブタイトル",
+    "bms_wip_source_artist": "元アーティスト",
+    "bms_wip_source_subartist": "元サブアーティスト / obj:obj作者"
   }
 ]
 ```
 
-`url`は、MD5重複排除後に採用されたversion自身に有効な`origin_url`がある場合だけ出力し、未登録時はキー自体を省略する。`name_diff`と`bms_wip_chart_name`は採用version自身の`chart_name`を使用し、NULLの既存行だけ`charts.chart_name`へfallbackする。`url_diff`は常に従来どおり出力する。`org_md5`と外側ZIPのSHA-256は出力しない。header/取込HTMLは`Cache-Control: public, max-age=3600, must-revalidate`、dataは`public, max-age=60, must-revalidate`とし、すべてETagと`If-None-Match`による304応答に対応する。エラー応答は`Cache-Control: no-store`とする。
+`md5`, `level`, `title`, `artist`, `url`, `url_diff`, `name_diff`の意味と、既存`bms_wip_original_difficulty`, `bms_wip_chart_name`, `bms_wip_version`, `bms_wip_author`, `bms_wip_completed_at`, `bms_wip_subtitle`, `bms_wip_subartist`の値は変更しない。特に`title`と`artist`は採用versionの保存値であり、表示用合成値へ置換しない。
+
+`comment`は`元難易度：{bms_wip_original_difficulty}`を必ず先頭にし、保存済み投稿コメントがあれば改行して続ける。`bms_wip_display_title`は表示用のTITLE・SUBTITLE・差分名、`bms_wip_display_artist`はmarkerを除いたARTIST・SUBARTIST、`bms_wip_authors`は親版から現在版までの作者と`obj`等のmarker作者を全角読点で結合した値である。
+
+`version_source_metadata.status='succeeded'`の場合だけ、存在する元値を表示合成へ優先使用し、非空の`bms_wip_source_title`, `bms_wip_source_subtitle`, `bms_wip_source_artist`, `bms_wip_source_subartist`を追加する。metadata行なし、`failed`、`unavailable`（`SOURCE_FILE_DELETED`を含む）はversions側の保存値へfallbackし、metadata status、error code、encodingを公開しない。BMS-IR URLもdataへ追加せず、将来のHTML側が既存`md5`から組み立てる。
+
+`url`は、MD5重複排除後に採用されたversion自身に有効な`origin_url`がある場合だけ出力し、未登録時はキー自体を省略する。`name_diff`と`bms_wip_chart_name`は採用version自身の`chart_name`を使用し、NULLの既存行だけ`charts.chart_name`へfallbackする。`url_diff`は常に従来どおり出力する。`org_md5`、R2 key、外側ZIPのSHA-256は出力しない。header/取込HTMLは`Cache-Control: public, max-age=3600, must-revalidate`、dataは`public, max-age=60, must-revalidate`とし、すべてETagと`If-None-Match`による304応答に対応する。エラー応答は`Cache-Control: no-store`とする。
 
 ## WITHDRAWAL-LIFECYCLE-16A
 
@@ -1477,7 +1491,7 @@ pendingのgrace/manualは通常のchart/version一覧APIへ残り、`handlingMod
 
 ## DIFFICULTY-TABLE-VIEW Phase A API互換
 
-Migration `0009_version_source_metadata.sql`で、初回・追記ファイルから解析した元BMSメタ情報をD1内部へ保存する。Phase Aではこのテーブルを読む公開routeまたは管理routeを追加しない。
+Migration `0009_version_source_metadata.sql`で、初回・追記ファイルから解析した元BMSメタ情報をD1内部へ保存する。Phase A時点ではこのテーブルを読む公開routeまたは管理routeを追加しない。難易度表での表示利用は、前述の公開BMS難易度表に記載したPhase C仕様を現行とする。
 
 次の既存response形式は変更しない。
 
@@ -1487,7 +1501,7 @@ Migration `0009_version_source_metadata.sql`で、初回・追記ファイルか
 - `/api/difficulty-tables/:tableId/data.json`
 - 初回・追記の投稿成功response
 
-source metadata、解析状態、内部error codeは上記responseへ含めない。バックフィルAPIはPhase Aの対象外とする。
+Phase A時点ではsource metadata、解析状態、内部error codeを上記responseへ含めない。Phase Cでもchart/version/投稿responseは不変で、難易度表dataだけがsucceeded sourceの値と表示用項目を後方互換に追加する。metadata status/error/encodingは引き続き非公開。バックフィルAPIはPhase Aの対象外とする。
 
 ## DIFFICULTY-TABLE-VIEW Phase B 管理バックフィルAPI
 
@@ -1519,4 +1533,4 @@ source metadata、解析状態、内部error codeは上記responseへ含めな�
 
 `dryRun=false`では`admin_logs.action='version_source_metadata_backfill'`へsystem summaryを1件保存する。個別failed/unavailable診断はversion単位で最大10件。summary detailはrun ID、request条件、各件数、cursor、所要時間だけをsnake_caseで保存する。全件正常は`info/completed`、個別問題ありは`warning/completed_with_errors`、候補SELECT失敗は`error/failed`。ログ失敗はAPI結果を上書きせず、本文・R2 key・ファイル名・URL・token・IP/UAをログへ含めない。
 
-入力不正は400 `INVALID_SOURCE_METADATA_BACKFILL_REQUEST`。候補SELECT等の実行全体失敗は500 `SOURCE_METADATA_BACKFILL_FAILED`を返し、内部例外、SQL、Secretはdetailへ出さない。既存の公開chart/version/難易度表responseは変更しない。
+入力不正は400 `INVALID_SOURCE_METADATA_BACKFILL_REQUEST`。候補SELECT等の実行全体失敗は500 `SOURCE_METADATA_BACKFILL_FAILED`を返し、内部例外、SQL、Secretはdetailへ出さない。Phase B単体では既存の公開chart/version/難易度表responseを変更しない。難易度表dataの後方互換な拡張はPhase C仕様を現行とする。

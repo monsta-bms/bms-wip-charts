@@ -1411,7 +1411,7 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 
 ### 公開回帰・静的検査
 
-- 公開version一覧へ内部source値やmetadata列を追加しないこと。metadata行追加前後でRC★の既存`data.json` snapshotが同一であること。
+- 公開version一覧へ内部source値やmetadata列を追加しないこと。Phase C以降のRC★/RC★★ではmetadata行追加前後も標準項目と既存`bms_wip_*`が同一で、表示用新規項目だけがsucceeded sourceを反映すること。
 - 曲・DLリンク、CHART-METADATA-EXTRACT、withdrawal active 18件、difficulty table、初回・追記・ZIP parserの既存回帰を実行すること。
 - `npx.cmd tsc --noEmit`、`npx.cmd wrangler deploy --dry-run`、両テストscriptの`node --check`、`git diff --check`を通すこと。`worker/wrangler.toml`、Cron、withdrawal service、`difficultyTables.ts`、`docs/**`、Pages、Secretを変更しないこと。
 
@@ -1432,3 +1432,22 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - file deletedはGET 0、既知unavailableは通常巡回の候補外でGET 0。候補SELECTは必要列だけ、dry-runは1 queryとする。write runは候補ごとの条件付きupsertと安全ログ分だけD1 writeが増える。
 - Phase A元metadata、初回、追記、ZIP validation、canonical schema 0001～0009、difficulty table JSON、曲・DLリンク、withdrawal active 18件を再実行する。`difficultyTables.ts`、`charts.ts`、`chartVersions.ts`、withdrawal service、`worker/wrangler.toml`、migration、schema、`docs/**`にPhase B差分がないことを確認する。
 - `node --check worker/scripts/test-version-source-metadata-backfill.mjs`、`npx.cmd tsc --noEmit`、`npx.cmd wrangler deploy --dry-run`、`git diff --check`を通す。本番Migration、バックフィル、deploy、push、D1/R2/Secret/Cron/Queue/Pages操作は行わない。
+
+## DIFFICULTY-TABLE-VIEW Phase C 難易度表データ・表示用ViewModel
+
+### 専用隔離テスト
+
+- `node worker/scripts/test-difficulty-table-view-model.mjs`で、TITLE/SUBTITLE/差分名の空値・改行・連続空白・NFKC完全一致・全角括弧・6種の囲み重複回避・一般単語の部分一致を確認する。
+- ARTIST/SUBARTIST結合、原曲作者間の`/`保持、`obj/note/notes/chart/charter` marker、単語内部と`chart maker`の誤検出なし、空marker、直前separator除去、表示作者重複を確認する。
+- 作者履歴はhidden親、collapsed親、同一作者、欠落親、循環、深さ64/65、`A & B`非分割、大文字小文字・全半角の別作者、marker重複・追加を確認する。選出0件では作者query 0件、通常は対象SELECT＋一括再帰CTEの2 queryとする。
+- succeeded全項目・一部NULL、metadata行なし、failed、unavailable、`SOURCE_FILE_DELETED`、sourceとversionの相違を確認する。source D1値が表示生成前後で不変で、status/error/encodingが公開JSONにないことを確認する。
+- コメントなし、短文、改行、HTMLタグ、引用符、絵文字、長文、変換後と同じ元難易度、sl、st、★、★★を確認する。HTMLを解釈せず、末尾空白・空行だけを整理する。
+- Phase C前相当の選定SQLと掲載MD5集合、RC★件数、RC★★件数、MD5重複除外、withdrawal/hidden/collapsed/DL停止除外、並び順を比較する。標準7項目と既存`bms_wip_*`をsnapshot比較し、新規項目以外が完全一致することを確認する。
+
+### 2026-07-24隔離結果・性能
+
+- 専用20 check成功。対象SELECTは8行、作者祖先は8行、data JSONは3226 bytes、実行約123msだった。実行環境で時間は変動するため、D1 query 2、R2 GET/PUT/DELETE 0、N+1なしを回帰基準にする。
+- succeeded sourceから表示title/artist/source 4項目、親チェーン＋markerから`bms_wip_authors`、元difficulty＋投稿commentを生成できた。failed/unavailable/metadataなしはversions値へfallbackし、`SOURCE_FILE_DELETED`等の内部codeを返さなかった。
+- `url`は既存origin validator、`url_diff`はWorker file APIのまま、BMS-IR URL、R2 key、password hash、metadata status/error/encodingは追加されないことを確認した。
+- Phase A metadata、Phase B backfill、canonical schema 0001～0009、difficulty classification/JSON、metadata parser/static、曲・DLリンク、withdrawal active 18件を再実行する。Worker typecheck、Wrangler dry-run、専用scriptの`node --check`、`git diff --check`を通す。
+- Migration、schema、Pages/`docs/**`、`worker/wrangler.toml`、Cron、withdrawal service、Secret、本番D1/R2を変更しない。
