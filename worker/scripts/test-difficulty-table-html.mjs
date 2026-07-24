@@ -86,7 +86,7 @@ function buildBrowserFixture(theme) {
     request,
     table: starTable,
     theme: difficultyTableHtml.getDifficultyTableHtmlTheme(request),
-    models: [makeModel(1), makeModel(2)]
+    models: [makeModel(1), makeModel(3), makeModel(2)]
   });
 }
 
@@ -483,20 +483,20 @@ async function runTests(fixtures) {
     assert.match(starBody, /href="\/difficulty-tables\/rc-double-star\?theme=default"/u);
     assert.match(starBody, /href="\/difficulty-tables\/rc-star\?theme=default" aria-current="page"/u);
   });
-  await check("24 theme switch preserves the table and marks current", () => {
-    assert.match(starBody, /href="\/difficulty-tables\/rc-star\?theme=white"/u);
-    assert.match(starBody, /href="\/difficulty-tables\/rc-star\?theme=default" aria-current="true"/u);
-    assert.match(starBody, /href="\/difficulty-tables\/rc-star\?theme=dark"/u);
+  await check("24 theme UI is absent while theme query support remains", () => {
+    assert.ok(!starBody.includes('aria-label="表示テーマの切替"'));
+    assert.ok(!starBody.includes('href="/difficulty-tables/rc-star?theme=white"'));
+    assert.ok(!starBody.includes('href="/difficulty-tables/rc-star?theme=dark"'));
   });
   await check("25 level sections follow header level order", () => {
-    const level1 = starBody.indexOf('id="level-1"');
-    const level2 = starBody.indexOf('id="level-2"');
-    const level3 = starBody.indexOf('id="level-3"');
+    const level1 = starBody.indexOf('id="level-1-heading"');
+    const level2 = starBody.indexOf('id="level-2-heading"');
+    const level3 = starBody.indexOf('id="level-3-heading"');
     assert.ok(level1 >= 0 && level1 < level2 && level2 < level3);
   });
   await check("26 zero-count levels are omitted", () => {
-    assert.ok(!starBody.includes('id="level-0"'));
-    assert.ok(!starBody.includes('id="level-4"'));
+    assert.ok(!starBody.includes('id="level-0-heading"'));
+    assert.ok(!starBody.includes('id="level-4-heading"'));
   });
   await check("27 each rendered level has its own count", () => {
     assert.ok(starBody.includes("RC★1（1譜面）"));
@@ -549,7 +549,7 @@ async function runTests(fixtures) {
     assert.match(starBody, /href="https:\/\/example\.com\/original\?download&#61;1" target="_blank" rel="noopener noreferrer"[^>]*>曲<\/a>/u);
   });
   await check("36 missing origin is rendered as non-link", () => {
-    const fallbackRow = starBody.match(/<tr role="row">[\s\S]*?Unavailable Stored[\s\S]*?<\/tr>/u)?.[0] ?? "";
+    const fallbackRow = starBody.match(/<tr class="chart-row" role="row">[\s\S]*?Unavailable Stored[\s\S]*?<\/tr>/u)?.[0] ?? "";
     assert.ok(fallbackRow.includes('aria-label="情報なし">—</span>'));
     assert.ok(!fallbackRow.includes(">曲</a>"));
   });
@@ -579,29 +579,29 @@ async function runTests(fixtures) {
   });
 
   await check("43 original difficulty is always visible", () => {
-    assert.ok(starBody.includes("元難易度：★1"));
-    assert.ok(starBody.includes("元難易度：★2"));
+    assert.ok(starBody.includes("元: ★1"));
+    assert.ok(starBody.includes("元: ★2"));
   });
   await check("44 no post comment means no details in that row", () => {
-    const fallbackRow = starBody.match(/<tr role="row">[\s\S]*?Unavailable Stored[\s\S]*?<\/tr>/u)?.[0] ?? "";
+    const fallbackRow = starBody.match(/<tr class="chart-row" role="row">[\s\S]*?Unavailable Stored[\s\S]*?<\/tr>/u)?.[0] ?? "";
     assert.ok(!fallbackRow.includes("<details"));
   });
   await check("45 post comment adds native details", () => {
-    assert.match(starBody, /<details class="comment-details"><summary>コメントを見る<\/summary>/u);
+    assert.match(starBody, /<details class="row-comment"><summary aria-label="コメントを見る">💬<\/summary>/u);
   });
   await check("46 details uses native keyboard-operable summary without inline handlers", () => {
-    assert.match(starBody, /<details[^>]*><summary>コメントを見る<\/summary>/u);
+    assert.match(starBody, /<details[^>]*><summary aria-label="コメントを見る">💬<\/summary>/u);
     assert.ok(!starBody.includes("onclick="));
   });
   await check("47 comment newlines are preserved structurally", () => {
     assert.ok(starBody.includes("line 1\nline 2 🎵"));
-    assert.match(starBody, /\.comment-text[\s\S]*white-space: pre-wrap/u);
+    assert.match(starBody, /\.comment-body[\s\S]*white-space: pre-wrap/u);
   });
   await check("48 HTML tags in comments remain escaped text", () => {
     assert.ok(starBody.includes("&lt;/summary&gt;&lt;script&gt;alert(5)&lt;/script&gt;"));
   });
   await check("49 long comments have bounded wrapping CSS", () => {
-    assert.match(starBody, /\.comment-text[\s\S]*overflow-wrap: anywhere/u);
+    assert.match(starBody, /\.comment-body[\s\S]*overflow-wrap: anywhere/u);
   });
   await check("50 emoji remains intact", () => {
     assert.ok(starBody.includes("🎵"));
@@ -639,6 +639,72 @@ async function runTests(fixtures) {
   });
   await check("60 no inline event attribute is generated", () => {
     assert.equal(countMatches(starBody, /<[^>]+\son[a-z]+\s*=/giu), 0);
+  });
+
+  await check("61 every non-empty level has one section, table, and thead", () => {
+    assert.equal(countMatches(starBody, /<section class="level-section"/gu), 3);
+    assert.equal(countMatches(starBody, /<table class="difficulty-table"/gu), 3);
+    assert.equal(countMatches(starBody, /<thead role="rowgroup">/gu), 3);
+  });
+  await check("62 every level table has exactly seven column headers", () => {
+    const tables = [...starBody.matchAll(/<table class="difficulty-table"[\s\S]*?<\/table>/gu)].map((match) => match[0]);
+    assert.equal(tables.length, 3);
+    assert.ok(tables.every((tableBody) => countMatches(tableBody, /<th role="columnheader"/gu) === 7));
+  });
+  await check("63 every selected model is emitted once as a chart row", () => {
+    assert.equal(countMatches(starBody, /<tr class="chart-row" role="row">/gu), 4);
+    assert.equal(countMatches(starBody, /<td role="cell" class="cell-title"/gu), 4);
+  });
+  await check("64 level headings use safe ids shared by aria-labelledby", () => {
+    for (const level of ["1", "2", "3"]) {
+      assert.ok(starBody.includes(`<section class="level-section" aria-labelledby="level-${level}-heading">`));
+      assert.ok(starBody.includes(`<h2 class="level-heading" id="level-${level}-heading">`));
+      assert.ok(starBody.includes(`<table class="difficulty-table" role="table" aria-labelledby="level-${level}-heading">`));
+    }
+  });
+  await check("65 zebra selectors are scoped to chart rows and reset per tbody", () => {
+    assert.match(starBody, /\.difficulty-table tbody \.chart-row:nth-child\(odd\) \{ background: var\(--row\); \}/u);
+    assert.match(starBody, /\.difficulty-table tbody \.chart-row:nth-child\(even\) \{ background: var\(--row-alt\); \}/u);
+    assert.match(starBody, /\.difficulty-table tbody \.chart-row:hover \{ background: var\(--row-hover\); \}/u);
+    const tableBodies = [...starBody.matchAll(/<tbody role="rowgroup">([\s\S]*?)<\/tbody>/gu)].map((match) => match[1]);
+    assert.ok(tableBodies.every((body) => body.trimStart().startsWith('<tr class="chart-row" role="row">')));
+  });
+  await check("66 data cells use horizontal rules without vertical borders", () => {
+    const style = starBody.match(/<style>([\s\S]*?)<\/style>/u)?.[1] ?? "";
+    assert.match(style, /\.difficulty-table th, \.difficulty-table td \{[\s\S]*border-bottom: 1px solid var\(--border\);/u);
+    assert.ok(!style.includes("border-left"));
+    assert.ok(!style.includes("border-right"));
+  });
+  await check("67 desktop rows and level headings use compact spacing", () => {
+    assert.match(starBody, /padding: \.4375rem \.5625rem;/u);
+    assert.match(starBody, /\.level-heading \{[\s\S]*padding: \.35rem \.65rem;[\s\S]*font-size: 1rem;/u);
+  });
+  await check("68 曲 and DL are lightweight action links with no button box", () => {
+    assert.ok(starBody.includes('class="action-link"'));
+    assert.ok(!starBody.includes('class="compact-link"'));
+    assert.match(starBody, /\.action-link \{[\s\S]*border: 0;[\s\S]*background: none;/u);
+  });
+  await check("69 compact comment summary keeps native details and accessible icon", () => {
+    assert.match(starBody, /<div class="comment-summary"><span class="original-difficulty">元: ★2<\/span><details class="row-comment"><summary aria-label="コメントを見る">💬<\/summary>/u);
+    assert.match(starBody, /\.row-comment summary[\s\S]*min-width: 30px;[\s\S]*min-height: 30px;/u);
+    assert.match(starBody, /\.comment-body \{[\s\S]*background: transparent;/u);
+  });
+  await check("70 mobile keeps actions horizontal with 44px targets", () => {
+    assert.match(starBody, /"origin download";/u);
+    assert.match(starBody, /\.switch-link, \.action-link, \.row-comment summary \{ min-width: 44px; min-height: 44px; \}/u);
+  });
+  await check("71 default, white, and dark define distinct zebra palettes", () => {
+    assert.equal(countMatches(starBody, /--row:/gu), 2);
+    for (const token of ["--row-alt", "--row-hover", "--table-head"]) {
+      assert.equal(countMatches(starBody, new RegExp(`${token}:`, "gu")), 3);
+    }
+    assert.match(starBody, /html\[data-theme="white"\][\s\S]*--row-alt: #f1f2f3;/u);
+    assert.match(starBody, /html\[data-theme="dark"\][\s\S]*--row: #191f22;/u);
+  });
+  await check("72 column balance favors title and keeps action columns narrow", () => {
+    assert.match(starBody, /col\.col-title \{ width: 30%; \}/u);
+    assert.match(starBody, /col\.col-artist \{ width: 20%; \}/u);
+    assert.match(starBody, /col\.col-origin, col\.col-download \{ width: 3\.25rem; \}/u);
   });
 
   await check("JSON header and data remain byte-identical before and after HTML requests", async () => {
@@ -719,7 +785,7 @@ async function runTests(fixtures) {
       generationMs: Number(durationMs.toFixed(2)),
       heapDeltaBytes: process.memoryUsage().heapUsed - beforeHeap
     });
-    assert.equal(countMatches(body, /<tr role="row">/gu) - countMatches(body, /<thead role="rowgroup"><tr role="row">/gu), count);
+    assert.equal(countMatches(body, /<tr class="chart-row" role="row">/gu), count);
   }
 
   console.log("performance", JSON.stringify({

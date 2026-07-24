@@ -24,56 +24,51 @@ const BMS_IR_BASE_URL = "https://bms-ir.org/new/song?songmd5=";
 const PAGE_STYLE = `
 :root {
   color-scheme: light;
-  --page-bg: #e4e9e7;
-  --header-bg: #d5dfdb;
-  --surface: #f4f7f6;
-  --surface-alt: #e8eeeb;
-  --surface-hover: #dde8e3;
-  --text: #1d2926;
-  --muted: #52635e;
-  --border: #aab9b4;
-  --border-strong: #6e8b81;
-  --link: #155241;
-  --link-hover: #0b382c;
-  --focus: #9a5a00;
-  --level-bg: #1f6652;
-  --level-text: #ffffff;
-  --missing: #6a7773;
+  --page-bg: #f4f5f5;
+  --header-bg: #e2e7e5;
+  --surface: #ffffff;
+  --table-head: #f2f4f4;
+  --row: #ffffff;
+  --row-alt: #eceeef;
+  --row-hover: #e2e8ea;
+  --text: #111820;
+  --muted: #47525a;
+  --border: #d3d7d9;
+  --link: #075fd8;
+  --link-hover: #0049a8;
+  --focus: #0b6bce;
+  --level-bg: #293330;
 }
 html[data-theme="white"] {
-  --page-bg: #f7f9fa;
-  --header-bg: #edf2f0;
-  --surface: #ffffff;
-  --surface-alt: #f1f5f3;
-  --surface-hover: #e8f1ed;
-  --text: #18221f;
-  --muted: #5a6864;
-  --border: #c7d2ce;
-  --border-strong: #82978f;
-  --link: #195443;
-  --link-hover: #0d362b;
-  --focus: #9b5800;
-  --level-bg: #2d6b59;
-  --level-text: #ffffff;
-  --missing: #687571;
+  --page-bg: #ffffff;
+  --header-bg: #f1f4f3;
+  --table-head: #f7f8f8;
+  --row-alt: #f1f2f3;
+  --row-hover: #e8edf0;
+  --text: #0e151b;
+  --muted: #4b565d;
+  --border: #d9dcde;
+  --link: #005cc7;
+  --link-hover: #00428f;
+  --focus: #0069d9;
+  --level-bg: #39423f;
 }
 html[data-theme="dark"] {
   color-scheme: dark;
-  --page-bg: #101613;
-  --header-bg: #151e1b;
-  --surface: #1a2421;
-  --surface-alt: #202d29;
-  --surface-hover: #293a34;
-  --text: #e5eeea;
-  --muted: #a8b7b1;
-  --border: #3b4e47;
-  --border-strong: #668078;
-  --link: #78d0b1;
-  --link-hover: #a5ead2;
-  --focus: #ffd166;
-  --level-bg: #2b785f;
-  --level-text: #ffffff;
-  --missing: #91a19b;
+  --page-bg: #121619;
+  --header-bg: #1d2426;
+  --surface: #191f22;
+  --table-head: #20272a;
+  --row: #191f22;
+  --row-alt: #242b2f;
+  --row-hover: #303a3f;
+  --text: #eef2f4;
+  --muted: #b5bec3;
+  --border: #3e474c;
+  --link: #8fc3ff;
+  --link-hover: #c2ddff;
+  --focus: #75baff;
+  --level-bg: #303b38;
 }
 *, *::before, *::after { box-sizing: border-box; }
 html { min-width: 0; background: var(--page-bg); }
@@ -84,7 +79,7 @@ body {
   background: var(--page-bg);
   color: var(--text);
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  line-height: 1.55;
+  line-height: 1.45;
   overflow-wrap: anywhere;
 }
 a { color: var(--link); text-underline-offset: .18em; }
@@ -110,52 +105,49 @@ a:focus-visible, summary:focus-visible {
   margin: 0 auto;
   padding-inline: clamp(.75rem, 2.4vw, 2rem);
 }
-.page-header-inner { padding-block: 1rem; }
+.page-header-inner { padding-block: .7rem; }
 .eyebrow { margin: 0 0 .15rem; color: var(--muted); font-size: .82rem; font-weight: 700; }
-h1 { margin: 0; font-size: clamp(1.45rem, 3vw, 2.25rem); line-height: 1.25; }
-.switches { display: flex; flex-wrap: wrap; gap: .65rem 1.5rem; margin-top: .8rem; }
+h1 { margin: 0; font-size: clamp(1.4rem, 2.8vw, 2rem); line-height: 1.2; }
+.switches { margin-top: .45rem; }
 .switch-group { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem; }
 .switch-label { margin-right: .25rem; color: var(--muted); font-size: .8rem; font-weight: 700; }
 .switch-link {
   display: inline-flex;
   align-items: center;
-  min-height: 2rem;
-  padding: .2rem .55rem;
-  border: 1px solid transparent;
-  border-radius: 3px;
+  min-height: 1.75rem;
+  padding: .1rem .35rem;
+  border-bottom: 2px solid transparent;
   font-size: .9rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 .switch-link[aria-current] {
-  border-color: var(--border-strong);
-  background: var(--surface);
+  border-bottom-color: currentColor;
   color: var(--text);
   text-decoration: none;
 }
-.page-main { padding-block: 1rem 2rem; }
+.page-main { padding-block: .75rem 1.5rem; }
 .intro {
-  margin-bottom: 1.25rem;
-  padding: .9rem 1rem;
+  margin-bottom: .8rem;
+  padding: .6rem .75rem;
   border: 1px solid var(--border);
-  border-left: 5px solid var(--level-bg);
   background: var(--surface);
 }
-.intro h2 { margin: 0 0 .3rem; font-size: 1.05rem; }
+.intro h2 { margin: 0 0 .2rem; font-size: 1rem; }
 .intro p { margin: 0; color: var(--muted); }
-.stats { display: flex; flex-wrap: wrap; gap: .25rem 1.25rem; margin-top: .65rem; }
-.stats strong { color: var(--text); font-size: 1.05rem; }
-.level-section { margin-top: 1.35rem; scroll-margin-top: 1rem; }
+.stats { display: flex; flex-wrap: wrap; gap: .15rem 1rem; margin-top: .4rem; font-size: .9rem; }
+.stats strong { color: var(--text); }
+.level-section { margin-top: .9rem; scroll-margin-top: .75rem; }
 .level-heading {
   margin: 0;
-  padding: .45rem .7rem;
+  padding: .35rem .65rem;
   background: var(--level-bg);
-  color: var(--level-text);
-  font-size: 1.08rem;
+  color: #ffffff;
+  font-size: 1rem;
   line-height: 1.35;
 }
 .table-shell { min-width: 0; border: 1px solid var(--border); border-top: 0; background: var(--surface); }
 .difficulty-table { width: 100%; table-layout: fixed; border-collapse: collapse; }
-.difficulty-table caption, .visually-hidden {
+.difficulty-table caption {
   position: absolute !important;
   width: 1px !important;
   height: 1px !important;
@@ -168,56 +160,60 @@ h1 { margin: 0; font-size: clamp(1.45rem, 3vw, 2.25rem); line-height: 1.25; }
 }
 .difficulty-table th, .difficulty-table td {
   min-width: 0;
-  padding: .55rem .6rem;
+  padding: .4375rem .5625rem;
   border-bottom: 1px solid var(--border);
-  border-right: 1px solid var(--border);
   text-align: left;
   vertical-align: top;
   overflow-wrap: anywhere;
   word-break: normal;
 }
-.difficulty-table th:last-child, .difficulty-table td:last-child { border-right: 0; }
 .difficulty-table tbody tr:last-child td { border-bottom: 0; }
-.difficulty-table th { background: var(--surface-alt); font-size: .8rem; }
-.difficulty-table tbody tr:nth-child(even) { background: var(--surface-alt); }
-@media (hover: hover) { .difficulty-table tbody tr:hover { background: var(--surface-hover); } }
+.difficulty-table th { padding-block: .375rem; background: var(--table-head); font-size: .8rem; font-weight: 650; }
+.difficulty-table th:nth-last-child(-n+2) { text-align: center; }
+.difficulty-table tbody .chart-row:nth-child(odd) { background: var(--row); }
+.difficulty-table tbody .chart-row:nth-child(even) { background: var(--row-alt); }
+@media (hover: hover) { .difficulty-table tbody .chart-row:hover { background: var(--row-hover); } }
 .cell-difficulty { font-weight: 800; white-space: nowrap; }
-.title-link { font-weight: 750; }
-.comment-original { font-size: .86rem; font-weight: 700; }
-.comment-details { margin-top: .25rem; }
-.comment-details summary {
-  width: fit-content;
-  min-height: 2rem;
-  padding: .2rem .25rem;
-  color: var(--link);
-  cursor: pointer;
-  font-size: .85rem;
-  font-weight: 700;
-}
-.comment-text {
-  max-width: 100%;
-  margin-top: .35rem;
-  padding: .5rem;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.compact-link {
+.title-link { font-weight: 500; text-decoration: underline; }
+.cell-authors { color: var(--muted); }
+.comment-summary { display: flex; flex-wrap: wrap; align-items: center; gap: .1rem .4rem; }
+.original-difficulty { color: var(--muted); font-size: .82rem; white-space: nowrap; }
+.row-comment { display: inline-block; }
+.row-comment summary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 2.25rem;
-  min-height: 2rem;
-  padding: .15rem .35rem;
-  border: 1px solid var(--border-strong);
-  border-radius: 3px;
-  font-size: .85rem;
-  font-weight: 800;
-  text-decoration: none;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0 .15rem;
+  color: var(--link);
+  cursor: pointer;
+  line-height: 1;
+  list-style: none;
 }
-.compact-link:hover { background: var(--surface-hover); }
-.missing { color: var(--missing); }
+.row-comment summary::-webkit-details-marker { display: none; }
+.comment-body {
+  margin-top: .25rem;
+  padding: .35rem .45rem;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.action-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  min-height: 30px;
+  padding: .1rem;
+  border: 0;
+  background: none;
+  font-size: .85rem;
+  font-weight: 700;
+}
+.action-link:hover { text-decoration-thickness: 2px; }
+.missing { color: var(--muted); }
 .mobile-label { display: none; color: var(--muted); font-size: .75rem; font-weight: 800; }
 .empty-state, .error-state {
   padding: clamp(1.25rem, 5vw, 2.5rem);
@@ -230,12 +226,12 @@ h1 { margin: 0; font-size: clamp(1.45rem, 3vw, 2.25rem); line-height: 1.25; }
 .resource-links a { margin-right: .75rem; }
 .page-footer { padding-block: 0 2rem; color: var(--muted); font-size: .8rem; }
 @media (min-width: 960px) {
-  col.col-difficulty { width: 7rem; }
-  col.col-title { width: 27%; }
-  col.col-artist { width: 16%; }
-  col.col-authors { width: 16%; }
-  col.col-comment { width: 23%; }
-  col.col-origin, col.col-download { width: 3.75rem; }
+  col.col-difficulty { width: 5.5rem; }
+  col.col-title { width: 30%; }
+  col.col-artist { width: 20%; }
+  col.col-authors { width: 17%; }
+  col.col-comment { width: 15%; }
+  col.col-origin, col.col-download { width: 3.25rem; }
 }
 @media (max-width: 959px) {
   .difficulty-table, .difficulty-table tbody { display: block; width: 100%; }
@@ -256,9 +252,9 @@ h1 { margin: 0; font-size: clamp(1.45rem, 3vw, 2.25rem); line-height: 1.25; }
       "comment comment"
       "origin download";
     min-width: 0;
-    padding: .65rem;
+    padding: .5rem;
     border-bottom: 1px solid var(--border);
-    gap: .55rem .75rem;
+    gap: .4rem .65rem;
   }
   .difficulty-table tbody tr:last-child { border-bottom: 0; }
   .difficulty-table td {
@@ -275,18 +271,22 @@ h1 { margin: 0; font-size: clamp(1.45rem, 3vw, 2.25rem); line-height: 1.25; }
   .cell-origin { grid-area: origin; }
   .cell-download { grid-area: download; }
   .mobile-label { display: block; margin-bottom: .1rem; }
-  .compact-link { min-width: 44px; min-height: 44px; }
-  .comment-details summary { min-height: 44px; padding-block: .55rem; }
+  .switch-link, .action-link, .row-comment summary { min-width: 44px; min-height: 44px; }
 }
 @media (max-width: 599px) {
   .page-header-inner, .page-main, .page-footer { padding-inline: .65rem; }
   .difficulty-table tr {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "difficulty" "title" "artist" "authors" "comment" "origin" "download";
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "difficulty difficulty"
+      "title title"
+      "artist artist"
+      "authors authors"
+      "comment comment"
+      "origin download";
   }
-  .cell-origin, .cell-download { display: flex !important; align-items: center; gap: .65rem; }
-  .cell-origin .mobile-label, .cell-download .mobile-label { min-width: 4.5rem; margin: 0; }
-  .switches { gap: .5rem; }
+  .cell-origin, .cell-download { display: flex !important; flex-wrap: wrap; align-items: center; gap: .3rem .55rem; }
+  .cell-origin .mobile-label, .cell-download .mobile-label { margin: 0; }
 }`;
 
 export function getDifficultyTableHtmlTheme(request: Request): DifficultyTableHtmlTheme {
@@ -367,7 +367,7 @@ function formatJstTimestamp(value: string | null): string {
 }
 
 function levelSectionId(level: string): string {
-  return /^\d+$/u.test(level) ? `level-${level}` : "level-other";
+  return /^\d+$/u.test(level) ? `level-${level}-heading` : "level-other-heading";
 }
 
 function renderSwitches(table: DifficultyTableHtmlDefinition, theme: DifficultyTableHtmlTheme): string {
@@ -375,21 +375,11 @@ function renderSwitches(table: DifficultyTableHtmlDefinition, theme: DifficultyT
     const current = id === table.id ? ' aria-current="page"' : "";
     return `<a class="switch-link" href="/difficulty-tables/${id}?theme=${theme}"${current}>${label}</a>`;
   };
-  const themeLink = (value: DifficultyTableHtmlTheme, label: string) => {
-    const current = value === theme ? ' aria-current="true"' : "";
-    return `<a class="switch-link" href="/difficulty-tables/${table.id}?theme=${value}"${current}>${label}</a>`;
-  };
   return `<div class="switches">
       <nav class="switch-group" aria-label="難易度表の切替">
         <span class="switch-label">表</span>
         ${tableLink("rc-star", "RC★")}
         ${tableLink("rc-double-star", "RC★★")}
-      </nav>
-      <nav class="switch-group" aria-label="表示テーマの切替">
-        <span class="switch-label">テーマ</span>
-        ${themeLink("white", "ホワイト")}
-        ${themeLink("default", "デフォルト")}
-        ${themeLink("dark", "ダーク")}
       </nav>
     </div>`;
 }
@@ -407,21 +397,21 @@ function renderModelRow(model: DifficultyTableViewModel, request: Request): stri
     : escapedTitle;
   const originUrl = safeHttpUrl(model.originUrl);
   const originContent = originUrl
-    ? `<a class="compact-link" href="${escapeHtml(originUrl)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(`${displayTitle}の原曲・本体配布ページを開く`)}">曲</a>`
+    ? `<a class="action-link" href="${escapeHtml(originUrl)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(`${displayTitle}の原曲・本体配布ページを開く`)}">曲</a>`
     : renderMissing();
   const downloadUrl = safeDownloadUrl(model.downloadUrl, request);
   const downloadContent = downloadUrl
-    ? `<a class="compact-link" href="${escapeHtml(downloadUrl)}" aria-label="${escapeHtml(`${displayTitle}の譜面ファイルをダウンロード`)}">DL</a>`
+    ? `<a class="action-link" href="${escapeHtml(downloadUrl)}" aria-label="${escapeHtml(`${displayTitle}の譜面ファイルをダウンロード`)}">DL</a>`
     : renderMissing();
   const commentDetails = model.postComment
-    ? `<details class="comment-details"><summary>コメントを見る</summary><div class="comment-text">${escapeHtml(model.postComment)}</div></details>`
+    ? `<details class="row-comment"><summary aria-label="コメントを見る">💬</summary><div class="comment-body">${escapeHtml(model.postComment)}</div></details>`
     : "";
-  return `<tr role="row">
+  return `<tr class="chart-row" role="row">
           <td role="cell" class="cell-difficulty" data-label="難易度"><span class="mobile-label" aria-hidden="true">難易度</span>${escapeHtml(model.levelLabel)}</td>
           <td role="cell" class="cell-title" data-label="曲名"><span class="mobile-label" aria-hidden="true">曲名</span>${titleContent}</td>
           <td role="cell" class="cell-artist" data-label="アーティスト"><span class="mobile-label" aria-hidden="true">アーティスト</span>${model.displayArtist ? escapeHtml(model.displayArtist) : renderMissing()}</td>
           <td role="cell" class="cell-authors" data-label="作者一覧"><span class="mobile-label" aria-hidden="true">作者一覧</span>${model.authorsText ? escapeHtml(model.authorsText) : renderMissing()}</td>
-          <td role="cell" class="cell-comment" data-label="コメント"><span class="mobile-label" aria-hidden="true">コメント</span><div class="comment-original">元難易度：${escapeHtml(model.originalDifficulty)}</div>${commentDetails}</td>
+          <td role="cell" class="cell-comment" data-label="コメント"><span class="mobile-label" aria-hidden="true">コメント</span><div class="comment-summary"><span class="original-difficulty">元: ${escapeHtml(model.originalDifficulty)}</span>${commentDetails}</div></td>
           <td role="cell" class="cell-origin" data-label="曲"><span class="mobile-label" aria-hidden="true">曲</span>${originContent}</td>
           <td role="cell" class="cell-download" data-label="DL"><span class="mobile-label" aria-hidden="true">DL</span>${downloadContent}</td>
         </tr>`;

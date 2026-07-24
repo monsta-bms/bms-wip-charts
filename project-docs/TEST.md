@@ -1456,10 +1456,11 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 
 ### 専用隔離テスト
 
-- `node worker/scripts/test-difficulty-table-html.mjs`で65 checkを実行する。RC★/RC★★のGET、HEAD、OPTIONS、POST、不正ID、3 themeと不正theme、bmstable meta、header/dataリンク、60秒cache、ETag/304、Content-Length、nosniffを確認する。
-- タイトル、説明、総件数、JST最終更新、RC/theme切替、level order、0件level省略、level別件数、7列、空状態、unavailable fallbackを確認する。曲名BMS-IR、lowercase MD5、無効MD5、外部属性、曲origin、originなし、不正protocol、Worker DL、R2非公開、3リンクの役割分離とaccessible nameを確認する。
-- 元難易度常時表示、コメント有無のdetails、native summary、改行、HTML文字列、長文、絵文字、引用符を確認する。title/artist/author/comment/chart nameの悪性文字列を本文・属性へ入れ、script要素・inline event属性・aria/title注入が生成されないことを確認する。
+- `node worker/scripts/test-difficulty-table-html.mjs`で77 checkを実行する。RC★/RC★★のGET、HEAD、OPTIONS、POST、不正ID、3 themeと不正theme、bmstable meta、header/dataリンク、60秒cache、ETag/304、Content-Length、nosniffを確認する。
+- タイトル、説明、総件数、JST最終更新、theme query、theme UI不在、themeを保持するRC切替、level order、0件level省略、level別件数、7列、空状態、unavailable fallbackを確認する。曲名BMS-IR、lowercase MD5、無効MD5、外部属性、曲origin、originなし、不正protocol、Worker DL、R2非公開、3リンクの役割分離とaccessible nameを確認する。
+- 元難易度の`元:`常時表示、コメント有無のdetails、accessible name付き`💬` native summary、改行、HTML文字列、長文、絵文字、引用符を確認する。title/artist/author/comment/chart nameの悪性文字列を本文・属性へ入れ、script要素・inline event属性・aria/title注入が生成されないことを確認する。
 - HTML閲覧前後でheader/data JSON本文をbyte比較し、`postComment`が公開JSONへ増えないこと、同一入力のHTML/ETagが安定することを確認する。D1失敗は503 HTML・no-store・内部detailなし・固定code/table IDだけのlog、HEAD bodyなしとする。
+- 非空level数とsection/table/thead数の一致、各tableのheader 7個、`chart-row`件数、safe heading ID、tableごとにリセットするodd/even縞、縦罫線なし、compact padding、枠なし曲/DL、comment省スペースmarkup、mobile横並び操作、3テーマの縞token、列幅を静的に確認する。
 
 ### 実ブラウザ・性能・回帰
 
@@ -1467,3 +1468,11 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 最終隔離計測は対象SELECT 5行、作者祖先5行、HTML 22,431 bytes、SHA-256/ETag込み応答約215ms、D1 query 2、R2 GET/PUT/DELETE 0。純粋serializerは100行180,091 bytes・約2.87ms・heap差約1.43MB、1000行1,685,350 bytes・約11.19ms・heap差約13.61MBだった。時間・heapは実行環境で変動するため、query/R2種別・件数と生成成功を回帰基準にする。
 - Phase C ViewModel/JSON、Phase A metadata、Phase B backfill、canonical schema 0001～0009、metadata parser/static、曲・DLリンク、withdrawal active 18件を再実行する。`node --check worker/scripts/test-difficulty-table-html.mjs`、Worker typecheck、Wrangler dry-run、`git diff --check`を通す。
 - Migration、schema、Pages/`docs/**`、`worker/wrangler.toml`、Cron、withdrawal services、Secret、本番D1/R2を変更しない。本番deploy、push、backfillを行わない。
+
+## DIFFICULTY-TABLE-VIEW Phase D.1 軽量表示
+
+- 専用隔離テスト77件が成功した。非空level 3件にsection/table/theadを各3件、各tableのheaderを7件、chart rowを4件生成し、safe heading ID、levelごとのodd/evenリセット、横罫線のみ、compact spacing、枠なし曲/DL、短縮comment、3テーマtoken、mobile配置を確認した。HTML閲覧前後のheader/data JSONはbyte一致し、D1 query 2、R2 GET/PUT/DELETE 0を維持した。
+- 2026-07-24、同じSSR serializerの3行fixture（level 1に2行、level 2に1行）を実ブラウザでwhite/default/dark × 390/760/1366pxの9条件確認した。全条件でhorizontal overflow 0、section/table/thead 2、各header 7、chart row 3、縦罫線0、theme切替UI 0、RC link 2だった。各テーマでlevel 1の1/2行目の背景が異なり、level 2の1行目がlevel 1の1行目と同色へリセットした。
+- 新表示は1366pxでlevel heading 32.8px、列header約31px、平均行高60.7px、900pxを平均行高で割った行space換算14行。旧表示はheading 37.7px、平均行高約71.1px、同換算12行で、行密度が上がった。新表示の曲/DLとcomment summaryはPC 30px、390/760px 44px、枠0・背景transparent。390pxで曲/DLは同じ行に並び、comment展開後も本文幅336px＝cell幅336px、overflow 0、keyboard focus輪郭3pxだった。
+- 本文contrastはwhite 18.39:1、default 16.36:1、dark 16.15:1、linkは順に6.26:1、5.77:1、9.06:1、作者一覧は7.53:1、8.01:1、8.82:1。3テーマとも通常行と交互行のsurface差を維持した。
+- 同じ4行の隔離response比較では旧Phase DがHTML 22,431 bytes、新D.1が22,271 bytes。CSSは8,232 bytesから8,224 bytes、theme切替linkは3件から0件、PCの枠付きactionと縦罫線は0件になった。新responseはSHA-256/ETag込み約150ms、対象SELECT 5行、作者祖先5行、D1 query 2、R2操作0。純粋serializerは100行184,406 bytes、1000行1,731,965 bytesで生成でき、HTMLは極端に肥大化していない。時間・heapは実行環境で変動するため、構造、bytes、query/R2種別を回帰基準にする。

@@ -1081,10 +1081,19 @@ RC★★変換:
 ## DIFFICULTY-TABLE-VIEW Phase D 人間向け難易度表HTML
 
 - `/difficulty-tables/rc-star`と`/difficulty-tables/rc-double-star`は、Phase Cと同じ対象SELECT・作者一括CTE・ViewModelを使ってWorkerが完成HTMLをSSRする。ブラウザからdata JSONを再取得せず、外部JavaScript/UI libraryなしで主要機能を利用できる。`meta[name="bmstable"]`の絶対header URLと既存header/data JSONは維持する。
-- ページはタイトル、RC表切替、white/default/dark切替、説明、総件数、データ由来の最終更新、レベル別section、取込用header/dataリンクで構成する。不正themeはdefault。RC切替はthemeを保持し、現在値を文字と`aria-current`で示す。最終更新は各ViewModelのversion/metadata最大updatedAtから表全体の最大値を求め、Asia/Tokyoで表示し、リクエスト時刻は埋め込まない。
+- ページはタイトル、RC表切替、説明、総件数、データ由来の最終更新、レベル別section、取込用header/dataリンクで構成する。white/default/darkはqueryとして維持するが、ページ内にtheme切替UIを置かない。不正themeはdefault。RC切替は現在のthemeを保持し、現在表を文字と`aria-current`で示す。最終更新は各ViewModelのversion/metadata最大updatedAtから表全体の最大値を求め、Asia/Tokyoで表示し、リクエスト時刻は埋め込まない。
 - 0件レベルを省略し、各sectionを安全な固定IDで表す。列順は難易度、曲名、アーティスト、作者一覧、コメント、曲、DL。960px以上は実table、600～959pxは2列card grid、599px以下は1列cardへ、単一の行markupをCSSだけで切り替える。native table/row/cell role、mobile項目名、skip link、heading順、focus-visible、44px mobile操作領域を維持する。
 - 曲名はPhase Cの表示titleを使い、lowercase化後に`^[0-9a-f]{32}$`を満たすMD5だけを固定BMS-IR originへ接続する。`曲`はPhase Cで検証済みの`originUrl`、`DL`は同一Workerの`/api/files/`だけを使い、R2情報を使用しない。外部リンクは`target="_blank" rel="noopener noreferrer"`と役割を含むaccessible nameを持つ。
 - ViewModelは公開JSONへ出さない内部用`postComment`を構造として保持する。元難易度は常時表示し、postCommentがある場合だけnative `details/summary`を出す。合成済み`comment`をHTML側で再分割せず、公開data JSONの値・件数・順序・MD5集合を変更しない。metadataがmissing/failed/unavailableならPhase Cどおりversion値へfallbackする。
 - display title/artist、authors、original difficulty、postComment、chart name、version labelを未信頼値として本文・属性・aria/titleでescapeする。BMS-IRは固定origin＋検証済みMD5だけ、曲は再度http/https検証、DLは同一originのfile APIだけを許可する。利用者入力をログへ出さず、正常閲覧ログも追加しない。
 - 3テーマはCSS custom propertiesで背景、surface、縞行、hover、border、link、focus、muted、details、欠損表示を分離し、darkでは`color-scheme: dark`を使う。対象0件は不完全なtableを出さず安全な空状態を表示する。
 - HTMLは60秒cache、ETag/304/HEAD/Content-Length/nosniffを維持する。同じデータとthemeならHTML・ETagは安定する。HTML生成失敗は503・no-storeの安全なHTMLを返し、consoleは固定codeとtable IDだけ。通常HTMLは対象SELECT＋作者CTEの原則2 query、対象0件では作者queryを省略し、R2操作は0とする。
+
+## DIFFICULTY-TABLE-VIEW Phase D.1 軽量表示
+
+- 0件でない難易度ごとに`section`、`table`、`thead`を各1つ生成し、各tableは7列headerを持つ。譜面は`chart-row`を付けた1行として1回だけ出力し、level heading、section、tableは同じ安全な`level-{level}-heading` ID参照で関連付ける。
+- 縞はtableごとの`tbody .chart-row:nth-child(odd/even)`で付け、各難易度の先頭行を常にodd色としてリセットする。default/white/darkはそれぞれ通常行、交互行、hover、列header、本文、muted、link、focus、罫線のtokenを分離し、3テーマすべてで判読可能にする。
+- PCはセルの縦罫線をなくして横罫線だけを残し、level headingと列headerを低く、本文を約15px、行paddingを約7px×9pxとする。曲名列を最大、曲/DL列を狭い固定幅とし、曲名は通常の青い下線link、曲/DLは枠・背景なしの文字linkとして表示する。
+- コメント列は`元: {元difficulty}`を常時表示し、投稿コメントがある場合だけaccessible name付きの`💬` native summaryとdetails本文を追加する。作者一覧は本文より弱いmuted色とし、長文は既存どおり安全に折り返す。
+- 600～959pxは2列card、599px以下は主要項目1列＋曲/DLの横2列とし、曲/DLとコメントsummaryは44px以上の操作領域を保つ。390/760/1366pxで横overflowを出さない。
+- Phase D.1はHTML/CSSと表示markupだけを変更し、Phase C ViewModel、JSON、掲載対象、分類、件数、順序、URL、D1 query、cache、ETag規則、R2操作を変更しない。外部JavaScript/UI libraryは追加しない。

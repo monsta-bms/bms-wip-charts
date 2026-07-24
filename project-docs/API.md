@@ -1400,7 +1400,7 @@ pending中は既存のDL状態と`allow_append`を維持する。processing/tomb
 ?theme=dark
 ```
 
-省略または不正値は`default`として扱う。HTMLはWorker SSRで生成し、JavaScriptなしで閲覧できる。themeはHTMLの配色とHTML自身のETagに反映するが、`meta[name="bmstable"]`、header/data JSONの内容・ETag、掲載データ、キャッシュ時間、CORS、D1 queryへ影響しない。
+省略または不正値は`default`として扱う。HTMLはWorker SSRで生成し、JavaScriptなしで閲覧できる。themeはHTMLの配色とHTML自身のETagに反映するが、`meta[name="bmstable"]`、header/data JSONの内容・ETag、掲載データ、キャッシュ時間、CORS、D1 queryへ影響しない。Phase D.1ではページ内のtheme切替UIを表示せず、queryによる直接指定とRC★/RC★★切替時のtheme保持だけを維持する。
 
 ### 人間向け難易度表HTML
 
