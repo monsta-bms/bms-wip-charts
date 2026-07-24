@@ -1097,3 +1097,15 @@ RC★★変換:
 - コメント列は`元: {元difficulty}`を常時表示し、投稿コメントがある場合だけaccessible name付きの`💬` native summaryとdetails本文を追加する。作者一覧は本文より弱いmuted色とし、長文は既存どおり安全に折り返す。
 - 600～959pxは2列card、599px以下は主要項目1列＋曲/DLの横2列とし、曲/DLとコメントsummaryは44px以上の操作領域を保つ。390/760/1366pxで横overflowを出さない。
 - Phase D.1はHTML/CSSと表示markupだけを変更し、Phase C ViewModel、JSON、掲載対象、分類、件数、順序、URL、D1 query、cache、ETag規則、R2操作を変更しない。外部JavaScript/UI libraryは追加しない。
+
+## SAFE-WORKER-DEPLOY API Worker誤デプロイ防止
+
+- API Worker `bms-wip-charts-worker`と静的Worker `bms-wip-charts`を別対象として扱う。正式なAPI Worker設定は`worker/wrangler.toml`、entrypointは`src/index.ts`、workers.dev URLは`https://bms-wip-charts-worker.monsta3228gsl.workers.dev`に固定し、任意引数で対象を変更できない個人用ツールとする。
+- 検査・デプロイは`$PSScriptRoot`から解決したrepository、worker、設定、package、ログの絶対パスを使う。Wranglerのdeployとdry-runは常に`worker/wrangler.toml`の絶対パスを`--config`へ渡し、設定なし`wrangler deploy`を正式経路に残さない。
+- 設定検査はWorker名、main、`workers_dev=true`、D1 `DB -> wip-bms-charts-db`と非空database ID、R2 `FILES -> wip-bms-charts-files`、`WITHDRAWAL_CRON_MODE=active`、`0 18 * * *`と`0 * * * *`の2本だけを完全一致で要求する。`assets`、`site`、`assets.directory`、`docs`参照は拒否する。
+- root `wrangler.jsonc`は常に拒否する。repository rootまたはworker配下の`.wrangler/deploy/config.json`は値をログへ出さず安全に解析し、API Worker設定以外を指す、不正形式、余分なキーを含むredirectは拒否する。redirectは自動削除せず、API Worker設定を指す場合も検出パスと解決先だけを警告記録する。
+- Git repository、conflictなし、`main`、`git fetch origin`成功、HEADとorigin/mainの関係を検査する。本番deployはworktree cleanかつHEADとorigin/mainが完全一致する場合だけ許可する。検査のみではdirty、ahead、behind、divergedを警告にしてtypecheckとdry-runまで継続できるが、conflictとmain以外は拒否する。
+- 本番deploy前にworkerで`npx.cmd tsc --noEmit`と、一時outdirを使うWrangler dry-runを必ず成功させる。dry-run出力はD1、R2、active modeを要求し、assets表現、静的Worker名、静的Worker URLを境界付きで拒否する。API Worker名が静的Worker名を部分文字列として含むことだけでは拒否しない。
+- 引数なしは検査専用で、本番deploy関数を呼ばない。`-Deploy`でも固定文字列`DEPLOY bms-wip-charts-worker`の大文字小文字・空白を含む完全一致後だけ候補とし、確認待ち後にconfig hash、root/redirect、Git同期を再検証してからdeployする。終了コード0だけで成功とせず、出力のUploaded/Deployed Worker名、workers.dev URL、2本のschedule、Current Version IDを検証し、静的Worker・assets出力を拒否する。
+- deploy後は固定health URLがHTTP 200、JSON、`status=ok`、`service=bms-wip-charts-worker`であることを確認する。続いて固定難易度表URLがHTTP 200、HTMLであり、表題、bmstable meta、header/dataリンクを含むことを確認する。応答本文全体はログに保存しない。確認失敗時は全体failureとするが、自動rollbackは行わない。
+- `worker/.deploy-logs/`へcheck/deploy、日時、branch、HEAD/origin SHA、設定パスとSHA-256、Node/Wrangler version、redirect、各検査結果、Version ID、failure stage、安全なerror codeをtext/JSONで保存する。Secret、Bearer/Authorization、`.dev.vars`内容、BMS metadata、D1 row、R2 object keyは記録せず、外部command出力もマスクしてから保存する。

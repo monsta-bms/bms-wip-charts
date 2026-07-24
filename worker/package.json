@@ -4,8 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "dev": "wrangler dev --config ./wrangler.toml",
+    "deploy": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ../scripts/deploy-worker.ps1 -Deploy",
+    "deploy:check": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ../scripts/deploy-worker.ps1",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

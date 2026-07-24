@@ -1476,3 +1476,14 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 新表示は1366pxでlevel heading 32.8px、列header約31px、平均行高60.7px、900pxを平均行高で割った行space換算14行。旧表示はheading 37.7px、平均行高約71.1px、同換算12行で、行密度が上がった。新表示の曲/DLとcomment summaryはPC 30px、390/760px 44px、枠0・背景transparent。390pxで曲/DLは同じ行に並び、comment展開後も本文幅336px＝cell幅336px、overflow 0、keyboard focus輪郭3pxだった。
 - 本文contrastはwhite 18.39:1、default 16.36:1、dark 16.15:1、linkは順に6.26:1、5.77:1、9.06:1、作者一覧は7.53:1、8.01:1、8.82:1。3テーマとも通常行と交互行のsurface差を維持した。
 - 同じ4行の隔離response比較では旧Phase DがHTML 22,431 bytes、新D.1が22,271 bytes。CSSは8,232 bytesから8,224 bytes、theme切替linkは3件から0件、PCの枠付きactionと縦罫線は0件になった。新responseはSHA-256/ETag込み約150ms、対象SELECT 5行、作者祖先5行、D1 query 2、R2操作0。純粋serializerは100行184,406 bytes、1000行1,731,965 bytesで生成でき、HTMLは極端に肥大化していない。時間・heapは実行環境で変動するため、構造、bytes、query/R2種別を回帰基準にする。
+
+## SAFE-WORKER-DEPLOY
+
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-deploy-worker-safety.ps1`で、本番Cloudflareへ接続しないfixture安全テストを実行する。deploy scriptはdot-source時にmainを起動せず、本番deploy関数の呼出件数が0であることを確認する。
+- 正しいconfigを許可し、Worker名、main、workers_dev、D1 binding/name/空database ID、R2 binding/name、active mode、Cron不足・余分、assets、site、docs参照の各不一致を固定error codeで拒否する。
+- root `wrangler.jsonc`、不正またはAPI Worker以外を指すredirectを拒否し、API Worker設定を指す安全なredirectだけを許可する。実ファイルを自動削除しない。
+- 正しいdry-run出力を許可し、assets、静的Worker名、静的Worker URL、active欠落を拒否する。`bms-wip-charts-worker`を`bms-wip-charts`の部分一致だけで誤拒否しない。
+- 正しいdeploy出力、health、難易度表HTMLを許可し、service違いと必須HTML要素欠落を拒否する。確認文字列は完全一致だけを許可し、空、`y`、部分一致、末尾空白、大文字小文字違いを拒否する。
+- deploy modeのGit dirty、ahead、behind、divergedをそれぞれ拒否する。検査modeは本番deployを実行せず、未commit・未push等を警告してdry-runまで継続できることを実スクリプトで確認する。
+- textログへ疑似ADMIN_TOKEN、HASH_SECRET、TURNSTILE_SECRET、Bearer token、R2 object keyが残らないことを確認する。health・難易度表の本文全体、`.dev.vars`、D1 row、BMS metadataをログへ保存しない。
+- PowerShell 2ファイルのparser検査、`git diff --check`、worker typecheck、絶対configを使うWrangler dry-runを実行する。本番deploy、push、D1/R2、Migration、Pages、Secret、Cron、`worker/wrangler.toml`、`worker/src/**`を変更しない。

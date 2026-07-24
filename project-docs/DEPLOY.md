@@ -1,5 +1,41 @@
 # デプロイ手順
 
+## 正式な安全デプロイ手順
+
+API Workerを確認・デプロイするときは、リポジトリ直下の専用BATだけを使用する。
+
+検査のみ（本番デプロイなし）:
+
+```text
+deploy-worker-check.bat
+```
+
+本番デプロイ候補:
+
+```text
+deploy-worker.bat
+```
+
+本番デプロイでは、Gitの`main`と`origin/main`が完全一致し、設定検査、TypeScript検査、Wrangler dry-runがすべて成功した後に、次の文字列を完全一致で入力する。
+
+```text
+DEPLOY bms-wip-charts-worker
+```
+
+空Enter、`y`、部分一致ではデプロイしない。正しい対象は`worker/wrangler.toml`の`bms-wip-charts-worker`だけであり、リポジトリ直下の`wrangler.jsonc`、静的Worker `bms-wip-charts`、`docs/` assetsを検出した場合は停止する。
+
+次の直接実行は禁止する。
+
+```text
+npx wrangler deploy
+```
+
+`worker`以外から`npm run deploy`を実行しない。`worker`内の`npm run deploy`は専用PowerShellへ接続済みのため利用できるが、初心者向けの正式手順は上記BATとする。
+
+専用PowerShellは常に`worker/wrangler.toml`の絶対パスを`--config`へ渡し、D1 `DB`、R2 `FILES`、`WITHDRAWAL_CRON_MODE=active`、2本のCronを固定値で検査する。ログは`worker/.deploy-logs/`へ保存し、Secret値、Authorization、BMS metadata、D1 row、R2 object keyは記録しない。
+
+デプロイ後は固定URLの`/api/health`と`/difficulty-tables/rc-star`を確認する。確認失敗時も自動rollbackは行わず、ログを保全して手動確認する。
+
 ## 対象
 
 - リポジトリ名: `bms-wip-charts`
@@ -253,14 +289,26 @@ npx wrangler d1 migrations apply wip-bms-charts-db --local
 
 ## デプロイ手順
 
-```bash
-cd worker
-npm install
-npm run typecheck
-npm run deploy
+検査だけを先に実行する。
+
+```text
+deploy-worker-check.bat
 ```
 
-`wrangler.toml` の `[vars]` を変更した場合も、Workerを再deployする。
+本番反映時だけ次を実行し、固定確認文字列を完全一致で入力する。
+
+```text
+deploy-worker.bat
+```
+
+PowerShellから実行する場合も専用scriptだけを使用する。
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\deploy-worker.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\deploy-worker.ps1 -Deploy
+```
+
+`worker/wrangler.toml` の `[vars]` を変更した場合も、安全検査を通してWorkerを再deployする。
 
 PROG-01ではWorker本体の実装を変更しないため、DB migrationだけで仕様準備は完了する。Worker本体が進捗グラフAPIを返すようになるのは後続フェーズとする。
 
