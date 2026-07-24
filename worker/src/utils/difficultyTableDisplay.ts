@@ -58,6 +58,7 @@ export type DifficultyTableViewModel = {
   versionLabel: string;
   authors: string[];
   authorsText: string;
+  postComment: string;
   comment: string;
   originUrl: string | null;
   downloadUrl: string;
@@ -220,13 +221,19 @@ export function buildDifficultyTableComment(
   originalDifficulty: string,
   postComment: string | null | undefined
 ): string {
-  const comment = (postComment ?? "")
-    .replace(/\r\n?/g, "\n")
-    .replace(/[ \t]+$/gmu, "")
-    .replace(/\n+$/u, "");
+  const comment = normalizeDifficultyTablePostComment(postComment);
   return comment
     ? `元難易度：${originalDifficulty}\n${comment}`
     : `元難易度：${originalDifficulty}`;
+}
+
+export function normalizeDifficultyTablePostComment(
+  postComment: string | null | undefined
+): string {
+  return (postComment ?? "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]+$/gmu, "")
+    .replace(/\n+$/u, "");
 }
 
 function nonEmptySourceValue(value: string | null | undefined): string | null {
@@ -290,6 +297,7 @@ export function buildDifficultyTableViewModel(
     subartist: effectiveDisplayValue(sourceMetadataSucceeded, sourceSubartist, input.storedSubartist)
   });
   const authors = mergeDifficultyTableAuthors(input.chainAuthors, artist.markerAuthors);
+  const postComment = normalizeDifficultyTablePostComment(input.postComment);
 
   return {
     versionId: input.versionId,
@@ -309,7 +317,8 @@ export function buildDifficultyTableViewModel(
     versionLabel: input.versionLabel,
     authors,
     authorsText: authors.join("、"),
-    comment: buildDifficultyTableComment(input.originalDifficulty, input.postComment),
+    postComment,
+    comment: buildDifficultyTableComment(input.originalDifficulty, postComment),
     originUrl: input.originUrl,
     downloadUrl: input.downloadUrl,
     completedAt: input.completedAt,

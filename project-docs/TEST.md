@@ -1451,3 +1451,19 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - `url`は既存origin validator、`url_diff`はWorker file APIのまま、BMS-IR URL、R2 key、password hash、metadata status/error/encodingは追加されないことを確認した。
 - Phase A metadata、Phase B backfill、canonical schema 0001～0009、difficulty classification/JSON、metadata parser/static、曲・DLリンク、withdrawal active 18件を再実行する。Worker typecheck、Wrangler dry-run、専用scriptの`node --check`、`git diff --check`を通す。
 - Migration、schema、Pages/`docs/**`、`worker/wrangler.toml`、Cron、withdrawal service、Secret、本番D1/R2を変更しない。
+
+## DIFFICULTY-TABLE-VIEW Phase D 人間向け難易度表HTML
+
+### 専用隔離テスト
+
+- `node worker/scripts/test-difficulty-table-html.mjs`で65 checkを実行する。RC★/RC★★のGET、HEAD、OPTIONS、POST、不正ID、3 themeと不正theme、bmstable meta、header/dataリンク、60秒cache、ETag/304、Content-Length、nosniffを確認する。
+- タイトル、説明、総件数、JST最終更新、RC/theme切替、level order、0件level省略、level別件数、7列、空状態、unavailable fallbackを確認する。曲名BMS-IR、lowercase MD5、無効MD5、外部属性、曲origin、originなし、不正protocol、Worker DL、R2非公開、3リンクの役割分離とaccessible nameを確認する。
+- 元難易度常時表示、コメント有無のdetails、native summary、改行、HTML文字列、長文、絵文字、引用符を確認する。title/artist/author/comment/chart nameの悪性文字列を本文・属性へ入れ、script要素・inline event属性・aria/title注入が生成されないことを確認する。
+- HTML閲覧前後でheader/data JSON本文をbyte比較し、`postComment`が公開JSONへ増えないこと、同一入力のHTML/ETagが安定することを確認する。D1失敗は503 HTML・no-store・内部detailなし・固定code/table IDだけのlog、HEAD bodyなしとする。
+
+### 実ブラウザ・性能・回帰
+
+- 2026-07-24、同じSSR serializerのローカルfixtureを実ブラウザでwhite/default/dark × 390/760/1366pxの9条件確認した。全条件でhorizontal overflow 0、行2件・unique title 2件、BMS-IR/曲/DL各2件、曲名幅254px、リンク操作可、details展開後overflow 0、native summaryのkeyboard focusと3px輪郭を確認した。390/760pxの曲/DLは44×44px以上、row表示は390/760pxがgrid、1366pxがtable-rowだった。本文contrastはwhite 15.45:1、default 12.24:1、dark 15.49:1。
+- 最終隔離計測は対象SELECT 5行、作者祖先5行、HTML 22,431 bytes、SHA-256/ETag込み応答約215ms、D1 query 2、R2 GET/PUT/DELETE 0。純粋serializerは100行180,091 bytes・約2.87ms・heap差約1.43MB、1000行1,685,350 bytes・約11.19ms・heap差約13.61MBだった。時間・heapは実行環境で変動するため、query/R2種別・件数と生成成功を回帰基準にする。
+- Phase C ViewModel/JSON、Phase A metadata、Phase B backfill、canonical schema 0001～0009、metadata parser/static、曲・DLリンク、withdrawal active 18件を再実行する。`node --check worker/scripts/test-difficulty-table-html.mjs`、Worker typecheck、Wrangler dry-run、`git diff --check`を通す。
+- Migration、schema、Pages/`docs/**`、`worker/wrangler.toml`、Cron、withdrawal services、Secret、本番D1/R2を変更しない。本番deploy、push、backfillを行わない。

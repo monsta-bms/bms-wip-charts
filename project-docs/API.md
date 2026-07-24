@@ -1317,7 +1317,7 @@ dataは譜面objectの配列を返す。対象なしはHTTP 200の`[]`。
 
 `version_source_metadata.status='succeeded'`の場合だけ、存在する元値を表示合成へ優先使用し、非空の`bms_wip_source_title`, `bms_wip_source_subtitle`, `bms_wip_source_artist`, `bms_wip_source_subartist`を追加する。metadata行なし、`failed`、`unavailable`（`SOURCE_FILE_DELETED`を含む）はversions側の保存値へfallbackし、metadata status、error code、encodingを公開しない。BMS-IR URLもdataへ追加せず、将来のHTML側が既存`md5`から組み立てる。
 
-`url`は、MD5重複排除後に採用されたversion自身に有効な`origin_url`がある場合だけ出力し、未登録時はキー自体を省略する。`name_diff`と`bms_wip_chart_name`は採用version自身の`chart_name`を使用し、NULLの既存行だけ`charts.chart_name`へfallbackする。`url_diff`は常に従来どおり出力する。`org_md5`、R2 key、外側ZIPのSHA-256は出力しない。header/取込HTMLは`Cache-Control: public, max-age=3600, must-revalidate`、dataは`public, max-age=60, must-revalidate`とし、すべてETagと`If-None-Match`による304応答に対応する。エラー応答は`Cache-Control: no-store`とする。
+`url`は、MD5重複排除後に採用されたversion自身に有効な`origin_url`がある場合だけ出力し、未登録時はキー自体を省略する。`name_diff`と`bms_wip_chart_name`は採用version自身の`chart_name`を使用し、NULLの既存行だけ`charts.chart_name`へfallbackする。`url_diff`は常に従来どおり出力する。`org_md5`、R2 key、外側ZIPのSHA-256は出力しない。headerは`Cache-Control: public, max-age=3600, must-revalidate`、dataと人間向けHTMLは`public, max-age=60, must-revalidate`とし、すべてETagと`If-None-Match`による304応答に対応する。エラー応答は`Cache-Control: no-store`とする。
 
 ## WITHDRAWAL-LIFECYCLE-16A
 
@@ -1390,9 +1390,9 @@ pending中は既存のDL状態と`allow_append`を維持する。processing/tomb
 
 既存の`POST /api/versions/:id/withdraw`と`POST /api/versions/:id/delete-request`は互換用として変更しない。新Pagesは新3routeだけを使用し、404時に旧APIへ自動fallbackしない。
 
-### 取込HTMLのtheme query
+### 人間向けHTMLのtheme query
 
-`GET /difficulty-tables/:tableId`の取込HTMLは、任意の`theme` queryを受け付ける。
+`GET /difficulty-tables/:tableId`の人間向けHTMLは、任意の`theme` queryを受け付ける。
 
 ```text
 ?theme=white
@@ -1400,7 +1400,17 @@ pending中は既存のDL状態と`allow_append`を維持する。processing/tomb
 ?theme=dark
 ```
 
-省略または不正値は`default`として扱う。queryは取込HTMLの背景・文字・リンク配色だけに適用し、`meta[name="bmstable"]`、header/data JSON、難易度表データ、ETag、キャッシュ時間、CORS、D1 queryへ影響しない。
+省略または不正値は`default`として扱う。HTMLはWorker SSRで生成し、JavaScriptなしで閲覧できる。themeはHTMLの配色とHTML自身のETagに反映するが、`meta[name="bmstable"]`、header/data JSONの内容・ETag、掲載データ、キャッシュ時間、CORS、D1 queryへ影響しない。
+
+### 人間向け難易度表HTML
+
+人間向けURLはPhase Cと同じ対象SELECT、作者履歴、ViewModelを使用し、`level_order`順に0件以外のレベルsectionをSSRする。総件数と、`versions.updated_at`または`version_source_metadata.updated_at`の最大値をAsia/Tokyoで表示する。対象0件ではheader/dataリンクを残した空状態を返す。
+
+列は`難易度 / 曲名 / アーティスト / 作者一覧 / コメント / 曲 / DL`の7項目。曲名は再検証した32桁MD5だけを固定originのBMS-IRへ、`曲`は検証済み`origin_url`へ、`DL`は同一Workerの`/api/files/{encoded file_id}`へ接続する。BMS-IRと曲は`target="_blank" rel="noopener noreferrer"`。R2 URL・keyは使用しない。
+
+元難易度は常時表示し、正規化済み投稿コメントがある場合だけnative `details/summary`を出す。公開data JSONの合成`comment`は変更しない。利用者入力は本文・属性・accessible nameを含めHTML escapeし、任意URLは`http:`/`https:`だけを許可する。PCは7列table、600～959pxは2列card grid、599px以下は1列cardとして、同じ行markupをCSSだけで切り替える。
+
+HTML生成失敗はHTTP 503の安全なHTMLと`Cache-Control: no-store`を返す。本文には内部例外を出さず、consoleには`DIFFICULTY_TABLE_UNAVAILABLE`とtable IDだけを記録する。HEADは同じstatus/headerでbodyを返さない。header/data JSONの既存エラー形式は変更しない。
 
 ## WITHDRAWAL-LIFECYCLE-16B
 

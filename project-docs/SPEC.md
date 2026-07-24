@@ -876,7 +876,7 @@ RC★★変換:
 
 元difficulty、採用version自身の差分名、数字パス版ラベル、作者、完成日時、subtitle、subartistは`bms_wip_`名前空間の独自項目として保持する。差分名がNULLの既存versionだけ起点差分名へfallbackする。本フィードは投稿者の自己申告難易度をRC★/RC★★へ統合した完成差分フィードであり、公式な難易度認定ではない。
 
-公開難易度表ルートのGET/HEAD/OPTIONSだけは`Access-Control-Allow-Origin: *`とし、投稿・管理APIのOrigin制限は変更しない。headerと取込HTMLは約1時間、dataは約60秒キャッシュし、ETag再検証に対応する。古いdataが残っていてもDL可否は既存file APIが現在のD1/R2状態で再判定する。
+公開難易度表ルートのGET/HEAD/OPTIONSだけは`Access-Control-Allow-Origin: *`とし、投稿・管理APIのOrigin制限は変更しない。headerは約1時間、dataと人間向けHTMLは約60秒キャッシュし、ETag再検証に対応する。古いdataが残っていてもDL可否は既存file APIが現在のD1/R2状態で再判定する。
 
 ## ORIGIN-URL-01 原曲配布URL
 
@@ -1077,3 +1077,14 @@ RC★★変換:
 - ViewModelは変換後level、`RC★/RC★★`付きlevelLabel、元difficulty、保存title/artist、表示title/artist、採用可能なsource 4項目、差分名、版ラベル、authors配列と全角読点結合、合成comment、曲URL、Worker file URL、completed_at、version/metadataの最大updated_at候補を未escape文字列で保持する。HTML escapeはPhase Dの責任とする。
 - `comment`はプレーンテキストの`元難易度：{元difficulty}`を必ず先頭にし、投稿コメントがあれば改行して続ける。投稿コメント内の改行を維持し、行末空白と末尾空行だけを整理する。HTMLを解釈せず、本文をログへ出さない。
 - data JSONの標準項目と既存`bms_wip_*`は値・意味を変更しない。`comment`, `bms_wip_display_title`, `bms_wip_display_artist`, `bms_wip_authors`を常時追加し、succeeded metadataの非空sourceだけ`bms_wip_source_title/subtitle/artist/subartist`を追加する。metadata status/error/encoding、R2 key、password hash、BMS-IR URLは追加しない。曲URLは既存`normalizeOriginUrl()`、DL URLは既存Worker `/api/files/{encoded file_id}`を使い、R2操作を行わない。
+
+## DIFFICULTY-TABLE-VIEW Phase D 人間向け難易度表HTML
+
+- `/difficulty-tables/rc-star`と`/difficulty-tables/rc-double-star`は、Phase Cと同じ対象SELECT・作者一括CTE・ViewModelを使ってWorkerが完成HTMLをSSRする。ブラウザからdata JSONを再取得せず、外部JavaScript/UI libraryなしで主要機能を利用できる。`meta[name="bmstable"]`の絶対header URLと既存header/data JSONは維持する。
+- ページはタイトル、RC表切替、white/default/dark切替、説明、総件数、データ由来の最終更新、レベル別section、取込用header/dataリンクで構成する。不正themeはdefault。RC切替はthemeを保持し、現在値を文字と`aria-current`で示す。最終更新は各ViewModelのversion/metadata最大updatedAtから表全体の最大値を求め、Asia/Tokyoで表示し、リクエスト時刻は埋め込まない。
+- 0件レベルを省略し、各sectionを安全な固定IDで表す。列順は難易度、曲名、アーティスト、作者一覧、コメント、曲、DL。960px以上は実table、600～959pxは2列card grid、599px以下は1列cardへ、単一の行markupをCSSだけで切り替える。native table/row/cell role、mobile項目名、skip link、heading順、focus-visible、44px mobile操作領域を維持する。
+- 曲名はPhase Cの表示titleを使い、lowercase化後に`^[0-9a-f]{32}$`を満たすMD5だけを固定BMS-IR originへ接続する。`曲`はPhase Cで検証済みの`originUrl`、`DL`は同一Workerの`/api/files/`だけを使い、R2情報を使用しない。外部リンクは`target="_blank" rel="noopener noreferrer"`と役割を含むaccessible nameを持つ。
+- ViewModelは公開JSONへ出さない内部用`postComment`を構造として保持する。元難易度は常時表示し、postCommentがある場合だけnative `details/summary`を出す。合成済み`comment`をHTML側で再分割せず、公開data JSONの値・件数・順序・MD5集合を変更しない。metadataがmissing/failed/unavailableならPhase Cどおりversion値へfallbackする。
+- display title/artist、authors、original difficulty、postComment、chart name、version labelを未信頼値として本文・属性・aria/titleでescapeする。BMS-IRは固定origin＋検証済みMD5だけ、曲は再度http/https検証、DLは同一originのfile APIだけを許可する。利用者入力をログへ出さず、正常閲覧ログも追加しない。
+- 3テーマはCSS custom propertiesで背景、surface、縞行、hover、border、link、focus、muted、details、欠損表示を分離し、darkでは`color-scheme: dark`を使う。対象0件は不完全なtableを出さず安全な空状態を表示する。
+- HTMLは60秒cache、ETag/304/HEAD/Content-Length/nosniffを維持する。同じデータとthemeならHTML・ETagは安定する。HTML生成失敗は503・no-storeの安全なHTMLを返し、consoleは固定codeとtable IDだけ。通常HTMLは対象SELECT＋作者CTEの原則2 query、対象0件では作者queryを省略し、R2操作は0とする。
