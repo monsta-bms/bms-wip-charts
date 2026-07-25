@@ -1162,3 +1162,16 @@ RC★★変換:
 - 保存済み進捗model、`applyStoredProgressThumbnails`、progress image mount/scheduler、MutationObserverは現行経路なので削除しない。`branch-append-ui.js`の正式base rendererとcompact一覧は対象外とする。
 - chart/version DOM、class、dataset、文言、操作順、CSS、runtime style、listener、observer、responsive/theme仕様は変更しない。script順は維持し、変更した`app.js`と`progress-thumbnail-list.js`だけを`chart-render-cleanup-r4b1-01`でcache bustする。
 - R4B1は旧描画コードの除去だけを対象とし、wrapper再導入、renderer統合、Worker/API変更を行わない。CSS/runtime style整理はR4B2へ分離する。
+
+## VERSION-TREE-RENDER-CONSOLIDATION R4B2a CSS回帰基準と所有関係
+
+- 版ツリーCSSは部品ごとに正式所有者を定め、完全重複だけを段階的に除去する。`.thumbnail-cell .progress-thumbnail`の`width`と`max-width`は`branch-tree-list.css`を正式所有者とし、`list-ui-refresh.css`は移行中のレイアウト補正層として`min-width`等の固有補正だけを保持する。
+- R4B2aは同値だった`width: 100%`と`max-width: 100%`だけを`list-ui-refresh.css`から除去する。版grid列、actions/thumbnail/graphのgap、未使用selector、tree connector、production JavaScript、favorite/progressのruntime styleは変更しない。
+- white/default/dark × 390/760/1366pxの隔離fixtureで、版・各control・thumbnailの件数、computed style、bounding rect、親からのclip量、document横overflow、tree overlay、detail card、compact一覧を変更前後比較する。フォント名、navigation時間、環境依存の微小差は厳密な表示仕様にしない。
+- 次の5件はR4B2aで修正しない既知問題であり、正常仕様として固定しない。予期せず解消した場合は既知問題記録を更新し、新しいclipまたは固定色の増加は回帰として扱う。
+  - `KNOWN-CSS-001`: 390pxの深い版ツリーでpending lifecycle badgeが右端からクリップする場合がある。
+  - `KNOWN-CSS-002`: 390pxの深い版ツリーでprocessing lifecycle badgeが右端からクリップする場合がある。
+  - `KNOWN-CSS-003`: darkテーマでも追記停止ボタン背景にlight固定色が残る。
+  - `KNOWN-CSS-004`: favorite待機色に固定色が残る。
+  - `KNOWN-CSS-005`: detail対象行の背景にlight固定色が残る。
+- 既知問題を正常仕様として固定しない。R4B2aの比較は今回の重複除去がそれらを増減させていないことだけを確認し、個別修正は後続Phaseへ分離する。

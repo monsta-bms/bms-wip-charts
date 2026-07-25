@@ -249,9 +249,7 @@
 
 .thumbnail-cell .progress-thumbnail,
 .progress-thumbnail-block .progress-thumbnail {
-  max-width: 100%;
   min-width: 0;
-  width: 100%;
 }
 
 .progress-thumbnail {

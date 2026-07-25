@@ -1550,3 +1550,13 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 2026-07-25の削除後UTF-8/LF正規化値は`app.js` 88,621 bytes/2,693行、`progress-thumbnail-list.js` 34,223 bytes/1,016行、`docs`配下JavaScript合計760,508 bytes/17,951行だった。削減量は順に4,190 bytes/94行、4,818 bytes/112行、合計9,008 bytes/206行。pipeline 8/100/1000 itemは各stage 1回、rendered node 8/100/1000を維持した。
 - ローカル実ブラウザでは初期10 chart/20 version、もっと見る後14/28、2回replace後10/20を維持し、重複chart/HTML ID/controlは0だった。投稿成功相当はmount 2、detail 1、list-settled 1、管理更新相当はmount 1、detail 1、list-settled 0で、detail 1 card/2 versionとrecent側への選択chart重複0を確認した。
 - lifecycle fixtureはactive 1、pending grace 1、pending manual 1、processing 1、tombstoned 1を描画し、各badge、DL可1/DL不可2、processing/tombstonedの操作非表示を確認した。white/default/dark × 390/760/1366pxの9条件すべてで横overflow 0、画面外control 0、重複control 0、Console warning/error 0だった。
+
+## VERSION-TREE-RENDER-CONSOLIDATION R4B2a CSS回帰
+
+- `node scripts/test-css-ownership-static.js`で、`.thumbnail-cell .progress-thumbnail`の`width/max-width`正式所有者が`branch-tree-list.css`だけであること、`list-ui-refresh.css`にはselectorと`min-width`だけが残ること、theme/media/runtime styleへ重複が移動していないことを確認する。
+- 同static testでCSS読込順、対象linkだけのcache bust、変更対象外CSSとruntime styleのSHA-256、grid列定義数、actions/thumbnail/graph gap、固定色数、HTML ID重複なし、既知問題5件の文書化を確認する。`list-ui-refresh.css`だけはレビュー済みR4B2a hashへ更新する。
+- `node scripts/test-css-browser-regression.js`は外部dependencyなしでlocalhostの隔離fixtureとheadless browserを起動し、white/default/dark × 390/760/1366pxについて詳細版ツリーとcompact一覧を確認する。document横overflow、版・曲・DL・追記・管理・favorite・thumbnail件数、主要controlのviewport clip、computed width/min/max/height/display/position/overflow/gap/grid/colors、bounds、親clip、overlay、detail card幅、Console error/warningを取得する。
+- CSS変更前snapshotはリポジトリ外の一時ディレクトリへ`--write-snapshot`で保存し、変更後は`--compare-snapshot`で全9条件のcomputed styleとboundsを許容差0.25px以内で比較する。navigation時間と非同期header表示の影響を受ける絶対縦座標は性能・環境参考値であり、width/height、水平bounds、親clipと同じ厳密比較対象にしない。比較完了後はsnapshotと一時ディレクトリを削除する。
+- `KNOWN-CSS-001` pending clip、`KNOWN-CSS-002` processing clip、`KNOWN-CSS-003` dark追記停止固定色、`KNOWN-CSS-004` favorite固定色、`KNOWN-CSS-005` detail対象背景固定色は、既知問題としてwarning表示する。既知問題を正常仕様として固定しない。観測されなくなった場合は記録更新を要求し、既知以外のcontrol clip、横overflow、固定色増加、Console warning/errorは失敗とする。
+- R4B2a前後でthumbnailのcomputed width/max-width、bounding width/height、display、position、overflow、親cell、graph、画像枠、DOM件数、compact一覧を一致させる。画像比較dependencyは追加せず、computed styleとboundsを回帰基準にする。
+- R1 model、R2 Link UI、R3 Action UI、R4A pipeline、R4B1 dead-code、曲/DL static、version list 4件、withdrawal active、metadata parser/static、変更テストJS構文、CSS/runtime hash、HTML ID、`git diff --check`を回帰する。Pages、Worker、D1/R2、Migration、Secret、Cron、dependency、本番操作、push、deployは行わない。
