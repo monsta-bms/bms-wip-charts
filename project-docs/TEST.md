@@ -1494,3 +1494,14 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - `cmd.exe` fixtureで両BATを解析し、不正なコマンド扱いがなく、PowerShell終了コードを維持することを確認する。
 - 検査用の`SAFE_WORKER_DEPLOY_NO_PAUSE`が設定された場合だけ`pause`を省略し、通常のダブルクリック実行では`pause`を維持する。
 - checkラッパーは`-Deploy`を渡さず、deployラッパーも完全一致確認文字列がない限り本番deployへ進まないことを確認する。
+
+## VERSION-TREE-RENDER-CONSOLIDATION R1 共通版表示モデル
+
+- `node scripts/test-version-ui-model.js`で67 checkを実行する。active、3 handling mode、processing/tombstoned/deleted、legacy、unknown、欠落/null/型不正、ID欠落、hidden、redacted、矛盾値を確認し、unknownと不足値がactiveへ補完されないことを確認する。
+- 曲URLはHTTP/HTTPS、相対URL、credentials、`javascript/data/file/blob`、不正文字列、空値を確認する。DL URLはWorker absolute/relative、file ID大小文字、別origin、別path、空ID、nested path、query/hash、credentials、`javascript/data`、parse失敗、URL欠落、管理停止、取り下げ停止、状態欠落を確認する。
+- 追記は厳密booleanの`allowAppend`、progressMap有無、pending grace/manual、processing/tombstoned、collapsed中間履歴を確認する。管理・favoriteはactive/pendingだけを許可し、processing/tombstoned/unknown/redacted/hiddenを拒否する。
+- 入力versionが不変、同じ入力の結果が同一、modelと下位recordがfreeze済み、reasonへ利用者入力が入らないことを確認する。正常control snapshotは曲、DL、追記投稿、投稿管理、favorite、activeの順で162 bytesを維持する。
+- 性能fixtureは8 versionに対してmodel生成8回とし、正常versionのURL parseは曲1回、Worker base 1回、DL 1回の最大3回、合計24回を上限目安とする。renderer内では1 versionのmodelをローカル変数へ保持して曲・DL・追記・管理へ再利用する。
+- `node scripts/test-version-render-pipeline-static.js`で24 checkを実行する。modelの先行読込、classic script、既存renderer/capture順、progress final bridge、chart-detail一時DOM移動、favorites既存再描画、class、操作順、thumbnail/tree selector、compact列、HTML重複ID、cache keyを確認する。
+- static契約では保護CSS 4ファイルとfavorites/progressのruntime styleをSHA-256で固定し、対象renderer 7ファイルの`querySelector/querySelectorAll/closest`合計がR1前と同数であることを確認する。CSS、DOM走査、MutationObserver、requestAnimationFrameはR1で増減させない。
+- `node scripts/test-song-and-chart-links-static.js`、`node worker/scripts/test-version-list-links.mjs`、`node worker/scripts/test-version-withdrawal-active.mjs`、append、metadata parser/static、Node構文検査、Worker typecheck、Wrangler dry-run、`git diff --check`を回帰実行する。本番deploy、Pages push、D1/R2、Migration、Secret、Cron、dependency変更は行わない。

@@ -188,29 +188,10 @@
     });
   }
 
-  function makeDownloadUrl(downloadUrl) {
-    if (!downloadUrl) {
-      return "";
-    }
-
-    if (typeof buildDownloadUrl === "function") {
-      return buildDownloadUrl(downloadUrl);
-    }
-
-    return downloadUrl;
-  }
-
-  function makeOriginUrl(originUrl) {
-    if (typeof normalizeExternalHttpUrl === "function") {
-      return normalizeExternalHttpUrl(originUrl);
-    }
-
-    try {
-      const url = new URL(String(originUrl || ""));
-      return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : "";
-    } catch {
-      return "";
-    }
+  function makeVersionUiModel(version, options = {}) {
+    return typeof buildSharedVersionUiModel === "function"
+      ? buildSharedVersionUiModel(version, options)
+      : null;
   }
 
   function cloneJson(value) {
@@ -482,13 +463,8 @@
   }
 
   function resolveAllowAppend(version) {
-    if (typeof window.BmsAppendPolicy?.resolve === "function") {
-      return window.BmsAppendPolicy.resolve(version);
-    }
-    if (typeof version?.allowAppend === "boolean") {
-      return version.allowAppend;
-    }
-    return version?.isRejected !== true && version?.is_rejected !== true;
+    const uiModel = makeVersionUiModel(version, { hasProgressMap: true });
+    return uiModel?.append.allowedByPolicy === true;
   }
 
   function getThemeCanvasColor(name, fallback) {
@@ -1410,22 +1386,32 @@
     `;
   }
 
-  function buildAppendControl(entry, version) {
+  function buildAppendControl(entry, version, uiModel) {
     const chart = entry.chart || {};
     const chartId = chart.id || chart.chartId || entry.chartId || "";
     const parentVersionId = version.id || version.versionId || "";
 
-    if (!resolveAllowAppend(version)) {
+    if (uiModel?.append.reason === "superseded_intermediate") {
+      return `
+        <button class="secondary append-disabled-intermediate" type="button" disabled title="完成版に置き換え済みの中間履歴のため追記できません">追記不可</button>
+      `;
+    }
+
+    if (uiModel?.append.reason === "append_disabled") {
       const descriptionId = `append-policy-description-${html(parentVersionId)}`;
       return `
         <button class="secondary append-policy-disabled-button" type="button" disabled aria-disabled="true" aria-describedby="${descriptionId}">追記停止</button>
       `;
     }
 
-    if (!isUsableProgressMap(version.progressMap)) {
+    if (uiModel?.append.reason === "legacy_progress_map") {
       return `
         <button class="secondary" type="button" disabled aria-disabled="true">旧形式</button>
       `;
+    }
+
+    if (!uiModel?.append.available) {
+      return `<button class="secondary" type="button" disabled aria-disabled="true">追記不可</button>`;
     }
 
     return `<button class="secondary append-version-button" type="button" data-chart-id="${html(chartId)}" data-parent-version-id="${html(parentVersionId)}">追記投稿</button>`;
@@ -1464,8 +1450,11 @@
         const progress = Number.isFinite(Number(version.progress)) ? Number(version.progress) : 0;
         const thumbnail = renderProgressThumbnail(version);
         const displayVersionLabel = String(version.displayVersion || "ver?.?");
-        const originHref = makeOriginUrl(version.originUrl);
-        const downloadHref = makeDownloadUrl(version.file?.downloadUrl);
+        const uiModel = makeVersionUiModel(version, {
+          hasProgressMap: isUsableProgressMap(version.progressMap)
+        });
+        const originHref = uiModel?.originLink.available ? uiModel.originLink.url : "";
+        const downloadHref = uiModel?.download.available ? uiModel.download.url : "";
         const rejectedBadge = version.isRejected ? `<span class="rejected-badge">没譜面</span>` : "";
         const originControl = originHref
           ? `<a class="version-origin-link" href="${html(originHref)}" target="_blank" rel="noopener noreferrer" title="原曲・本体の配布ページを開く" aria-label="${html(`${displayVersionLabel} の原曲・本体の配布ページを開く（外部サイト）`)}">曲</a>`
@@ -1500,7 +1489,7 @@
             <div class="version-actions">
               ${originControl}
               ${downloadControl}
-              ${buildAppendControl(entry, version)}
+              ${buildAppendControl(entry, version, uiModel)}
             </div>
           </div>
         `;

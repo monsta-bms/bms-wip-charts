@@ -29,29 +29,10 @@
     });
   }
 
-  function downloadUrl(value) {
-    if (!value) {
-      return "";
-    }
-
-    if (typeof buildDownloadUrl === "function") {
-      return buildDownloadUrl(value);
-    }
-
-    return value;
-  }
-
-  function originUrl(value) {
-    if (typeof normalizeExternalHttpUrl === "function") {
-      return normalizeExternalHttpUrl(value);
-    }
-
-    try {
-      const url = new URL(String(value || ""));
-      return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : "";
-    } catch {
-      return "";
-    }
+  function makeVersionUiModel(version, options = {}) {
+    return typeof buildSharedVersionUiModel === "function"
+      ? buildSharedVersionUiModel(version, options)
+      : null;
   }
 
   function ensureProgressImageThumbnailStyle() {
@@ -996,8 +977,9 @@
         const progress = Number.isFinite(Number(version.progress)) ? Number(version.progress) : 0;
         const thumbnail = renderProgressThumbnail(version, context);
         const displayVersionLabel = String(version.displayVersion || "ver?.?");
-        const originHref = originUrl(version.originUrl);
-        const downloadHref = downloadUrl(version.file?.downloadUrl);
+        const uiModel = makeVersionUiModel(version, { hasProgressMap: true });
+        const originHref = uiModel?.originLink.available ? uiModel.originLink.url : "";
+        const downloadHref = uiModel?.download.available ? uiModel.download.url : "";
         const rejectedBadge = version.isRejected ? `<span class="rejected-badge">没譜面</span>` : "";
         const originControl = originHref
           ? `<a class="version-origin-link" href="${html(originHref)}" target="_blank" rel="noopener noreferrer" title="原曲・本体の配布ページを開く" aria-label="${html(`${displayVersionLabel} の原曲・本体の配布ページを開く（外部サイト）`)}">曲</a>`
@@ -1032,7 +1014,7 @@
             <div class="version-actions">
               ${originControl}
               ${downloadControl}
-              <button class="secondary" type="button" disabled>追記投稿</button>
+              <button class="secondary" type="button" disabled>${uiModel ? "追記投稿" : "追記不可"}</button>
             </div>
           </div>
         `;

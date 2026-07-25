@@ -67,29 +67,12 @@
       .replace(/'/g, "&#039;");
   }
 
-  function normalizeExternalHttpUrl(value) {
-    try {
-      const url = new URL(String(value || ""));
-      return url.protocol === "http:" || url.protocol === "https:"
-        ? url.toString()
-        : "";
-    } catch {
-      return "";
-    }
-  }
-
-  function buildWorkerDownloadUrl(value) {
-    try {
-      const apiBase = new URL(API_BASE_URL);
-      const url = new URL(String(value || ""), apiBase);
-      return ["http:", "https:"].includes(url.protocol)
-        && url.origin === apiBase.origin
-        && url.pathname.startsWith("/api/files/")
-        ? url.toString()
-        : "";
-    } catch {
-      return "";
-    }
+  function buildSharedVersionUiModel(version, options = {}) {
+    return window.BmsVersionUiModel?.buildVersionUiModel?.(version, {
+      workerBaseUrl: API_BASE_URL,
+      hasProgressMap: options.hasProgressMap === true,
+      isSupersededIntermediate: options.isSupersededIntermediate === true
+    }) || null;
   }
 
   function normalizeQuery(value) {
@@ -418,8 +401,9 @@
     const stateBadges = buildStateBadges(item);
     const versionChartName = formatVersionChartName(chartName);
     const fullLabel = `${fullTitle} / 差分名: ${versionChartName} / 版: ${versionLabel}`;
-    const originHref = normalizeExternalHttpUrl(item.originUrl);
-    const downloadHref = buildWorkerDownloadUrl(item.file?.downloadUrl);
+    const uiModel = buildSharedVersionUiModel(item, { hasProgressMap: true });
+    const originHref = uiModel?.originLink.available ? uiModel.originLink.url : "";
+    const downloadHref = uiModel?.download.available ? uiModel.download.url : "";
     const originControl = originHref
       ? `<a class="compact-link-control compact-origin-link" href="${escapeHtml(originHref)}" target="_blank" rel="noopener noreferrer" title="原曲・本体の配布ページを開く" aria-label="${escapeHtml(`${fullTitle} の原曲・本体の配布ページを開く（外部サイト）`)}">曲</a>`
       : "";

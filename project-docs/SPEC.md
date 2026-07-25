@@ -1109,3 +1109,15 @@ RC★★変換:
 - 引数なしは検査専用で、本番deploy関数を呼ばない。`-Deploy`でも固定文字列`DEPLOY bms-wip-charts-worker`の大文字小文字・空白を含む完全一致後だけ候補とし、確認待ち後にconfig hash、root/redirect、Git同期を再検証してからdeployする。終了コード0だけで成功とせず、出力のUploaded/Deployed Worker名、workers.dev URL、2本のschedule、Current Version IDを検証し、静的Worker・assets出力を拒否する。
 - deploy後は固定health URLがHTTP 200、JSON、`status=ok`、`service=bms-wip-charts-worker`であることを確認する。続いて固定難易度表URLがHTTP 200、HTMLであり、表題、bmstable meta、header/dataリンクを含むことを確認する。応答本文全体はログに保存しない。確認失敗時は全体failureとするが、自動rollbackは行わない。
 - `worker/.deploy-logs/`へcheck/deploy、日時、branch、HEAD/origin SHA、設定パスとSHA-256、Node/Wrangler version、redirect、各検査結果、Version ID、failure stage、安全なerror codeをtext/JSONで保存する。Secret、Bearer/Authorization、`.dev.vars`内容、BMS metadata、D1 row、R2 object keyは記録せず、外部command出力もマスクしてから保存する。
+
+## VERSION-TREE-RENDER-CONSOLIDATION R1 共通版表示モデル
+
+- `docs/version-ui-model.js`はDOMへ依存しない共通表示モデルを提供し、browserでは`window.BmsVersionUiModel`、Nodeテストでは同じ実装のCommonJS exportを使用する。公開関数は`buildVersionUiModel`、`normalizeExternalHttpUrl`、`normalizeWorkerDownloadUrl`、`normalizeLifecycleState`だけとし、戻り値と下位表示状態はfreezeする。
+- lifecycleは`active/withdrawal_pending/processing/tombstoned/deleted/legacy_withdrawn/legacy_delete_pending`を正式値として認識し、それ以外、欠落、null、型不正は`unknown`へ正規化する。公開操作を許可するのは整合した`active`と`withdrawal_pending`だけで、unknownをactiveへ補完しない。
+- version ID欠落、hidden、`publicDataRedacted`、公開操作非表示フラグ、未知または操作不能lifecycle、pending handling mode欠落、activeとhandling modeの矛盾、明示availabilityとの矛盾はfail-closedとする。操作非表示時は曲なし、DL不可、追記不可、管理なし、お気に入り不可へ倒すが、既存の墓標・履歴ラベル描画はtree rendererに残す。
+- 曲URLは絶対HTTP/HTTPSだけを許可し、username/password、相対URL、`javascript/data/file/blob`、parse不能値を拒否する。安全な曲リンクはDL停止中も残し、既存の`target="_blank"`と`rel="noopener noreferrer"`を維持する。
+- DL URLは現在のWorker baseと同一origin、HTTP/HTTPS、`/api/files/{fileId}`の1 segment、credentials/query/hashなしだけを許可する。`downloadBlocked`は公開APIで必須の集約停止値として扱い、`withdrawalDownloadBlocked`が存在する場合も独立した停止要因とする。不正URL、別origin、状態欠落、空file IDはDL不可とする。
+- 追記は`allowAppend === true`、利用可能なprogressMap、操作可能lifecycle、非collapsed中間履歴をすべて満たす場合だけ利用可能とする。`allowAppend`欠落・文字列値をtrueへ補完せず、既存の「追記投稿」「追記停止」「旧形式」「追記不可」の文言を維持する。
+- 管理操作とお気に入りはversion IDがあり、redacted/hiddenでない整合したactiveまたはwithdrawal pendingだけで利用可能とする。管理dialogは表示時に従来どおりlifecycle APIを再取得する。
+- `app.js`、追記full renderer、thumbnail full renderer、tree補強、favorites、compact list、削除済みURLの移動先判定は共通モデルを利用する。モデルscript未読込時は旧ロジックへfallbackせず、各操作を安全側へ倒す。
+- R1ではversion row/card HTML、class、操作順、CSS、runtime CSS、`renderCharts`代入・capture順、progress final bridge、`mountChartUi`、MutationObserver、requestAnimationFrame、chart-detailの一時DOM移動、favorites再描画経路を変更しない。wrapper整理とDOM部品共通化はR2以降で行う。

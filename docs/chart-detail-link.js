@@ -48,13 +48,12 @@
   }
 
   function isPublicReplacementVersion(version) {
-    const lifecycleStatus = String(version?.lifecycleStatus || version?.lifecycle_status || "active");
+    const uiModel = typeof buildSharedVersionUiModel === "function"
+      ? buildSharedVersionUiModel(version, { hasProgressMap: true })
+      : null;
     return isValidId(getVersionId(version))
-      && version?.publicDataRedacted !== true
-      && lifecycleStatus === "active"
-      && version?.hidden !== true
-      && version?.isHidden !== true
-      && version?.is_hidden !== true;
+      && uiModel?.canShowActions === true
+      && uiModel.lifecycle.state === "active";
   }
 
   function versionSortTime(version) {

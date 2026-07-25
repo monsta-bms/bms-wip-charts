@@ -196,17 +196,9 @@ function showError(error) {
   errorBox.hidden = false;
 }
 
-function isRejectedVersion(version) {
-  return version?.isRejected === true
-    || version?.is_rejected === true
-    || Number(version?.isRejected ?? version?.is_rejected) === 1;
-}
-
 function resolveAllowAppend(version) {
-  if (typeof version?.allowAppend === "boolean") {
-    return version.allowAppend;
-  }
-  return !isRejectedVersion(version);
+  const uiModel = buildSharedVersionUiModel(version, { hasProgressMap: true });
+  return uiModel?.append.allowedByPolicy === true;
 }
 
 function setPostStateBadge(element, text, state) {
@@ -1919,23 +1911,12 @@ async function apiRequest(path, options = {}) {
   return body;
 }
 
-function buildDownloadUrl(downloadUrl) {
-  if (!downloadUrl) {
-    return "";
-  }
-
-  return new URL(downloadUrl, API_BASE_URL).toString();
-}
-
-function normalizeExternalHttpUrl(value) {
-  try {
-    const url = new URL(String(value || ""));
-    return url.protocol === "http:" || url.protocol === "https:"
-      ? url.toString()
-      : "";
-  } catch {
-    return "";
-  }
+function buildSharedVersionUiModel(version, options = {}) {
+  return window.BmsVersionUiModel?.buildVersionUiModel?.(version, {
+    workerBaseUrl: API_BASE_URL,
+    hasProgressMap: options.hasProgressMap === true,
+    isSupersededIntermediate: options.isSupersededIntermediate === true
+  }) || null;
 }
 
 function getChartEntryId(entry) {
@@ -2161,8 +2142,9 @@ function renderCharts(data) {
       const difficulty = version.difficulty || "未入力";
       const progress = Number.isFinite(Number(version.progress)) ? Number(version.progress) : 0;
       const displayVersionLabel = String(version.displayVersion || "ver?.?");
-      const originHref = normalizeExternalHttpUrl(version.originUrl);
-      const downloadHref = buildDownloadUrl(version.file?.downloadUrl);
+      const uiModel = buildSharedVersionUiModel(version, { hasProgressMap: true });
+      const originHref = uiModel?.originLink.available ? uiModel.originLink.url : "";
+      const downloadHref = uiModel?.download.available ? uiModel.download.url : "";
       const rejectedBadge = version.isRejected ? `<span class="rejected-badge">没譜面</span>` : "";
       const originControl = originHref
         ? `<a class="version-origin-link" href="${escapeHtml(originHref)}" target="_blank" rel="noopener noreferrer" title="原曲・本体の配布ページを開く" aria-label="${escapeHtml(`${displayVersionLabel} の原曲・本体の配布ページを開く（外部サイト）`)}">曲</a>`
@@ -2194,7 +2176,7 @@ function renderCharts(data) {
           <div class="version-actions">
             ${originControl}
             ${downloadControl}
-            <button class="secondary" type="button" disabled>追記投稿</button>
+            <button class="secondary" type="button" disabled>${uiModel ? "追記投稿" : "追記不可"}</button>
           </div>
         </div>
       `;

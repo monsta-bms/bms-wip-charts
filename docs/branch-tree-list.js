@@ -11,6 +11,12 @@
 
   const baseRenderCharts = renderCharts;
 
+  function makeVersionUiModel(version, options = {}) {
+    return typeof buildSharedVersionUiModel === "function"
+      ? buildSharedVersionUiModel(version, options)
+      : null;
+  }
+
   function html(value) {
     if (typeof escapeHtml === "function") {
       return escapeHtml(value);
@@ -115,15 +121,15 @@
     }).format(date)}`;
   }
 
-  function renderLifecycleMeta(version, options = {}) {
+  function renderLifecycleMeta(version, uiModel, options = {}) {
     const postedAt = formatPostedAt(version);
     const createdAt = String(version?.createdAt || version?.created_at || "");
     const recentBadge = options.isLatest && createdAt
       ? `<span class="recent-activity-badge" data-created-at="${html(createdAt)}" hidden></span>`
       : "";
-    const lifecycleStatus = getLifecycleStatus(version);
+    const lifecycleStatus = getLifecycleStatus(version, uiModel);
     if (lifecycleStatus === "withdrawal_pending") {
-      const handlingMode = getLifecycleHandlingMode(version);
+      const handlingMode = getLifecycleHandlingMode(version, uiModel);
       if (handlingMode === "immediate_delete") {
         return `
           <span class="version-posted-at">${html(postedAt)}</span>
@@ -459,14 +465,9 @@
     return version?.isRejected === true || version?.is_rejected === true;
   }
 
-  function resolveAllowAppend(version) {
-    if (typeof window.BmsAppendPolicy?.resolve === "function") {
-      return window.BmsAppendPolicy.resolve(version);
-    }
-    if (typeof version?.allowAppend === "boolean") {
-      return version.allowAppend;
-    }
-    return !isRejected(version);
+  function resolveAllowAppend(version, uiModel = null) {
+    const model = uiModel || makeVersionUiModel(version, { hasProgressMap: true });
+    return model?.append.allowedByPolicy === true;
   }
 
   function isCollapsedByCompletion(version) {
@@ -481,30 +482,32 @@
     return version?.collapsedReason || version?.collapsed_reason || "";
   }
 
-  function isDownloadBlocked(version) {
-    return version?.downloadBlocked === true
-      || version?.download_blocked === true
-      || ["processing", "tombstoned"].includes(getLifecycleStatus(version));
+  function isDownloadBlocked(version, uiModel = null) {
+    const model = uiModel || makeVersionUiModel(version, { hasProgressMap: true });
+    return model?.download.available !== true;
   }
 
-  function getLifecycleStatus(version) {
-    return String(version?.lifecycleStatus || version?.lifecycle_status || "active");
+  function getLifecycleStatus(version, uiModel = null) {
+    if (uiModel?.lifecycle.state) {
+      return uiModel.lifecycle.state;
+    }
+    const rawStatus = version?.lifecycleStatus ?? version?.lifecycle_status;
+    return window.BmsVersionUiModel?.normalizeLifecycleState?.(rawStatus) || "unknown";
   }
 
   function getLifecycleRequestMode(version) {
     return String(version?.requestMode || version?.request_mode || "");
   }
 
-  function getLifecycleHandlingMode(version) {
-    return String(version?.handlingMode || version?.handling_mode || "");
+  function getLifecycleHandlingMode(version, uiModel = null) {
+    if (uiModel?.lifecycle.handlingMode) {
+      return uiModel.lifecycle.handlingMode;
+    }
+    return "";
   }
 
   function getLifecycleScheduledAt(version) {
     return version?.scheduledAt || version?.scheduled_at || "";
-  }
-
-  function lifecycleBlocksAppend(version) {
-    return ["processing", "tombstoned"].includes(getLifecycleStatus(version));
   }
 
   function isDeleteRequested(version) {
@@ -532,7 +535,7 @@
     const version = node.version;
     return getDownloadBlockReason(version) === completedCollapseReason &&
       getProgress(version) < 100 &&
-      Boolean(isCollapsedByCompletion(version) || getCollapsedReason(version) === completedCollapseReason || isDownloadBlocked(version)) &&
+      Boolean(isCollapsedByCompletion(version) || getCollapsedReason(version) === completedCollapseReason) &&
       !isHiddenVersion(version);
   }
 
@@ -613,13 +616,13 @@
     return "";
   }
 
-  function renderStateBadges(node, progress) {
+  function renderStateBadges(node, progress, uiModel) {
     const version = node.version;
     const badges = [];
-    const lifecycleStatus = getLifecycleStatus(version);
+    const lifecycleStatus = getLifecycleStatus(version, uiModel);
 
     if (lifecycleStatus === "withdrawal_pending") {
-      const handlingMode = getLifecycleHandlingMode(version);
+      const handlingMode = getLifecycleHandlingMode(version, uiModel);
       const label = handlingMode === "grace_auto_delete"
         ? "DL停止・自動削除待ち"
         : handlingMode === "manual_review"
@@ -651,8 +654,8 @@
     return badges.slice(0, 2).join("");
   }
 
-  function renderAppendPolicyInfo(version) {
-    if (resolveAllowAppend(version)) {
+  function renderAppendPolicyInfo(version, uiModel) {
+    if (!uiModel || resolveAllowAppend(version, uiModel)) {
       return "";
     }
 
@@ -665,7 +668,7 @@
     `;
   }
 
-  function enhanceDownloadControl(row, version, displayVersionLabel, forceBlocked = false) {
+  function enhanceDownloadControl(row, version, uiModel, displayVersionLabel, forceBlocked = false) {
     const actions = row.querySelector(".version-actions");
     if (!actions) {
       return;
@@ -676,7 +679,7 @@
       return;
     }
 
-    const blocked = forceBlocked || isDownloadBlocked(version);
+    const blocked = forceBlocked || isDownloadBlocked(version, uiModel);
     if (blocked) {
       const disabled = document.createElement("span");
       disabled.className = "version-download-control download-disabled download-button download-blocked-control";
@@ -729,9 +732,9 @@
     appendControl.replaceWith(locked);
   }
 
-  function ensureManagementControl(row, version, chartId, displayVersionLabel) {
+  function ensureManagementControl(row, version, uiModel, chartId, displayVersionLabel) {
     const actions = row.querySelector(".version-actions");
-    if (!actions || lifecycleBlocksAppend(version) || actions.querySelector(".version-management-button")) {
+    if (!actions || uiModel?.management.visible !== true || actions.querySelector(".version-management-button")) {
       return;
     }
 
@@ -747,12 +750,12 @@
     button.dataset.author = String(version?.author || "未入力");
     button.dataset.withdrawn = isWithdrawn(version) ? "true" : "false";
     button.dataset.deleteRequested = isDeleteRequested(version) ? "true" : "false";
-    button.dataset.allowAppend = resolveAllowAppend(version) ? "true" : "false";
-    button.dataset.appendAvailable = resolveAllowAppend(version) && !lifecycleBlocksAppend(version) ? "true" : "false";
-    button.dataset.downloadAvailable = !isDownloadBlocked(version) && !isHiddenVersion(version) ? "true" : "false";
-    button.dataset.lifecycleStatus = getLifecycleStatus(version);
+    button.dataset.allowAppend = uiModel.append.allowedByPolicy ? "true" : "false";
+    button.dataset.appendAvailable = uiModel.append.available ? "true" : "false";
+    button.dataset.downloadAvailable = uiModel.download.available ? "true" : "false";
+    button.dataset.lifecycleStatus = getLifecycleStatus(version, uiModel);
     button.dataset.requestMode = getLifecycleRequestMode(version);
-    button.dataset.handlingMode = getLifecycleHandlingMode(version);
+    button.dataset.handlingMode = getLifecycleHandlingMode(version, uiModel);
     button.dataset.scheduledAt = String(getLifecycleScheduledAt(version));
     button.dataset.canCancelWithdrawal = version?.canCancelWithdrawal === true ? "true" : "false";
     button.dataset.createdAt = String(version?.createdAt || version?.created_at || "");
@@ -834,14 +837,19 @@
     const completed = isCompleted(version, progress);
     const rejected = isRejected(version);
     const collapsed = isCollapsedByCompletion(version);
-    const blocked = isDownloadBlocked(version);
     const deleteRequested = isDeleteRequested(version);
     const withdrawn = isWithdrawn(version);
     const hidden = isHiddenVersion(version);
-    const lifecycleStatus = getLifecycleStatus(version);
-    const publicDataRedacted = lifecycleStatus === "processing" || lifecycleStatus === "tombstoned";
     const supersededIntermediate = isSupersededIntermediateNode(node);
+    const uiModel = makeVersionUiModel(version, {
+      hasProgressMap: true,
+      isSupersededIntermediate: supersededIntermediate
+    });
+    const lifecycleStatus = getLifecycleStatus(version, uiModel);
+    const publicDataRedacted = lifecycleStatus === "processing" || lifecycleStatus === "tombstoned";
+    const blocked = isDownloadBlocked(version, uiModel);
     const tag = row.querySelector(".version-tag");
+    const actions = row.querySelector(":scope > .version-actions");
     const progressBlock = [...row.querySelectorAll(".meta-block")]
       .find((block) => block.querySelector(".progress-pill"));
 
@@ -898,28 +906,28 @@
         <span class="version-label-stack">
           <span class="version-title-line">
             <span class="version-main-label">${html(displayVersionLabel)}</span>
-            <span class="version-state-badges">${renderStateBadges(node, progress)}</span>
+            <span class="version-state-badges">${renderStateBadges(node, progress, uiModel)}</span>
           </span>
           <span class="version-redacted-message">${html(lifecycleStatus === "tombstoned"
             ? "投稿者により取り下げられました"
             : "取り下げ処理中")}</span>
           <span class="version-parent-line" title="${html(titleText)}">${html(parentText)}</span>
-          <span class="version-lifecycle-line">${renderLifecycleMeta(version, { isLatest: options.isLatest })}</span>
+          <span class="version-lifecycle-line">${renderLifecycleMeta(version, uiModel, { isLatest: options.isLatest })}</span>
         </span>
       ` : `
         ${renderTreeConnector(node.depth)}
         <span class="version-label-stack">
           <span class="version-title-line">
             <span class="version-main-label">${html(displayVersionLabel)}</span>
-            <span class="version-state-badges">${renderStateBadges(node, progress)}</span>
+            <span class="version-state-badges">${renderStateBadges(node, progress, uiModel)}</span>
           </span>
           <span class="version-chart-name-line">
             <span class="version-chart-name-label">差分名：</span>
             <span class="version-chart-name" title="${html(versionChartName)}">${html(versionChartName)}</span>
           </span>
-          ${renderAppendPolicyInfo(version)}
+          ${renderAppendPolicyInfo(version, uiModel)}
           <span class="version-parent-line" title="${html(titleText)}">${html(parentText)}</span>
-          <span class="version-lifecycle-line">${renderLifecycleMeta(version, { isLatest: options.isLatest })}</span>
+          <span class="version-lifecycle-line">${renderLifecycleMeta(version, uiModel, { isLatest: options.isLatest })}</span>
         </span>
       `;
     }
@@ -930,7 +938,12 @@
         cell.replaceChildren();
         cell.setAttribute("aria-hidden", "true");
       });
-      row.querySelector(":scope > .version-actions")?.replaceChildren();
+      actions?.replaceChildren();
+      return;
+    }
+
+    if (uiModel?.canShowActions !== true) {
+      actions?.replaceChildren();
       return;
     }
 
@@ -946,11 +959,9 @@
     }
 
     enhanceOriginControl(row, displayVersionLabel);
-    enhanceDownloadControl(row, version, displayVersionLabel, supersededIntermediate);
-    ensureManagementControl(row, version, getChartId(options.entry), displayVersionLabel);
-    if (lifecycleBlocksAppend(version)) {
-      lockAppendControl(row, "取り下げ処理中のため追記できません");
-    } else if (supersededIntermediate) {
+    enhanceDownloadControl(row, version, uiModel, displayVersionLabel, supersededIntermediate);
+    ensureManagementControl(row, version, uiModel, getChartId(options.entry), displayVersionLabel);
+    if (supersededIntermediate) {
       lockAppendControl(row, "完成版に置き換え済みの中間履歴のため追記できません");
     }
   }

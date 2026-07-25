@@ -14,6 +14,12 @@
   let favoriteOnly = false;
   let storageWarned = false;
 
+  function makeVersionUiModel(version) {
+    return typeof buildSharedVersionUiModel === "function"
+      ? buildSharedVersionUiModel(version, { hasProgressMap: true })
+      : null;
+  }
+
   function injectStyles() {
     if (document.querySelector("#favoriteListStyles")) {
       return;
@@ -166,9 +172,7 @@
   }
 
   function isVersionFavoriteAvailable(version) {
-    const lifecycleStatus = String(version?.lifecycleStatus || version?.lifecycle_status || "active");
-    return version?.publicDataRedacted !== true
-      && !["processing", "tombstoned", "deleted"].includes(lifecycleStatus);
+    return makeVersionUiModel(version)?.favorite.available === true;
   }
 
   function getParentVersionId(version) {
