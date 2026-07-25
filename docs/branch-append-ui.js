@@ -1396,7 +1396,9 @@
     return actionUi.createAppendControl(uiModel, { chartId })?.outerHTML || "";
   }
 
-  function renderChartsWithAppend(data) {
+  function renderBranchAppendBase(context) {
+    const data = context.data;
+    const target = context.target;
     const charts = Array.isArray(data?.charts) ? data.charts : [];
     const nextChartIds = new Set(charts.map((entry) => String(entry?.chart?.id || entry?.chartId || "")));
     appendState.charts = [
@@ -1407,20 +1409,20 @@
       })
     ];
 
-    if (!chartList) {
-      return;
+    if (!target) {
+      const error = new Error("The branch append base renderer target is unavailable.");
+      error.code = "CHART_RENDER_TARGET_INVALID";
+      throw error;
     }
 
     if (charts.length === 0) {
-      if (typeof renderEmpty === "function") {
-        renderEmpty();
-      } else {
-        chartList.innerHTML = `<div class="list-status">投稿はまだありません。</div>`;
+      if (context.mode !== "append") {
+        target.innerHTML = `<div class="list-status">投稿はまだありません。</div>`;
       }
       return;
     }
 
-    chartList.innerHTML = charts.map((entry) => {
+    const markup = charts.map((entry) => {
       const song = entry.song || {};
       const chart = entry.chart || {};
       const versions = Array.isArray(entry.versions) ? entry.versions : [];
@@ -1495,6 +1497,12 @@
         </article>
       `;
     }).join("");
+
+    if (context.mode === "append") {
+      target.insertAdjacentHTML("beforeend", markup);
+      return;
+    }
+    target.innerHTML = markup;
   }
 
   function findAppendTarget(chartId, parentVersionId) {
@@ -1665,11 +1673,15 @@
     }
   });
 
-  try {
-    renderCharts = renderChartsWithAppend;
-  } catch (error) {
-    window.renderCharts = renderChartsWithAppend;
+  if (typeof window.BmsChartRenderPipeline?.setBaseRenderer !== "function") {
+    const error = new Error("The chart render pipeline is unavailable.");
+    error.code = "CHART_RENDER_PIPELINE_UNAVAILABLE";
+    throw error;
   }
+  window.BmsChartRenderPipeline.setBaseRenderer({
+    name: "branch-append-base",
+    run: renderBranchAppendBase
+  });
 
   function blocksShareGrid(leftBlocks, rightBlocks) {
     if (!Array.isArray(leftBlocks) || !Array.isArray(rightBlocks) || leftBlocks.length !== rightBlocks.length) {

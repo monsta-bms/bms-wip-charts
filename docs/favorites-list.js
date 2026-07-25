@@ -5,11 +5,12 @@
   const storageKey = "bms-wip-charts:favorites:v1";
   const completedCollapseReason = "superseded_by_completed_descendant";
 
-  if (!listElement || typeof renderCharts !== "function") {
+  if (!listElement
+    || typeof window.BmsChartRenderPipeline?.registerDataStage !== "function"
+    || typeof window.BmsChartRenderPipeline?.registerPostRenderStage !== "function") {
     return;
   }
 
-  const wrappedRenderCharts = renderCharts;
   let latestData = null;
   let favoriteOnly = false;
   let storageWarned = false;
@@ -388,10 +389,15 @@
     return map;
   }
 
-  function mountFavorites(renderData, root = listElement) {
+  function mountFavorites(renderData, root = listElement, renderedNodes = null) {
     const favorites = readFavorites();
     const entries = Array.isArray(renderData?.charts) ? renderData.charts : [];
-    const groups = Array.from(root.querySelectorAll(".chart-group"));
+    const renderedGroups = Array.isArray(renderedNodes)
+      ? renderedNodes.filter((node) => node.matches?.(".chart-group"))
+      : [];
+    const groups = renderedGroups.length > 0
+      ? renderedGroups
+      : Array.from(root.querySelectorAll(".chart-group"));
 
     entries.forEach((entry, chartIndex) => {
       const group = groups[chartIndex];
@@ -448,20 +454,45 @@
     });
   }
 
-  function renderWithFavorites(data) {
-    latestData = data;
+  function mergeLatestData(data) {
+    const charts = Array.isArray(data?.charts) ? data.charts : [];
+    const nextIds = new Set(charts.map(getChartId));
+    const existingCharts = Array.isArray(latestData?.charts) ? latestData.charts : [];
+    return {
+      ...(latestData || {}),
+      ...data,
+      charts: [
+        ...existingCharts.filter((entry) => {
+          const chartId = getChartId(entry);
+          return chartId && !nextIds.has(chartId);
+        }),
+        ...charts
+      ]
+    };
+  }
+
+  function applyFavoriteFilter(context) {
+    if (context.mode === "detail" || context.suppressFavorites) {
+      return context.data;
+    }
+
+    latestData = context.mode === "append"
+      ? mergeLatestData(context.originalData)
+      : context.originalData;
     const favorites = readFavorites();
-    const renderData = favoriteOnly ? filterDataForFavorites(data, favorites) : data;
-    wrappedRenderCharts(renderData);
-    if (favoriteOnly && (!Array.isArray(renderData?.charts) || renderData.charts.length === 0)) {
-      const status = listElement.querySelector(".list-status");
+    return favoriteOnly ? filterDataForFavorites(context.data, favorites) : context.data;
+  }
+
+  function mountFavoriteStage(context) {
+    if (favoriteOnly && context.mode !== "detail"
+      && (!Array.isArray(context.data?.charts) || context.data.charts.length === 0)) {
+      const status = context.target.querySelector(".list-status");
       if (status) {
         status.textContent = "お気に入り登録されたversionはありません。";
       }
     }
-    mountFavorites(renderData);
+    mountFavorites(context.data, context.target, context.renderedNodes);
     updateFilterButton();
-    return renderData;
   }
 
   function rerenderLatest() {
@@ -469,13 +500,11 @@
       return;
     }
 
-    const renderData = renderWithFavorites(latestData);
-    if (typeof window.mountChartUi === "function") {
-      window.mountChartUi(renderData, listElement, {
-        reason: "favorites-rerender",
-        mountFavorites: false
-      });
-    }
+    window.BmsChartRenderPipeline.render(latestData, {
+      target: listElement,
+      mode: "replace",
+      source: "favorite-filter"
+    });
   }
 
   interactionRoot.addEventListener("click", (event) => {
@@ -531,11 +560,18 @@
     rerenderLatest();
   });
 
-  try {
-    renderCharts = renderWithFavorites;
-  } catch (error) {
-    window.renderCharts = renderWithFavorites;
-  }
+  window.BmsChartRenderPipeline.registerDataStage({
+    name: "favorites-filter",
+    order: 100,
+    required: true,
+    run: applyFavoriteFilter
+  });
+  window.BmsChartRenderPipeline.registerPostRenderStage({
+    name: "favorites",
+    order: 200,
+    required: true,
+    run: mountFavoriteStage
+  });
 
   window.mountFavoriteButtons = mountFavorites;
 

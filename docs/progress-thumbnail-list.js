@@ -4,7 +4,6 @@
   const interactionRoot = document.querySelector("#list") || listElement;
   let progressThumbnailMountFrame = 0;
   let progressThumbnailObserver = null;
-  let progressThumbnailBridgeInstalled = false;
   let progressImageGenerationWarnCount = 0;
   const maxProgressImageGenerationWarnings = 5;
   const emptyBarFill = "#D3E5DF";
@@ -878,14 +877,19 @@
     return slot;
   }
 
-  function applyStoredProgressThumbnails(data, root = listElement) {
+  function applyStoredProgressThumbnails(data, root = listElement, options = {}) {
     const charts = Array.isArray(data?.charts) ? data.charts : [];
     if (!root || charts.length === 0) {
       return;
     }
 
     const densityScale = calculateListDensityScale(data);
-    const chartGroups = Array.from(root.querySelectorAll(".chart-group"));
+    const renderedGroups = Array.isArray(options.renderedNodes)
+      ? options.renderedNodes.filter((node) => node.matches?.(".chart-group"))
+      : [];
+    const chartGroups = renderedGroups.length > 0
+      ? renderedGroups
+      : Array.from(root.querySelectorAll(".chart-group"));
     charts.forEach((entry, chartIndex) => {
       const group = chartGroups[chartIndex];
       const versions = Array.isArray(entry?.versions) ? entry.versions : [];
@@ -926,7 +930,9 @@
       });
     });
 
-    scheduleProgressImageThumbnailMount(root);
+    if (options.scheduleMount !== false) {
+      scheduleProgressImageThumbnailMount(root);
+    }
   }
 
   function installProgressThumbnailObserver() {
@@ -954,7 +960,7 @@
     }
   }
 
-  function renderChartsWithProgressThumbnails(data) {
+  function renderChartsWithProgressThumbnailsLegacy(data) {
     const charts = Array.isArray(data?.charts) ? data.charts : [];
 
     if (!listElement) {
@@ -1049,33 +1055,6 @@
     scheduleProgressImageThumbnailMount(listElement);
   }
 
-  function installFinalProgressThumbnailBridge() {
-    if (progressThumbnailBridgeInstalled || typeof renderCharts !== "function") {
-      return;
-    }
-
-    const finalRenderCharts = renderCharts;
-    if (finalRenderCharts.__progressThumbnailFinalBridge) {
-      progressThumbnailBridgeInstalled = true;
-      return;
-    }
-
-    const renderChartsWithFinalProgressThumbnails = (data) => {
-      finalRenderCharts(data);
-      applyStoredProgressThumbnails(data, listElement);
-    };
-    renderChartsWithFinalProgressThumbnails.__progressThumbnailFinalBridge = true;
-    renderChartsWithFinalProgressThumbnails.__progressThumbnailBase = finalRenderCharts;
-
-    try {
-      renderCharts = renderChartsWithFinalProgressThumbnails;
-    } catch (error) {
-      window.renderCharts = renderChartsWithFinalProgressThumbnails;
-    }
-
-    progressThumbnailBridgeInstalled = true;
-  }
-
   function debugProgressThumbnails(root = listElement || document) {
     const scope = root || document;
     const progressThumbnails = Array.from(scope.querySelectorAll(".progress-thumbnail"));
@@ -1130,11 +1109,20 @@
   window.getProgressThumbnailBlockRanges = (versionId) => progressBlockRangesByVersionId.get(String(versionId || "")) || null;
   window.debugProgressThumbnails = debugProgressThumbnails;
 
-  try {
-    renderCharts = renderChartsWithProgressThumbnails;
-  } catch (error) {
-    window.renderCharts = renderChartsWithProgressThumbnails;
+  if (typeof window.BmsChartRenderPipeline?.registerPostRenderStage !== "function") {
+    const error = new Error("The chart render pipeline is unavailable.");
+    error.code = "CHART_RENDER_PIPELINE_UNAVAILABLE";
+    throw error;
   }
-
-  window.setTimeout(installFinalProgressThumbnailBridge, 0);
+  window.BmsChartRenderPipeline.registerPostRenderStage({
+    name: "stored-progress-thumbnails",
+    order: 300,
+    required: true,
+    run(context) {
+      applyStoredProgressThumbnails(context.data, context.target, {
+        renderedNodes: context.renderedNodes,
+        scheduleMount: false
+      });
+    }
+  });
 })();

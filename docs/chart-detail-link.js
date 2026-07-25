@@ -1,21 +1,19 @@
 (() => {
   "use strict";
 
-  const chartList = document.querySelector("#chartList");
   const section = document.querySelector("#selectedChartSection");
   const status = document.querySelector("#selectedChartStatus");
   const retryButton = document.querySelector("#selectedChartRetry");
   const cardSlot = document.querySelector("#selectedChartCardSlot");
   const backLink = document.querySelector("#selectedChartBackLink");
 
-  if (!chartList || !section || !status || !retryButton || !cardSlot || !backLink
-    || typeof renderCharts !== "function") {
+  if (!section || !status || !retryButton || !cardSlot || !backLink
+    || typeof window.BmsChartRenderPipeline?.renderInto !== "function") {
     return;
   }
 
   const maxIdLength = 160;
   const validIdPattern = /^[A-Za-z0-9_-]+$/;
-  const baseRenderCharts = renderCharts;
   let selection = readSelectionFromUrl();
   let detailRequested = selection.paramsPresent;
   let detailReady = false;
@@ -166,53 +164,22 @@
     }, 4000);
   }
 
-  function scheduleDetailMounts(data = null) {
-    if (data && typeof window.mountChartUi === "function") {
-      window.mountChartUi(data, cardSlot, { reason: "selected-detail" });
-      return;
-    }
-    window.scheduleProgressImageThumbnailMount?.(cardSlot);
-    window.scheduleChartMiniViewMount?.(cardSlot);
-    window.refreshBranchTreeOverlays?.(cardSlot);
-    window.scheduleBranchTreeOverlayRefresh?.();
-    window.BmsRecentActivity?.refresh?.(cardSlot);
-  }
-
-  function renderChartsWithSelectedSection(data) {
-    baseRenderCharts(data);
-    insertSection();
-    scheduleDetailMounts();
-    void focusTargetVersion();
-  }
-
-  try {
-    renderCharts = renderChartsWithSelectedSection;
-  } catch {
-    window.renderCharts = renderChartsWithSelectedSection;
-  }
-
-  function preserveCurrentList() {
-    const fragment = document.createDocumentFragment();
-    while (chartList.firstChild) {
-      fragment.appendChild(chartList.firstChild);
-    }
-    return fragment;
-  }
-
-  function renderDetailCard(data) {
-    const preservedList = preserveCurrentList();
+  function renderDetailCard(data, source = "detail") {
     cardSlot.replaceChildren();
-    baseRenderCharts(data);
+    window.BmsChartRenderPipeline.renderInto(data, cardSlot, {
+      mode: "detail",
+      source,
+      selectedChartId: selection.chartId,
+      suppressFavorites: true
+    });
 
-    const renderedCard = chartList.querySelector(":scope > .chart-group");
+    const renderedCard = cardSlot.querySelector(":scope > .chart-group");
     if (!renderedCard) {
-      chartList.replaceChildren(preservedList);
-      throw new Error("The shared chart renderer did not produce a chart card.");
+      const error = new Error("The shared chart renderer did not produce a chart card.");
+      error.code = "CHART_DETAIL_CARD_MISSING";
+      throw error;
     }
 
-    cardSlot.appendChild(renderedCard);
-    chartList.replaceChildren(preservedList);
-    scheduleDetailMounts(data);
     detailReady = true;
     shouldFocusTarget = true;
     setStatus(successMessage, { success: Boolean(successMessage) });
@@ -290,7 +257,7 @@
           successMessage = "指定された版は削除されたため、残っている版を表示しました。";
           updateDetailUrl("replace");
           window.BmsRecentActivity?.setServerTime?.(body?.serverTime);
-          renderDetailCard(body);
+          renderDetailCard(body, managementRefresh ? "management-refresh" : "detail");
           await focusTargetVersion();
           return true;
         }
@@ -306,7 +273,7 @@
       }
 
       window.BmsRecentActivity?.setServerTime?.(body?.serverTime);
-      renderDetailCard(body);
+      renderDetailCard(body, managementRefresh ? "management-refresh" : (postSuccess ? "append-success" : "detail"));
       await focusTargetVersion();
       return true;
     } catch (error) {
@@ -448,7 +415,6 @@
 
   window.addEventListener("chart-list-load-settled", () => {
     insertSection();
-    scheduleDetailMounts();
     void focusTargetVersion();
   });
 })();

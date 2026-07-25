@@ -336,25 +336,25 @@ check("Version Action UI never uses innerHTML", () => {
 });
 
 const favoritesSource = fs.readFileSync(path.resolve(__dirname, "../docs/favorites-list.js"), "utf8");
-const renderStart = favoritesSource.indexOf("function renderWithFavorites(data)");
+const renderStart = favoritesSource.indexOf("function mergeLatestData(data)");
 const renderEnd = favoritesSource.indexOf("interactionRoot.addEventListener", renderStart);
 assert.ok(renderStart >= 0 && renderEnd > renderStart, "favorites rerender functions must be extractable");
 const createFavoritesHarness = Function("dependencies", `
   let latestData = dependencies.latestData;
   const readFavorites = dependencies.readFavorites;
   const filterDataForFavorites = dependencies.filterDataForFavorites;
-  const wrappedRenderCharts = dependencies.wrappedRenderCharts;
+  const getChartId = dependencies.getChartId;
   const listElement = dependencies.listElement;
   const mountFavorites = dependencies.mountFavorites;
   const updateFilterButton = dependencies.updateFilterButton;
   const favoriteOnly = dependencies.favoriteOnly;
   const window = dependencies.window;
   ${favoritesSource.slice(renderStart, renderEnd)}
-  return { renderWithFavorites, rerenderLatest };
+  return { applyFavoriteFilter, mountFavoriteStage, rerenderLatest, getLatestData: () => latestData };
 `);
 
-check("favorites local rerender mounts shared UI exactly once", () => {
-  const calls = { render: 0, favoriteMount: 0, sharedMount: 0, fetch: 0 };
+check("favorites local rerender enters the shared pipeline once", () => {
+  const calls = { render: 0, favoriteMount: 0, fetch: 0 };
   const data = { charts: [{ versions: [{ id: "version_01" }] }] };
   const filtered = { charts: [{ versions: [{ id: "version_01" }] }] };
   const listElement = { querySelector: () => null, thumbnailSlots: 1, favoriteButtons: 1 };
@@ -363,44 +363,53 @@ check("favorites local rerender mounts shared UI exactly once", () => {
     favoriteOnly: true,
     readFavorites: () => ({ version_01: {} }),
     filterDataForFavorites: () => filtered,
-    wrappedRenderCharts: () => { calls.render += 1; },
+    getChartId: () => "chart_01",
     listElement,
     mountFavorites: () => { calls.favoriteMount += 1; },
     updateFilterButton: () => {},
     window: {
-      mountChartUi(renderData, root, options) {
-        calls.sharedMount += 1;
-        assert.equal(renderData, filtered);
-        assert.equal(root, listElement);
-        assert.deepEqual(options, { reason: "favorites-rerender", mountFavorites: false });
-        root.storedThumbnailApplied = true;
+      BmsChartRenderPipeline: {
+        render(renderData, options) {
+          calls.render += 1;
+          assert.equal(renderData, data);
+          assert.deepEqual(options, {
+            target: listElement,
+            mode: "replace",
+            source: "favorite-filter"
+          });
+        }
       },
       fetch() { calls.fetch += 1; }
     }
   });
   harness.rerenderLatest();
-  assert.deepEqual(calls, { render: 1, favoriteMount: 1, sharedMount: 1, fetch: 0 });
+  harness.mountFavoriteStage({
+    data: filtered,
+    target: listElement,
+    renderedNodes: [],
+    mode: "replace"
+  });
+  assert.deepEqual(calls, { render: 1, favoriteMount: 1, fetch: 0 });
   assert.equal(listElement.thumbnailSlots, 1);
   assert.equal(listElement.favoriteButtons, 1);
-  assert.equal(listElement.storedThumbnailApplied, true);
 });
 check("two favorites rerenders do not recurse or grow DOM", () => {
-  const calls = { render: 0, favoriteMount: 0, sharedMount: 0 };
+  const calls = { render: 0, favoriteMount: 0 };
   const listElement = { querySelector: () => null, thumbnailSlots: 1, favoriteButtons: 1 };
   const harness = createFavoritesHarness({
     latestData: { charts: [] },
     favoriteOnly: false,
     readFavorites: () => ({}),
     filterDataForFavorites: (data) => data,
-    wrappedRenderCharts: () => { calls.render += 1; },
+    getChartId: () => "",
     listElement,
     mountFavorites: () => { calls.favoriteMount += 1; },
     updateFilterButton: () => {},
-    window: { mountChartUi: () => { calls.sharedMount += 1; } }
+    window: { BmsChartRenderPipeline: { render: () => { calls.render += 1; } } }
   });
   harness.rerenderLatest();
   harness.rerenderLatest();
-  assert.deepEqual(calls, { render: 2, favoriteMount: 2, sharedMount: 2 });
+  assert.deepEqual(calls, { render: 2, favoriteMount: 0 });
   assert.deepEqual([listElement.thumbnailSlots, listElement.favoriteButtons], [1, 1]);
 });
 

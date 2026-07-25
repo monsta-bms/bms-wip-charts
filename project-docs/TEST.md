@@ -1525,3 +1525,16 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 8 version性能fixtureはmodel生成8回、append/management node 16、同一状態の置換0、favorites再描画ごとの共通mount 1回を基準とする。Action UIはURL parseや状態再判定を行わず、既存rendererのDOM走査増加はtree/favoritesの必要selectorだけに制限する。
 - `node scripts/test-version-render-pipeline-static.js`で34 checkを実行し、model→Link UI→Action UI→app→rendererのclassic script順、wrapper/capture順、全対象rendererのAction UI利用、独自の正常append/management/lifecycle生成なし、tree冪等性、favorites mount、cache key、HTML重複ID、保護CSS/runtime style不変を確認する。
 - R1 model、R2 Link UI、曲/DL static、version list links、withdrawal active、append、metadata parser/static、変更JS構文、HTML重複ID、既存3テーマ・390/760/1366px確認を回帰実行する。本番deploy、Pages push、push、D1/R2、Migration、Secret、Cron、dependency変更は行わない。
+
+## VERSION-TREE-RENDER-CONSOLIDATION R4A 明示的描画パイプライン
+
+- `node scripts/test-chart-render-pipeline.js`で、global/API固定、base/data/post/mount登録、二重登録、不正name/order、order・同順位name順、初回render後lock、登録一覧freeze、replace/append/detail、明示target、入力非破壊、context、各stage/mount 1回、mount抑止を確認する。
+- 同unit testでrequired/optional/base失敗、base未登録、同一target再入拒否、別target入れ子、例外後guard解除、stage結果、不正mode/source/target、固定error code、stable facade、同一入力のstage順、append既存node維持、detail別targetを確認する。45 check以上を維持する。
+- `node scripts/test-version-render-pipeline-static.js`で、model→link→action→pipeline→app順、classic script、pipeline外facade代入0、renderer capture/wrapper/timer wrapper 0、base 1件、tree/favorites/thumbnail/mountの登録名・順序、detailの`renderInto`、共通event名、legacy renderer未参照を確認する。
+- 初期表示はdata→base→tree→favorites→stored thumbnail→common mountを各1回通る。favorite切替はfetch 0のままreplaceし、button/thumbnail/mountを重複させない。投稿成功と管理操作後のdetail・recent再取得はpipelineを通り、`chart-detail:rendered`、`chart-ui:mounted`、`chart-list-load-settled`を同じ描画で二重dispatchしない。
+- もっと見るは旧card nodeとlistenerを維持し、新batchだけをappendして補強する。既存chartを再生成せず、重複chart、favorite、曲/DL、追記、管理、lifecycle、thumbnail slotを増やさない。detailは専用slotへ直接描画し、favorite-onlyの影響、最近の投稿への重複、一時main list利用がないことを確認する。
+- 保護CSS、favorites/progress runtime style、delegation/resize listener、MutationObserver、requestAnimationFrameの登録数を維持する。white/default/dark × 390/760/1366pxではR3と同じDOM/classを使用し、横overflow、操作重なり、focus表示、選択中cardの崩れがないことを確認する。
+- 性能fixtureはbase、tree、favorites、stored thumbnail、common mountを各1回とし、appendでは新batchだけを対象にする。8/100/1000 version相当でwrapper連鎖による追加full renderがなく、DOM走査とnode生成がR3から増えていないことを基準にする。時間値は実行環境で変動するため、実行回数と対象node数を回帰基準にする。
+- R1 model、R2 Link UI、R3 Action UI、曲/DL static、version list links、withdrawal active、append、metadata parser/static、全変更JS構文、HTML重複ID、`git diff --check`を回帰実行する。Worker、Pages、D1/R2、Migration、Secret、Cron、dependency、compact一覧、CSSを変更せず、本番操作・push・deployを行わない。
+- 2026-07-25の隔離結果はpipeline unit 45 check、static契約41 check、R1 model 67、R2 Link UI 56、R3 Action UI 73、version list link 4、withdrawal active回帰、metadata parser/static、曲/DL staticが成功した。8/100/1000 itemのpipeline fixtureは全サイズでdata/base/tree/favorites/thumbnail/mount各1回、rendered node数8/100/1000だった。
+- ローカルfixtureの実ブラウザでは初期10 chart/20 version、追加4 chart後14 chart/28 versionを確認し、chart ID重複0、追加境界1、favorite/曲/DL/thumbnail/tree/管理control各28を維持した。detailは専用slot 1 card/2 version、最近一覧の同一chart重複0。white/default/dark × 390/760/1366pxの9条件すべてで横overflow 0、操作欄の画面外要素0、Console warning/error 0だった。

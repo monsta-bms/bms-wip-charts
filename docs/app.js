@@ -2090,6 +2090,37 @@ window.BmsRecentActivity = {
 };
 window.mountChartUi = mountChartUi;
 
+function getChartRenderMountReason(source) {
+  const reasons = {
+    initial: "initial",
+    reload: "rerender",
+    "favorite-filter": "favorites-rerender",
+    "append-success": "append-success",
+    "management-refresh": "management-refresh",
+    "load-more": "append-complete",
+    detail: "selected-detail"
+  };
+  return reasons[source] || "render";
+}
+
+if (typeof window.BmsChartRenderPipeline?.registerMountStage !== "function") {
+  const error = new Error("The chart render pipeline is unavailable.");
+  error.code = "CHART_RENDER_PIPELINE_UNAVAILABLE";
+  throw error;
+}
+window.BmsChartRenderPipeline.registerMountStage({
+  name: "common-mount",
+  order: 400,
+  required: true,
+  run(context) {
+    mountChartUi(context.data, context.target, {
+      reason: getChartRenderMountReason(context.source),
+      applyStoredThumbnails: false,
+      mountFavorites: false
+    });
+  }
+});
+
 function updateChartListControls() {
   if (!chartListPagination || !loadMoreChartsButton) {
     return;
@@ -2128,7 +2159,7 @@ function renderEmpty() {
   chartList.innerHTML = `<div class="list-status">投稿はまだありません。</div>`;
 }
 
-function renderCharts(data) {
+function renderChartsLegacy(data) {
   const charts = Array.isArray(data?.charts) ? data.charts : [];
 
   if (charts.length === 0) {
@@ -2223,14 +2254,12 @@ function appendRenderedCharts(data) {
     card.classList.remove("appended-batch-start");
   });
 
-  const preserved = document.createDocumentFragment();
-  while (chartList.firstChild) {
-    preserved.appendChild(chartList.firstChild);
-  }
-
-  renderCharts(data);
-  mountChartUi(data, chartList, { reason: "append-new-cards" });
-  const addedCards = Array.from(chartList.querySelectorAll(":scope > .chart-group"));
+  const renderContext = window.renderCharts(data, {
+    target: chartList,
+    mode: "append",
+    source: "load-more"
+  });
+  const addedCards = renderContext.renderedNodes.filter((node) => node.matches?.(".chart-group"));
   const firstAddedCard = addedCards[0] || null;
   const batchBoundary = firstAddedCard ? document.createElement("div") : null;
   if (firstAddedCard && batchBoundary) {
@@ -2240,17 +2269,9 @@ function appendRenderedCharts(data) {
     batchBoundary.dataset.appendedCount = String(addedCards.length);
     batchBoundary.setAttribute("aria-hidden", "true");
     batchBoundary.innerHTML = '<span class="appended-batch-boundary-mark"></span>';
+    chartList.insertBefore(batchBoundary, firstAddedCard);
   }
-  const additions = document.createDocumentFragment();
-  while (chartList.firstChild) {
-    additions.appendChild(chartList.firstChild);
-  }
-  chartList.appendChild(preserved);
-  if (batchBoundary) {
-    chartList.appendChild(batchBoundary);
-  }
-  chartList.appendChild(additions);
-  mountChartUi(null, chartList, { reason: "append-complete" });
+  return renderContext;
 }
 
 function rerenderCurrentChartList() {
@@ -2264,8 +2285,11 @@ function rerenderCurrentChartList() {
     },
     query: { q: chartListState.query }
   };
-  renderCharts(renderData);
-  mountChartUi(renderData, chartList, { reason: "rerender" });
+  window.renderCharts(renderData, {
+    target: chartList,
+    mode: "replace",
+    source: "reload"
+  });
   updateChartListControls();
   return renderData;
 }
@@ -2354,8 +2378,12 @@ async function loadCharts(options = {}) {
         appendRenderedCharts(renderData);
       }
     } else {
-      renderCharts(renderData);
-      mountChartUi(renderData, chartList, { reason: "initial" });
+      window.renderCharts(renderData, {
+        target: chartList,
+        mode: "replace",
+        source: "initial",
+        selectedChartId
+      });
     }
 
     setChartListFeedback(`${chartListState.charts.length}件表示`);

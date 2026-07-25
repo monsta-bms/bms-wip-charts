@@ -5,11 +5,9 @@
   const expandedIntermediateGroups = new Set();
   let latestCharts = [];
 
-  if (!listElement || typeof renderCharts !== "function") {
+  if (!listElement || typeof window.BmsChartRenderPipeline?.registerPostRenderStage !== "function") {
     return;
   }
-
-  const baseRenderCharts = renderCharts;
 
   function makeVersionUiModel(version, options = {}) {
     return typeof buildSharedVersionUiModel === "function"
@@ -1137,7 +1135,7 @@
     setIntermediateGroupExpanded(button.closest(".version-list"), groupId, nextExpanded);
   });
 
-  function enhanceTreeDisplay(data) {
+  function enhanceTreeDisplay(data, root, renderedNodes) {
     const charts = Array.isArray(data?.charts) ? data.charts : [];
     const nextChartIds = new Set(charts.map(getChartId));
     latestCharts = [
@@ -1147,7 +1145,12 @@
         return chartId && !nextChartIds.has(chartId);
       })
     ];
-    const chartGroups = Array.from(listElement.querySelectorAll(".chart-group"));
+    const renderedGroups = Array.isArray(renderedNodes)
+      ? renderedNodes.filter((node) => node.matches?.(".chart-group"))
+      : [];
+    const chartGroups = renderedGroups.length > 0
+      ? renderedGroups
+      : Array.from(root.querySelectorAll(".chart-group"));
 
     charts.forEach((entry, chartIndex) => {
       const group = chartGroups[chartIndex];
@@ -1241,18 +1244,14 @@
     });
   }
 
-  function renderChartsAsTree(data) {
-    baseRenderCharts(data);
-    enhanceTreeDisplay(data);
-    window.scheduleProgressImageThumbnailMount?.(listElement);
-    window.scheduleChartMiniViewMount?.(listElement);
-  }
-
-  try {
-    renderCharts = renderChartsAsTree;
-  } catch (error) {
-    window.renderCharts = renderChartsAsTree;
-  }
+  window.BmsChartRenderPipeline.registerPostRenderStage({
+    name: "tree",
+    order: 100,
+    required: true,
+    run(context) {
+      enhanceTreeDisplay(context.data, context.target, context.renderedNodes);
+    }
+  });
 
   window.revealChartVersionRow = revealVersionRow;
 })();

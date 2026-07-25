@@ -1140,3 +1140,16 @@ RC★★変換:
 - `replaceControlIfChanged`は共通UIが生成した次nodeだけを採用し、既存nodeと`outerHTML`が同一なら維持する。状態変化時の置換、elementからnullの削除、nullからelementの1回挿入を扱い、個別listenerを追加しない。Action UI未読込時は一覧を止めず、固定の「追記不可」、管理なし、lifecycle追加表示なしへ倒し、固定code `VERSION_ACTION_UI_UNAVAILABLE`を1回だけ記録する。
 - favoritesの局所再描画は従来の`renderCharts` wrapper順を変えず、`renderWithFavorites`完了後に`mountChartUi`を1回だけ明示実行する。favorite buttonは同じ描画内で先にmount済みのため共通mount側のfavorite処理を無効にし、保存済みサムネイル、mini-view、progress image、overlay、recent badge、`chart-ui:mounted`を再適用する。再帰renderや追加fetchは行わない。
 - script順はR1 model、R2 Link UI、R3 Action UI、app、既存renderer群とする。R3では版行全体、favorite button、管理dialog内部、CSS/runtime CSS、MutationObserver、requestAnimationFrame、chart-detail、`renderCharts`代入/capture順を変更しない。
+
+## VERSION-TREE-RENDER-CONSOLIDATION R4A 明示的描画パイプライン
+
+- トップ画面の版描画は`window.BmsChartRenderPipeline`へ集約し、`setBaseRenderer`、`registerDataStage`、`registerPostRenderStage`、`registerMountStage`、`render`、`renderInto`、`getRegisteredStages`だけを公開する。`window.renderCharts`はpipelineが一度だけ設定する同期facadeとし、その他のscriptは代入・capture・wrapper化しない。
+- pipelineは`replace/append/detail` modeと、`initial/reload/favorite-filter/append-success/management-refresh/load-more/detail` sourceだけを受理する。不正値は`replace`または`reload`へ正規化し、target、変換前後data、charts、追加描画フラグ、選択chart ID、favorites/mount抑止、今回生成node、stage結果を共通contextで渡す。
+- 正式baseは`branch-append-ui.js`の`branch-append-base` 1件とする。data stageは`favorites-filter`、post-render stageは`tree`（100）、`favorites`（200）、`stored-progress-thumbnails`（300）、mount stageは`common-mount`（400）の順で実行する。同順位はname昇順とし、同名登録、base二重登録、初回render後の追加登録を固定error codeで拒否する。
+- base、tree、favorites、保存済みthumbnail、共通mountはrequired stageとし、失敗を固定code・stage名だけでconsoleへ記録して呼出元へ伝播する。optional stageはwarning記録後の継続を許可する。ログへ入力本文やDOM本文を出さない。
+- 同一targetのrender中に同じpipelineへ再入した場合は`CHART_RENDER_REENTRANT`で拒否し、guardは`finally`で解除する。別targetのdetail描画は許可する。pipeline欠落は読込順契約で防ぎ、base未登録は`CHART_RENDER_BASE_MISSING`として空描画を成功扱いしない。
+- `loadCharts`の初期・再読込は`replace`、もっと見るは`append`を使う。appendは既存cardを退避・再生成せず、baseが新batchだけを末尾へ追加し、今回生成したtop-level nodeだけへtree、favorite、thumbnail補強を行う。既存card、event listener、chart重複防止、batch境界表示を維持する。
+- favorite-onlyはdata stageで浅いコピーを返し、fetchを増やさない。favorite buttonはpost-render stageで付与し、局所再描画もpipelineへ戻す。detailはfavorite-onlyの絞り込みを抑止し、`renderInto`で`#selectedChartCardSlot`へ直接描画する。最近の投稿用`#chartList`を一時退避・描画・復元には使わない。
+- 保存済み進捗thumbnailはpost-render stageだけ、progress画像、mini-view、tree overlay、recent badge、`chart-ui:mounted`は共通mountだけから起動する。1回のpipeline renderにつき各stageと共通mountを1回とし、`chart-detail:rendered`と`chart-list-load-settled`の名前・payload契約を維持する。load-moreの`chart-ui:mounted` reasonは`append-complete`とする。
+- `app.js`と`progress-thumbnail-list.js`の旧full rendererはR4Aでは`Legacy`名のprivate関数として残すが、pipelineへ登録せず通常経路から参照しない。progress final wrapper、zero-delay wrapper登録、tree/favorites/detail wrapperは廃止する。旧renderer本体の削除と重複CSS整理はR4Bへ分離する。
+- R4Aは既存chart/version DOM、class、dataset、操作順、文言、runtime style、CSS、MutationObserver、resize/delegation listenerを変更しない。compact一覧は独立rendererのため対象外とし、`docs/list.html`と`docs/list.js`を変更しない。
