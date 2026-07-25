@@ -1505,3 +1505,13 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - `node scripts/test-version-render-pipeline-static.js`で24 checkを実行する。modelの先行読込、classic script、既存renderer/capture順、progress final bridge、chart-detail一時DOM移動、favorites既存再描画、class、操作順、thumbnail/tree selector、compact列、HTML重複ID、cache keyを確認する。
 - static契約では保護CSS 4ファイルとfavorites/progressのruntime styleをSHA-256で固定し、対象renderer 7ファイルの`querySelector/querySelectorAll/closest`合計がR1前と同数であることを確認する。CSS、DOM走査、MutationObserver、requestAnimationFrameはR1で増減させない。
 - `node scripts/test-song-and-chart-links-static.js`、`node worker/scripts/test-version-list-links.mjs`、`node worker/scripts/test-version-withdrawal-active.mjs`、append、metadata parser/static、Node構文検査、Worker typecheck、Wrangler dry-run、`git diff --check`を回帰実行する。本番deploy、Pages push、D1/R2、Migration、Secret、Cron、dependency変更は行わない。
+
+## VERSION-TREE-RENDER-CONSOLIDATION R2 共通リンクUI
+
+- `node scripts/test-version-link-ui.js`で56 checkを実行する。originの有無、target/rel/title/aria/class/text、DL anchor、DL不可span、URL欠落、null model、tree/compact/未知variant、serializer、model/options不変、別node生成、reason非表示、URL再parseなしを確認する。
+- 正常DOM snapshotは既定・tree・compactそれぞれの曲、DL、DL不可についてtag、text、href、target、rel、title、aria-label、class、属性順を固定する。曲あり/なし、DL可/不可、active、withdrawal pending grace/manualの7状態fixtureでモデル結果とcontrol種別を確認する。
+- treeの実際の`reconcileLinkControl`を抽出して実行し、同一origin/DLの2回目補強が置換なし、DL可から不可、不可から可が1回置換、originありからなしが削除、なしからありが1回挿入になることを確認する。processing等の操作停止はpipeline契約で操作欄clearを確認し、compactは行HTML全置換で再描画時に増殖しないことを確認する。
+- XSS fixtureは`\"><script>`、引用符、`< > &`、event属性風文字列を使い、textContent・属性escape、script nodeなし、inline event属性なしを確認する。共通UIは`innerHTML`、click listener、URL parserを使用しない。
+- 8 version性能fixtureはmodel生成8回、origin node 8、download node 8、R1 URL parse 24、Link UI追加parse 0、生成HTML 2,880 bytes、生成node 16を固定する。tree rendererのDOM走査は40から39へ減り、その他rendererはR1と同数を維持する。
+- `node scripts/test-version-render-pipeline-static.js`で29 checkを実行し、model→Link UI→rendererのclassic script順、wrapper/capture順、全5 rendererのLink UI利用、独自anchor生成なし、tree冪等性、compact再描画、class、操作順、HTML重複ID、cache key、保護CSS/runtime style不変を確認する。
+- `node scripts/test-version-ui-model.js`、曲・DL static、version list links、withdrawal active、metadata parser/static、変更JS構文、Worker typecheck、`git diff --check`を回帰実行する。Pages/Worker deploy、push、D1/R2、Migration、Secret、Cron、dependency変更は行わない。

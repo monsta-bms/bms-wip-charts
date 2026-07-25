@@ -668,47 +668,74 @@
     `;
   }
 
-  function enhanceDownloadControl(row, version, uiModel, displayVersionLabel, forceBlocked = false) {
-    const actions = row.querySelector(".version-actions");
+  function reconcileLinkControl(actions, existing, desired, insertionPoint, desiredHtml) {
+    if (!desired) {
+      existing?.remove();
+      return null;
+    }
+    if (existing?.outerHTML === desiredHtml) {
+      return existing;
+    }
+    if (existing) {
+      existing.replaceWith(desired);
+      return desired;
+    }
+    actions.insertBefore(desired, insertionPoint || null);
+    return desired;
+  }
+
+  function enhanceLinkControls(actions, uiModel, displayVersionLabel) {
     if (!actions) {
       return;
     }
 
+    const existingOrigin = actions.querySelector(".version-origin-link");
     const existingDownload = actions.querySelector(".version-download-control");
-    if (!existingDownload) {
+    const linkUi = window.BmsVersionLinkUi;
+    const canBuildLinks = typeof linkUi?.createOriginLink === "function"
+      && typeof linkUi?.createDownloadControl === "function"
+      && typeof linkUi?.serializeControl === "function";
+
+    if (!canBuildLinks) {
+      existingOrigin?.remove();
+      const unavailable = document.createElement("span");
+      unavailable.className = "version-download-control download-disabled download-button download-blocked-control";
+      unavailable.title = "この版はダウンロードできません";
+      unavailable.setAttribute("aria-label", `${displayVersionLabel} はダウンロードできません`);
+      unavailable.textContent = "DL不可";
+      reconcileLinkControl(
+        actions,
+        existingDownload,
+        unavailable,
+        actions.firstChild,
+        unavailable.outerHTML
+      );
       return;
     }
 
-    const blocked = forceBlocked || isDownloadBlocked(version, uiModel);
-    if (blocked) {
-      const disabled = document.createElement("span");
-      disabled.className = "version-download-control download-disabled download-button download-blocked-control";
-      disabled.title = "この版はダウンロードできません";
-      disabled.setAttribute("aria-label", `${displayVersionLabel} はダウンロードできません`);
-      disabled.textContent = "DL不可";
-      existingDownload.replaceWith(disabled);
-      return;
-    }
-
-    existingDownload.classList.add("download-button");
-    if (existingDownload.tagName.toLowerCase() === "a") {
-      existingDownload.classList.add("download-available-control");
-      existingDownload.setAttribute("aria-label", `${displayVersionLabel} をダウンロード`);
-    } else {
-      existingDownload.classList.add("download-blocked-control");
-      existingDownload.title = "この版はダウンロードできません";
-      existingDownload.setAttribute("aria-label", `${displayVersionLabel} はダウンロードできません`);
-    }
-  }
-
-  function enhanceOriginControl(row, displayVersionLabel) {
-    const originLink = row.querySelector(".version-actions .version-origin-link");
-    if (!originLink) {
-      return;
-    }
-
-    originLink.title = "原曲・本体の配布ページを開く";
-    originLink.setAttribute("aria-label", `${displayVersionLabel} の原曲・本体の配布ページを開く（外部サイト）`);
+    const desiredOrigin = linkUi.createOriginLink(uiModel, {
+      variant: "tree",
+      ariaLabel: `${displayVersionLabel} の原曲・本体の配布ページを開く（外部サイト）`
+    });
+    const desiredDownload = linkUi.createDownloadControl(uiModel, {
+      variant: "tree",
+      availableAriaLabel: `${displayVersionLabel} をダウンロード`,
+      unavailableAriaLabel: `${displayVersionLabel} はダウンロードできません`
+    });
+    const originNode = reconcileLinkControl(
+      actions,
+      existingOrigin,
+      desiredOrigin,
+      existingDownload || actions.firstChild,
+      linkUi.serializeControl(desiredOrigin)
+    );
+    reconcileLinkControl(
+      actions,
+      existingDownload,
+      desiredDownload,
+      originNode ? originNode.nextSibling : actions.firstChild,
+      linkUi.serializeControl(desiredDownload)
+    );
   }
 
   function lockAppendControl(row, title = "完成版に置き換え済みの中間履歴のため追記できません") {
@@ -958,8 +985,7 @@
       progressBlock.insertAdjacentHTML("beforeend", renderProgressBadges(version));
     }
 
-    enhanceOriginControl(row, displayVersionLabel);
-    enhanceDownloadControl(row, version, uiModel, displayVersionLabel, supersededIntermediate);
+    enhanceLinkControls(actions, uiModel, displayVersionLabel);
     ensureManagementControl(row, version, uiModel, getChartId(options.entry), displayVersionLabel);
     if (supersededIntermediate) {
       lockAppendControl(row, "完成版に置き換え済みの中間履歴のため追記できません");

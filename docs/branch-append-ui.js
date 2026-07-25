@@ -1453,15 +1453,19 @@
         const uiModel = makeVersionUiModel(version, {
           hasProgressMap: isUsableProgressMap(version.progressMap)
         });
-        const originHref = uiModel?.originLink.available ? uiModel.originLink.url : "";
-        const downloadHref = uiModel?.download.available ? uiModel.download.url : "";
+        const linkUi = window.BmsVersionLinkUi;
+        const canBuildLinks = typeof linkUi?.createOriginLink === "function"
+          && typeof linkUi?.createDownloadControl === "function"
+          && typeof linkUi?.serializeControl === "function";
         const rejectedBadge = version.isRejected ? `<span class="rejected-badge">没譜面</span>` : "";
-        const originControl = originHref
-          ? `<a class="version-origin-link" href="${html(originHref)}" target="_blank" rel="noopener noreferrer" title="原曲・本体の配布ページを開く" aria-label="${html(`${displayVersionLabel} の原曲・本体の配布ページを開く（外部サイト）`)}">曲</a>`
+        const originControl = canBuildLinks
+          ? linkUi.serializeControl(linkUi.createOriginLink(uiModel, {
+            ariaLabel: `${displayVersionLabel} の原曲・本体の配布ページを開く（外部サイト）`
+          }))
           : "";
-        const downloadControl = downloadHref
-          ? `<a class="version-download-control" href="${html(downloadHref)}">DL</a>`
-          : `<span class="version-download-control download-disabled">DL不可</span>`;
+        const downloadControl = (canBuildLinks
+          ? linkUi.serializeControl(linkUi.createDownloadControl(uiModel))
+          : "") || `<span class="version-download-control download-disabled">DL不可</span>`;
 
         return `
           <div class="version-row">

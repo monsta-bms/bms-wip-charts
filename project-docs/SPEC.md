@@ -1121,3 +1121,12 @@ RC★★変換:
 - 管理操作とお気に入りはversion IDがあり、redacted/hiddenでない整合したactiveまたはwithdrawal pendingだけで利用可能とする。管理dialogは表示時に従来どおりlifecycle APIを再取得する。
 - `app.js`、追記full renderer、thumbnail full renderer、tree補強、favorites、compact list、削除済みURLの移動先判定は共通モデルを利用する。モデルscript未読込時は旧ロジックへfallbackせず、各操作を安全側へ倒す。
 - R1ではversion row/card HTML、class、操作順、CSS、runtime CSS、`renderCharts`代入・capture順、progress final bridge、`mountChartUi`、MutationObserver、requestAnimationFrame、chart-detailの一時DOM移動、favorites再描画経路を変更しない。wrapper整理とDOM部品共通化はR2以降で行う。
+
+## VERSION-TREE-RENDER-CONSOLIDATION R2 共通リンクUI
+
+- `docs/version-link-ui.js`は`window.BmsVersionLinkUi`として`createOriginLink`、`createDownloadControl`、`serializeControl`だけを公開する。browserとNodeテストで同じ実装を使い、状態判定・URL検証は再実装せず、R1の表示モデルをDOMへ変換する責務だけを持つ。
+- origin controlはモデルが利用可能な場合だけanchorを生成し、既存の「曲」、`target="_blank"`、`rel="noopener noreferrer"`、title、aria-labelを維持する。download controlはモデルの可否に従い、利用可能時は「DL」anchor、利用不可またはモデル不正時は「DL不可」spanを生成し、disabled anchorやclick無効化を使わない。
+- variantは既定、`tree`、`compact`の列挙値だけを扱い、既存の固定class、tree用DL title/aria、compact用class/ariaだけを切り替える。未知variantは既定へ倒し、variantでlifecycle、hidden、DL停止、URLを再判定しない。
+- `serializeControl`は共通UIが生成したnodeだけを`outerHTML`へ変換し、nullまたは外部nodeは空文字列とする。textは`textContent`、属性はDOM APIで設定し、利用者入力を`innerHTML`や手動属性文字列へ連結しない。reasonと内部stateはDOMへ出さない。
+- app、追記full renderer、thumbnail full renderer、tree補強、compact listは同じモデルをLink UIへ渡す。treeは既存controlと共通controlのserialized DOMが一致する場合は置換せず、差異時だけ置換し、origin欠損・復帰、DL可否遷移を増殖なしで反映する。モデルまたはLink UI未読込時は曲なし・DL不可へ倒す。
+- R2では追記・管理・favoriteのDOM、版行全体、favorites/chart-detail経路、CSS、runtime CSS、thumbnail、MutationObserver、requestAnimationFrame、`renderCharts` wrapper順を変更しない。操作DOMの残りの共通化はR3以降で行う。

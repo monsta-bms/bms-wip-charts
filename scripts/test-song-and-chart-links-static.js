@@ -6,6 +6,7 @@ const root = path.resolve(__dirname, "..");
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 const app = read("docs/app.js");
 const versionUiModel = read("docs/version-ui-model.js");
+const versionLinkUi = read("docs/version-link-ui.js");
 const branchTree = read("docs/branch-tree-list.js");
 const branchAppend = read("docs/branch-append-ui.js");
 const progressThumbnail = read("docs/progress-thumbnail-list.js");
@@ -24,24 +25,26 @@ function duplicateIds(source) {
 assert.deepEqual(duplicateIds(indexHtml), [], "index.html must not contain duplicate IDs");
 assert.deepEqual(duplicateIds(listHtml), [], "list.html must not contain duplicate IDs");
 
-assert.match(app, /class="version-origin-link"[^>]*target="_blank"[^>]*rel="noopener noreferrer"/);
-assert.match(app, /class="version-download-control"/);
+assert.match(versionLinkUi, /originClass: "version-origin-link"/);
+assert.match(versionLinkUi, /setAttribute\("target", "_blank"\)/);
+assert.match(versionLinkUi, /setAttribute\("rel", "noopener noreferrer"\)/);
+assert.match(versionLinkUi, /downloadClass: "version-download-control"/);
 assert.match(app, /\$\{originControl\}[\s\S]*\$\{downloadControl\}[\s\S]*追記投稿/);
+assert.match(app, /BmsVersionLinkUi/);
 assert.match(versionUiModel, /function normalizeExternalHttpUrl\(value\)/);
 assert.match(versionUiModel, /\["http:", "https:"\]\.includes\(url\.protocol\)/);
 assert.match(versionUiModel, /url\.username \|\| url\.password/);
 assert.match(app, /\["localhost", "127\.0\.0\.1"\][\s\S]*"http:\/\/localhost:8788"/);
 
 for (const renderer of [branchAppend, progressThumbnail]) {
-  assert.match(renderer, /class="version-origin-link"[^>]*target="_blank"[^>]*rel="noopener noreferrer"/);
-  assert.match(renderer, /class="version-download-control"/);
+  assert.match(renderer, /BmsVersionLinkUi/);
   assert.match(renderer, /\$\{originControl\}[\s\S]*\$\{downloadControl\}/);
 }
 
 assert.match(branchTree, /actions\.querySelector\("\.version-download-control"\)/);
 assert.doesNotMatch(branchTree, /actions\.querySelector\("a\[href\], \.download-disabled"\)/);
-assert.match(branchTree, /version-download-control download-disabled download-button download-blocked-control/);
-assert.match(branchTree, /enhanceOriginControl\(row, displayVersionLabel\);\s*enhanceDownloadControl\(row, version, uiModel/);
+assert.match(versionLinkUi, /version-download-control download-disabled download-button download-blocked-control/);
+assert.match(branchTree, /enhanceLinkControls\(actions, uiModel, displayVersionLabel\)/);
 
 assert.match(listHtml, /<span>リンク<\/span>/);
 assert.match(listJs, /BmsVersionUiModel\?\.buildVersionUiModel/);
@@ -49,8 +52,9 @@ assert.match(versionUiModel, /new URL\(value\.trim\(\), workerBase\)/);
 assert.match(versionUiModel, /url\.origin !== workerBase\.origin/);
 assert.match(versionUiModel, /url\.pathname\.startsWith\(filePathPrefix\)/);
 assert.match(listJs, /compact-song-title compact-detail-link/);
-assert.match(listJs, /compact-origin-link[^>]*target="_blank"[^>]*rel="noopener noreferrer"/);
-assert.match(listJs, /compact-download-disabled/);
+assert.match(listJs, /BmsVersionLinkUi/);
+assert.match(versionLinkUi, /compact-link-control compact-origin-link/);
+assert.match(versionLinkUi, /compact-link-control compact-download-disabled/);
 assert.match(listCss, /92px;/);
 assert.match(listCss, /"links links"/);
 assert.match(themeCss, /\.download-blocked-control\s*\{[\s\S]*var\(--disabled-bg\)[\s\S]*var\(--disabled-text\)/);

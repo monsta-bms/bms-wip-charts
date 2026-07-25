@@ -402,14 +402,23 @@
     const versionChartName = formatVersionChartName(chartName);
     const fullLabel = `${fullTitle} / 差分名: ${versionChartName} / 版: ${versionLabel}`;
     const uiModel = buildSharedVersionUiModel(item, { hasProgressMap: true });
-    const originHref = uiModel?.originLink.available ? uiModel.originLink.url : "";
-    const downloadHref = uiModel?.download.available ? uiModel.download.url : "";
-    const originControl = originHref
-      ? `<a class="compact-link-control compact-origin-link" href="${escapeHtml(originHref)}" target="_blank" rel="noopener noreferrer" title="原曲・本体の配布ページを開く" aria-label="${escapeHtml(`${fullTitle} の原曲・本体の配布ページを開く（外部サイト）`)}">曲</a>`
+    const linkUi = window.BmsVersionLinkUi;
+    const canBuildLinks = typeof linkUi?.createOriginLink === "function"
+      && typeof linkUi?.createDownloadControl === "function"
+      && typeof linkUi?.serializeControl === "function";
+    const originControl = canBuildLinks
+      ? linkUi.serializeControl(linkUi.createOriginLink(uiModel, {
+        variant: "compact",
+        ariaLabel: `${fullTitle} の原曲・本体の配布ページを開く（外部サイト）`
+      }))
       : "";
-    const downloadControl = downloadHref
-      ? `<a class="compact-link-control compact-download-link" href="${escapeHtml(downloadHref)}" aria-label="${escapeHtml(`${fullTitle} / ${versionChartName} / ${versionLabel} をダウンロード`)}">DL</a>`
-      : `<span class="compact-link-control compact-download-disabled" aria-label="${escapeHtml(`${fullTitle} / ${versionChartName} / ${versionLabel} はダウンロードできません`)}">DL不可</span>`;
+    const downloadControl = (canBuildLinks
+      ? linkUi.serializeControl(linkUi.createDownloadControl(uiModel, {
+        variant: "compact",
+        availableAriaLabel: `${fullTitle} / ${versionChartName} / ${versionLabel} をダウンロード`,
+        unavailableAriaLabel: `${fullTitle} / ${versionChartName} / ${versionLabel} はダウンロードできません`
+      }))
+      : "") || `<span class="compact-link-control compact-download-disabled" aria-label="${escapeHtml(`${fullTitle} / ${versionChartName} / ${versionLabel} はダウンロードできません`)}">DL不可</span>`;
     const detailUrl = new URL("./index.html", document.baseURI);
     detailUrl.searchParams.set("chartId", String(item.chartId || ""));
     detailUrl.searchParams.set("versionId", String(item.versionId || ""));

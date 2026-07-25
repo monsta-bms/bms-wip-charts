@@ -47,41 +47,50 @@ const compactList = read("docs/list.js");
 const chartDetail = read("docs/chart-detail-link.js");
 const versionManagement = read("docs/version-management-ui.js");
 const modelSource = read("docs/version-ui-model.js");
+const linkSource = read("docs/version-link-ui.js");
 const indexScripts = scriptTags(indexHtml);
 const listScripts = scriptTags(listHtml);
 const indexSources = indexScripts.map((item) => item.src);
 const listSources = listScripts.map((item) => item.src);
 
 check("version model loads before app on index", () => {
-  assert.ok(indexSources.indexOf("./version-ui-model.js?v=version-ui-model-r1-01") < indexSources.indexOf("./app.js?v=version-ui-model-r1-01"));
+  assert.ok(indexSources.indexOf("./version-ui-model.js?v=version-link-ui-r2-01") < indexSources.indexOf("./app.js?v=version-link-ui-r2-01"));
 });
 check("version model loads before compact list", () => {
-  assert.ok(listSources.indexOf("./version-ui-model.js?v=version-ui-model-r1-01") < listSources.indexOf("./list.js?v=version-ui-model-r1-01"));
+  const modelIndex = listSources.indexOf("./version-ui-model.js?v=version-link-ui-r2-01");
+  const linkIndex = listSources.indexOf("./version-link-ui.js?v=version-link-ui-r2-01");
+  assert.equal(linkIndex, modelIndex + 1);
+  assert.ok(linkIndex < listSources.indexOf("./list.js?v=version-link-ui-r2-01"));
 });
-check("model precedes every index renderer consumer", () => {
-  const modelIndex = indexSources.indexOf("./version-ui-model.js?v=version-ui-model-r1-01");
+check("model and link UI precede every index renderer consumer", () => {
+  const modelIndex = indexSources.indexOf("./version-ui-model.js?v=version-link-ui-r2-01");
+  const linkIndex = indexSources.indexOf("./version-link-ui.js?v=version-link-ui-r2-01");
   const consumers = [
-    "./app.js?v=version-ui-model-r1-01",
-    "./progress-thumbnail-list.js?v=version-ui-model-r1-01",
-    "./branch-append-ui.js?v=version-ui-model-r1-01",
-    "./branch-tree-list.js?v=version-ui-model-r1-01",
+    "./app.js?v=version-link-ui-r2-01",
+    "./progress-thumbnail-list.js?v=version-link-ui-r2-01",
+    "./branch-append-ui.js?v=version-link-ui-r2-01",
+    "./branch-tree-list.js?v=version-link-ui-r2-01",
     "./favorites-list.js?v=version-ui-model-r1-01",
     "./version-management-ui.js?v=withdrawal-lifecycle-16r",
     "./chart-detail-link.js?v=version-ui-model-r1-01"
   ];
-  consumers.forEach((src) => assert.ok(modelIndex < indexSources.indexOf(src), `${src} must follow model`));
+  assert.equal(linkIndex, modelIndex + 1);
+  consumers.forEach((src) => {
+    assert.ok(modelIndex < indexSources.indexOf(src), `${src} must follow model`);
+    assert.ok(linkIndex < indexSources.indexOf(src), `${src} must follow link UI`);
+  });
 });
 check("renderer scripts remain classic and synchronous", () => {
   [...indexScripts, ...listScripts]
-    .filter((item) => /version-ui-model|app\.js|progress-thumbnail-list|branch-append-ui|branch-tree-list|favorites-list|version-management-ui|chart-detail-link|list\.js/.test(item.src))
+    .filter((item) => /version-ui-model|version-link-ui|app\.js|progress-thumbnail-list|branch-append-ui|branch-tree-list|favorites-list|version-management-ui|chart-detail-link|list\.js/.test(item.src))
     .forEach((item) => assert.doesNotMatch(item.attributes, /\b(?:type\s*=\s*["']module|defer|async)\b/i));
 });
 check("renderer capture order remains unchanged", () => {
   const ordered = [
-    "./app.js?v=version-ui-model-r1-01",
-    "./progress-thumbnail-list.js?v=version-ui-model-r1-01",
-    "./branch-append-ui.js?v=version-ui-model-r1-01",
-    "./branch-tree-list.js?v=version-ui-model-r1-01",
+    "./app.js?v=version-link-ui-r2-01",
+    "./progress-thumbnail-list.js?v=version-link-ui-r2-01",
+    "./branch-append-ui.js?v=version-link-ui-r2-01",
+    "./branch-tree-list.js?v=version-link-ui-r2-01",
     "./favorites-list.js?v=version-ui-model-r1-01",
     "./version-management-ui.js?v=withdrawal-lifecycle-16r",
     "./chart-detail-link.js?v=version-ui-model-r1-01"
@@ -118,9 +127,18 @@ check("public model global has only the requested API", () => {
   const apiMatch = modelSource.match(/return freezeRecord\(\{\s*buildVersionUiModel,\s*normalizeExternalHttpUrl,\s*normalizeWorkerDownloadUrl,\s*normalizeLifecycleState\s*\}\);/);
   assert.ok(apiMatch);
 });
+check("public link UI global has only the requested API", () => {
+  assert.match(linkSource, /window\.BmsVersionLinkUi = api/);
+  const apiMatch = linkSource.match(/return Object\.freeze\(\{\s*createOriginLink,\s*createDownloadControl,\s*serializeControl\s*\}\);/);
+  assert.ok(apiMatch);
+});
 check("every requested renderer consumes the shared model", () => {
   [app, branchAppend, progressThumbnail, branchTree, favorites, compactList]
     .forEach((source) => assert.match(source, /buildVersionUiModel|buildSharedVersionUiModel/));
+});
+check("every link renderer consumes the shared link UI", () => {
+  [app, branchAppend, progressThumbnail, branchTree, compactList]
+    .forEach((source) => assert.match(source, /BmsVersionLinkUi/));
 });
 check("URL parser implementations exist only in the shared model", () => {
   assert.match(modelSource, /function normalizeExternalHttpUrl\(value\)/);
@@ -130,13 +148,13 @@ check("URL parser implementations exist only in the shared model", () => {
       assert.doesNotMatch(source, /function (?:makeOriginUrl|originUrl|normalizeExternalHttpUrl)\(/);
       assert.doesNotMatch(source, /function (?:makeDownloadUrl|downloadUrl|buildDownloadUrl|buildWorkerDownloadUrl)\(/);
     });
+  assert.doesNotMatch(linkSource, /new URL\(|normalizeExternalHttpUrl|normalizeWorkerDownloadUrl/);
 });
 check("version action class contract remains", () => {
-  [app, branchAppend, progressThumbnail].forEach((source) => {
-    assert.match(source, /class="version-origin-link"/);
-    assert.match(source, /class="version-download-control/);
-    assert.match(source, /<div class="version-actions">/);
-  });
+  [app, branchAppend, progressThumbnail].forEach((source) => assert.match(source, /<div class="version-actions">/));
+  assert.match(linkSource, /originClass: "version-origin-link"/);
+  assert.match(linkSource, /downloadClass: "version-download-control"/);
+  assert.match(linkSource, /downloadUnavailableClass: "version-download-control download-disabled"/);
   assert.match(branchAppend, /class="secondary append-version-button"/);
   assert.match(branchTree, /button\.className = "secondary version-management-button"/);
   assert.match(favorites, /button\.className = "favorite-version-button"/);
@@ -146,6 +164,23 @@ check("origin then download action order remains", () => {
     assert.match(source, /\$\{originControl\}[\s\S]*\$\{downloadControl\}/);
   });
 });
+check("renderers no longer build independent origin or download anchors", () => {
+  [app, branchAppend, progressThumbnail, branchTree, compactList].forEach((source) => {
+    assert.doesNotMatch(source, /<a\s+class="(?:version-origin-link|version-download-control|compact-link-control compact-(?:origin|download)-link)/);
+  });
+});
+check("tree link enhancement is idempotent and state replaceable", () => {
+  assert.match(branchTree, /function reconcileLinkControl\(/);
+  assert.match(branchTree, /existing\?\.outerHTML === desiredHtml/);
+  assert.match(branchTree, /existing\.replaceWith\(desired\)/);
+  assert.match(branchTree, /actions\.insertBefore\(desired, insertionPoint \|\| null\)/);
+  assert.match(branchTree, /existing\?\.remove\(\)/);
+  assert.match(branchTree, /enhanceLinkControls\(actions, uiModel, displayVersionLabel\)/);
+  assert.match(branchTree, /if \(uiModel\?\.canShowActions !== true\) \{\s*actions\?\.replaceChildren\(\);\s*return;/);
+});
+check("compact rerender replaces its row markup instead of appending controls", () => {
+  assert.match(compactList, /list\.innerHTML = state\.items\.map\(renderRow\)\.join\(""\)/);
+});
 check("thumbnail and tree selector contract remains", () => {
   assert.match(progressThumbnail, /progress-thumbnail-slot/);
   assert.match(progressThumbnail, /:scope > \.thumbnail-cell, :scope > \.progress-thumbnail-block/);
@@ -154,21 +189,23 @@ check("thumbnail and tree selector contract remains", () => {
 });
 check("compact list columns and link classes remain", () => {
   assert.match(compactList, /compact-version-row/);
-  assert.match(compactList, /compact-origin-link/);
-  assert.match(compactList, /compact-download-link/);
-  assert.match(compactList, /compact-download-disabled/);
+  assert.match(linkSource, /compact-link-control compact-origin-link/);
+  assert.match(linkSource, /compact-link-control compact-download-link/);
+  assert.match(linkSource, /compact-link-control compact-download-disabled/);
   assert.match(compactList, /compact-links/);
 });
 check("HTML IDs remain unique", () => {
   assert.deepEqual(duplicateIds(indexHtml), []);
   assert.deepEqual(duplicateIds(listHtml), []);
 });
-check("changed renderer cache keys use the R1 version", () => {
-  const changedIndexScripts = ["app.js", "progress-thumbnail-list.js", "branch-append-ui.js", "branch-tree-list.js", "favorites-list.js", "chart-detail-link.js"];
+check("changed renderer cache keys use the R2 version", () => {
+  const changedIndexScripts = ["version-ui-model.js", "version-link-ui.js", "app.js", "progress-thumbnail-list.js", "branch-append-ui.js", "branch-tree-list.js"];
   changedIndexScripts.forEach((name) => {
-    assert.ok(indexSources.includes(`./${name}?v=version-ui-model-r1-01`), `${name} cache key mismatch`);
+    assert.ok(indexSources.includes(`./${name}?v=version-link-ui-r2-01`), `${name} cache key mismatch`);
   });
-  assert.ok(listSources.includes("./list.js?v=version-ui-model-r1-01"));
+  ["version-ui-model.js", "version-link-ui.js", "list.js"].forEach((name) => {
+    assert.ok(listSources.includes(`./${name}?v=version-link-ui-r2-01`), `${name} compact cache key mismatch`);
+  });
 });
 check("protected CSS files are byte-for-byte unchanged", () => {
   const expected = new Map([
@@ -185,8 +222,8 @@ check("runtime style blocks are unchanged", () => {
   assert.equal(sha256(runtimeStyle(favorites)), "ff8f76306c520d22e15244067ec7470568278a20fcf9ac9e4f60cc63210ad6b8");
   assert.equal(sha256(runtimeStyle(progressThumbnail)), "280a1c0a18e3500bfda2f2e45ff58f8f0afcec26467192968f18a3036e2ac1e6");
 });
-check("R1 adds no DOM traversal to existing renderers", () => {
-  const expected = new Map([
+check("R2 does not increase DOM traversal in existing renderers", () => {
+  const r1Baseline = new Map([
     [app, 69],
     [branchAppend, 59],
     [progressThumbnail, 24],
@@ -195,22 +232,28 @@ check("R1 adds no DOM traversal to existing renderers", () => {
     [compactList, 9],
     [chartDetail, 8]
   ]);
-  expected.forEach((count, source) => assert.equal(traversalCount(source), count));
+  r1Baseline.forEach((count, source) => assert.ok(traversalCount(source) <= count));
+  assert.equal(traversalCount(branchTree), 39);
 });
 check("normal action strings remain unchanged", () => {
   assert.match(branchAppend, />追記投稿<\/button>/);
   assert.match(branchAppend, />追記停止<\/button>/);
   assert.match(branchAppend, />旧形式<\/button>/);
   assert.match(branchAppend, />追記不可<\/button>/);
-  assert.match(app, />DL<\/a>/);
-  assert.match(app, />DL不可<\/span>/);
+  assert.match(linkSource, /control\.textContent = "DL"/);
+  assert.match(linkSource, /control\.textContent = "DL不可"/);
 });
 check("missing shared model paths fail closed", () => {
   assert.match(app, /buildVersionUiModel\?\.[\s\S]*\|\| null/);
   assert.match(compactList, /buildVersionUiModel\?\.[\s\S]*\|\| null/);
   assert.match(branchTree, /uiModel\?\.canShowActions !== true/);
   assert.match(favorites, /\?\.favorite\.available === true/);
+  [app, branchAppend, progressThumbnail, compactList].forEach((source) => {
+    assert.match(source, /canBuildLinks/);
+    assert.match(source, /DL不可<\/span>/);
+  });
+  assert.match(branchTree, /if \(!canBuildLinks\)[\s\S]*existingOrigin\?\.remove\(\)[\s\S]*DL不可/);
 });
 
-assert.ok(passed >= 18, `expected at least 18 checks, got ${passed}`);
+assert.ok(passed >= 20, `expected at least 20 checks, got ${passed}`);
 console.log(`version render pipeline static tests: ${passed} checks passed`);
