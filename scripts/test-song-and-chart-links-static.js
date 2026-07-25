@@ -30,19 +30,18 @@ assert.match(versionLinkUi, /originClass: "version-origin-link"/);
 assert.match(versionLinkUi, /setAttribute\("target", "_blank"\)/);
 assert.match(versionLinkUi, /setAttribute\("rel", "noopener noreferrer"\)/);
 assert.match(versionLinkUi, /downloadClass: "version-download-control"/);
-assert.match(app, /\$\{originControl\}[\s\S]*\$\{downloadControl\}[\s\S]*\$\{appendControl\}/);
-assert.match(app, /BmsVersionLinkUi/);
-assert.match(app, /BmsVersionActionUi/);
+assert.match(branchAppend, /\$\{originControl\}[\s\S]*\$\{downloadControl\}[\s\S]*\$\{buildAppendControl\(entry, version, uiModel\)\}/);
+assert.match(branchAppend, /BmsVersionLinkUi/);
+assert.match(branchAppend, /BmsVersionActionUi/);
+assert.doesNotMatch(app, /\$\{originControl\}|\$\{downloadControl\}|\$\{appendControl\}/);
+assert.doesNotMatch(progressThumbnail, /\$\{originControl\}|\$\{downloadControl\}|\$\{appendControl\}/);
 assert.match(versionActionUi, /button\.textContent = "追記投稿"/);
 assert.match(versionUiModel, /function normalizeExternalHttpUrl\(value\)/);
 assert.match(versionUiModel, /\["http:", "https:"\]\.includes\(url\.protocol\)/);
 assert.match(versionUiModel, /url\.username \|\| url\.password/);
 assert.match(app, /\["localhost", "127\.0\.0\.1"\][\s\S]*"http:\/\/localhost:8788"/);
 
-for (const renderer of [branchAppend, progressThumbnail]) {
-  assert.match(renderer, /BmsVersionLinkUi/);
-  assert.match(renderer, /\$\{originControl\}[\s\S]*\$\{downloadControl\}/);
-}
+assert.match(branchAppend, /\$\{originControl\}[\s\S]*\$\{downloadControl\}/);
 
 assert.match(branchTree, /actions\.querySelector\("\.version-download-control"\)/);
 assert.doesNotMatch(branchTree, /actions\.querySelector\("a\[href\], \.download-disabled"\)/);

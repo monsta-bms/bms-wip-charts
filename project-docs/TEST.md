@@ -1538,3 +1538,15 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - R1 model、R2 Link UI、R3 Action UI、曲/DL static、version list links、withdrawal active、append、metadata parser/static、全変更JS構文、HTML重複ID、`git diff --check`を回帰実行する。Worker、Pages、D1/R2、Migration、Secret、Cron、dependency、compact一覧、CSSを変更せず、本番操作・push・deployを行わない。
 - 2026-07-25の隔離結果はpipeline unit 45 check、static契約41 check、R1 model 67、R2 Link UI 56、R3 Action UI 73、version list link 4、withdrawal active回帰、metadata parser/static、曲/DL staticが成功した。8/100/1000 itemのpipeline fixtureは全サイズでdata/base/tree/favorites/thumbnail/mount各1回、rendered node数8/100/1000だった。
 - ローカルfixtureの実ブラウザでは初期10 chart/20 version、追加4 chart後14 chart/28 versionを確認し、chart ID重複0、追加境界1、favorite/曲/DL/thumbnail/tree/管理control各28を維持した。detailは専用slot 1 card/2 version、最近一覧の同一chart重複0。white/default/dark × 390/760/1366pxの9条件すべてで横overflow 0、操作欄の画面外要素0、Console warning/error 0だった。
+
+## VERSION-TREE-RENDER-CONSOLIDATION R4B1 到達不能な旧renderer削除
+
+- `node scripts/test-chart-render-dead-code.js`で21 check以上を実行する。旧renderer 2件と専用helper/stateが0件、pipeline外`renderCharts`代入0件、capture/wrapper/timer bridge 0件、base 1件、data stage 1件、post-render stage 3件、mount stage 1件を確認する。
+- 同テストで`app.js`と進捗enhancerにchart/version行HTMLが残らないこと、進捗model/apply/mount/scheduler/observer、公開global、描画eventが残ること、script順と変更2 scriptだけのcache key更新を確認する。
+- `node scripts/test-version-render-pipeline-static.js`で、R4Aのstage順、append/detail/favorite、mount、listener/observer数、保護CSS/runtime style、HTML ID、fail-closed契約を回帰し、旧rendererの存在確認を不存在確認へ更新する。
+- UTF-8/LF正規化値で、削除前は`app.js` 92,811 bytes/2,787行、`progress-thumbnail-list.js` 39,041 bytes/1,128行、`docs`配下JavaScript合計769,516 bytes/18,157行とする。削除後との差分で軽量化量を記録する。
+- R1 model、R2 Link UI、R3 Action UI、R4A pipeline、曲/DL static、version list links、withdrawal active、append、metadata parser/static、変更JavaScript構文、HTML重複ID、Worker typecheck、`git diff --check`を回帰実行する。Wrangler dry-run、本番deploy、Pages push、push、D1/R2、Migration、Secret、Cron、dependency変更は行わない。
+- ローカルfixtureの実ブラウザで初期表示、もっと見る、favorite切替、detail表示、投稿成功相当の再描画、管理更新相当の再描画を確認する。white/default/dark × 390/760/1366pxで横overflow、操作重なり、重複control、Console warning/errorがないことを確認する。
+- 2026-07-25の削除後UTF-8/LF正規化値は`app.js` 88,621 bytes/2,693行、`progress-thumbnail-list.js` 34,223 bytes/1,016行、`docs`配下JavaScript合計760,508 bytes/17,951行だった。削減量は順に4,190 bytes/94行、4,818 bytes/112行、合計9,008 bytes/206行。pipeline 8/100/1000 itemは各stage 1回、rendered node 8/100/1000を維持した。
+- ローカル実ブラウザでは初期10 chart/20 version、もっと見る後14/28、2回replace後10/20を維持し、重複chart/HTML ID/controlは0だった。投稿成功相当はmount 2、detail 1、list-settled 1、管理更新相当はmount 1、detail 1、list-settled 0で、detail 1 card/2 versionとrecent側への選択chart重複0を確認した。
+- lifecycle fixtureはactive 1、pending grace 1、pending manual 1、processing 1、tombstoned 1を描画し、各badge、DL可1/DL不可2、processing/tombstonedの操作非表示を確認した。white/default/dark × 390/760/1366pxの9条件すべてで横overflow 0、画面外control 0、重複control 0、Console warning/error 0だった。

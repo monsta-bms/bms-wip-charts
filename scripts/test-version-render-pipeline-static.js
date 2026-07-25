@@ -65,7 +65,7 @@ check("model, link, action, pipeline, and app load in contract order", () => {
     "./version-link-ui.js?v=chart-render-pipeline-r4a-01",
     "./version-action-ui.js?v=chart-render-pipeline-r4a-01",
     "./chart-render-pipeline.js?v=chart-render-pipeline-r4a-01",
-    "./app.js?v=chart-render-pipeline-r4a-01"
+    "./app.js?v=chart-render-cleanup-r4b1-01"
   ].map((src) => indexSources.indexOf(src));
   assert.ok(ordered.every((index) => index >= 0));
   assert.deepEqual(ordered, [...ordered].sort((left, right) => left - right));
@@ -82,8 +82,8 @@ check("model, link UI, and Action UI precede every index renderer consumer", () 
   const actionIndex = indexSources.indexOf("./version-action-ui.js?v=chart-render-pipeline-r4a-01");
   const consumers = [
     "./chart-render-pipeline.js?v=chart-render-pipeline-r4a-01",
-    "./app.js?v=chart-render-pipeline-r4a-01",
-    "./progress-thumbnail-list.js?v=chart-render-pipeline-r4a-01",
+    "./app.js?v=chart-render-cleanup-r4b1-01",
+    "./progress-thumbnail-list.js?v=chart-render-cleanup-r4b1-01",
     "./branch-append-ui.js?v=chart-render-pipeline-r4a-01",
     "./branch-tree-list.js?v=chart-render-pipeline-r4a-01",
     "./favorites-list.js?v=chart-render-pipeline-r4a-01",
@@ -116,6 +116,7 @@ check("renderer capture and wrapper registration are absent", () => {
   assert.doesNotMatch(rendererSources, /(?:previous|original|base|wrapped|final)RenderCharts\s*=\s*renderCharts/i);
   assert.doesNotMatch(rendererSources, /renderChartsWith(?:SelectedSection|FinalProgressThumbnails)|renderChartsAsTree|renderWithFavorites/);
   assert.doesNotMatch(progressThumbnail, /installFinalProgressThumbnailBridge|setTimeout\([^\n]*ProgressThumbnailBridge/);
+  assert.doesNotMatch(rendererSources, /renderChartsLegacy|renderChartsWithProgressThumbnailsLegacy/);
 });
 check("base and ordered stages are explicitly registered", () => {
   assert.match(branchAppend, /setBaseRenderer\(\{\s*name: "branch-append-base"/);
@@ -202,23 +203,23 @@ check("existing render events and payload names remain", () => {
   assert.match(chartDetail, /new CustomEvent\("chart-detail:rendered"/);
   assert.match(app, /detail: \{\s*root,\s*data: data \|\| null,\s*reason:/);
 });
-check("legacy full renderers remain private and unreachable", () => {
-  assert.match(app, /function renderChartsLegacy\(data\)/);
-  assert.match(progressThumbnail, /function renderChartsWithProgressThumbnailsLegacy\(data\)/);
-  assert.equal((app.match(/renderChartsLegacy/g) || []).length, 1);
-  assert.equal((progressThumbnail.match(/renderChartsWithProgressThumbnailsLegacy/g) || []).length, 1);
-  assert.doesNotMatch(branchAppend, /Legacy/);
+check("unreachable legacy full renderers and their private helpers are removed", () => {
+  [app, progressThumbnail].forEach((source) => {
+    assert.doesNotMatch(source, /renderChartsLegacy|renderChartsWithProgressThumbnailsLegacy/);
+  });
+  assert.doesNotMatch(app, /function renderEmpty\(|versionActionUiUnavailableWarned/);
+  assert.doesNotMatch(progressThumbnail, /function renderEmptyList\(|function makeVersionUiModel\(/);
 });
-check("every requested renderer consumes the shared model", () => {
-  [app, branchAppend, progressThumbnail, branchTree, favorites, compactList]
+check("every active model consumer uses the shared model", () => {
+  [app, branchAppend, branchTree, favorites, compactList]
     .forEach((source) => assert.match(source, /buildVersionUiModel|buildSharedVersionUiModel/));
 });
-check("every link renderer consumes the shared link UI", () => {
-  [app, branchAppend, progressThumbnail, branchTree, compactList]
+check("every active link renderer consumes the shared link UI", () => {
+  [branchAppend, branchTree, compactList]
     .forEach((source) => assert.match(source, /BmsVersionLinkUi/));
 });
-check("every Action renderer consumes the shared Action UI", () => {
-  [app, branchAppend, progressThumbnail, branchTree, favorites]
+check("every active Action renderer consumes the shared Action UI", () => {
+  [branchAppend, branchTree, favorites]
     .forEach((source) => assert.match(source, /BmsVersionActionUi/));
 });
 check("URL parser implementations exist only in the shared model", () => {
@@ -232,7 +233,7 @@ check("URL parser implementations exist only in the shared model", () => {
   assert.doesNotMatch(linkSource, /new URL\(|normalizeExternalHttpUrl|normalizeWorkerDownloadUrl/);
 });
 check("version action class contract remains", () => {
-  [app, branchAppend, progressThumbnail].forEach((source) => assert.match(source, /<div class="version-actions">/));
+  assert.match(branchAppend, /<div class="version-actions">/);
   assert.match(linkSource, /originClass: "version-origin-link"/);
   assert.match(linkSource, /downloadClass: "version-download-control"/);
   assert.match(linkSource, /downloadUnavailableClass: "version-download-control download-disabled"/);
@@ -241,9 +242,7 @@ check("version action class contract remains", () => {
   assert.match(favorites, /button\.className = "favorite-version-button"/);
 });
 check("origin then download action order remains", () => {
-  [app, branchAppend, progressThumbnail].forEach((source) => {
-    assert.match(source, /\$\{originControl\}[\s\S]*\$\{downloadControl\}/);
-  });
+  assert.match(branchAppend, /\$\{originControl\}[\s\S]*\$\{downloadControl\}/);
 });
 check("renderers no longer build independent origin or download anchors", () => {
   [app, branchAppend, progressThumbnail, branchTree, compactList].forEach((source) => {
@@ -305,20 +304,21 @@ check("HTML IDs remain unique", () => {
   assert.deepEqual(duplicateIds(indexHtml), []);
   assert.deepEqual(duplicateIds(listHtml), []);
 });
-check("changed renderer cache keys use one R4A version", () => {
-  const changedIndexScripts = [
+check("only R4B1-modified render scripts use the cleanup cache key", () => {
+  ["app.js", "progress-thumbnail-list.js"].forEach((name) => {
+    assert.ok(indexSources.includes(`./${name}?v=chart-render-cleanup-r4b1-01`), `${name} cache key mismatch`);
+  });
+  const unchangedR4aScripts = [
     "version-ui-model.js",
     "version-link-ui.js",
     "version-action-ui.js",
     "chart-render-pipeline.js",
-    "app.js",
-    "progress-thumbnail-list.js",
     "branch-append-ui.js",
     "branch-tree-list.js",
     "favorites-list.js",
     "chart-detail-link.js"
   ];
-  changedIndexScripts.forEach((name) => {
+  unchangedR4aScripts.forEach((name) => {
     assert.ok(indexSources.includes(`./${name}?v=chart-render-pipeline-r4a-01`), `${name} cache key mismatch`);
   });
   ["version-ui-model.js", "version-link-ui.js", "list.js"].forEach((name) => {
@@ -369,16 +369,13 @@ check("missing shared model paths fail closed", () => {
   assert.match(compactList, /buildVersionUiModel\?\.[\s\S]*\|\| null/);
   assert.match(branchTree, /uiModel\?\.canShowActions !== true/);
   assert.match(favorites, /\?\.favorite\.available === true/);
-  [app, branchAppend, progressThumbnail, compactList].forEach((source) => {
+  [branchAppend, compactList].forEach((source) => {
     assert.match(source, /canBuildLinks/);
     assert.match(source, /DL不可<\/span>/);
   });
   assert.match(branchTree, /if \(!canBuildLinks\)[\s\S]*existingOrigin\?\.remove\(\)[\s\S]*DL不可/);
-  [app, branchAppend, progressThumbnail].forEach((source) => {
-    assert.match(source, /BmsVersionActionUi/);
-    assert.match(source, /追記不可<\/button>/);
-  });
-  assert.match(app, /VERSION_ACTION_UI_UNAVAILABLE/);
+  assert.match(branchAppend, /BmsVersionActionUi/);
+  assert.match(branchAppend, /追記不可<\/button>/);
   assert.match(branchTree, /existingManagement\?\.remove\(\)/);
 });
 

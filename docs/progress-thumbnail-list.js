@@ -28,12 +28,6 @@
     });
   }
 
-  function makeVersionUiModel(version, options = {}) {
-    return typeof buildSharedVersionUiModel === "function"
-      ? buildSharedVersionUiModel(version, options)
-      : null;
-  }
-
   function ensureProgressImageThumbnailStyle() {
     if (document.querySelector("#progress-image-thumbnail-style")) {
       return;
@@ -947,112 +941,6 @@
       childList: true,
       subtree: true
     });
-  }
-
-  function renderEmptyList() {
-    if (typeof renderEmpty === "function") {
-      renderEmpty();
-      return;
-    }
-
-    if (listElement) {
-      listElement.innerHTML = `<div class="list-status">投稿はまだありません。</div>`;
-    }
-  }
-
-  function renderChartsWithProgressThumbnailsLegacy(data) {
-    const charts = Array.isArray(data?.charts) ? data.charts : [];
-
-    if (!listElement) {
-      return;
-    }
-
-    if (charts.length === 0) {
-      renderEmptyList();
-      return;
-    }
-
-    const densityScale = calculateListDensityScale(data);
-    listElement.innerHTML = charts.map((entry) => {
-      const song = entry.song || {};
-      const chart = entry.chart || {};
-      const versions = Array.isArray(entry.versions) ? entry.versions : [];
-      const context = buildThumbnailContext(versions, densityScale);
-      const rows = versions.map((version) => {
-        const difficulty = version.difficulty || "未入力";
-        const progress = Number.isFinite(Number(version.progress)) ? Number(version.progress) : 0;
-        const thumbnail = renderProgressThumbnail(version, context);
-        const displayVersionLabel = String(version.displayVersion || "ver?.?");
-        const uiModel = makeVersionUiModel(version, { hasProgressMap: true });
-        const linkUi = window.BmsVersionLinkUi;
-        const canBuildLinks = typeof linkUi?.createOriginLink === "function"
-          && typeof linkUi?.createDownloadControl === "function"
-          && typeof linkUi?.serializeControl === "function";
-        const rejectedBadge = version.isRejected ? `<span class="rejected-badge">没譜面</span>` : "";
-        const originControl = canBuildLinks
-          ? linkUi.serializeControl(linkUi.createOriginLink(uiModel, {
-            ariaLabel: `${displayVersionLabel} の原曲・本体の配布ページを開く（外部サイト）`
-          }))
-          : "";
-        const downloadControl = (canBuildLinks
-          ? linkUi.serializeControl(linkUi.createDownloadControl(uiModel))
-          : "") || `<span class="version-download-control download-disabled">DL不可</span>`;
-        const actionUi = window.BmsVersionActionUi;
-        const appendControl = typeof actionUi?.createAppendControl === "function"
-          ? actionUi.createAppendControl(uiModel, { placeholder: true })?.outerHTML || ""
-          : `<button class="secondary" type="button" disabled>追記不可</button>`;
-
-        return `
-          <div class="version-row">
-            <div class="version-tag">${html(version.displayVersion || "ver?.?")}</div>
-            <div class="meta-block">
-              <span class="meta-label">想定難易度</span>
-              <span class="meta-value">${html(difficulty)}</span>
-            </div>
-            <div class="meta-block">
-              <span class="meta-label">差分作者</span>
-              <span class="meta-value">${html(version.author || "未入力")}</span>
-            </div>
-            <div class="meta-block">
-              <span class="meta-label">進捗度</span>
-              <span class="progress-pill">${html(progress)}%</span>
-              ${rejectedBadge}
-            </div>
-            <div class="meta-block progress-thumbnail-block${thumbnail ? "" : " is-empty"}">
-              <div class="progress-thumbnail-slot">${thumbnail || ""}</div>
-            </div>
-            <div class="meta-block">
-              <span class="meta-label">コメント</span>
-              <span class="meta-value">${html(version.comment || "")}</span>
-            </div>
-            <div class="version-actions">
-              ${originControl}
-              ${downloadControl}
-              ${appendControl}
-            </div>
-          </div>
-        `;
-      }).join("");
-
-      return `
-        <article class="chart-group">
-          <div class="chart-title-row">
-            <div class="chart-heading-main">
-              <h3>${html(song.title || "無題")}</h3>
-              <span class="artist-separator">/</span>
-              <span class="chart-artist">${html(song.artist || "Unknown Artist")}</span>
-            </div>
-            <div class="chart-origin-name">
-              <span class="chart-origin-name-label">起点差分名：</span>
-              <span class="chart-origin-name-value" title="${html(chart.name || "差分名未入力")}">${html(chart.name || "差分名未入力")}</span>
-            </div>
-          </div>
-          <div class="version-list">${rows || `<div class="list-status">表示できるversionがありません。</div>`}</div>
-        </article>
-      `;
-    }).join("");
-
-    scheduleProgressImageThumbnailMount(listElement);
   }
 
   function debugProgressThumbnails(root = listElement || document) {

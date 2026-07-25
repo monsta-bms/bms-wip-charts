@@ -1153,3 +1153,12 @@ RC★★変換:
 - 保存済み進捗thumbnailはpost-render stageだけ、progress画像、mini-view、tree overlay、recent badge、`chart-ui:mounted`は共通mountだけから起動する。1回のpipeline renderにつき各stageと共通mountを1回とし、`chart-detail:rendered`と`chart-list-load-settled`の名前・payload契約を維持する。load-moreの`chart-ui:mounted` reasonは`append-complete`とする。
 - `app.js`と`progress-thumbnail-list.js`の旧full rendererはR4Aでは`Legacy`名のprivate関数として残すが、pipelineへ登録せず通常経路から参照しない。progress final wrapper、zero-delay wrapper登録、tree/favorites/detail wrapperは廃止する。旧renderer本体の削除と重複CSS整理はR4Bへ分離する。
 - R4Aは既存chart/version DOM、class、dataset、操作順、文言、runtime style、CSS、MutationObserver、resize/delegation listenerを変更しない。compact一覧は独立rendererのため対象外とし、`docs/list.html`と`docs/list.js`を変更しない。
+
+## VERSION-TREE-RENDER-CONSOLIDATION R4B1 到達不能な旧renderer削除
+
+- R4Aで通常経路から切り離した`renderChartsLegacy`と`renderChartsWithProgressThumbnailsLegacy`は、direct/indirect参照、`window`公開、inline handler、event、timer、pipeline登録がないことを確認した上で削除する。旧rendererだけが使用していた`renderEmpty`、`renderEmptyList`、進捗側`makeVersionUiModel`、`versionActionUiUnavailableWarned`も削除する。
+- 正式描画経路はR4Aと同じく`favorites-filter`→`branch-append-base`→`tree`→`favorites`→`stored-progress-thumbnails`→`common-mount`とする。base renderer、stageの登録名・順序・required属性、`replace/append/detail`の動作は変更しない。
+- `window.renderCharts`、`window.BmsChartRenderPipeline`、`window.mountChartUi`、`window.loadCharts`、`window.rerenderCurrentChartList`、detail/favorite/progressの公開globalと、`chart-ui:mounted`、`chart-list-load-settled`、`chart-detail:rendered`のevent契約を維持する。
+- 保存済み進捗model、`applyStoredProgressThumbnails`、progress image mount/scheduler、MutationObserverは現行経路なので削除しない。`branch-append-ui.js`の正式base rendererとcompact一覧は対象外とする。
+- chart/version DOM、class、dataset、文言、操作順、CSS、runtime style、listener、observer、responsive/theme仕様は変更しない。script順は維持し、変更した`app.js`と`progress-thumbnail-list.js`だけを`chart-render-cleanup-r4b1-01`でcache bustする。
+- R4B1は旧描画コードの除去だけを対象とし、wrapper再導入、renderer統合、Worker/API変更を行わない。CSS/runtime style整理はR4B2へ分離する。

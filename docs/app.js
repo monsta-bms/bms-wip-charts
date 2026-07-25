@@ -1919,8 +1919,6 @@ function buildSharedVersionUiModel(version, options = {}) {
   }) || null;
 }
 
-let versionActionUiUnavailableWarned = false;
-
 function getChartEntryId(entry) {
   return String(entry?.chart?.id || entry?.chartId || "");
 }
@@ -2153,98 +2151,6 @@ function updateChartListControls() {
 
 function renderLoading() {
   chartList.innerHTML = `<div class="list-status">読み込み中</div>`;
-}
-
-function renderEmpty() {
-  chartList.innerHTML = `<div class="list-status">投稿はまだありません。</div>`;
-}
-
-function renderChartsLegacy(data) {
-  const charts = Array.isArray(data?.charts) ? data.charts : [];
-
-  if (charts.length === 0) {
-    renderEmpty();
-    return;
-  }
-
-  chartList.innerHTML = charts.map((entry) => {
-    const song = entry.song || {};
-    const chart = entry.chart || {};
-    const versions = Array.isArray(entry.versions) ? entry.versions : [];
-    const rows = versions.map((version) => {
-      const difficulty = version.difficulty || "未入力";
-      const progress = Number.isFinite(Number(version.progress)) ? Number(version.progress) : 0;
-      const displayVersionLabel = String(version.displayVersion || "ver?.?");
-      const uiModel = buildSharedVersionUiModel(version, { hasProgressMap: true });
-      const linkUi = window.BmsVersionLinkUi;
-      const canBuildLinks = typeof linkUi?.createOriginLink === "function"
-        && typeof linkUi?.createDownloadControl === "function"
-        && typeof linkUi?.serializeControl === "function";
-      const rejectedBadge = version.isRejected ? `<span class="rejected-badge">没譜面</span>` : "";
-      const originControl = canBuildLinks
-        ? linkUi.serializeControl(linkUi.createOriginLink(uiModel, {
-          ariaLabel: `${displayVersionLabel} の原曲・本体の配布ページを開く（外部サイト）`
-        }))
-        : "";
-      const downloadControl = (canBuildLinks
-        ? linkUi.serializeControl(linkUi.createDownloadControl(uiModel))
-        : "") || `<span class="version-download-control download-disabled">DL不可</span>`;
-      const actionUi = window.BmsVersionActionUi;
-      const canBuildActions = typeof actionUi?.createAppendControl === "function";
-      if (!canBuildActions && !versionActionUiUnavailableWarned) {
-        versionActionUiUnavailableWarned = true;
-        console.error("[version-action-ui] VERSION_ACTION_UI_UNAVAILABLE");
-      }
-      const appendControl = canBuildActions
-        ? actionUi.createAppendControl(uiModel, { placeholder: true })?.outerHTML || ""
-        : `<button class="secondary" type="button" disabled>追記不可</button>`;
-
-      return `
-        <div class="version-row">
-          <div class="version-tag">${escapeHtml(version.displayVersion || "ver?.?")}</div>
-          <div class="meta-block">
-            <span class="meta-label">想定難易度</span>
-            <span class="meta-value">${escapeHtml(difficulty)}</span>
-          </div>
-          <div class="meta-block">
-            <span class="meta-label">差分作者</span>
-            <span class="meta-value">${escapeHtml(version.author || "未入力")}</span>
-          </div>
-          <div class="meta-block">
-            <span class="meta-label">進捗度</span>
-            <span class="progress-pill">${escapeHtml(progress)}%</span>
-            ${rejectedBadge}
-          </div>
-          <div class="meta-block">
-            <span class="meta-label">コメント</span>
-            <span class="meta-value">${escapeHtml(version.comment || "")}</span>
-          </div>
-          <div class="version-actions">
-            ${originControl}
-            ${downloadControl}
-            ${appendControl}
-          </div>
-        </div>
-      `;
-    }).join("");
-
-    return `
-      <article class="chart-group">
-        <div class="chart-title-row">
-          <div class="chart-heading-main">
-            <h3>${escapeHtml(song.title || "無題")}</h3>
-            <span class="artist-separator">/</span>
-            <span class="chart-artist">${escapeHtml(song.artist || "Unknown Artist")}</span>
-          </div>
-          <div class="chart-origin-name">
-            <span class="chart-origin-name-label">起点差分名：</span>
-            <span class="chart-origin-name-value" title="${escapeHtml(chart.name || "差分名未入力")}">${escapeHtml(chart.name || "差分名未入力")}</span>
-          </div>
-        </div>
-        <div class="version-list">${rows || `<div class="list-status">表示できるversionがありません。</div>`}</div>
-      </article>
-    `;
-  }).join("");
 }
 
 function appendRenderedCharts(data) {
