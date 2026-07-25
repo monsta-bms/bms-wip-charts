@@ -991,6 +991,10 @@
         const downloadControl = (canBuildLinks
           ? linkUi.serializeControl(linkUi.createDownloadControl(uiModel))
           : "") || `<span class="version-download-control download-disabled">DL不可</span>`;
+        const actionUi = window.BmsVersionActionUi;
+        const appendControl = typeof actionUi?.createAppendControl === "function"
+          ? actionUi.createAppendControl(uiModel, { placeholder: true })?.outerHTML || ""
+          : `<button class="secondary" type="button" disabled>追記不可</button>`;
 
         return `
           <div class="version-row">
@@ -1018,7 +1022,7 @@
             <div class="version-actions">
               ${originControl}
               ${downloadControl}
-              <button class="secondary" type="button" disabled>${uiModel ? "追記投稿" : "追記不可"}</button>
+              ${appendControl}
             </div>
           </div>
         `;

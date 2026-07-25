@@ -48,13 +48,14 @@ const chartDetail = read("docs/chart-detail-link.js");
 const versionManagement = read("docs/version-management-ui.js");
 const modelSource = read("docs/version-ui-model.js");
 const linkSource = read("docs/version-link-ui.js");
+const actionSource = read("docs/version-action-ui.js");
 const indexScripts = scriptTags(indexHtml);
 const listScripts = scriptTags(listHtml);
 const indexSources = indexScripts.map((item) => item.src);
 const listSources = listScripts.map((item) => item.src);
 
 check("version model loads before app on index", () => {
-  assert.ok(indexSources.indexOf("./version-ui-model.js?v=version-link-ui-r2-01") < indexSources.indexOf("./app.js?v=version-link-ui-r2-01"));
+  assert.ok(indexSources.indexOf("./version-ui-model.js?v=version-action-ui-r3-01") < indexSources.indexOf("./app.js?v=version-action-ui-r3-01"));
 });
 check("version model loads before compact list", () => {
   const modelIndex = listSources.indexOf("./version-ui-model.js?v=version-link-ui-r2-01");
@@ -62,36 +63,39 @@ check("version model loads before compact list", () => {
   assert.equal(linkIndex, modelIndex + 1);
   assert.ok(linkIndex < listSources.indexOf("./list.js?v=version-link-ui-r2-01"));
 });
-check("model and link UI precede every index renderer consumer", () => {
-  const modelIndex = indexSources.indexOf("./version-ui-model.js?v=version-link-ui-r2-01");
-  const linkIndex = indexSources.indexOf("./version-link-ui.js?v=version-link-ui-r2-01");
+check("model, link UI, and Action UI precede every index renderer consumer", () => {
+  const modelIndex = indexSources.indexOf("./version-ui-model.js?v=version-action-ui-r3-01");
+  const linkIndex = indexSources.indexOf("./version-link-ui.js?v=version-action-ui-r3-01");
+  const actionIndex = indexSources.indexOf("./version-action-ui.js?v=version-action-ui-r3-01");
   const consumers = [
-    "./app.js?v=version-link-ui-r2-01",
-    "./progress-thumbnail-list.js?v=version-link-ui-r2-01",
-    "./branch-append-ui.js?v=version-link-ui-r2-01",
-    "./branch-tree-list.js?v=version-link-ui-r2-01",
-    "./favorites-list.js?v=version-ui-model-r1-01",
+    "./app.js?v=version-action-ui-r3-01",
+    "./progress-thumbnail-list.js?v=version-action-ui-r3-01",
+    "./branch-append-ui.js?v=version-action-ui-r3-01",
+    "./branch-tree-list.js?v=version-action-ui-r3-01",
+    "./favorites-list.js?v=version-action-ui-r3-01",
     "./version-management-ui.js?v=withdrawal-lifecycle-16r",
     "./chart-detail-link.js?v=version-ui-model-r1-01"
   ];
   assert.equal(linkIndex, modelIndex + 1);
+  assert.equal(actionIndex, linkIndex + 1);
   consumers.forEach((src) => {
     assert.ok(modelIndex < indexSources.indexOf(src), `${src} must follow model`);
     assert.ok(linkIndex < indexSources.indexOf(src), `${src} must follow link UI`);
+    assert.ok(actionIndex < indexSources.indexOf(src), `${src} must follow Action UI`);
   });
 });
 check("renderer scripts remain classic and synchronous", () => {
   [...indexScripts, ...listScripts]
-    .filter((item) => /version-ui-model|version-link-ui|app\.js|progress-thumbnail-list|branch-append-ui|branch-tree-list|favorites-list|version-management-ui|chart-detail-link|list\.js/.test(item.src))
+    .filter((item) => /version-ui-model|version-link-ui|version-action-ui|app\.js|progress-thumbnail-list|branch-append-ui|branch-tree-list|favorites-list|version-management-ui|chart-detail-link|list\.js/.test(item.src))
     .forEach((item) => assert.doesNotMatch(item.attributes, /\b(?:type\s*=\s*["']module|defer|async)\b/i));
 });
 check("renderer capture order remains unchanged", () => {
   const ordered = [
-    "./app.js?v=version-link-ui-r2-01",
-    "./progress-thumbnail-list.js?v=version-link-ui-r2-01",
-    "./branch-append-ui.js?v=version-link-ui-r2-01",
-    "./branch-tree-list.js?v=version-link-ui-r2-01",
-    "./favorites-list.js?v=version-ui-model-r1-01",
+    "./app.js?v=version-action-ui-r3-01",
+    "./progress-thumbnail-list.js?v=version-action-ui-r3-01",
+    "./branch-append-ui.js?v=version-action-ui-r3-01",
+    "./branch-tree-list.js?v=version-action-ui-r3-01",
+    "./favorites-list.js?v=version-action-ui-r3-01",
     "./version-management-ui.js?v=withdrawal-lifecycle-16r",
     "./chart-detail-link.js?v=version-ui-model-r1-01"
   ].map((src) => indexSources.indexOf(src));
@@ -114,8 +118,12 @@ check("chart detail still captures and temporarily moves shared output", () => {
   assert.match(chartDetail, /cardSlot\.appendChild\(renderedCard\)/);
   assert.match(chartDetail, /chartList\.replaceChildren\(preservedList\)/);
 });
-check("favorites local rerender path remains unchanged", () => {
-  assert.match(favorites, /function rerenderLatest\(\)[\s\S]*renderWithFavorites\(latestData\)/);
+check("favorites local rerender mounts shared UI exactly once without recursion", () => {
+  const rerender = favorites.match(/function rerenderLatest\(\) \{([\s\S]*?)\n  \}/)?.[1] || "";
+  assert.match(rerender, /const renderData = renderWithFavorites\(latestData\)/);
+  assert.equal((rerender.match(/window\.mountChartUi\(/g) || []).length, 1);
+  assert.match(rerender, /mountFavorites: false/);
+  assert.doesNotMatch(rerender, /renderCharts\(/);
 });
 check("mount, observer, and animation scheduling remain", () => {
   assert.match(app, /function mountChartUi\(data, root = chartList, options = \{\}\)/);
@@ -132,6 +140,11 @@ check("public link UI global has only the requested API", () => {
   const apiMatch = linkSource.match(/return Object\.freeze\(\{\s*createOriginLink,\s*createDownloadControl,\s*serializeControl\s*\}\);/);
   assert.ok(apiMatch);
 });
+check("public Action UI global has only the requested API", () => {
+  assert.match(actionSource, /window\.BmsVersionActionUi = api/);
+  const apiMatch = actionSource.match(/return Object\.freeze\(\{\s*createAppendControl,\s*createManagementControl,\s*createLifecycleIndicator,\s*replaceControlIfChanged\s*\}\);/);
+  assert.ok(apiMatch);
+});
 check("every requested renderer consumes the shared model", () => {
   [app, branchAppend, progressThumbnail, branchTree, favorites, compactList]
     .forEach((source) => assert.match(source, /buildVersionUiModel|buildSharedVersionUiModel/));
@@ -139,6 +152,10 @@ check("every requested renderer consumes the shared model", () => {
 check("every link renderer consumes the shared link UI", () => {
   [app, branchAppend, progressThumbnail, branchTree, compactList]
     .forEach((source) => assert.match(source, /BmsVersionLinkUi/));
+});
+check("every Action renderer consumes the shared Action UI", () => {
+  [app, branchAppend, progressThumbnail, branchTree, favorites]
+    .forEach((source) => assert.match(source, /BmsVersionActionUi/));
 });
 check("URL parser implementations exist only in the shared model", () => {
   assert.match(modelSource, /function normalizeExternalHttpUrl\(value\)/);
@@ -155,8 +172,8 @@ check("version action class contract remains", () => {
   assert.match(linkSource, /originClass: "version-origin-link"/);
   assert.match(linkSource, /downloadClass: "version-download-control"/);
   assert.match(linkSource, /downloadUnavailableClass: "version-download-control download-disabled"/);
-  assert.match(branchAppend, /class="secondary append-version-button"/);
-  assert.match(branchTree, /button\.className = "secondary version-management-button"/);
+  assert.match(actionSource, /button\.className = "secondary append-version-button"/);
+  assert.match(actionSource, /button\.className = "secondary version-management-button"/);
   assert.match(favorites, /button\.className = "favorite-version-button"/);
 });
 check("origin then download action order remains", () => {
@@ -169,6 +186,21 @@ check("renderers no longer build independent origin or download anchors", () => 
     assert.doesNotMatch(source, /<a\s+class="(?:version-origin-link|version-download-control|compact-link-control compact-(?:origin|download)-link)/);
   });
 });
+check("renderers no longer build normal append or management controls independently", () => {
+  [app, branchAppend, progressThumbnail, branchTree, favorites].forEach((source) => {
+    assert.doesNotMatch(source, /class="secondary append-version-button"/);
+    assert.doesNotMatch(source, /className = "secondary version-management-button"/);
+  });
+  assert.match(branchAppend, /createAppendControl\(uiModel, \{ chartId \}\)/);
+  assert.match(branchTree, /createManagementControl\(uiModel, \{/);
+});
+check("tree lifecycle labels come from Action UI", () => {
+  assert.match(branchTree, /createLifecycleIndicator\(uiModel\)/);
+  assert.match(branchTree, /createLifecycleIndicator\(uiModel, \{ variant: "detail" \}\)/);
+  assert.doesNotMatch(branchTree, /class="withdrawal-pending-badge"/);
+  assert.doesNotMatch(branchTree, /class="withdrawal-processing-badge"/);
+  assert.doesNotMatch(branchTree, /class="withdrawal-tombstone-badge"/);
+});
 check("tree link enhancement is idempotent and state replaceable", () => {
   assert.match(branchTree, /function reconcileLinkControl\(/);
   assert.match(branchTree, /existing\?\.outerHTML === desiredHtml/);
@@ -177,6 +209,17 @@ check("tree link enhancement is idempotent and state replaceable", () => {
   assert.match(branchTree, /existing\?\.remove\(\)/);
   assert.match(branchTree, /enhanceLinkControls\(actions, uiModel, displayVersionLabel\)/);
   assert.match(branchTree, /if \(uiModel\?\.canShowActions !== true\) \{\s*actions\?\.replaceChildren\(\);\s*return;/);
+});
+check("tree Action enhancement is idempotent and state replaceable", () => {
+  const reconcileBlock = branchTree.slice(
+    branchTree.indexOf("function reconcileActionControls("),
+    branchTree.indexOf("function ensureGroupGutter(")
+  );
+  assert.match(branchTree, /function reconcileActionControls\(/);
+  assert.match(branchTree, /actionUi\.replaceControlIfChanged\(existingAppend, desiredAppend/);
+  assert.match(branchTree, /actions\.querySelector\("\.version-management-button"\)/);
+  assert.match(actionSource, /existing\.outerHTML === next\.outerHTML/);
+  assert.ok(reconcileBlock.indexOf("const desiredAppend") < reconcileBlock.indexOf("const desiredManagement"));
 });
 check("compact rerender replaces its row markup instead of appending controls", () => {
   assert.match(compactList, /list\.innerHTML = state\.items\.map\(renderRow\)\.join\(""\)/);
@@ -198,10 +241,10 @@ check("HTML IDs remain unique", () => {
   assert.deepEqual(duplicateIds(indexHtml), []);
   assert.deepEqual(duplicateIds(listHtml), []);
 });
-check("changed renderer cache keys use the R2 version", () => {
-  const changedIndexScripts = ["version-ui-model.js", "version-link-ui.js", "app.js", "progress-thumbnail-list.js", "branch-append-ui.js", "branch-tree-list.js"];
+check("changed renderer cache keys use the R3 version", () => {
+  const changedIndexScripts = ["version-ui-model.js", "version-link-ui.js", "version-action-ui.js", "app.js", "progress-thumbnail-list.js", "branch-append-ui.js", "branch-tree-list.js", "favorites-list.js"];
   changedIndexScripts.forEach((name) => {
-    assert.ok(indexSources.includes(`./${name}?v=version-link-ui-r2-01`), `${name} cache key mismatch`);
+    assert.ok(indexSources.includes(`./${name}?v=version-action-ui-r3-01`), `${name} cache key mismatch`);
   });
   ["version-ui-model.js", "version-link-ui.js", "list.js"].forEach((name) => {
     assert.ok(listSources.includes(`./${name}?v=version-link-ui-r2-01`), `${name} compact cache key mismatch`);
@@ -222,24 +265,25 @@ check("runtime style blocks are unchanged", () => {
   assert.equal(sha256(runtimeStyle(favorites)), "ff8f76306c520d22e15244067ec7470568278a20fcf9ac9e4f60cc63210ad6b8");
   assert.equal(sha256(runtimeStyle(progressThumbnail)), "280a1c0a18e3500bfda2f2e45ff58f8f0afcec26467192968f18a3036e2ac1e6");
 });
-check("R2 does not increase DOM traversal in existing renderers", () => {
+check("R3 keeps DOM traversal growth bounded", () => {
   const r1Baseline = new Map([
     [app, 69],
     [branchAppend, 59],
     [progressThumbnail, 24],
-    [branchTree, 40],
-    [favorites, 16],
+    [branchTree, 44],
+    [favorites, 18],
     [compactList, 9],
     [chartDetail, 8]
   ]);
   r1Baseline.forEach((count, source) => assert.ok(traversalCount(source) <= count));
-  assert.equal(traversalCount(branchTree), 39);
+  assert.ok(traversalCount(branchTree) <= 44);
+  assert.ok(traversalCount(favorites) <= 18);
 });
 check("normal action strings remain unchanged", () => {
-  assert.match(branchAppend, />追記投稿<\/button>/);
-  assert.match(branchAppend, />追記停止<\/button>/);
-  assert.match(branchAppend, />旧形式<\/button>/);
-  assert.match(branchAppend, />追記不可<\/button>/);
+  assert.match(actionSource, /button\.textContent = "追記投稿"/);
+  assert.match(actionSource, /"追記停止"/);
+  assert.match(actionSource, /"旧形式"/);
+  assert.match(actionSource, /"追記不可"/);
   assert.match(linkSource, /control\.textContent = "DL"/);
   assert.match(linkSource, /control\.textContent = "DL不可"/);
 });
@@ -253,6 +297,12 @@ check("missing shared model paths fail closed", () => {
     assert.match(source, /DL不可<\/span>/);
   });
   assert.match(branchTree, /if \(!canBuildLinks\)[\s\S]*existingOrigin\?\.remove\(\)[\s\S]*DL不可/);
+  [app, branchAppend, progressThumbnail].forEach((source) => {
+    assert.match(source, /BmsVersionActionUi/);
+    assert.match(source, /追記不可<\/button>/);
+  });
+  assert.match(app, /VERSION_ACTION_UI_UNAVAILABLE/);
+  assert.match(branchTree, /existingManagement\?\.remove\(\)/);
 });
 
 assert.ok(passed >= 20, `expected at least 20 checks, got ${passed}`);

@@ -171,8 +171,8 @@
     return version?.id || version?.versionId || "";
   }
 
-  function isVersionFavoriteAvailable(version) {
-    return makeVersionUiModel(version)?.favorite.available === true;
+  function isVersionFavoriteAvailable(version, uiModel = null) {
+    return (uiModel || makeVersionUiModel(version))?.favorite.available === true;
   }
 
   function getParentVersionId(version) {
@@ -358,20 +358,26 @@
     return button;
   }
 
-  function lockFavoriteContextAppend(row) {
+  function lockFavoriteContextAppend(row, uiModel, chartId) {
     const actions = row.querySelector(".version-actions");
-    const appendButton = actions?.querySelector(".append-version-button, button.secondary:not(.intermediate-toggle-button)");
-    if (!appendButton || appendButton.classList.contains("append-disabled-intermediate")) {
+    const appendButton = actions?.querySelector([
+      ".append-version-button",
+      ".append-policy-disabled-button",
+      ".append-disabled-intermediate",
+      "button.secondary:not(.intermediate-toggle-button):not(.version-management-button)"
+    ].join(", "));
+    const managementButton = actions?.querySelector(".version-management-button") || null;
+    const actionUi = window.BmsVersionActionUi;
+    if (!actions
+      || typeof actionUi?.createAppendControl !== "function"
+      || typeof actionUi?.replaceControlIfChanged !== "function") {
       return;
     }
-
-    const locked = document.createElement("button");
-    locked.className = "secondary append-disabled-intermediate";
-    locked.type = "button";
-    locked.disabled = true;
-    locked.title = "完成版に置き換え済みの中間履歴のため追記できません";
-    locked.textContent = "追記不可";
-    appendButton.replaceWith(locked);
+    actionUi.replaceControlIfChanged(
+      appendButton,
+      actionUi.createAppendControl(uiModel, { chartId }),
+      { parent: actions, before: managementButton }
+    );
   }
 
   function versionMapByLabel(versions) {
@@ -409,7 +415,8 @@
           return;
         }
 
-        if (!isVersionFavoriteAvailable(version)) {
+        const uiModel = makeVersionUiModel(version);
+        if (!isVersionFavoriteAvailable(version, uiModel)) {
           titleLine.querySelector(".favorite-version-button")?.remove();
           row.classList.remove("is-favorite-version");
           return;
@@ -435,7 +442,7 @@
 
         if (version.favoriteFilterIntermediate) {
           row.classList.add("is-intermediate-history");
-          lockFavoriteContextAppend(row);
+          lockFavoriteContextAppend(row, uiModel, getChartId(entry));
         }
       });
     });
@@ -454,6 +461,7 @@
     }
     mountFavorites(renderData);
     updateFilterButton();
+    return renderData;
   }
 
   function rerenderLatest() {
@@ -461,7 +469,13 @@
       return;
     }
 
-    renderWithFavorites(latestData);
+    const renderData = renderWithFavorites(latestData);
+    if (typeof window.mountChartUi === "function") {
+      window.mountChartUi(renderData, listElement, {
+        reason: "favorites-rerender",
+        mountFavorites: false
+      });
+    }
   }
 
   interactionRoot.addEventListener("click", (event) => {

@@ -128,36 +128,13 @@
       ? `<span class="recent-activity-badge" data-created-at="${html(createdAt)}" hidden></span>`
       : "";
     const lifecycleStatus = getLifecycleStatus(version, uiModel);
-    if (lifecycleStatus === "withdrawal_pending") {
-      const handlingMode = getLifecycleHandlingMode(version, uiModel);
-      if (handlingMode === "immediate_delete") {
-        return `
-          <span class="version-posted-at">${html(postedAt)}</span>
-          <span class="version-withdrawal-detail">削除処理待ち / 取消不可</span>
-          ${recentBadge}
-        `;
-      }
-      if (handlingMode === "manual_review") {
-        return `
-          <span class="version-posted-at">${html(postedAt)}</span>
-          <span class="version-withdrawal-detail">DL停止・管理者確認待ち</span>
-          <span class="version-withdrawal-help">申請理由と派生版の状態を管理者が確認します。</span>
-          ${recentBadge}
-        `;
-      }
-      const scheduledAt = parseApiDate(getLifecycleScheduledAt(version));
+    if (["withdrawal_pending", "processing", "tombstoned", "deleted"].includes(lifecycleStatus)) {
       return `
         <span class="version-posted-at">${html(postedAt)}</span>
-        <span class="version-withdrawal-detail">DL停止・自動削除待ち</span>
-        <span class="version-withdrawal-help">${html(formatPostedAt({ createdAt: scheduledAt?.toISOString() || "" }).replace(/^投稿/, ""))}以降、追記や参照がなければ自動削除します。</span>
+        ${options.detailHtml || ""}
+        ${options.helpHtml || ""}
         ${recentBadge}
       `;
-    }
-    if (lifecycleStatus === "processing") {
-      return `<span class="version-posted-at">${html(postedAt)}</span><span class="version-withdrawal-detail">取り下げ処理中</span>${recentBadge}`;
-    }
-    if (lifecycleStatus === "tombstoned") {
-      return `<span class="version-posted-at">${html(postedAt)}</span><span class="version-withdrawal-detail">派生版を維持するため、版ツリー上の履歴だけ残っています。</span>${recentBadge}`;
     }
     if (!isWithin24Hours(version)) {
       return `<span class="version-posted-at">${html(postedAt)}</span>${recentBadge}`;
@@ -616,24 +593,10 @@
     return "";
   }
 
-  function renderStateBadges(node, progress, uiModel) {
+  function renderStateBadges(node, progress, uiModel, maxBadges = 2) {
     const version = node.version;
     const badges = [];
     const lifecycleStatus = getLifecycleStatus(version, uiModel);
-
-    if (lifecycleStatus === "withdrawal_pending") {
-      const handlingMode = getLifecycleHandlingMode(version, uiModel);
-      const label = handlingMode === "grace_auto_delete"
-        ? "DL停止・自動削除待ち"
-        : handlingMode === "manual_review"
-          ? "DL停止・管理者確認待ち"
-          : "取り下げ申請中";
-      badges.push(`<span class="withdrawal-pending-badge">${label}</span>`);
-    } else if (lifecycleStatus === "processing") {
-      badges.push(`<span class="withdrawal-processing-badge">取り下げ処理中</span>`);
-    } else if (lifecycleStatus === "tombstoned") {
-      badges.push(`<span class="withdrawal-tombstone-badge">履歴のみ</span>`);
-    }
 
     if (lifecycleStatus === "legacy_withdrawn" || isWithdrawn(version)) {
       badges.push(`<span class="withdrawn-badge">取り下げ済み</span>`);
@@ -651,7 +614,27 @@
       }
     }
 
-    return badges.slice(0, 2).join("");
+    return badges.slice(0, maxBadges).join("");
+  }
+
+  function buildLifecycleIndicators(version, uiModel) {
+    const actionUi = window.BmsVersionActionUi;
+    if (typeof actionUi?.createLifecycleIndicator !== "function") {
+      return { badgeHtml: "", detailHtml: "", helpHtml: "" };
+    }
+
+    const scheduledAt = parseApiDate(getLifecycleScheduledAt(version));
+    const scheduledLabel = formatPostedAt({
+      createdAt: scheduledAt?.toISOString() || ""
+    }).replace(/^投稿/, "");
+    return {
+      badgeHtml: actionUi.createLifecycleIndicator(uiModel)?.outerHTML || "",
+      detailHtml: actionUi.createLifecycleIndicator(uiModel, { variant: "detail" })?.outerHTML || "",
+      helpHtml: actionUi.createLifecycleIndicator(uiModel, {
+        variant: "help",
+        scheduledLabel
+      })?.outerHTML || ""
+    };
   }
 
   function renderAppendPolicyInfo(version, uiModel) {
@@ -738,57 +721,65 @@
     );
   }
 
-  function lockAppendControl(row, title = "完成版に置き換え済みの中間履歴のため追記できません") {
+  function findAppendControl(actions) {
+    return actions?.querySelector([
+      ".append-version-button",
+      ".append-policy-disabled-button",
+      ".append-disabled-intermediate",
+      "button.secondary:not(.intermediate-toggle-button):not(.version-management-button)"
+    ].join(", ")) || null;
+  }
+
+  function reconcileActionControls(row, version, uiModel, chartId, displayVersionLabel) {
     const actions = row.querySelector(".version-actions");
     if (!actions) {
       return;
     }
 
-    const appendControl = actions.querySelector(".append-policy-control")
-      || actions.querySelector(".append-version-button, button.secondary:not(.intermediate-toggle-button)");
-    if (!appendControl) {
+    const actionUi = window.BmsVersionActionUi;
+    const existingAppend = findAppendControl(actions);
+    const existingManagement = actions.querySelector(".version-management-button");
+    const canBuildActions = typeof actionUi?.createAppendControl === "function"
+      && typeof actionUi?.createManagementControl === "function"
+      && typeof actionUi?.replaceControlIfChanged === "function";
+    if (!canBuildActions) {
+      const fallback = document.createElement("button");
+      fallback.className = "secondary";
+      fallback.type = "button";
+      fallback.disabled = true;
+      fallback.setAttribute("aria-disabled", "true");
+      fallback.textContent = "追記不可";
+      if (existingAppend?.outerHTML !== fallback.outerHTML) {
+        if (existingAppend) existingAppend.replaceWith(fallback);
+        else actions.insertBefore(fallback, existingManagement || null);
+      }
+      existingManagement?.remove();
       return;
     }
 
-    const locked = document.createElement("button");
-    locked.className = "secondary append-disabled-intermediate";
-    locked.type = "button";
-    locked.disabled = true;
-    locked.title = title;
-    locked.textContent = "追記不可";
-    appendControl.replaceWith(locked);
-  }
-
-  function ensureManagementControl(row, version, uiModel, chartId, displayVersionLabel) {
-    const actions = row.querySelector(".version-actions");
-    if (!actions || uiModel?.management.visible !== true || actions.querySelector(".version-management-button")) {
-      return;
-    }
-
-    const button = document.createElement("button");
-    button.className = "secondary version-management-button";
-    button.type = "button";
-    button.textContent = "…";
-    button.title = `${displayVersionLabel} の投稿管理`;
-    button.setAttribute("aria-label", `${displayVersionLabel} の投稿管理`);
-    button.dataset.versionId = getVersionId(version);
-    button.dataset.chartId = chartId || "";
-    button.dataset.versionLabel = displayVersionLabel;
-    button.dataset.author = String(version?.author || "未入力");
-    button.dataset.withdrawn = isWithdrawn(version) ? "true" : "false";
-    button.dataset.deleteRequested = isDeleteRequested(version) ? "true" : "false";
-    button.dataset.allowAppend = uiModel.append.allowedByPolicy ? "true" : "false";
-    button.dataset.appendAvailable = uiModel.append.available ? "true" : "false";
-    button.dataset.downloadAvailable = uiModel.download.available ? "true" : "false";
-    button.dataset.lifecycleStatus = getLifecycleStatus(version, uiModel);
-    button.dataset.requestMode = getLifecycleRequestMode(version);
-    button.dataset.handlingMode = getLifecycleHandlingMode(version, uiModel);
-    button.dataset.scheduledAt = String(getLifecycleScheduledAt(version));
-    button.dataset.canCancelWithdrawal = version?.canCancelWithdrawal === true ? "true" : "false";
-    button.dataset.createdAt = String(version?.createdAt || version?.created_at || "");
-    button.dataset.within24Hours = isWithin24Hours(version) ? "true" : "false";
-    button.dataset.hasDescendants = hasChildVersions(version) ? "true" : "false";
-    actions.appendChild(button);
+    const desiredAppend = actionUi.createAppendControl(uiModel, { chartId });
+    actionUi.replaceControlIfChanged(existingAppend, desiredAppend, {
+      parent: actions,
+      before: existingManagement || null
+    });
+    const desiredManagement = actionUi.createManagementControl(uiModel, {
+      chartId,
+      versionLabel: displayVersionLabel,
+      author: String(version?.author || "未入力"),
+      withdrawn: isWithdrawn(version),
+      deleteRequested: isDeleteRequested(version),
+      requestMode: getLifecycleRequestMode(version),
+      scheduledAt: String(getLifecycleScheduledAt(version)),
+      canCancelWithdrawal: version?.canCancelWithdrawal === true,
+      createdAt: String(version?.createdAt || version?.created_at || ""),
+      within24Hours: isWithin24Hours(version),
+      hasDescendants: hasChildVersions(version)
+    });
+    actionUi.replaceControlIfChanged(
+      actions.querySelector(".version-management-button"),
+      desiredManagement,
+      { parent: actions }
+    );
   }
 
   function ensureGroupGutter(row) {
@@ -872,6 +863,8 @@
       hasProgressMap: true,
       isSupersededIntermediate: supersededIntermediate
     });
+    const lifecycleIndicators = buildLifecycleIndicators(version, uiModel);
+    const secondaryBadgeLimit = lifecycleIndicators.badgeHtml ? 1 : 2;
     const lifecycleStatus = getLifecycleStatus(version, uiModel);
     const publicDataRedacted = lifecycleStatus === "processing" || lifecycleStatus === "tombstoned";
     const blocked = isDownloadBlocked(version, uiModel);
@@ -933,20 +926,24 @@
         <span class="version-label-stack">
           <span class="version-title-line">
             <span class="version-main-label">${html(displayVersionLabel)}</span>
-            <span class="version-state-badges">${renderStateBadges(node, progress, uiModel)}</span>
+            <span class="version-state-badges">${lifecycleIndicators.badgeHtml}${renderStateBadges(node, progress, uiModel, secondaryBadgeLimit)}</span>
           </span>
           <span class="version-redacted-message">${html(lifecycleStatus === "tombstoned"
             ? "投稿者により取り下げられました"
             : "取り下げ処理中")}</span>
           <span class="version-parent-line" title="${html(titleText)}">${html(parentText)}</span>
-          <span class="version-lifecycle-line">${renderLifecycleMeta(version, uiModel, { isLatest: options.isLatest })}</span>
+          <span class="version-lifecycle-line">${renderLifecycleMeta(version, uiModel, {
+            isLatest: options.isLatest,
+            detailHtml: lifecycleIndicators.detailHtml,
+            helpHtml: lifecycleIndicators.helpHtml
+          })}</span>
         </span>
       ` : `
         ${renderTreeConnector(node.depth)}
         <span class="version-label-stack">
           <span class="version-title-line">
             <span class="version-main-label">${html(displayVersionLabel)}</span>
-            <span class="version-state-badges">${renderStateBadges(node, progress, uiModel)}</span>
+            <span class="version-state-badges">${lifecycleIndicators.badgeHtml}${renderStateBadges(node, progress, uiModel, secondaryBadgeLimit)}</span>
           </span>
           <span class="version-chart-name-line">
             <span class="version-chart-name-label">差分名：</span>
@@ -954,7 +951,11 @@
           </span>
           ${renderAppendPolicyInfo(version, uiModel)}
           <span class="version-parent-line" title="${html(titleText)}">${html(parentText)}</span>
-          <span class="version-lifecycle-line">${renderLifecycleMeta(version, uiModel, { isLatest: options.isLatest })}</span>
+          <span class="version-lifecycle-line">${renderLifecycleMeta(version, uiModel, {
+            isLatest: options.isLatest,
+            detailHtml: lifecycleIndicators.detailHtml,
+            helpHtml: lifecycleIndicators.helpHtml
+          })}</span>
         </span>
       `;
     }
@@ -986,10 +987,7 @@
     }
 
     enhanceLinkControls(actions, uiModel, displayVersionLabel);
-    ensureManagementControl(row, version, uiModel, getChartId(options.entry), displayVersionLabel);
-    if (supersededIntermediate) {
-      lockAppendControl(row, "完成版に置き換え済みの中間履歴のため追記できません");
-    }
+    reconcileActionControls(row, version, uiModel, getChartId(options.entry), displayVersionLabel);
   }
 
   function createVersionListHeader() {

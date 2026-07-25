@@ -1919,6 +1919,8 @@ function buildSharedVersionUiModel(version, options = {}) {
   }) || null;
 }
 
+let versionActionUiUnavailableWarned = false;
+
 function getChartEntryId(entry) {
   return String(entry?.chart?.id || entry?.chartId || "");
 }
@@ -2156,6 +2158,15 @@ function renderCharts(data) {
       const downloadControl = (canBuildLinks
         ? linkUi.serializeControl(linkUi.createDownloadControl(uiModel))
         : "") || `<span class="version-download-control download-disabled">DL不可</span>`;
+      const actionUi = window.BmsVersionActionUi;
+      const canBuildActions = typeof actionUi?.createAppendControl === "function";
+      if (!canBuildActions && !versionActionUiUnavailableWarned) {
+        versionActionUiUnavailableWarned = true;
+        console.error("[version-action-ui] VERSION_ACTION_UI_UNAVAILABLE");
+      }
+      const appendControl = canBuildActions
+        ? actionUi.createAppendControl(uiModel, { placeholder: true })?.outerHTML || ""
+        : `<button class="secondary" type="button" disabled>追記不可</button>`;
 
       return `
         <div class="version-row">
@@ -2180,7 +2191,7 @@ function renderCharts(data) {
           <div class="version-actions">
             ${originControl}
             ${downloadControl}
-            <button class="secondary" type="button" disabled>${uiModel ? "追記投稿" : "追記不可"}</button>
+            ${appendControl}
           </div>
         </div>
       `;

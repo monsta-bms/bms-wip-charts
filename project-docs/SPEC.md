@@ -1130,3 +1130,13 @@ RC★★変換:
 - `serializeControl`は共通UIが生成したnodeだけを`outerHTML`へ変換し、nullまたは外部nodeは空文字列とする。textは`textContent`、属性はDOM APIで設定し、利用者入力を`innerHTML`や手動属性文字列へ連結しない。reasonと内部stateはDOMへ出さない。
 - app、追記full renderer、thumbnail full renderer、tree補強、compact listは同じモデルをLink UIへ渡す。treeは既存controlと共通controlのserialized DOMが一致する場合は置換せず、差異時だけ置換し、origin欠損・復帰、DL可否遷移を増殖なしで反映する。モデルまたはLink UI未読込時は曲なし・DL不可へ倒す。
 - R2では追記・管理・favoriteのDOM、版行全体、favorites/chart-detail経路、CSS、runtime CSS、thumbnail、MutationObserver、requestAnimationFrame、`renderCharts` wrapper順を変更しない。操作DOMの残りの共通化はR3以降で行う。
+
+## VERSION-TREE-RENDER-CONSOLIDATION R3 共通Action UI
+
+- `docs/version-action-ui.js`は`window.BmsVersionActionUi`として`createAppendControl`、`createManagementControl`、`createLifecycleIndicator`、`replaceControlIfChanged`だけを公開する。R1モデルが確定した状態をbutton/spanへ変換し、lifecycle文字列、allowAppend、hidden、download状態、URLを再判定しない。
+- append controlは「追記投稿」「追記停止」「旧形式」「追記不可」と、完成版に置き換え済み中間履歴のtitle/class、disabled/aria、chart/version datasetを既存DOMどおり生成する。processing、tombstoned、deleted、unknownなどモデルが操作欄を許可しない状態ではcontrolを返さない。appとthumbnailの基礎rendererは共通UIのplaceholderを使い、追記full rendererとtree補強で最終状態へ置き換える。
+- management controlはモデルの`management.visible`だけを表示条件とし、version/chart ID、版ラベル、作者、旧取り下げ状態、追記/DL可否、lifecycle/handling/request mode、予定/投稿日時、取消可否、24時間条件、派生有無の既存datasetを維持する。管理dialogはdatasetだけで操作を確定せず、従来どおりlifecycle APIを再取得する。
+- lifecycle indicatorはtreeの自動削除待ち、管理者確認待ち、immediate処理待ち、processing、tombstoned、deletedのbadge/detail/helpを既存classと正式文言で生成する。activeは追加表示なし、unknownは内部値を表示しない。利用者入力と予定日時labelは`textContent`を使い、reasonや内部error codeを表示しない。
+- `replaceControlIfChanged`は共通UIが生成した次nodeだけを採用し、既存nodeと`outerHTML`が同一なら維持する。状態変化時の置換、elementからnullの削除、nullからelementの1回挿入を扱い、個別listenerを追加しない。Action UI未読込時は一覧を止めず、固定の「追記不可」、管理なし、lifecycle追加表示なしへ倒し、固定code `VERSION_ACTION_UI_UNAVAILABLE`を1回だけ記録する。
+- favoritesの局所再描画は従来の`renderCharts` wrapper順を変えず、`renderWithFavorites`完了後に`mountChartUi`を1回だけ明示実行する。favorite buttonは同じ描画内で先にmount済みのため共通mount側のfavorite処理を無効にし、保存済みサムネイル、mini-view、progress image、overlay、recent badge、`chart-ui:mounted`を再適用する。再帰renderや追加fetchは行わない。
+- script順はR1 model、R2 Link UI、R3 Action UI、app、既存renderer群とする。R3では版行全体、favorite button、管理dialog内部、CSS/runtime CSS、MutationObserver、requestAnimationFrame、chart-detail、`renderCharts`代入/capture順を変更しない。

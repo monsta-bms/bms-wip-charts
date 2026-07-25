@@ -1389,32 +1389,11 @@
   function buildAppendControl(entry, version, uiModel) {
     const chart = entry.chart || {};
     const chartId = chart.id || chart.chartId || entry.chartId || "";
-    const parentVersionId = version.id || version.versionId || "";
-
-    if (uiModel?.append.reason === "superseded_intermediate") {
-      return `
-        <button class="secondary append-disabled-intermediate" type="button" disabled title="完成版に置き換え済みの中間履歴のため追記できません">追記不可</button>
-      `;
-    }
-
-    if (uiModel?.append.reason === "append_disabled") {
-      const descriptionId = `append-policy-description-${html(parentVersionId)}`;
-      return `
-        <button class="secondary append-policy-disabled-button" type="button" disabled aria-disabled="true" aria-describedby="${descriptionId}">追記停止</button>
-      `;
-    }
-
-    if (uiModel?.append.reason === "legacy_progress_map") {
-      return `
-        <button class="secondary" type="button" disabled aria-disabled="true">旧形式</button>
-      `;
-    }
-
-    if (!uiModel?.append.available) {
+    const actionUi = window.BmsVersionActionUi;
+    if (typeof actionUi?.createAppendControl !== "function") {
       return `<button class="secondary" type="button" disabled aria-disabled="true">追記不可</button>`;
     }
-
-    return `<button class="secondary append-version-button" type="button" data-chart-id="${html(chartId)}" data-parent-version-id="${html(parentVersionId)}">追記投稿</button>`;
+    return actionUi.createAppendControl(uiModel, { chartId })?.outerHTML || "";
   }
 
   function renderChartsWithAppend(data) {

@@ -1515,3 +1515,13 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 8 version性能fixtureはmodel生成8回、origin node 8、download node 8、R1 URL parse 24、Link UI追加parse 0、生成HTML 2,880 bytes、生成node 16を固定する。tree rendererのDOM走査は40から39へ減り、その他rendererはR1と同数を維持する。
 - `node scripts/test-version-render-pipeline-static.js`で29 checkを実行し、model→Link UI→rendererのclassic script順、wrapper/capture順、全5 rendererのLink UI利用、独自anchor生成なし、tree冪等性、compact再描画、class、操作順、HTML重複ID、cache key、保護CSS/runtime style不変を確認する。
 - `node scripts/test-version-ui-model.js`、曲・DL static、version list links、withdrawal active、metadata parser/static、変更JS構文、Worker typecheck、`git diff --check`を回帰実行する。Pages/Worker deploy、push、D1/R2、Migration、Secret、Cron、dependency変更は行わない。
+
+## VERSION-TREE-RENDER-CONSOLIDATION R3 共通Action UI
+
+- `node scripts/test-version-action-ui.js`で73 checkを実行する。appendの利用可、受付停止、旧形式、collapsed中間履歴、processing/tombstoned/unknown/null、class/text/disabled/title/aria/dataset、managementのactive/pending表示と非操作状態非表示、全既存datasetを確認する。
+- lifecycleはactive非表示、grace/manual/immediate、processing、tombstoned、deleted、unknown非表示についてbadge/detail/helpのclassと正式文言を確認する。理由や内部値をDOMへ出さず、悪性文字列をtext/dataset/title/ariaへ渡してもscript要素・inline event属性を生成せず、共通UIが`innerHTML`や個別listenerを使用しないことを確認する。
+- replace helperは同一DOMの置換0、状態/dataset/disabled/aria差の置換1、elementからnull、nullからelement、2回補強の増殖なし、外部next node拒否を確認する。入力model/options不変と同一入力の安定DOMを固定する。
+- favorites関数fixtureでfavorite-only局所再描画後の`mountChartUi`が1回、favorite mountが1回、保存済みthumbnail再適用、render再帰0、fetch増加0となることを確認する。2回切替後もthumbnail slot/favorite button数を増やさず、`mountFavorites: false`で共通mount内のfavorite二重処理を防ぐ。
+- 8 version性能fixtureはmodel生成8回、append/management node 16、同一状態の置換0、favorites再描画ごとの共通mount 1回を基準とする。Action UIはURL parseや状態再判定を行わず、既存rendererのDOM走査増加はtree/favoritesの必要selectorだけに制限する。
+- `node scripts/test-version-render-pipeline-static.js`で34 checkを実行し、model→Link UI→Action UI→app→rendererのclassic script順、wrapper/capture順、全対象rendererのAction UI利用、独自の正常append/management/lifecycle生成なし、tree冪等性、favorites mount、cache key、HTML重複ID、保護CSS/runtime style不変を確認する。
+- R1 model、R2 Link UI、曲/DL static、version list links、withdrawal active、append、metadata parser/static、変更JS構文、HTML重複ID、既存3テーマ・390/760/1366px確認を回帰実行する。本番deploy、Pages push、push、D1/R2、Migration、Secret、Cron、dependency変更は行わない。
