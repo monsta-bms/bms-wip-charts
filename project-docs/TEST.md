@@ -1487,3 +1487,10 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - deploy modeのGit dirty、ahead、behind、divergedをそれぞれ拒否する。検査modeは本番deployを実行せず、未commit・未push等を警告してdry-runまで継続できることを実スクリプトで確認する。
 - textログへ疑似ADMIN_TOKEN、HASH_SECRET、TURNSTILE_SECRET、Bearer token、R2 object keyが残らないことを確認する。health・難易度表の本文全体、`.dev.vars`、D1 row、BMS metadataをログへ保存しない。
 - PowerShell 2ファイルのparser検査、`git diff --check`、worker typecheck、絶対configを使うWrangler dry-runを実行する。本番deploy、push、D1/R2、Migration、Pages、Secret、Cron、`worker/wrangler.toml`、`worker/src/**`を変更しない。
+
+### BATラッパー互換性
+
+- `deploy-worker-check.bat`と`deploy-worker.bat`はASCIIのみ、BOMなし、CRLF改行であることをbyte単位で検査する。
+- `cmd.exe` fixtureで両BATを解析し、不正なコマンド扱いがなく、PowerShell終了コードを維持することを確認する。
+- 検査用の`SAFE_WORKER_DEPLOY_NO_PAUSE`が設定された場合だけ`pause`を省略し、通常のダブルクリック実行では`pause`を維持する。
+- checkラッパーは`-Deploy`を渡さず、deployラッパーも完全一致確認文字列がない限り本番deployへ進まないことを確認する。

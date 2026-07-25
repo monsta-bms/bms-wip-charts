@@ -136,6 +136,64 @@ function New-GitFixtureState {
     }
 }
 
+function Get-BatchFileSafetyState {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+    $bytes = [IO.File]::ReadAllBytes($Path)
+    $nonAsciiCount = @($bytes | Where-Object { $_ -gt 127 }).Count
+    $lineFeedCount = 0
+    $bareLineFeedCount = 0
+    for ($index = 0; $index -lt $bytes.Length; $index++) {
+        if ($bytes[$index] -eq 10) {
+            $lineFeedCount++
+            if ($index -eq 0 -or $bytes[$index - 1] -ne 13) {
+                $bareLineFeedCount++
+            }
+        }
+    }
+    return [pscustomobject]@{
+        Path = $Path
+        Text = [Text.Encoding]::ASCII.GetString($bytes)
+        NonAsciiCount = $nonAsciiCount
+        HasUtf8Bom = ($bytes.Length -ge 3 -and $bytes[0] -eq 239 -and $bytes[1] -eq 187 -and $bytes[2] -eq 191)
+        LineFeedCount = $lineFeedCount
+        BareLineFeedCount = $bareLineFeedCount
+    }
+}
+
+function Invoke-BatchParserFixture {
+    param(
+        [Parameter(Mandatory = $true)][string]$SourcePath,
+        [Parameter(Mandatory = $true)][string]$FixturePath,
+        [Parameter(Mandatory = $true)][int]$MockExitCode
+    )
+    $sourceText = [IO.File]::ReadAllText($SourcePath, [Text.Encoding]::ASCII)
+    $mockCommand = "cmd.exe /D /C exit /b $MockExitCode"
+    $fixtureText = [regex]::Replace($sourceText, '(?m)^powershell\.exe [^\r\n]+', $mockCommand)
+    Assert-TestTrue -Condition ($fixtureText -cne $sourceText) -Message "PowerShell command was not replaced in the batch fixture"
+    [IO.File]::WriteAllText($FixturePath, $fixtureText, [Text.Encoding]::ASCII)
+
+    $previousNoPause = $env:SAFE_WORKER_DEPLOY_NO_PAUSE
+    try {
+        $env:SAFE_WORKER_DEPLOY_NO_PAUSE = "1"
+        $outputLines = @(& $env:ComSpec /D /C "call `"$FixturePath`"" 2>&1)
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        if ($null -eq $previousNoPause) {
+            Remove-Item Env:SAFE_WORKER_DEPLOY_NO_PAUSE -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:SAFE_WORKER_DEPLOY_NO_PAUSE = $previousNoPause
+        }
+    }
+    return [pscustomobject]@{
+        ExitCode = $exitCode
+        Output = ($outputLines | ForEach-Object { [string]$_ }) -join "`n"
+    }
+}
+
 $tempBase = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
 $tempDirectory = [IO.Path]::GetFullPath((Join-Path $tempBase ("deploy-worker-safety-tests-" + [Guid]::NewGuid().ToString("N"))))
 if (-not $tempDirectory.StartsWith($tempBase, [StringComparison]::OrdinalIgnoreCase)) {
@@ -143,6 +201,7 @@ if (-not $tempDirectory.StartsWith($tempBase, [StringComparison]::OrdinalIgnoreC
 }
 New-Item -ItemType Directory -Path $tempDirectory | Out-Null
 $configPath = Join-Path $tempDirectory "wrangler.toml"
+$repositoryRoot = (Get-DeployPaths).RepositoryRoot
 
 $dryRunOutput = @'
 Total Upload: 100 KiB / gzip: 20 KiB
@@ -303,6 +362,41 @@ try {
         Assert-TestTrue -Condition ([IO.Path]::IsPathRooted($paths.RepositoryRoot)) -Message "repository path is not absolute"
         Assert-TestTrue -Condition ([IO.Path]::IsPathRooted($paths.WorkerConfigPath)) -Message "config path is not absolute"
         Assert-TestTrue -Condition ($paths.WorkerConfigPath.EndsWith('worker\wrangler.toml', [StringComparison]::OrdinalIgnoreCase)) -Message "config path is not fixed"
+    }
+    Invoke-SafetyTest "40 batch wrappers are ASCII CRLF without BOM" {
+        foreach ($wrapperName in @("deploy-worker-check.bat", "deploy-worker.bat")) {
+            $state = Get-BatchFileSafetyState -Path (Join-Path $repositoryRoot $wrapperName)
+            Assert-TestEqual -Actual $state.NonAsciiCount -Expected 0 -Message "$wrapperName contains non-ASCII bytes"
+            Assert-TestTrue -Condition (-not $state.HasUtf8Bom) -Message "$wrapperName contains a UTF-8 BOM"
+            Assert-TestTrue -Condition ($state.LineFeedCount -gt 0) -Message "$wrapperName has no line endings"
+            Assert-TestEqual -Actual $state.BareLineFeedCount -Expected 0 -Message "$wrapperName contains bare LF line endings"
+            Assert-TestTrue -Condition (-not $state.Text.Contains("chcp")) -Message "$wrapperName changes the code page"
+            Assert-TestTrue -Condition ($state.Text.Contains("if not defined SAFE_WORKER_DEPLOY_NO_PAUSE pause")) -Message "$wrapperName does not preserve interactive pause"
+        }
+    }
+    Invoke-SafetyTest "41 batch wrappers call only the fixed PowerShell entry point" {
+        $checkText = (Get-BatchFileSafetyState -Path (Join-Path $repositoryRoot "deploy-worker-check.bat")).Text
+        $deployText = (Get-BatchFileSafetyState -Path (Join-Path $repositoryRoot "deploy-worker.bat")).Text
+        $checkCommand = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\deploy-worker.ps1"'
+        $deployCommand = $checkCommand + ' -Deploy'
+        Assert-TestTrue -Condition ($checkText.Contains($checkCommand)) -Message "check wrapper does not call the fixed PowerShell script"
+        Assert-TestTrue -Condition (-not $checkText.Contains($deployCommand)) -Message "check wrapper requests production deployment"
+        Assert-TestTrue -Condition ($deployText.Contains($deployCommand)) -Message "deploy wrapper does not call the fixed PowerShell script with -Deploy"
+    }
+    Invoke-SafetyTest "42 cmd.exe parses both wrappers and preserves exit codes" {
+        foreach ($wrapperName in @("deploy-worker-check.bat", "deploy-worker.bat")) {
+            $fixturePath = Join-Path $tempDirectory ("fixture-" + $wrapperName)
+            $result = Invoke-BatchParserFixture -SourcePath (Join-Path $repositoryRoot $wrapperName) -FixturePath $fixturePath -MockExitCode 7
+            Assert-TestEqual -Actual $result.ExitCode -Expected 7 -Message "$wrapperName did not preserve the failure exit code"
+            foreach ($parserError in @("ExecutionPolicy", "is not recognized", "内部コマンドまたは外部コマンド", "was unexpected at this time", "予期しない", "The syntax of the command is incorrect", "構文が誤っています")) {
+                Assert-TestTrue -Condition (-not $result.Output.Contains($parserError)) -Message "$wrapperName produced a cmd.exe parser error"
+            }
+        }
+    }
+    Invoke-SafetyTest "43 deploy wrapper cannot deploy without exact confirmation" {
+        Assert-TestTrue -Condition (-not (Test-ProductionDeployRequested -DeployMode $true -Confirmation "")) -Message "empty confirmation requested production deploy"
+        Assert-TestTrue -Condition (-not (Test-ProductionDeployRequested -DeployMode $true -Confirmation "y")) -Message "short confirmation requested production deploy"
+        Assert-TestEqual -Actual $script:ProductionDeployInvocationCount -Expected 0 -Message "batch safety tests invoked production deploy"
     }
 }
 finally {
