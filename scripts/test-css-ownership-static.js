@@ -28,6 +28,7 @@ const sources = {
   favorites: read("docs/favorites-list.js"),
   favoriteCss: read("docs/favorites-list.css"),
   progressThumbnail: read("docs/progress-thumbnail-list.js"),
+  progressCss: read("docs/progress-thumbnail-list.css"),
   index: read("docs/index.html"),
   listHtml: read("docs/list.html"),
   spec: read("project-docs/SPEC.md"),
@@ -63,12 +64,6 @@ function declarationBlocks(source, selector) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return [...source.matchAll(new RegExp(`${escaped}\\s*\\{([^{}]*)\\}`, "g"))]
     .map((match) => declarations(match[1]));
-}
-
-function runtimeStyle(source) {
-  const match = source.match(/style\.textContent = `([\s\S]*?)`;\s*document\.head\.appendChild\(style\);/);
-  assert.ok(match, "runtime style block must exist");
-  return match[1];
 }
 
 function stylesheetNames(html) {
@@ -154,9 +149,8 @@ check("no media-query duplicate was introduced", () => {
   assert.equal(refreshRules.filter((rule) => Object.hasOwn(rule.declarations, "max-width")).length, 0);
 });
 
-check("runtime styles do not take over thumbnail sizing ownership", () => {
-  const runtime = runtimeStyle(sources.progressThumbnail);
-  assert.equal(rulesFor(runtime, selector).some((rule) => (
+check("progress image CSS does not take over thumbnail sizing ownership", () => {
+  assert.equal(rulesFor(sources.progressCss, selector).some((rule) => (
     Object.hasOwn(rule.declarations, "width") || Object.hasOwn(rule.declarations, "max-width")
   )), false);
 });
@@ -173,13 +167,18 @@ check("index stylesheet order remains stable", () => {
     "post-form-ui.css",
     "chart-detail-link.css",
     "theme.css",
-    "favorites-list.css"
+    "favorites-list.css",
+    "progress-thumbnail-list.css"
   ]);
-  const themeIndex = sources.index.indexOf("./theme.css?v=detail-theme-r4b2e-01");
+  const themeIndex = sources.index.indexOf("./theme.css?v=progress-style-r4b2f-01");
   const favoriteCssIndex = sources.index.indexOf("./favorites-list.css?v=favorite-theme-r4b2d-01");
+  const progressCssIndex = sources.index.indexOf("./progress-thumbnail-list.css?v=progress-style-r4b2f-01");
+  const progressScriptIndex = sources.index.indexOf("./progress-thumbnail-list.js?v=progress-style-r4b2f-01");
   const favoriteScriptIndex = sources.index.indexOf("./favorites-list.js?v=favorite-theme-r4b2d-01");
   assert.ok(themeIndex >= 0 && themeIndex < favoriteCssIndex);
-  assert.ok(favoriteCssIndex < sources.index.indexOf("</head>"));
+  assert.ok(favoriteCssIndex < progressCssIndex);
+  assert.ok(progressCssIndex < sources.index.indexOf("</head>"));
+  assert.ok(progressCssIndex < progressScriptIndex);
   assert.ok(favoriteCssIndex < favoriteScriptIndex);
 });
 
@@ -187,22 +186,26 @@ check("compact-list stylesheet order remains stable", () => {
   assert.deepEqual(stylesheetNames(sources.listHtml), ["style.css", "site-header.css", "list.css", "theme.css"]);
 });
 
-check("only the R4B2e detail styles use the new cache key", () => {
+check("only the R4B2f progress assets use the new cache key", () => {
   assert.match(sources.index, /\.\/branch-tree-list\.css\?v=append-disabled-theme-r4b2c-01/);
   assert.match(sources.index, /\.\/chart-detail-link\.css\?v=detail-theme-r4b2e-01/);
-  assert.match(sources.index, /\.\/theme\.css\?v=detail-theme-r4b2e-01/);
-  assert.equal((sources.index.match(/detail-theme-r4b2e-01/g) || []).length, 2);
+  assert.equal((sources.index.match(/detail-theme-r4b2e-01/g) || []).length, 1);
+  assert.match(sources.index, /\.\/theme\.css\?v=progress-style-r4b2f-01/);
+  assert.match(sources.index, /\.\/progress-thumbnail-list\.css\?v=progress-style-r4b2f-01/);
+  assert.match(sources.index, /\.\/progress-thumbnail-list\.js\?v=progress-style-r4b2f-01/);
+  assert.equal((sources.index.match(/progress-style-r4b2f-01/g) || []).length, 3);
   assert.match(sources.index, /\.\/favorites-list\.css\?v=favorite-theme-r4b2d-01/);
   assert.match(sources.index, /\.\/favorites-list\.js\?v=favorite-theme-r4b2d-01/);
   assert.equal((sources.index.match(/favorite-theme-r4b2d-01/g) || []).length, 2);
   assert.match(sources.index, /\.\/list-ui-refresh\.css\?v=css-cleanup-r4b2a-01/);
   assert.equal((sources.index.match(/css-cleanup-r4b2a-01/g) || []).length, 1);
-  assert.doesNotMatch(sources.listHtml, /detail-theme-r4b2e-01|favorite-theme-r4b2d-01|css-cleanup-r4b2a-01/);
+  assert.doesNotMatch(sources.listHtml, /progress-style-r4b2f-01|detail-theme-r4b2e-01|favorite-theme-r4b2d-01|css-cleanup-r4b2a-01/);
 });
 
-check("favorite runtime style is removed while progress runtime style stays stable", () => {
+check("favorite and progress runtime styles are completely removed", () => {
   assert.doesNotMatch(sources.favorites, /injectStyles|favoriteListStyles|createElement\(["']style["']\)|style\.textContent|document\.head\.appendChild\(style\)/);
-  assert.equal(sha256(runtimeStyle(sources.progressThumbnail)), "280a1c0a18e3500bfda2f2e45ff58f8f0afcec26467192968f18a3036e2ac1e6");
+  assert.doesNotMatch(sources.progressThumbnail, /ensureProgressImageThumbnailStyle|progress-image-thumbnail-style|createElement\(["']style["']\)|style\.textContent|document\.head\.appendChild\(style\)/);
+  assert.doesNotMatch(productionJsAggregate, /favoriteListStyles|progress-image-thumbnail-style|createElement\(["']style["']\)|document\.head\.appendChild\(style\)/);
 });
 
 check("protected CSS hashes remain stable", () => {
@@ -243,8 +246,8 @@ check("action and thumbnail gap values remain stable", () => {
 check("fixed color counts isolate detail colors in theme tokens", () => {
   const expected = new Map([
     ["style", 65], ["branch", 73], ["refresh", 21], ["treePolish", 17],
-    ["chartMiniview", 40], ["management", 17], ["chartDetail", 4], ["theme", 243],
-    ["favorites", 0], ["favoriteCss", 0], ["progressThumbnail", 7]
+    ["chartMiniview", 40], ["management", 17], ["chartDetail", 4], ["theme", 252],
+    ["favorites", 0], ["favoriteCss", 0], ["progressThumbnail", 4], ["progressCss", 0]
   ]);
   expected.forEach((count, name) => assert.equal(fixedColorCount(sources[name]), count, name));
 });
@@ -305,6 +308,68 @@ check("favorite semantic tokens exist for every theme and meet contrast targets"
     if (selector.includes("dark")) {
       assert.notEqual(filterBg, "#ffffff");
       assert.notEqual(idleStar, "#b6c0c9");
+    }
+  }
+});
+
+check("progress image selectors and responsive ownership moved to static CSS", () => {
+  const wrapBlocks = declarationBlocks(sources.progressCss, ".progress-thumbnail-image-wrap");
+  assert.equal(wrapBlocks.length, 3);
+  assert.deepEqual(wrapBlocks[0], {
+    "align-items": "center",
+    background: "var(--progress-image-bg)",
+    border: "1px solid var(--progress-image-border)",
+    "border-radius": "6px",
+    display: "flex",
+    height: "38px",
+    "justify-content": "center",
+    "max-width": "220px",
+    "min-width": "96px",
+    overflow: "hidden",
+    width: "100%"
+  });
+  assert.deepEqual(wrapBlocks[1], { "max-width": "100%" });
+  assert.deepEqual(wrapBlocks[2], { "max-width": "none", width: "100%" });
+  assert.match(sources.progressCss, /@media \(max-width: 640px\)[\s\S]*\.progress-thumbnail-image-wrap/);
+  assert.deepEqual(declarationBlocks(sources.progressCss, ".progress-thumbnail-image"), [{
+    display: "block",
+    height: "100%",
+    "object-fit": "contain",
+    width: "100%"
+  }]);
+  assert.deepEqual(declarationBlocks(sources.progressCss, ".thumbnail-cell .progress-thumbnail-image-wrap"), [{
+    "max-width": "100%"
+  }]);
+  assert.deepEqual(declarationBlocks(sources.progressCss, ".progress-thumbnail.is-empty .progress-thumbnail-value"), [{
+    color: "var(--progress-image-empty-text)"
+  }]);
+});
+
+check("progress image CSS consumes semantic colors only", () => {
+  assert.equal(fixedColorCount(sources.progressCss), 0);
+  assert.equal(rulesFor(sources.progressCss, ".progress-thumbnail-image-wrap")[0].declarations.background, "var(--progress-image-bg)");
+  assert.equal(rulesFor(sources.progressCss, ".progress-thumbnail-image-wrap")[0].declarations.border, "1px solid var(--progress-image-border)");
+  assert.equal(rulesFor(sources.progressCss, ".progress-thumbnail.is-empty .progress-thumbnail-value")[0].declarations.color, "var(--progress-image-empty-text)");
+});
+
+check("progress image semantic tokens exist for every theme and meet contrast targets", () => {
+  for (const token of ["bg", "border", "empty-text"]) {
+    assert.equal((sources.theme.match(new RegExp(`--progress-image-${token}:`, "g")) || []).length, 3, token);
+  }
+  const expectations = [
+    ["html[data-theme=\"white\"]", "#f4f7f9", "#dfe6ec", "#66727f"],
+    ["html[data-theme=\"default\"]", "#f4f7f9", "#dfe6ec", "#66727f"],
+    ["html[data-theme=\"dark\"]", "#17231f", "#587168", "#b8c7c1"]
+  ];
+  for (const [selector, background, border, emptyText] of expectations) {
+    const themeRule = rulesFor(sources.theme, selector)[0].declarations;
+    assert.equal(themeRule["--progress-image-bg"], background);
+    assert.equal(themeRule["--progress-image-border"], border);
+    assert.equal(themeRule["--progress-image-empty-text"], emptyText);
+    assert.ok(contrastRatio(emptyText, background) >= 4.5, `${selector} empty text contrast is below 4.5`);
+    if (selector.includes("dark")) {
+      assert.notEqual(background, "#f4f7f9");
+      assert.ok(contrastRatio(border, background) >= 3, "dark progress image border contrast is below 3");
     }
   }
 });
@@ -390,9 +455,10 @@ check("appended batch boundary remains outside R4B2e", () => {
   assert.equal(mark.background, "#f4f9f7");
 });
 
-check("R4B2e detail CSS hashes match the reviewed implementation", () => {
+check("R4B2f CSS hashes match the reviewed implementation", () => {
   assert.equal(sha256(sources.chartDetail), "c45722a66d547ecb51825e67dc3e65cc31413f7820a5d34db8b45eb23dbe0882");
-  assert.equal(sha256(sources.theme), "579c9ec61c0c831fa10db54bb5c88e99a298fb1892a8738081c780edb6ff6ee0");
+  assert.equal(sha256(sources.theme), "5b91d40156a17f9fbce1f6c46ec2f279bf6cf92713f2f7732cf3bd5a1d6a401b");
+  assert.equal(sha256(sources.progressCss), "24d5a258fb4b737584cd54700544f6c496a8065639120d047ccc80135e1e3304");
 });
 
 check("append-stopped component selector is narrowly owned by branch-tree-list", () => {
@@ -478,9 +544,10 @@ check("R4B2b does not use clipping or visual workarounds", () => {
   assert.doesNotMatch(mobileSource, /font-size\s*:|position\s*:\s*absolute|transform\s*:|margin-left\s*:\s*-|overflow\s*:\s*hidden|text-overflow\s*:|white-space\s*:\s*normal/);
 });
 
-check("R4B2e leaves production JavaScript unchanged", () => {
+check("R4B2f changes only the reviewed progress JavaScript CSS deletion", () => {
   assert.equal(productionJsFiles.length, 30);
-  assert.equal(sha256(productionJsAggregate), "67f0052442c01401d7a2b9b28889edbba890e570238e57e4932568af90a309c6");
+  assert.equal(sha256(sources.progressThumbnail), "e2dbcee8975d7b95341875d1c4962fd2904a81873fd4cf7dbdbe757004a58bb6");
+  assert.equal(sha256(productionJsAggregate), "0e99767d749210f416ec18c9ac4c70a12a2a9cdb705100a19817085dd8f32ed7");
 });
 
 check("all known CSS issues are documented as resolved", () => {

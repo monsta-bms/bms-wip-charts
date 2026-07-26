@@ -28,53 +28,6 @@
     });
   }
 
-  function ensureProgressImageThumbnailStyle() {
-    if (document.querySelector("#progress-image-thumbnail-style")) {
-      return;
-    }
-
-    const style = document.createElement("style");
-    style.id = "progress-image-thumbnail-style";
-    style.textContent = `
-      .progress-thumbnail-image-wrap {
-        align-items: center;
-        background: #f4f7f9;
-        border: 1px solid #dfe6ec;
-        border-radius: 6px;
-        display: flex;
-        height: 38px;
-        justify-content: center;
-        max-width: 220px;
-        min-width: 96px;
-        overflow: hidden;
-        width: 100%;
-      }
-
-      .progress-thumbnail-image {
-        display: block;
-        height: 100%;
-        object-fit: contain;
-        width: 100%;
-      }
-
-      .thumbnail-cell .progress-thumbnail-image-wrap {
-        max-width: 100%;
-      }
-
-      .progress-thumbnail.is-empty .progress-thumbnail-value {
-        color: #8a96a3;
-      }
-
-      @media (max-width: 640px) {
-        .progress-thumbnail-image-wrap {
-          max-width: none;
-          width: 100%;
-        }
-      }
-    `;
-    document.head.appendChild(style);
-  }
-
   function warnProgressThumbnail(versionId, detail) {
     console.warn("[progress-thumbnail-render] failed to render progress thumbnail", {
       code: "PROGRESS_THUMBNAIL_RENDER_SKIPPED",
@@ -983,7 +936,6 @@
     };
   }
 
-  ensureProgressImageThumbnailStyle();
   installProgressThumbnailObserver();
 
   if (interactionRoot) {

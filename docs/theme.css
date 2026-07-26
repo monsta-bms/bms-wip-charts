@@ -72,6 +72,9 @@ html[data-theme="white"] {
   --progress-border: #aac2ba;
   --progress-grid-line: rgba(36, 110, 91, 0.18);
   --progress-meta: #4d625b;
+  --progress-image-bg: #f4f7f9;
+  --progress-image-border: #dfe6ec;
+  --progress-image-empty-text: #66727f;
   --time-badge-bg: #eef4f2;
   --time-badge-text: #35584e;
   --time-badge-border: #a8beb6;
@@ -152,6 +155,9 @@ html:not([data-theme]) {
   --progress-border: #8fa9a0;
   --progress-grid-line: rgba(31, 107, 87, 0.2);
   --progress-meta: #495f58;
+  --progress-image-bg: #f4f7f9;
+  --progress-image-border: #dfe6ec;
+  --progress-image-empty-text: #66727f;
   --time-badge-bg: #dce7e3;
   --time-badge-text: #294f44;
   --time-badge-border: #809d93;
@@ -231,6 +237,9 @@ html[data-theme="dark"] {
   --progress-border: #587168;
   --progress-grid-line: rgba(155, 184, 174, 0.28);
   --progress-meta: #b8c7c1;
+  --progress-image-bg: #17231f;
+  --progress-image-border: #587168;
+  --progress-image-empty-text: #b8c7c1;
   --time-badge-bg: #24332e;
   --time-badge-text: #d5e5df;
   --time-badge-border: #5f786f;

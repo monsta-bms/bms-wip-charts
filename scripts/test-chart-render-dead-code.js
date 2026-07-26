@@ -110,6 +110,11 @@ check("progress observer remains singular", () => {
   assert.match(progressThumbnail, /progressThumbnailObserver\.observe\(listElement/);
 });
 
+check("progress runtime style generator remains absent", () => {
+  assert.doesNotMatch(progressThumbnail, /ensureProgressImageThumbnailStyle|progress-image-thumbnail-style/);
+  assert.doesNotMatch(allDocsSource, /favoriteListStyles|progress-image-thumbnail-style|createElement\(["']style["']\)|document\.head\.appendChild\(style\)/);
+});
+
 check("required application globals remain", () => {
   assert.match(app, /window\.mountChartUi = mountChartUi/);
   assert.match(app, /window\.loadCharts = loadCharts/);
@@ -134,9 +139,9 @@ check("render lifecycle events remain", () => {
   assert.match(chartDetail, /new CustomEvent\("chart-detail:rendered"/);
 });
 
-check("modified scripts keep their order and use the R4B1 cache key", () => {
+check("modified scripts keep their order and reviewed cache keys", () => {
   const appIndex = indexHtml.indexOf("./app.js?v=chart-render-cleanup-r4b1-01");
-  const progressIndex = indexHtml.indexOf("./progress-thumbnail-list.js?v=chart-render-cleanup-r4b1-01");
+  const progressIndex = indexHtml.indexOf("./progress-thumbnail-list.js?v=progress-style-r4b2f-01");
   const pipelineIndex = indexHtml.indexOf("./chart-render-pipeline.js?v=chart-render-pipeline-r4a-01");
   const branchAppendIndex = indexHtml.indexOf("./branch-append-ui.js?v=chart-render-pipeline-r4a-01");
   assert.ok(pipelineIndex >= 0 && pipelineIndex < appIndex);

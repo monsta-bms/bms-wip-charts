@@ -1207,3 +1207,12 @@ RC★★変換:
 - 390pxで絶対配置の「選択中」badgeがお気に入り操作へ重なっていたため、640px以下だけbadgeの`top`を44pxへ移す。row／sectionの高さ・幅、grid、gap、DOM、lifecycle／favoriteの所有CSSは変更せず、760pxと1366pxのbadge位置も変更しない。
 - detail URL、target切替、append-success、management-refresh、lifecycle／favorite併存、render pipeline、compact一覧、production JavaScript、progress runtime style、追記batch境界は変更しない。`chart-detail-link.css`と`theme.css`だけを`detail-theme-r4b2e-01`でcache bustする。
 - `KNOWN-CSS-005`はR4B2eで修正済みとし、darkでlight固定section／target／badge色へ戻る場合、contrast不足、badge重なり、clip、横overflow、既知warningの再発を通常の回帰失敗にする。`KNOWN-CSS-001`～`005`はすべて修正済みである。
+
+## VERSION-TREE-RENDER-CONSOLIDATION R4B2f progress画像thumbnail静的CSS
+
+- `.progress-thumbnail-image-wrap`、`.progress-thumbnail-image`、`.thumbnail-cell .progress-thumbnail-image-wrap`、empty時の`.progress-thumbnail-value`、640px以下の画像枠幅は`progress-thumbnail-list.css`を正式所有者とする。高さ38px、最大幅220px、最小幅96px、`object-fit: contain`、`overflow: hidden`とmobileの`max-width: none`を従来どおり維持する。
+- 画像枠の配色は`theme.css`の`--progress-image-bg`、`--progress-image-border`、`--progress-image-empty-text`を使用する。white／defaultは背景`#f4f7f9`とborder`#dfe6ec`を維持し、従来のempty文字`#8a96a3`は背景比2.80:1だったため、近似色`#66727f`（4.56:1）へ限定調整する。
+- darkは背景`#17231f`、border`#587168`、empty文字`#b8c7c1`を使用する。empty文字は9.24:1、borderと背景は3.07:1を確保し、画像そのものへfilterやopacityを適用しない。
+- `progress-thumbnail-list.js`は進捗model、canvas／SVG、動的inline CSS custom property、画像URL解決、load／error／fallback、再mount、MutationObserver、requestAnimationFrame scheduler、公開global、`stored-progress-thumbnails` post-render stageだけを所有する。`ensureProgressImageThumbnailStyle`と`#progress-image-thumbnail-style`を廃止し、production runtime `<style>`はfavoriteとprogressを含め0件とする。
+- `index.html`は`theme.css`→`favorites-list.css`→`progress-thumbnail-list.css`の順でhead内に読み込み、progress JavaScriptより先に適用する。R4B2fで変更するtheme CSS、progress CSS、progress JavaScriptだけに`progress-style-r4b2f-01`を使用し、`list.html`は変更しない。
+- 画像load成功、同一src再mount、URL変更、decode error、map fallback、empty、URL欠落、不正画像source、blob拒否、favorite-only、detail再描画、load-moreの既存契約を維持する。CSS移設によりObserver callback、scheduler、pipeline stage、版行geometry、lifecycle／favorite／detail表示を増減させない。

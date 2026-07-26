@@ -240,11 +240,27 @@ function createApiServer() {
       json(response, 200, { serverTime: "2026-07-25T03:00:00.000Z", charts: [chartEntry] });
       return;
     }
-    if (request.method === "GET" && request.url === `/api/progress-images/${imageFixtureVersion.id}`) {
+    if (request.method === "GET" && request.url.startsWith(`/api/progress-images/${imageFixtureVersion.id}`)) {
       response.statusCode = 200;
       response.setHeader("Access-Control-Allow-Origin", "*");
       response.setHeader("Content-Type", "image/png");
       response.end(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+AvzW0QAAAABJRU5ErkJggg==", "base64"));
+      return;
+    }
+    if (request.method === "GET" && request.url.startsWith("/api/progress-images/css-regression-slow")) {
+      setTimeout(() => {
+        response.statusCode = 200;
+        response.setHeader("Access-Control-Allow-Origin", "*");
+        response.setHeader("Content-Type", "image/png");
+        response.end(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+AvzW0QAAAABJRU5ErkJggg==", "base64"));
+      }, 250);
+      return;
+    }
+    if (request.method === "GET" && request.url === "/api/progress-images/css-regression-invalid") {
+      response.statusCode = 200;
+      response.setHeader("Access-Control-Allow-Origin", "*");
+      response.setHeader("Content-Type", "image/png");
+      response.end("not-a-valid-png");
       return;
     }
     if (request.method === "GET" && request.url.startsWith("/api/charts?")) {
@@ -443,6 +459,7 @@ async function waitFor(cdp, sessionId, expression, label) {
     progressStyle: Boolean(document.querySelector("#progress-image-thumbnail-style")),
     favoriteRuntimeStyle: Boolean(document.querySelector("#favoriteListStyles")),
     favoriteStylesheet: [...document.styleSheets].some((sheet) => sheet.href && new URL(sheet.href).pathname.endsWith("/favorites-list.css")),
+    progressStylesheet: [...document.styleSheets].some((sheet) => sheet.href && new URL(sheet.href).pathname.endsWith("/progress-thumbnail-list.css")),
     bodyText: document.body?.innerText?.slice(0, 500) || ""
   })`);
   throw new Error(`Timed out waiting for ${label}: ${JSON.stringify(diagnostic)}`);
@@ -705,6 +722,310 @@ async function captureFavoriteInteractions(cdp, sessionId) {
     toolbar,
     runtimeStyles
   };
+}
+
+async function captureProgressThumbnailStates(cdp, sessionId) {
+  return evaluate(cdp, sessionId, `(async () => {
+    const existing = document.querySelector("#css-regression-progress-host");
+    existing?.remove();
+    const host = document.createElement("div");
+    host.id = "css-regression-progress-host";
+    document.body.appendChild(host);
+    const originalWarn = console.warn;
+    const warnings = [];
+    console.warn = (...args) => {
+      warnings.push({
+        message: String(args[0] || ""),
+        code: String(args[1]?.code || "")
+      });
+    };
+    const wait = async (predicate, label) => {
+      const deadline = Date.now() + 3000;
+      while (Date.now() < deadline) {
+        if (predicate()) return;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      throw new Error(\`progress fixture timed out: \${label}\`);
+    };
+    const round = (value) => Number(Number(value || 0).toFixed(3));
+    const rectValue = (element) => {
+      if (!element) return null;
+      const rect = element.getBoundingClientRect();
+      return {
+        left: round(rect.left),
+        right: round(rect.right),
+        width: round(rect.width),
+        height: round(rect.height)
+      };
+    };
+    const describe = (root) => {
+      const thumbnail = root.querySelector(".progress-thumbnail");
+      const wrap = root.querySelector(".progress-thumbnail-image-wrap");
+      const image = root.querySelector("img.progress-thumbnail-image");
+      const fallback = root.querySelector(".progress-thumbnail-fallback");
+      const value = root.querySelector(".progress-thumbnail-value");
+      const wrapStyle = wrap ? getComputedStyle(wrap) : null;
+      const imageStyle = image ? getComputedStyle(image) : null;
+      const valueStyle = value ? getComputedStyle(value) : null;
+      const wrapRect = wrap?.getBoundingClientRect?.() || null;
+      return {
+        thumbnailCount: root.querySelectorAll(".progress-thumbnail").length,
+        mapCount: root.querySelectorAll(".progress-thumbnail.has-progress-map").length,
+        imageThumbnailCount: root.querySelectorAll(".progress-thumbnail.has-progress-image").length,
+        wrapCount: root.querySelectorAll(".progress-thumbnail-image-wrap").length,
+        imageCount: root.querySelectorAll("img.progress-thumbnail-image").length,
+        fallbackCount: root.querySelectorAll(".progress-thumbnail-fallback").length,
+        className: String(thumbnail?.className || ""),
+        mounted: thumbnail?.dataset.progressImageMounted || "",
+        source: thumbnail?.dataset.progressImageSrc || "",
+        wrapHidden: wrap?.hidden ?? null,
+        fallbackHidden: fallback?.hidden ?? null,
+        fallbackText: String(fallback?.textContent || "").trim(),
+        imageSrc: image?.getAttribute("src") || "",
+        imageAlt: image?.alt || "",
+        imageDecoding: image?.decoding || "",
+        imageLoading: image?.loading || "",
+        wrap: wrapStyle ? {
+          alignItems: wrapStyle.alignItems,
+          backgroundColor: wrapStyle.backgroundColor,
+          borderColor: wrapStyle.borderColor,
+          borderStyle: wrapStyle.borderStyle,
+          borderWidth: wrapStyle.borderWidth,
+          borderRadius: wrapStyle.borderRadius,
+          display: wrapStyle.display,
+          height: wrapStyle.height,
+          justifyContent: wrapStyle.justifyContent,
+          maxWidth: wrapStyle.maxWidth,
+          minWidth: wrapStyle.minWidth,
+          overflow: wrapStyle.overflow,
+          width: wrapStyle.width,
+          rect: rectValue(wrap),
+          viewportClip: wrapRect ? {
+            left: round(Math.max(0, -wrapRect.left)),
+            right: round(Math.max(0, wrapRect.right - document.documentElement.clientWidth))
+          } : null
+        } : null,
+        image: imageStyle ? {
+          display: imageStyle.display,
+          height: imageStyle.height,
+          objectFit: imageStyle.objectFit,
+          opacity: imageStyle.opacity,
+          filter: imageStyle.filter,
+          width: imageStyle.width,
+          rect: rectValue(image)
+        } : null,
+        valueColor: valueStyle?.color || ""
+      };
+    };
+    const version = (id, progressImage, progressMap = null) => ({
+      id,
+      versionId: id,
+      progress: 50,
+      progressImage,
+      progressMap
+    });
+    const map = {
+      schemaVersion: 2,
+      blockMode: "standardized_measure",
+      progress: 50,
+      blocks: [{ startMeasure: 0, endMeasure: 3, startTimeSec: 0, endTimeSec: 5, playNotes: 24 }],
+      layers: [{ kind: "initial", versionId: "css-progress-map", color: "#27896b", ranges: [[0, 0]] }]
+    };
+    const states = {};
+    const slowImageSource = "/api/progress-images/css-regression-slow?fixture=" + Date.now() + "-" + Math.random();
+    try {
+      host.innerHTML = window.renderProgressThumbnail(version("css-progress-map", null, map));
+      states.mapOnly = describe(host);
+
+      host.innerHTML = window.renderProgressThumbnail(version(
+        "css-progress-map-image",
+        { url: slowImageSource },
+        map
+      ));
+      states.mapAndImageMetadata = describe(host);
+
+      host.innerHTML = window.renderProgressThumbnail(version(
+        "css-progress-image",
+        { url: slowImageSource }
+      ));
+      states.beforeMount = describe(host);
+      const imageMountStartedAt = performance.now();
+      window.mountProgressImageThumbnails(host);
+      const firstImage = host.querySelector("img.progress-thumbnail-image");
+      states.loading = describe(host);
+      await wait(() => host.querySelector(".progress-thumbnail")?.classList.contains("is-image-loaded"), "image load");
+      const imageMountMs = round(performance.now() - imageMountStartedAt);
+      states.loaded = describe(host);
+
+      window.mountProgressImageThumbnails(host);
+      states.remount = {
+        reusedImage: firstImage === host.querySelector("img.progress-thumbnail-image"),
+        ...describe(host)
+      };
+
+      const changedSource = ${JSON.stringify(`http://localhost:${apiPort}/api/progress-images/${imageFixtureVersion.id}?changed=1`)};
+      host.querySelector(".progress-thumbnail").dataset.progressImageSrc = changedSource;
+      window.mountProgressImageThumbnails(host);
+      const changedImage = host.querySelector("img.progress-thumbnail-image");
+      await wait(() => changedImage?.complete && changedImage?.naturalWidth > 0, "changed image load");
+      states.urlChanged = {
+        replacedImage: changedImage !== firstImage,
+        ...describe(host)
+      };
+
+      host.innerHTML = window.renderProgressThumbnail(version(
+        "css-progress-error",
+        { url: "/api/progress-images/css-regression-invalid" }
+      ));
+      window.mountProgressImageThumbnails(host);
+      await wait(() => host.querySelector(".progress-thumbnail")?.classList.contains("is-image-fallback"), "image error");
+      states.errorEmpty = describe(host);
+
+      host.innerHTML = '<div class="progress-thumbnail has-progress-image" data-version-id="css-progress-fallback" data-progress-image-src="http://localhost:${apiPort}/api/progress-images/css-regression-invalid">'
+        + '<div class="progress-thumbnail-image-wrap"></div>'
+        + '<div class="progress-thumbnail-fallback" hidden><span>map fallback</span></div>'
+        + '<span class="progress-thumbnail-value">progress 50%</span>'
+        + '</div>';
+      window.mountProgressImageThumbnails(host);
+      await wait(() => host.querySelector(".progress-thumbnail")?.classList.contains("is-image-fallback"), "fallback display");
+      states.fallback = describe(host);
+
+      host.innerHTML = window.renderProgressThumbnail(version("css-progress-missing", null));
+      states.missingUrl = describe(host);
+
+      host.innerHTML = window.renderProgressThumbnail(version(
+        "css-progress-invalid",
+        { url: "httpx://[" }
+      ));
+      states.invalidUrl = describe(host);
+
+      host.innerHTML = window.renderProgressThumbnail(version(
+        "css-progress-blob",
+        { url: "blob:http://127.0.0.1/css-progress" }
+      ));
+      states.blobRejected = describe(host);
+
+      host.innerHTML = window.renderProgressThumbnail(version(
+        "css-progress-standalone",
+        { url: ${JSON.stringify(`/api/progress-images/${imageFixtureVersion.id}`)} }
+      ));
+      window.mountProgressImageThumbnails(host);
+      await wait(() => host.querySelector(".progress-thumbnail")?.classList.contains("is-image-loaded"), "standalone image");
+      states.standalone = describe(host);
+
+      const cell = document.createElement("div");
+      cell.className = "thumbnail-cell";
+      cell.innerHTML = window.renderProgressThumbnail(version(
+        "css-progress-cell",
+        { url: ${JSON.stringify(`/api/progress-images/${imageFixtureVersion.id}`)} }
+      ));
+      host.replaceChildren(cell);
+      window.mountProgressImageThumbnails(host);
+      await wait(() => cell.querySelector(".progress-thumbnail")?.classList.contains("is-image-loaded"), "thumbnail cell image");
+      states.thumbnailCell = describe(cell);
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const originalAnimationFrame = window.requestAnimationFrame;
+      const originalCancelAnimationFrame = window.cancelAnimationFrame;
+      let animationFrameCount = 0;
+      let cancelAnimationFrameCount = 0;
+      window.requestAnimationFrame = (callback) => {
+        animationFrameCount += 1;
+        return originalAnimationFrame.call(window, callback);
+      };
+      window.cancelAnimationFrame = (handle) => {
+        cancelAnimationFrameCount += 1;
+        return originalCancelAnimationFrame.call(window, handle);
+      };
+      window.scheduleProgressImageThumbnailMount(host);
+      window.scheduleProgressImageThumbnailMount(host);
+      const directSchedule = { animationFrameCount, cancelAnimationFrameCount };
+      await new Promise((resolve) => setTimeout(resolve, 80));
+
+      animationFrameCount = 0;
+      cancelAnimationFrameCount = 0;
+      const observerMarker = document.createElement("span");
+      document.querySelector("#chartList")?.appendChild(observerMarker);
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const observerSchedule = { animationFrameCount, cancelAnimationFrameCount };
+      window.requestAnimationFrame = originalAnimationFrame;
+      window.cancelAnimationFrame = originalCancelAnimationFrame;
+      observerMarker.remove();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      states.scheduler = { directSchedule, observerSchedule };
+
+      const loadMoreTarget = document.createElement("div");
+      document.body.appendChild(loadMoreTarget);
+      const loadMoreVersion = {
+        id: "css-progress-load-more",
+        versionId: "css-progress-load-more",
+        parentVersionId: null,
+        displayVersion: "ver1.0",
+        branchPath: "root",
+        difficulty: "★1",
+        author: "CSS fixture",
+        progress: 50,
+        comment: "load-more fixture",
+        createdAt: "2026-07-25T01:00:00.000Z",
+        isRejected: false,
+        hidden: false,
+        publicDataRedacted: false,
+        publicActionsHidden: false,
+        canShowActions: true,
+        lifecycleStatus: "active",
+        handlingMode: null,
+        downloadBlocked: false,
+        withdrawalDownloadBlocked: false,
+        downloadAvailable: true,
+        allowAppend: true,
+        appendAvailable: true,
+        managementAvailable: true,
+        collapsedByCompletion: false,
+        originUrl: "https://example.com/css-progress-load-more",
+        file: { downloadUrl: "http://localhost:${apiPort}/api/files/css-progress-load-more" },
+        progressMap: null,
+        progressImage: { url: "/api/progress-images/${imageFixtureVersion.id}" }
+      };
+      const loadMoreMountStartedAt = performance.now();
+      const loadMoreContext = window.BmsChartRenderPipeline.renderInto({
+        charts: [{
+          song: { id: "css-song-load-more", title: "Load more", artist: "CSS fixture" },
+          chart: { id: "css-chart-load-more", chartId: "css-chart-load-more", name: "CSS fixture" },
+          versions: [loadMoreVersion]
+        }]
+      }, loadMoreTarget, { mode: "append", source: "load-more", suppressFavorites: true });
+      await wait(() => loadMoreTarget.querySelector(".progress-thumbnail")?.classList.contains("is-image-loaded"), "load-more image");
+      states.loadMore = {
+        mode: loadMoreContext.mode,
+        source: loadMoreContext.source,
+        renderedNodeCount: loadMoreContext.renderedNodes.length,
+        stageNames: loadMoreContext.stageResults.map((result) => result.name),
+        chartCount: loadMoreTarget.querySelectorAll(".chart-group").length,
+        versionCount: loadMoreTarget.querySelectorAll(".version-row").length,
+        thumbnail: describe(loadMoreTarget)
+      };
+      states.timings = {
+        imageMountMs,
+        loadMoreMountMs: round(performance.now() - loadMoreMountStartedAt)
+      };
+      loadMoreTarget.remove();
+
+      states.runtimeStyles = {
+        favorite: document.querySelectorAll("#favoriteListStyles").length,
+        progress: document.querySelectorAll("#progress-image-thumbnail-style").length,
+        total: document.querySelectorAll("style").length,
+        staticStylesheet: [...document.styleSheets].filter((sheet) => (
+          sheet.href && new URL(sheet.href).pathname.endsWith("/progress-thumbnail-list.css")
+        )).length
+      };
+      states.pipeline = window.BmsChartRenderPipeline.getRegisteredStages();
+      states.warnings = warnings;
+      return states;
+    } finally {
+      console.warn = originalWarn;
+      host.remove();
+    }
+  })()`);
 }
 
 async function captureDetailStatusStyle(cdp, sessionId, state) {
@@ -1266,6 +1587,7 @@ async function captureMatrix(cdp, sessionId, pageKind) {
           entry.detailPresentation = await captureDetailPresentation(cdp, sessionId);
           entry.controlInteractions = await captureControlInteractions(cdp, sessionId);
           entry.favoriteInteractions = await captureFavoriteInteractions(cdp, sessionId);
+          entry.progressThumbnailStates = await captureProgressThumbnailStates(cdp, sessionId);
         }
         matrix.push(entry);
       } catch (error) {
@@ -1386,6 +1708,24 @@ const detailPresentationColors = {
     targetBorder: "rgb(118, 151, 139)",
     badgeBackground: "rgb(38, 52, 47)",
     badgeText: "rgb(212, 228, 222)"
+  }
+};
+
+const progressThumbnailColors = {
+  white: {
+    background: "rgb(244, 247, 249)",
+    border: "rgb(223, 230, 236)",
+    emptyText: "rgb(102, 114, 127)"
+  },
+  default: {
+    background: "rgb(244, 247, 249)",
+    border: "rgb(223, 230, 236)",
+    emptyText: "rgb(102, 114, 127)"
+  },
+  dark: {
+    background: "rgb(23, 35, 31)",
+    border: "rgb(88, 113, 104)",
+    emptyText: "rgb(184, 199, 193)"
   }
 };
 
@@ -1616,7 +1956,127 @@ function assertPageInvariants(snapshot, consoleMessages) {
     assert.match(favorite.behavior.storageAfterAdd["version-active"].favoritedAt, /^\d{4}-\d{2}-\d{2}T/);
     assert.deepEqual(favorite.behavior.storageAfterRemove, {});
     assert.equal(favorite.behavior.chartFetchDelta, 0, "favorite-only rerender must not fetch charts again");
-    assert.deepEqual(favorite.runtimeStyles, { favorite: 0, progress: 1, total: 1 });
+    assert.deepEqual(favorite.runtimeStyles, { favorite: 0, progress: 0, total: 0 });
+    const progressStates = entry.progressThumbnailStates;
+    const expectedProgress = progressThumbnailColors[entry.requestedTheme];
+    assert.deepEqual(
+      {
+        thumbnailCount: progressStates.mapOnly.thumbnailCount,
+        mapCount: progressStates.mapOnly.mapCount,
+        imageThumbnailCount: progressStates.mapOnly.imageThumbnailCount,
+        wrapCount: progressStates.mapOnly.wrapCount,
+        imageCount: progressStates.mapOnly.imageCount
+      },
+      { thumbnailCount: 1, mapCount: 1, imageThumbnailCount: 0, wrapCount: 0, imageCount: 0 }
+    );
+    assert.equal(progressStates.mapAndImageMetadata.mapCount, 1);
+    assert.equal(progressStates.mapAndImageMetadata.imageThumbnailCount, 0);
+    assert.equal(progressStates.mapAndImageMetadata.wrapCount, 0);
+    assert.match(progressStates.mapAndImageMetadata.source, /css-regression-slow\?fixture=/);
+    assert.equal(progressStates.beforeMount.imageThumbnailCount, 1);
+    assert.equal(progressStates.beforeMount.wrapCount, 1);
+    assert.equal(progressStates.beforeMount.imageCount, 0);
+    assert.equal(progressStates.loading.imageCount, 1);
+    assert.equal(progressStates.loading.className.includes("is-image-loaded"), false);
+    assert.equal(progressStates.loaded.imageCount, 1);
+    assert.ok(progressStates.loaded.className.includes("is-image-loaded"));
+    assert.equal(progressStates.loaded.imageAlt, "progress image");
+    assert.equal(progressStates.loaded.imageDecoding, "async");
+    assert.equal(progressStates.loaded.imageLoading, "eager");
+    assert.equal(progressStates.loaded.image.objectFit, "contain");
+    assert.equal(progressStates.loaded.image.opacity, "1");
+    assert.equal(progressStates.loaded.image.filter, "none");
+    assert.equal(progressStates.remount.reusedImage, true);
+    assert.equal(progressStates.remount.imageCount, 1);
+    assert.equal(progressStates.urlChanged.replacedImage, true);
+    assert.equal(progressStates.urlChanged.imageCount, 1);
+    assert.match(progressStates.urlChanged.source, /\?changed=1$/);
+    assert.equal(progressStates.urlChanged.imageSrc, progressStates.urlChanged.source);
+    assert.ok(progressStates.errorEmpty.className.includes("is-image-fallback"));
+    assert.ok(progressStates.errorEmpty.className.includes("is-empty"));
+    assert.equal(progressStates.errorEmpty.wrapHidden, true);
+    assert.equal(progressStates.errorEmpty.fallbackHidden, true);
+    assert.equal(progressStates.errorEmpty.valueColor, expectedProgress.emptyText);
+    assert.ok(
+      colorContrastRatio(progressStates.errorEmpty.valueColor, expectedProgress.background) >= 4.5,
+      `${entry.requestedTheme} empty progress text contrast is below 4.5`
+    );
+    assert.ok(progressStates.fallback.className.includes("is-image-fallback"));
+    assert.equal(progressStates.fallback.className.includes("is-empty"), false);
+    assert.equal(progressStates.fallback.wrapHidden, true);
+    assert.equal(progressStates.fallback.fallbackHidden, false);
+    assert.equal(progressStates.fallback.fallbackText, "map fallback");
+    assert.equal(progressStates.missingUrl.thumbnailCount, 0);
+    assert.equal(progressStates.invalidUrl.thumbnailCount, 0);
+    assert.equal(progressStates.blobRejected.thumbnailCount, 0);
+    for (const state of [progressStates.loaded, progressStates.standalone, progressStates.thumbnailCell]) {
+      assert.equal(state.wrap.backgroundColor, expectedProgress.background);
+      assert.equal(state.wrap.borderColor, expectedProgress.border);
+      assert.equal(state.wrap.borderStyle, "solid");
+      assert.equal(state.wrap.borderWidth, "1px");
+      assert.equal(state.wrap.borderRadius, "6px");
+      assert.equal(state.wrap.display, "flex");
+      assert.equal(state.wrap.height, "38px");
+      assert.equal(state.wrap.minWidth, "96px");
+      assert.equal(state.wrap.overflow, "hidden");
+      assert.equal(state.wrap.viewportClip.left, 0);
+      assert.equal(state.wrap.viewportClip.right, 0);
+    }
+    assert.equal(progressStates.thumbnailCell.wrap.maxWidth, "100%");
+    if (entry.requestedWidth === 390) {
+      assert.equal(progressStates.standalone.wrap.maxWidth, "none");
+      assert.ok(progressStates.standalone.wrap.rect.width <= entry.viewport.clientWidth);
+    } else {
+      assert.equal(progressStates.standalone.wrap.maxWidth, "220px");
+      assert.equal(progressStates.standalone.wrap.rect.width, 220);
+    }
+    assert.deepEqual(progressStates.scheduler.directSchedule, {
+      animationFrameCount: 2,
+      cancelAnimationFrameCount: 1
+    });
+    assert.ok(progressStates.scheduler.observerSchedule.animationFrameCount >= 1);
+    assert.ok(progressStates.scheduler.observerSchedule.animationFrameCount <= 3);
+    assert.equal(progressStates.scheduler.observerSchedule.cancelAnimationFrameCount, 0);
+    const { thumbnail: loadMoreThumbnail, ...loadMoreSummary } = progressStates.loadMore;
+    assert.deepEqual(loadMoreSummary, {
+      mode: "append",
+      source: "load-more",
+      renderedNodeCount: 1,
+      stageNames: [
+        "favorites-filter",
+        "branch-append-base",
+        "tree",
+        "favorites",
+        "stored-progress-thumbnails",
+        "common-mount"
+      ],
+      chartCount: 1,
+      versionCount: 1
+    });
+    assert.equal(loadMoreThumbnail.imageThumbnailCount, 1);
+    assert.equal(loadMoreThumbnail.imageCount, 1);
+    assert.ok(loadMoreThumbnail.className.includes("is-image-loaded"));
+    assert.equal(loadMoreThumbnail.wrap.backgroundColor, expectedProgress.background);
+    assert.equal(loadMoreThumbnail.wrap.borderColor, expectedProgress.border);
+    assert.deepEqual(progressStates.runtimeStyles, {
+      favorite: 0,
+      progress: 0,
+      total: 0,
+      staticStylesheet: 1
+    });
+    assert.equal(progressStates.warnings.length, 7);
+    assert.ok(progressStates.warnings.every((warning) => warning.code === "PROGRESS_THUMBNAIL_RENDER_SKIPPED"));
+    assert.ok(progressStates.timings.imageMountMs >= 200 && progressStates.timings.imageMountMs < 3000);
+    assert.ok(progressStates.timings.loadMoreMountMs > 0 && progressStates.timings.loadMoreMountMs < 3000);
+    assert.equal(
+      progressStates.pipeline.postRender.filter((stage) => stage.name === "stored-progress-thumbnails").length,
+      1
+    );
+    assert.deepEqual(
+      progressStates.pipeline.postRender.find((stage) => stage.name === "stored-progress-thumbnails"),
+      { name: "stored-progress-thumbnails", order: 300, required: true }
+    );
+    assert.equal(progressStates.pipeline.mount.filter((stage) => stage.name === "common-mount").length, 1);
     for (const state of ["filterIdle", "filterHover", "filterFocus", "filterActive", "filterActiveHover", "filterActiveFocus", "starIdle", "starHover", "starFocus", "starFavorite", "starFavoriteHover", "starFavoriteFocus"]) {
       for (const side of ["left", "right"]) {
         assert.equal(favorite[state].viewportClip[side], 0, `${state} ${side} clip at ${entry.requestedTheme} ${entry.requestedWidth}px`);
@@ -1788,6 +2248,8 @@ function compareValues(expected, actual, location = "snapshot") {
       const isStoppedSummary = /\.known\.appendStopped$/.test(location);
       const isStoppedInteraction = /\.controlInteractions\.appendStopped\.(?:hover|focusVisible|active)$/.test(location);
       const isFavoriteStyle = /\.(?:elements\.favorites\[\d+\]|known\.favoriteIdle|favoriteInteractions\.(?:filter(?:Idle|Hover|Focus|Active(?:Hover|Focus)?)|star(?:Idle|Hover|Focus|Favorite(?:Hover|Focus)?)))$/.test(location);
+      const isProgressImageWrap = /\.(?:elements\.imageWraps\[\d+\]|progressThumbnailStates\.[^.]+\.wrap)$/.test(location);
+      const isProgressEmptyState = /\.progressThumbnailStates\.(?:errorEmpty|invalidUrl)$/.test(location);
       const favoriteStyleChanges = new Set([
         "backgroundColor", "visibleBackgroundColor", "surroundingBackgroundColor", "color", "borderColor",
         "outline", "outlineColor", "contrastRatio", "borderContrastRatio", "outlineContrastRatio", "boxShadow"
@@ -1806,6 +2268,12 @@ function compareValues(expected, actual, location = "snapshot") {
       ]).has(key)) continue;
       if (isFavoriteStyle && favoriteStyleChanges.has(key)) continue;
       if (location.endsWith(".favoriteInteractions.runtimeStyles") && key === "favorite") continue;
+      if (location.endsWith(".favoriteInteractions.runtimeStyles") && (key === "progress" || key === "total")) continue;
+      if (location.endsWith(".progressThumbnailStates.runtimeStyles") && (key === "progress" || key === "total")) continue;
+      if (isProgressEmptyState && key === "valueColor") continue;
+      if (isDark && isProgressImageWrap && new Set([
+        "backgroundColor", "borderColor", "contrastRatio", "borderContrastRatio"
+      ]).has(key)) continue;
       if (location.endsWith(".favoriteInteractions.behavior.storageAfterAdd.version-active") && key === "favoritedAt") continue;
       if (location === "detailRerender" && key === "url") continue;
       if (/^detailRerender\.(?:afterAppend|afterManagement)$/.test(location) && key === "url") continue;
@@ -1885,9 +2353,10 @@ async function run() {
       && document.querySelectorAll(".thumbnail-cell .progress-thumbnail").length >= 5
       && document.querySelectorAll(".progress-thumbnail-image-wrap img.progress-thumbnail-image").length === 1
       && document.querySelectorAll(".progress-thumbnail.has-progress-image.is-image-loaded").length === 1
-      && document.querySelector("#progress-image-thumbnail-style")
+      && !document.querySelector("#progress-image-thumbnail-style")
       && !document.querySelector("#favoriteListStyles")
-      && [...document.styleSheets].some((sheet) => sheet.href && new URL(sheet.href).pathname.endsWith("/favorites-list.css"))`, "detail fixture");
+      && [...document.styleSheets].some((sheet) => sheet.href && new URL(sheet.href).pathname.endsWith("/favorites-list.css"))
+      && [...document.styleSheets].some((sheet) => sheet.href && new URL(sheet.href).pathname.endsWith("/progress-thumbnail-list.css"))`, "detail fixture");
     await installControlFixtures(cdp, sessionId);
     const detailNavigationMs = Number(process.hrtime.bigint() - navigationStart) / 1e6;
     const detail = await captureMatrix(cdp, sessionId, "detail");
@@ -1924,11 +2393,21 @@ async function run() {
     }
 
     const totalMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
+    const timingSummary = (key) => {
+      const values = detail.matrix.map((entry) => entry.progressThumbnailStates.timings[key]);
+      return {
+        min: Number(Math.min(...values).toFixed(1)),
+        average: Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(1)),
+        max: Number(Math.max(...values).toFixed(1))
+      };
+    };
     console.log("css browser regression: 9 detail + 9 compact theme/width conditions passed");
     console.log(JSON.stringify({
       detailNavigationMs: Number(detailNavigationMs.toFixed(1)),
       compactNavigationMs: Number(compactNavigationMs.toFixed(1)),
       computedStyleMs: Number((detail.computedCaptureMs + compact.computedCaptureMs).toFixed(1)),
+      imageMountMs: timingSummary("imageMountMs"),
+      loadMoreMountMs: timingSummary("loadMoreMountMs"),
       totalMs: Number(totalMs.toFixed(1)),
       consoleErrors: 0,
       consoleWarnings: 0

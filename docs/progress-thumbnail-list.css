@@ -1,0 +1,35 @@
+.progress-thumbnail-image-wrap {
+  align-items: center;
+  background: var(--progress-image-bg);
+  border: 1px solid var(--progress-image-border);
+  border-radius: 6px;
+  display: flex;
+  height: 38px;
+  justify-content: center;
+  max-width: 220px;
+  min-width: 96px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.progress-thumbnail-image {
+  display: block;
+  height: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+.thumbnail-cell .progress-thumbnail-image-wrap {
+  max-width: 100%;
+}
+
+.progress-thumbnail.is-empty .progress-thumbnail-value {
+  color: var(--progress-image-empty-text);
+}
+
+@media (max-width: 640px) {
+  .progress-thumbnail-image-wrap {
+    max-width: none;
+    width: 100%;
+  }
+}

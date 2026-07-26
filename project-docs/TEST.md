@@ -1596,3 +1596,13 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 390pxではtarget badgeをrow上端から44pxへ移してfavoriteとの重なりを解消する。変更前後の全対象row高さ差は0px、section／row幅、DOM件数、760px／1366pxの配置は一致させる。compact一覧は全computed snapshotを変更前と一致させる。
 - detail URLのchartId／versionId／hash、append-success後とmanagement-refresh後のselection、1 card／16 version／target 1件、描画event回数、横overflowなしを確認する。favorite-onlyの追加fetch、production JavaScript、progress runtime style、pipeline stage、listener／observerは変更しない。
 - `KNOWN-CSS-005`は修正済みとしてwarningを削除し、`KNOWN-CSS-001`～`005`の既知warningを0件とする。Console error／warning 0件、HTML ID重複なし、cache keyは変更した`chart-detail-link.css`と`theme.css`だけ、`git diff --check`成功を必須とする。本番Pages、Worker、D1、R2、Cron、Secret、dependencyは操作しない。
+
+## VERSION-TREE-RENDER-CONSOLIDATION R4B2f progress画像thumbnail静的CSS回帰
+
+- `node scripts/test-css-ownership-static.js`で`progress-thumbnail-list.css`の存在と読込順、4 selector、640px media rule、38px／220px／96pxのgeometry、全3テーマの3 tokenを確認する。component CSSの固定色、`ensureProgressImageThumbnailStyle`、progress style ID、production JavaScriptの`createElement("style")`と大規模CSS文字列は0件とする。
+- `node scripts/test-css-browser-regression.js`はprogressMapのみ、progressImageのみ、map＋image metadata、mount前、loading、load成功、同一src再mount、URL変更、decode error、fallback、empty、URL欠落、不正画像source、blob拒否を隔離fixture化する。期待するerror／blob warningはfixture内で捕捉し、ページ全体のConsole error／warningは0件とする。
+- white／default／dark × 390／760／1366pxで画像枠と画像の件数、背景、border、empty文字、height／width／min／max、`object-fit`、opacity、filter、bounding rect、viewport clip、document overflowを確認する。white／defaultの背景とborderは変更前、darkは専用色、empty文字は全テーマ4.5:1以上とする。
+- 同一src再mountは同じimgを再利用して1件、URL変更は旧imgを置換して新img 1件、error時は枠を隠してfallbackを表示し、fallback内容なしでは`is-empty`を付ける。MutationObserver登録1件と直接schedulerのrequestAnimationFrame／cancel回数を維持し、Observer経由でもboundedなscheduleが発生することを確認する。
+- favorite-onlyは追加chart fetch 0、detailのappend-success／management-refreshは選択版と1 cardを維持する。load-moreはpipeline unit／staticでappend mode、新batchだけの補強、`stored-progress-thumbnails` order 300 required、`common-mount` 1回を回帰する。
+- 変更前snapshotはリポジトリ外の一時ファイルへ保存し、意図したruntime style 1→0、全テーマのempty文字、darkの画像枠背景／border以外を0.25px以内で比較する。全9条件で対象lifecycle row高さ差0px、compact一覧差分なし、横overflow／clipなしとし、比較後に一時snapshotを削除する。
+- R1 model、R2 Link UI、R3 Action UI、R4A pipeline、R4B1 dead-code、曲／DL、version list 4件、withdrawal active 18件、metadata parser／static、変更JavaScript構文、HTML重複ID、既知CSS warning 0件、`git diff --check`を回帰する。既知canonical schemaの0009不整合は本Phaseで変更しない。Pages、Worker、D1、R2、Cron、Secret、dependency、本番操作、push、deployは行わない。
