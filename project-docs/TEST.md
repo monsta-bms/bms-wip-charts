@@ -1557,6 +1557,14 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 同static testでCSS読込順、対象linkだけのcache bust、変更対象外CSSとruntime styleのSHA-256、grid列定義数、actions/thumbnail/graph gap、固定色数、HTML ID重複なし、既知問題5件の文書化を確認する。`list-ui-refresh.css`だけはレビュー済みR4B2a hashへ更新する。
 - `node scripts/test-css-browser-regression.js`は外部dependencyなしでlocalhostの隔離fixtureとheadless browserを起動し、white/default/dark × 390/760/1366pxについて詳細版ツリーとcompact一覧を確認する。document横overflow、版・曲・DL・追記・管理・favorite・thumbnail件数、主要controlのviewport clip、computed width/min/max/height/display/position/overflow/gap/grid/colors、bounds、親clip、overlay、detail card幅、Console error/warningを取得する。
 - CSS変更前snapshotはリポジトリ外の一時ディレクトリへ`--write-snapshot`で保存し、変更後は`--compare-snapshot`で全9条件のcomputed styleとboundsを許容差0.25px以内で比較する。navigation時間と非同期header表示の影響を受ける絶対縦座標は性能・環境参考値であり、width/height、水平bounds、親clipと同じ厳密比較対象にしない。比較完了後はsnapshotと一時ディレクトリを削除する。
-- `KNOWN-CSS-001` pending clip、`KNOWN-CSS-002` processing clip、`KNOWN-CSS-003` dark追記停止固定色、`KNOWN-CSS-004` favorite固定色、`KNOWN-CSS-005` detail対象背景固定色は、既知問題としてwarning表示する。既知問題を正常仕様として固定しない。観測されなくなった場合は記録更新を要求し、既知以外のcontrol clip、横overflow、固定色増加、Console warning/errorは失敗とする。
+- `KNOWN-CSS-001` pending clipと`KNOWN-CSS-002` processing clipはR4B2bで修正済み。`KNOWN-CSS-003` dark追記停止固定色、`KNOWN-CSS-004` favorite固定色、`KNOWN-CSS-005` detail対象背景固定色だけを既知問題warningとして残す。新しいcontrol clip、横overflow、固定色増加、Console warning/errorは失敗とする。
 - R4B2a前後でthumbnailのcomputed width/max-width、bounding width/height、display、position、overflow、親cell、graph、画像枠、DOM件数、compact一覧を一致させる。画像比較dependencyは追加せず、computed styleとboundsを回帰基準にする。
 - R1 model、R2 Link UI、R3 Action UI、R4A pipeline、R4B1 dead-code、曲/DL static、version list 4件、withdrawal active、metadata parser/static、変更テストJS構文、CSS/runtime hash、HTML ID、`git diff --check`を回帰する。Pages、Worker、D1/R2、Migration、Secret、Cron、dependency、本番操作、push、deployは行わない。
+
+## VERSION-TREE-RENDER-CONSOLIDATION R4B2b モバイルlifecycle回帰
+
+- `node scripts/test-css-browser-regression.js`はgrace、manual、immediate、processing、tombstoned、deletedの正式badge classと文言を個別に検査する。white/default/dark × 390/760/1366pxでbadge、`.version-state-badges`、`.version-title-line`、`.version-label-stack`、`.version-tree-cell`、`.version-row`、viewportのbounding rectとclip量を取得する。
+- 390pxでは全badgeの上下左右clipを1px以内、badgeのscrollWidth/scrollHeightをclientWidth/clientHeight以内、badge内部`nowrap`、badge群とtitle lineの折返しを必須とする。documentと各rowの横overflow、曲・DL・追記・管理・favorite・thumbnailのviewport clipも失敗条件にする。
+- 変更前snapshotとの比較では390pxの折返しに伴う配置・row高さだけを許可し、幅・視覚style・DOM件数を維持する。760pxと1366pxはgeometry、row高さ、配置、thumbnail、tree、detail、操作欄を変更前と0.25px以内で一致させる。
+- `KNOWN-CSS-001`と`KNOWN-CSS-002`は修正済みとしてwarningを削除し、再発を通常のtest failureにする。warningは残存する`KNOWN-CSS-003`～`KNOWN-CSS-005`の3件だけとする。
+- 本番Pages、Worker、D1、R2、Cron、Secret、dependencyは操作しない。

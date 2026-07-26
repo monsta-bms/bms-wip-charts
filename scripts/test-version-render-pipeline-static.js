@@ -328,7 +328,7 @@ check("only R4B1-modified render scripts use the cleanup cache key", () => {
 check("protected CSS files are byte-for-byte unchanged", () => {
   const expected = new Map([
     ["docs/style.css", "2cb373b2344a61706e314fcca197939c0a03c864ef93c8e87fcec638b38bd49e"],
-    ["docs/branch-tree-list.css", "a0b721e0f55381dfd6f9374ac5ea18363a764b27c76954251132406e061e4968"],
+    ["docs/branch-tree-list.css", "e741afedc1ed6f3c1c3c5a85caf70ef2d2fe93bca1cf2b6ecbcc047d94f06a7e"],
     ["docs/list-ui-refresh.css", "f630206e0a7ce75150b2305414ff85c6657244bfa0d58965594e29fb372b1d81"],
     ["docs/list.css", "68f757317cf1b75819a2cbb3589e1563f2e87a7eaffe10cd103c46335e1b3f23"],
     ["docs/theme.css", "1ad383052779391c123b9a51109514285d224fe2e1edd9c6e321419f35f5b1e5"],

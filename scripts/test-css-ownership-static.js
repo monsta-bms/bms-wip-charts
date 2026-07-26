@@ -8,6 +8,12 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");
+const productionJsFiles = fs.readdirSync(path.join(root, "docs"))
+  .filter((name) => name.endsWith(".js"))
+  .sort();
+const productionJsAggregate = productionJsFiles
+  .map((name) => `${name}\0${read(`docs/${name}`)}`)
+  .join("\0");
 
 const sources = {
   branch: read("docs/branch-tree-list.css"),
@@ -50,6 +56,12 @@ function leafRules(source) {
 
 function rulesFor(source, selector) {
   return leafRules(source).filter((rule) => rule.selectors.includes(selector));
+}
+
+function declarationBlocks(source, selector) {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return [...source.matchAll(new RegExp(`${escaped}\\s*\\{([^{}]*)\\}`, "g"))]
+    .map((match) => declarations(match[1]));
 }
 
 function runtimeStyle(source) {
@@ -153,10 +165,12 @@ check("compact-list stylesheet order remains stable", () => {
   assert.deepEqual(stylesheetNames(sources.listHtml), ["style.css", "site-header.css", "list.css", "theme.css"]);
 });
 
-check("only the R4B2a stylesheet cache key changes", () => {
+check("only the changed R4B2b stylesheet cache key changes", () => {
+  assert.match(sources.index, /\.\/branch-tree-list\.css\?v=lifecycle-mobile-r4b2b-01/);
+  assert.equal((sources.index.match(/lifecycle-mobile-r4b2b-01/g) || []).length, 1);
   assert.match(sources.index, /\.\/list-ui-refresh\.css\?v=css-cleanup-r4b2a-01/);
   assert.equal((sources.index.match(/css-cleanup-r4b2a-01/g) || []).length, 1);
-  assert.doesNotMatch(sources.listHtml, /css-cleanup-r4b2a-01/);
+  assert.doesNotMatch(sources.listHtml, /lifecycle-mobile-r4b2b-01|css-cleanup-r4b2a-01/);
 });
 
 check("runtime style hashes remain stable", () => {
@@ -167,11 +181,13 @@ check("runtime style hashes remain stable", () => {
 check("protected CSS hashes remain stable", () => {
   const expected = new Map([
     [sources.style, "2cb373b2344a61706e314fcca197939c0a03c864ef93c8e87fcec638b38bd49e"],
-    [sources.branch, "a0b721e0f55381dfd6f9374ac5ea18363a764b27c76954251132406e061e4968"],
+    [sources.branch, "e741afedc1ed6f3c1c3c5a85caf70ef2d2fe93bca1cf2b6ecbcc047d94f06a7e"],
     [sources.list, "68f757317cf1b75819a2cbb3589e1563f2e87a7eaffe10cd103c46335e1b3f23"],
     [sources.theme, "1ad383052779391c123b9a51109514285d224fe2e1edd9c6e321419f35f5b1e5"],
     [sources.treePolish, "e0d1cf234c249070294491982088d34812c602e92ccdca7377011d7292e9f4ad"],
-    [sources.chartMiniview, "e92980af2dde81ce2051a9216d744d62ee9fbed18e8423f6461296f65791d49c"]
+    [sources.chartMiniview, "e92980af2dde81ce2051a9216d744d62ee9fbed18e8423f6461296f65791d49c"],
+    [sources.management, "d0b09e7e107d9dcaf5830f243761357462e27765bf3d24bfa78aad0a1b81bcb7"],
+    [sources.chartDetail, "bcbe6bfe1a77fc0117184b3d5acbd25d8e4c9fc51af990da941b09ded8346b2f"]
   ]);
   expected.forEach((hash, source) => assert.equal(sha256(source), hash));
 });
@@ -205,14 +221,62 @@ check("fixed color counts have not increased", () => {
   expected.forEach((count, name) => assert.equal(fixedColorCount(sources[name]), count, name));
 });
 
-check("all five known CSS issues are documented without being accepted as normal", () => {
-  for (let index = 1; index <= 5; index += 1) {
+check("mobile lifecycle layout belongs to branch-tree-list only", () => {
+  const titleBlocks = declarationBlocks(sources.branch, ".version-title-line");
+  const badgeGroupBlocks = declarationBlocks(sources.branch, ".version-state-badges");
+  assert.equal(titleBlocks.length, 2);
+  assert.equal(badgeGroupBlocks.length, 2);
+  assert.equal(titleBlocks[0]["align-items"], "center");
+  assert.equal(titleBlocks[0]["flex-wrap"], "nowrap");
+  assert.equal(titleBlocks[1]["align-items"], "flex-start");
+  assert.equal(titleBlocks[1]["flex-wrap"], "wrap");
+  assert.equal(badgeGroupBlocks[0].flex, "0 0 auto");
+  assert.equal(badgeGroupBlocks[0]["flex-wrap"], "nowrap");
+  assert.equal(badgeGroupBlocks[1].flex, "1 1 100%");
+  assert.equal(badgeGroupBlocks[1]["flex-wrap"], "wrap");
+  assert.equal(badgeGroupBlocks[1]["min-width"], "0");
+  const mobileIndex = sources.branch.indexOf("@media (max-width: 640px)");
+  assert.ok(mobileIndex >= 0);
+  assert.ok(sources.branch.indexOf(".version-title-line", mobileIndex) > mobileIndex);
+  assert.ok(sources.branch.indexOf(".version-state-badges", mobileIndex) > mobileIndex);
+});
+
+check("lifecycle badge visual ownership remains in version-management-ui", () => {
+  const badgeRule = rulesFor(sources.management, ".withdrawal-pending-badge")
+    .find((rule) => rule.selectors.includes(".withdrawal-processing-badge") && rule.selectors.includes(".withdrawal-tombstone-badge"));
+  assert.ok(badgeRule);
+  assert.equal(badgeRule.declarations["font-size"], "0.68rem");
+  assert.equal(badgeRule.declarations.padding, "2px 7px");
+  assert.equal(badgeRule.declarations["white-space"], "nowrap");
+  assert.equal(badgeRule.declarations["border-radius"], "999px");
+  const mobileRules = declarationBlocks(sources.branch.slice(sources.branch.indexOf("@media (max-width: 640px)")), ".version-state-badges");
+  assert.equal(mobileRules.length, 1);
+  assert.deepEqual(Object.keys(mobileRules[0]).sort(), ["flex", "flex-wrap", "min-width"]);
+});
+
+check("R4B2b does not use clipping or visual workarounds", () => {
+  const mobileSource = sources.branch.slice(sources.branch.indexOf("@media (max-width: 640px)"));
+  assert.doesNotMatch(mobileSource, /font-size\s*:|position\s*:\s*absolute|transform\s*:|margin-left\s*:\s*-|overflow\s*:\s*hidden|text-overflow\s*:|white-space\s*:\s*normal/);
+});
+
+check("production JavaScript remains byte-for-byte unchanged", () => {
+  assert.equal(productionJsFiles.length, 30);
+  assert.equal(sha256(productionJsAggregate), "ae1031cf14736bf72464b5a46c41a9175e0ae6cac58c05b412b96c2ed8691f9a");
+});
+
+check("resolved and remaining CSS issues are documented accurately", () => {
+  for (let index = 1; index <= 2; index += 1) {
+    const id = `KNOWN-CSS-00${index}`;
+    assert.match(sources.spec, new RegExp(`${id}[^\\n]*修正済み`));
+    assert.match(sources.test, new RegExp(`${id}[^\\n]*修正済み`));
+  }
+  for (let index = 3; index <= 5; index += 1) {
     const id = `KNOWN-CSS-00${index}`;
     assert.match(sources.spec, new RegExp(id));
     assert.match(sources.test, new RegExp(id));
   }
-  assert.match(sources.spec, /既知問題を正常仕様として固定しない/);
-  assert.match(sources.test, /既知問題を正常仕様として固定しない/);
+  assert.match(sources.spec, /KNOWN-CSS-003[\s\S]*KNOWN-CSS-005/);
+  assert.match(sources.test, /KNOWN-CSS-003[\s\S]*KNOWN-CSS-005/);
 });
 
 check("public HTML IDs remain unique", () => {

@@ -685,6 +685,17 @@
     --version-tree-indent: 12px;
   }
 
+  .version-title-line {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .version-state-badges {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
   .version-row.version-tree-row {
     grid-template-columns: var(--group-gutter-width) minmax(0, 1fr);
   }

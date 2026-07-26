@@ -94,7 +94,8 @@ const versions = [
     withdrawalDownloadBlocked: true,
     downloadAvailable: false,
     file: { downloadUrl: null },
-    progress: 76
+    progress: 100,
+    progressMap: createProgressMap(100)
   }),
   createVersion("version-manual", {
     lifecycleStatus: "withdrawal_pending",
@@ -103,7 +104,17 @@ const versions = [
     withdrawalDownloadBlocked: true,
     downloadAvailable: false,
     file: { downloadUrl: null },
+    isRejected: true,
     progress: 82
+  }),
+  createVersion("version-immediate", {
+    lifecycleStatus: "withdrawal_pending",
+    handlingMode: "immediate_delete",
+    scheduledAt: null,
+    withdrawalDownloadBlocked: true,
+    downloadAvailable: false,
+    file: { downloadUrl: null },
+    progress: 88
   }),
   createVersion("version-processing", {
     lifecycleStatus: "processing",
@@ -130,6 +141,18 @@ const versions = [
     file: { downloadUrl: null },
     originUrl: null,
     progressMap: null
+  }),
+  createVersion("version-deleted", {
+    lifecycleStatus: "deleted",
+    publicActionsHidden: true,
+    canShowActions: false,
+    downloadBlocked: true,
+    downloadAvailable: false,
+    appendAvailable: false,
+    managementAvailable: false,
+    file: { downloadUrl: null },
+    originUrl: null,
+    progressMap: null
   })
 ];
 
@@ -138,6 +161,7 @@ versions.forEach((version, index) => {
   version.branchPath = index === 0 ? "root" : `root/${Array.from({ length: index }, () => "a").join("/")}`;
   version.displayVersion = index === 0 ? "ver1.0" : `ver1.${index}`;
 });
+versions.find((version) => version.id === "version-immediate").displayVersion = "ver1.12-long-mobile-label";
 const imageFixtureVersion = versions.find((version) => version.id === "version-depth-1");
 imageFixtureVersion.progressMap = null;
 imageFixtureVersion.progressImage = {
@@ -402,8 +426,22 @@ async function waitFor(cdp, sessionId, expression, label) {
 }
 
 function captureExpression(pageKind) {
-  return `(() => {
+  return `(async () => {
     const round = (value) => Number(Number(value || 0).toFixed(3));
+    const rectValue = (rect) => ({
+      left: round(rect.left),
+      right: round(rect.right),
+      top: round(rect.top),
+      bottom: round(rect.bottom),
+      width: round(rect.width),
+      height: round(rect.height)
+    });
+    const clipAgainst = (rect, containerRect) => ({
+      left: round(Math.max(0, containerRect.left - rect.left)),
+      right: round(Math.max(0, rect.right - containerRect.right)),
+      top: round(Math.max(0, containerRect.top - rect.top)),
+      bottom: round(Math.max(0, rect.bottom - containerRect.bottom))
+    });
     const inspect = (selector) => [...document.querySelectorAll(selector)].map((element) => {
       const style = getComputedStyle(element);
       const rect = element.getBoundingClientRect();
@@ -411,26 +449,33 @@ function captureExpression(pageKind) {
       return {
         tagName: element.tagName,
         className: String(element.className || ""),
+        dataVersionId: element.closest(".version-row")?.dataset.versionId || "",
+        text: String(element.textContent || "").trim(),
         display: style.display,
+        flex: style.flex,
+        flexBasis: style.flexBasis,
+        flexWrap: style.flexWrap,
         width: style.width,
         minWidth: style.minWidth,
         maxWidth: style.maxWidth,
         height: style.height,
         position: style.position,
         overflow: style.overflow,
+        overflowX: style.overflowX,
+        overflowY: style.overflowY,
+        whiteSpace: style.whiteSpace,
         gap: style.gap,
         gridTemplateColumns: style.gridTemplateColumns,
         backgroundColor: style.backgroundColor,
         color: style.color,
         borderColor: style.borderColor,
-        rect: { left: round(rect.left), right: round(rect.right), top: round(rect.top), bottom: round(rect.bottom), width: round(rect.width), height: round(rect.height) },
+        clientWidth: element.clientWidth,
+        scrollWidth: element.scrollWidth,
+        clientHeight: element.clientHeight,
+        scrollHeight: element.scrollHeight,
+        rect: rectValue(rect),
         parentRect: { width: round(parentRect.width), height: round(parentRect.height) },
-        parentClip: {
-          left: round(Math.max(0, parentRect.left - rect.left)),
-          right: round(Math.max(0, rect.right - parentRect.right)),
-          top: round(Math.max(0, parentRect.top - rect.top)),
-          bottom: round(Math.max(0, rect.bottom - parentRect.bottom))
-        },
+        parentClip: clipAgainst(rect, parentRect),
         viewportClip: {
           left: round(Math.max(0, -rect.left)),
           right: round(Math.max(0, rect.right - document.documentElement.clientWidth))
@@ -445,6 +490,10 @@ function captureExpression(pageKind) {
       appendControls: ".append-version-button, .append-policy-disabled-button, .append-disabled-intermediate",
       managementControls: ".version-management-button",
       lifecycle: ".withdrawal-pending-badge, .withdrawal-processing-badge, .withdrawal-tombstone-badge",
+      stateBadgeGroups: ".version-state-badges",
+      titleLines: ".version-title-line",
+      labelStacks: ".version-label-stack",
+      treeCells: ".version-tree-cell",
       favorites: ".favorite-version-button",
       thumbnailCells: ".thumbnail-cell",
       thumbnails: ".thumbnail-cell .progress-thumbnail",
@@ -456,7 +505,71 @@ function captureExpression(pageKind) {
       downloads: ".compact-download-link, .compact-download-disabled"
     })};
     const elements = Object.fromEntries(Object.entries(selectors).map(([name, selector]) => [name, inspect(selector)]));
+    const lifecycleGeometry = [];
+    if (${JSON.stringify(pageKind)} === "detail") {
+      const badgeSelector = ".withdrawal-pending-badge, .withdrawal-processing-badge, .withdrawal-tombstone-badge";
+      const containerSelectors = [
+        ".version-state-badges",
+        ".version-title-line",
+        ".version-label-stack",
+        ".version-tree-cell",
+        ".version-row"
+      ];
+      for (const badge of document.querySelectorAll(badgeSelector)) {
+        const initialRect = badge.getBoundingClientRect();
+        scrollTo(0, Math.max(0, scrollY + initialRect.top - ((innerHeight - initialRect.height) / 2)));
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const badgeRect = badge.getBoundingClientRect();
+        const badgeStyle = getComputedStyle(badge);
+        const containers = {};
+        for (const selector of containerSelectors) {
+          const container = badge.closest(selector);
+          if (!container) continue;
+          const rect = container.getBoundingClientRect();
+          const style = getComputedStyle(container);
+          containers[selector] = {
+            text: String(container.textContent || "").trim(),
+            rect: rectValue(rect),
+            clip: clipAgainst(badgeRect, rect),
+            clientWidth: container.clientWidth,
+            scrollWidth: container.scrollWidth,
+            clientHeight: container.clientHeight,
+            scrollHeight: container.scrollHeight,
+            flex: style.flex,
+            flexBasis: style.flexBasis,
+            flexWrap: style.flexWrap,
+            minWidth: style.minWidth,
+            overflowX: style.overflowX,
+            overflowY: style.overflowY,
+            whiteSpace: style.whiteSpace
+          };
+        }
+        const viewportRect = { left: 0, right: document.documentElement.clientWidth, top: 0, bottom: innerHeight };
+        lifecycleGeometry.push({
+          dataVersionId: badge.closest(".version-row")?.dataset.versionId || "",
+          className: String(badge.className || ""),
+          text: String(badge.textContent || "").trim(),
+          rect: rectValue(badgeRect),
+          viewportRect,
+          viewportClip: clipAgainst(badgeRect, viewportRect),
+          clientWidth: badge.clientWidth,
+          scrollWidth: badge.scrollWidth,
+          clientHeight: badge.clientHeight,
+          scrollHeight: badge.scrollHeight,
+          flexWrap: badgeStyle.flexWrap,
+          flexBasis: badgeStyle.flexBasis,
+          minWidth: badgeStyle.minWidth,
+          overflowX: badgeStyle.overflowX,
+          overflowY: badgeStyle.overflowY,
+          whiteSpace: badgeStyle.whiteSpace,
+          containers
+        });
+      }
+      scrollTo(0, 0);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
     let detailTarget = null;
+    let focusVisible = null;
     if (${JSON.stringify(pageKind)} === "detail") {
       const target = document.querySelector('.version-row[data-version-id="version-active"]') || document.querySelector(".version-row");
       if (target) {
@@ -464,6 +577,19 @@ function captureExpression(pageKind) {
         const style = getComputedStyle(target);
         detailTarget = { backgroundColor: style.backgroundColor, borderColor: style.borderColor, color: style.color };
         target.classList.remove("is-detail-target");
+      }
+      const focusTarget = document.querySelector(".version-origin-link");
+      if (focusTarget) {
+        focusTarget.focus({ preventScroll: true });
+        const focusStyle = getComputedStyle(focusTarget);
+        focusVisible = {
+          matches: focusTarget.matches(":focus-visible"),
+          outlineStyle: focusStyle.outlineStyle,
+          outlineWidth: focusStyle.outlineWidth,
+          outlineColor: focusStyle.outlineColor,
+          outlineOffset: focusStyle.outlineOffset
+        };
+        focusTarget.blur();
       }
     }
     const pending = elements.lifecycle?.find((item) => item.className.includes("withdrawal-pending-badge")) || null;
@@ -485,6 +611,8 @@ function captureExpression(pageKind) {
       },
       counts: Object.fromEntries(Object.entries(elements).map(([name, items]) => [name, items.length])),
       elements,
+      lifecycleGeometry,
+      focusVisible,
       known: {
         pendingViewportClip: pending?.viewportClip?.right || 0,
         processingViewportClip: processing?.viewportClip?.right || 0,
@@ -548,6 +676,14 @@ function findResult(matrix, theme, width) {
 }
 
 function assertPageInvariants(snapshot, consoleMessages) {
+  const lifecycleExpectations = new Map([
+    ["version-grace", ["withdrawal-pending-badge", "DL停止・自動削除待ち"]],
+    ["version-manual", ["withdrawal-pending-badge", "DL停止・管理者確認待ち"]],
+    ["version-immediate", ["withdrawal-pending-badge", "取り下げ申請中"]],
+    ["version-processing", ["withdrawal-processing-badge", "取り下げ処理中"]],
+    ["version-tombstoned", ["withdrawal-tombstone-badge", "履歴のみ"]],
+    ["version-deleted", ["withdrawal-tombstone-badge", "削除済み"]]
+  ]);
   for (const entry of [...snapshot.detail.matrix, ...snapshot.compact.matrix]) {
     assert.equal(entry.document.horizontalOverflow, false, `${entry.pageKind} ${entry.requestedTheme} ${entry.requestedWidth}px overflow`);
   }
@@ -557,7 +693,11 @@ function assertPageInvariants(snapshot, consoleMessages) {
   }
   for (const entry of snapshot.detail.matrix) {
     assert.equal(entry.counts.versionRows, versions.length);
+    assert.equal(entry.counts.lifecycle, lifecycleExpectations.size);
     assert.ok(entry.overlay, `tree overlay is missing at ${entry.requestedTheme} ${entry.requestedWidth}px`);
+    assert.equal(entry.focusVisible?.matches, true, `focus-visible did not activate at ${entry.requestedTheme} ${entry.requestedWidth}px`);
+    assert.notEqual(entry.focusVisible?.outlineStyle, "none", `focus-visible outline missing at ${entry.requestedTheme} ${entry.requestedWidth}px`);
+    assert.ok(Number.parseFloat(entry.focusVisible?.outlineWidth || "0") >= 1, `focus-visible outline is too thin at ${entry.requestedTheme} ${entry.requestedWidth}px`);
     assert.deepEqual(entry.counts, detailCounts, `detail control counts changed at ${entry.requestedTheme} ${entry.requestedWidth}px`);
     for (const group of ["originLinks", "downloads", "appendControls", "managementControls", "favorites", "thumbnails"]) {
       for (const item of entry.elements[group]) {
@@ -565,6 +705,45 @@ function assertPageInvariants(snapshot, consoleMessages) {
         assert.equal(item.viewportClip.right, 0, `${group} right clip at ${entry.requestedWidth}px`);
       }
     }
+    if (entry.requestedWidth === 390) {
+      for (const row of entry.elements.versionRows) {
+        assert.ok(row.scrollWidth <= row.clientWidth + 1, `${row.dataVersionId} row overflows horizontally at ${entry.requestedTheme} 390px`);
+      }
+    }
+    assert.equal(entry.lifecycleGeometry.length, lifecycleExpectations.size);
+    for (const badge of entry.lifecycleGeometry) {
+      const expected = lifecycleExpectations.get(badge.dataVersionId);
+      assert.ok(expected, `unexpected lifecycle fixture ${badge.dataVersionId}`);
+      assert.ok(badge.className.includes(expected[0]), `${badge.dataVersionId} lifecycle class changed`);
+      assert.equal(badge.text, expected[1], `${badge.dataVersionId} lifecycle text changed`);
+      assert.equal(badge.whiteSpace, "nowrap", `${badge.dataVersionId} badge text must stay on one line`);
+      assert.ok(badge.scrollWidth <= badge.clientWidth + 1, `${badge.dataVersionId} badge text clips horizontally`);
+      assert.ok(badge.scrollHeight <= badge.clientHeight + 1, `${badge.dataVersionId} badge text clips vertically`);
+      for (const side of ["left", "right", "top", "bottom"]) {
+        assert.ok(badge.viewportClip[side] <= 1, `${badge.dataVersionId} viewport ${side} clip at ${entry.requestedTheme} ${entry.requestedWidth}px`);
+      }
+      if (entry.requestedWidth === 390) {
+        for (const [selector, container] of Object.entries(badge.containers)) {
+          for (const side of ["left", "right", "top", "bottom"]) {
+            assert.ok(container.clip[side] <= 1, `${badge.dataVersionId} ${selector} ${side} clip at ${entry.requestedTheme} ${entry.requestedWidth}px`);
+          }
+        }
+      }
+      const title = badge.containers[".version-title-line"];
+      const group = badge.containers[".version-state-badges"];
+      if (entry.requestedWidth === 390) {
+        assert.equal(title.flexWrap, "wrap", `${badge.dataVersionId} mobile title line must wrap`);
+        assert.equal(group.flexWrap, "wrap", `${badge.dataVersionId} mobile badge group must wrap`);
+        assert.equal(group.flexBasis, "100%", `${badge.dataVersionId} mobile badge group must use a new flex line`);
+        assert.equal(group.minWidth, "0px", `${badge.dataVersionId} mobile badge group min-width changed`);
+      } else {
+        assert.equal(title.flexWrap, "nowrap", `${badge.dataVersionId} desktop/tablet title line changed`);
+        assert.equal(group.flexWrap, "nowrap", `${badge.dataVersionId} desktop/tablet badge group changed`);
+        assert.equal(group.flex, "0 0 auto", `${badge.dataVersionId} desktop/tablet badge placement changed`);
+      }
+    }
+    const manual = entry.lifecycleGeometry.find((badge) => badge.dataVersionId === "version-manual");
+    assert.match(manual.containers[".version-state-badges"].text, /没譜面/);
   }
   for (const entry of snapshot.compact.matrix) {
     assert.equal(entry.counts.compactRows, compactItems.length);
@@ -582,8 +761,6 @@ function reportKnownIssues(snapshot) {
   const dark390 = findResult(snapshot.detail.matrix, "dark", 390);
   const themeAt1366 = themes.map((theme) => findResult(snapshot.detail.matrix, theme, 1366));
   const checks = [
-    ["KNOWN-CSS-001", white390.known.pendingViewportClip > 0, "390px pending lifecycle badge clipping"],
-    ["KNOWN-CSS-002", white390.known.processingViewportClip > 0, "390px processing lifecycle badge clipping"],
     ["KNOWN-CSS-003", dark390.known.appendStopped?.backgroundColor === white390.known.appendStopped?.backgroundColor, "dark append-stopped fixed light background"],
     ["KNOWN-CSS-004", new Set(themeAt1366.map((entry) => JSON.stringify(entry.known.favoriteIdle))).size === 1, "favorite idle fixed color"],
     ["KNOWN-CSS-005", new Set(themeAt1366.map((entry) => entry.known.detailTarget?.backgroundColor)).size === 1, "detail target fixed light background"]
@@ -596,7 +773,21 @@ function reportKnownIssues(snapshot) {
   }
 }
 
+function isAllowedMobileLayoutDifference(location) {
+  const match = location.match(/^detail\[(\d+)\]\.(.*)$/);
+  if (!match || Number(match[1]) % widths.length !== 0) return false;
+  const rest = match[2];
+  if (rest.startsWith("lifecycleGeometry")) return true;
+  if (/^known\.(pendingViewportClip|processingViewportClip)$/.test(rest)) return true;
+  if (/^elements\.[^.]+\[\d+\]\.(rect\.(left|right)|parentRect\.width|parentClip\.(left|right)|viewportClip\.(left|right))$/.test(rest)) return true;
+  if (/^elements\.[^.]+\[\d+\]\.parentRect\.height$/.test(rest)) return true;
+  if (/^elements\.versionRows\[\d+\]\.(height|clientHeight|scrollHeight|scrollWidth|rect\.height|parentRect\.height)$/.test(rest)) return true;
+  if (/^elements\.lifecycle\[\d+\]\.(rect\.(left|right)|parentRect|viewportClip)$/.test(rest)) return true;
+  return false;
+}
+
 function compareValues(expected, actual, location = "snapshot") {
+  if (isAllowedMobileLayoutDifference(location)) return;
   if (typeof expected === "number" && typeof actual === "number") {
     assert.ok(Math.abs(expected - actual) <= tolerance, `${location}: ${expected} != ${actual}`);
     return;
@@ -618,6 +809,23 @@ function compareValues(expected, actual, location = "snapshot") {
     return;
   }
   assert.equal(actual, expected, `${location} changed`);
+}
+
+function rowHeightDeltas(baseline, snapshot) {
+  const ids = ["version-grace", "version-manual", "version-immediate", "version-processing", "version-tombstoned", "version-deleted"];
+  return themes.flatMap((theme) => widths.map((width) => {
+    const before = baseline.detail.find((entry) => entry.requestedTheme === theme && entry.requestedWidth === width);
+    const after = snapshot.detail.find((entry) => entry.requestedTheme === theme && entry.requestedWidth === width);
+    return {
+      theme,
+      width,
+      rows: Object.fromEntries(ids.map((id) => {
+        const beforeRow = before.elements.versionRows.find((row) => row.dataVersionId === id);
+        const afterRow = after.elements.versionRows.find((row) => row.dataVersionId === id);
+        return [id, Number((afterRow.rect.height - beforeRow.rect.height).toFixed(3))];
+      }))
+    };
+  }));
 }
 
 async function run() {
@@ -700,6 +908,7 @@ async function run() {
       compareValues(baseline.fixture, snapshot.fixture, "fixture");
       compareValues(baseline.detail, snapshot.detail, "detail");
       compareValues(baseline.compact, snapshot.compact, "compact");
+      console.log(`css browser row height deltas: ${JSON.stringify(rowHeightDeltas(baseline, snapshot))}`);
     }
 
     const totalMs = Number(process.hrtime.bigint() - startedAt) / 1e6;

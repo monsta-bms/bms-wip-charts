@@ -1169,9 +1169,16 @@ RC★★変換:
 - R4B2aは同値だった`width: 100%`と`max-width: 100%`だけを`list-ui-refresh.css`から除去する。版grid列、actions/thumbnail/graphのgap、未使用selector、tree connector、production JavaScript、favorite/progressのruntime styleは変更しない。
 - white/default/dark × 390/760/1366pxの隔離fixtureで、版・各control・thumbnailの件数、computed style、bounding rect、親からのclip量、document横overflow、tree overlay、detail card、compact一覧を変更前後比較する。フォント名、navigation時間、環境依存の微小差は厳密な表示仕様にしない。
 - 次の5件はR4B2aで修正しない既知問題であり、正常仕様として固定しない。予期せず解消した場合は既知問題記録を更新し、新しいclipまたは固定色の増加は回帰として扱う。
-  - `KNOWN-CSS-001`: 390pxの深い版ツリーでpending lifecycle badgeが右端からクリップする場合がある。
-  - `KNOWN-CSS-002`: 390pxの深い版ツリーでprocessing lifecycle badgeが右端からクリップする場合がある。
+  - `KNOWN-CSS-001`: 390pxの深い版ツリーでpending lifecycle badgeが右端からクリップする場合がある（R4B2bで修正済み）。
+  - `KNOWN-CSS-002`: 390pxの深い版ツリーでprocessing lifecycle badgeが右端からクリップする場合がある（R4B2bで修正済み）。
   - `KNOWN-CSS-003`: darkテーマでも追記停止ボタン背景にlight固定色が残る。
   - `KNOWN-CSS-004`: favorite待機色に固定色が残る。
   - `KNOWN-CSS-005`: detail対象行の背景にlight固定色が残る。
 - 既知問題を正常仕様として固定しない。R4B2aの比較は今回の重複除去がそれらを増減させていないことだけを確認し、個別修正は後続Phaseへ分離する。
+
+## VERSION-TREE-RENDER-CONSOLIDATION R4B2b モバイルlifecycleバッジ
+
+- 390pxでは`.version-title-line`を折返し可能にし、`.version-state-badges`を`flex: 1 1 100%`で必要に応じて次行へ移す。バッジ群は複数行へ折返せるが、個々のlifecycleバッジは`white-space: nowrap`を維持し、pill内では改行しない。
+- lifecycle配置の正式所有者は`branch-tree-list.css`、色・border・padding・font-size等の視覚スタイル所有者は`version-management-ui.css`とする。版grid列、tree indent、actions/thumbnail gap、production JavaScript、HTML DOMは変更しない。
+- `KNOWN-CSS-001`（pendingの右クリップ）と`KNOWN-CSS-002`（processingの右クリップ）はR4B2bで修正済み。grace、manual、immediate、processing、tombstoned、deletedをコンテナ単位で検査し、再発は通常の回帰失敗とする。
+- 配色に関する`KNOWN-CSS-003`、`KNOWN-CSS-004`、`KNOWN-CSS-005`は未修正の既知問題として別Phaseへ残す。
