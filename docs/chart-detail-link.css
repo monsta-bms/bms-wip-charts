@@ -1,8 +1,8 @@
 .selected-chart-section {
   margin: 0 0 20px;
   padding: 16px 0 20px;
-  border-block: 1px solid #b7cbc5;
-  background: #f3f8f6;
+  border-block: 1px solid var(--detail-section-border);
+  background: var(--detail-section-bg);
 }
 
 .selected-chart-heading {
@@ -19,7 +19,7 @@
 }
 
 .selected-chart-heading a {
-  color: #176556;
+  color: var(--primary-hover);
   font-size: 0.9rem;
   font-weight: 700;
   text-underline-offset: 0.18em;
@@ -27,16 +27,16 @@
 
 .selected-chart-status {
   margin: 0 16px 12px;
-  color: #52636d;
+  color: var(--muted);
   white-space: pre-line;
 }
 
 .selected-chart-status.is-error {
-  color: #8b3434;
+  color: var(--danger);
 }
 
 .selected-chart-status.is-success {
-  color: #155f51;
+  color: var(--success);
   font-weight: 700;
 }
 
@@ -45,7 +45,7 @@
 }
 
 .recent-chart-all-link {
-  color: #176556;
+  color: var(--primary-hover);
   font-size: 0.9rem;
   font-weight: 700;
   text-underline-offset: 0.18em;
@@ -131,14 +131,14 @@
 }
 
 .selected-chart-section .version-row:focus {
-  outline: 2px solid #176f60;
+  outline: 2px solid var(--primary);
   outline-offset: -3px;
 }
 
 .selected-chart-section .version-row.is-detail-target {
   position: relative;
-  box-shadow: inset 4px 0 0 #23806f, inset 0 0 0 1px #79a99f;
-  background: #e9f6f1;
+  box-shadow: inset 4px 0 0 var(--detail-target-accent), inset 0 0 0 1px var(--detail-target-border);
+  background: var(--detail-target-bg);
 }
 
 .selected-chart-section .version-row.is-detail-target::after {
@@ -146,10 +146,10 @@
   top: 7px;
   right: 8px;
   padding: 2px 6px;
-  border: 1px solid #79a99f;
+  border: 1px solid var(--detail-target-border);
   border-radius: 3px;
-  background: #fff;
-  color: #155f51;
+  background: var(--detail-target-badge-bg);
+  color: var(--detail-target-badge-text);
   content: "選択中";
   font-size: 0.68rem;
   font-weight: 700;
@@ -188,6 +188,12 @@
     flex-direction: row;
     flex-wrap: wrap;
     gap: 8px 14px;
+  }
+}
+
+@media (max-width: 640px) {
+  .selected-chart-section .version-row.is-detail-target::after {
+    top: 44px;
   }
 }
 

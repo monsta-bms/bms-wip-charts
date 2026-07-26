@@ -707,6 +707,248 @@ async function captureFavoriteInteractions(cdp, sessionId) {
   };
 }
 
+async function captureDetailStatusStyle(cdp, sessionId, state) {
+  const selector = "#selectedChartStatus";
+  await evaluate(cdp, sessionId, `(() => {
+    const element = document.querySelector(${JSON.stringify(selector)});
+    element.classList.toggle("is-error", ${JSON.stringify(state)} === "error");
+    element.classList.toggle("is-success", ${JSON.stringify(state)} === "success");
+    return true;
+  })()`);
+  return captureBrowserStyle(cdp, sessionId, selector);
+}
+
+async function captureDetailTargetState(cdp, sessionId, versionId) {
+  return evaluate(cdp, sessionId, `(() => {
+    const round = (value) => Number(Number(value || 0).toFixed(3));
+    const colorChannels = (value) => {
+      const channels = String(value || "").match(/[\\d.]+/g)?.map(Number) || [];
+      return channels.length >= 3 ? channels : null;
+    };
+    const luminance = (channels) => {
+      const linear = channels.slice(0, 3).map((channel) => {
+        const value = channel / 255;
+        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+      });
+      return (0.2126 * linear[0]) + (0.7152 * linear[1]) + (0.0722 * linear[2]);
+    };
+    const contrast = (first, second) => {
+      const firstChannels = colorChannels(first);
+      const secondChannels = colorChannels(second);
+      if (!firstChannels || !secondChannels) return null;
+      const firstLuminance = luminance(firstChannels);
+      const secondLuminance = luminance(secondChannels);
+      return round((Math.max(firstLuminance, secondLuminance) + 0.05)
+        / (Math.min(firstLuminance, secondLuminance) + 0.05));
+    };
+    const rectValue = (rect) => ({
+      left: round(rect.left), right: round(rect.right), top: round(rect.top), bottom: round(rect.bottom),
+      width: round(rect.width), height: round(rect.height)
+    });
+    const clipAgainst = (inner, outer) => ({
+      left: round(Math.max(0, outer.left - inner.left)),
+      right: round(Math.max(0, inner.right - outer.right)),
+      top: round(Math.max(0, outer.top - inner.top)),
+      bottom: round(Math.max(0, inner.bottom - outer.bottom))
+    });
+    const overlaps = (first, second) => Boolean(first && second
+      && first.left < second.right && first.right > second.left
+      && first.top < second.bottom && first.bottom > second.top);
+    const rows = [...document.querySelectorAll("#selectedChartCardSlot .version-row")];
+    rows.forEach((candidate) => candidate.classList.remove("is-detail-target"));
+    const row = rows.find((candidate) => candidate.dataset.versionId === ${JSON.stringify(versionId)});
+    if (!row) throw new Error("detail target fixture row is missing");
+    row.classList.add("is-detail-target");
+    const style = getComputedStyle(row);
+    const pseudo = getComputedStyle(row, "::after");
+    const rowRect = row.getBoundingClientRect();
+    const sectionRect = document.querySelector("#selectedChartSection").getBoundingClientRect();
+    const shadowColors = [...style.boxShadow.matchAll(/rgba?\\([^)]*\\)/g)].map((match) => match[0]);
+    const probe = document.createElement("span");
+    probe.textContent = pseudo.content.replace(/^['\"]|['\"]$/g, "");
+    Object.assign(probe.style, {
+      position: "fixed",
+      visibility: "hidden",
+      padding: pseudo.padding,
+      border: pseudo.border,
+      borderRadius: pseudo.borderRadius,
+      font: pseudo.font,
+      fontSize: pseudo.fontSize,
+      fontWeight: pseudo.fontWeight,
+      lineHeight: pseudo.lineHeight,
+      whiteSpace: pseudo.whiteSpace
+    });
+    document.body.appendChild(probe);
+    const probeRect = probe.getBoundingClientRect();
+    probe.remove();
+    const badgeRight = rowRect.right - Number.parseFloat(pseudo.right || "0");
+    const badgeTop = rowRect.top + Number.parseFloat(pseudo.top || "0");
+    const badgeRect = {
+      left: badgeRight - probeRect.width,
+      right: badgeRight,
+      top: badgeTop,
+      bottom: badgeTop + probeRect.height,
+      width: probeRect.width,
+      height: probeRect.height
+    };
+    const lifecycleRect = row.querySelector(".withdrawal-pending-badge, .withdrawal-processing-badge, .withdrawal-tombstone-badge")?.getBoundingClientRect() || null;
+    const favoriteRect = row.querySelector(".favorite-version-button")?.getBoundingClientRect() || null;
+    const result = {
+      versionId: row.dataset.versionId,
+      classCount: document.querySelectorAll("#selectedChartCardSlot .version-row.is-detail-target").length,
+      row: {
+        backgroundColor: style.backgroundColor,
+        color: style.color,
+        boxShadow: style.boxShadow,
+        outlineColor: style.outlineColor,
+        outlineStyle: style.outlineStyle,
+        outlineWidth: style.outlineWidth,
+        rect: rectValue(rowRect),
+        clientWidth: row.clientWidth,
+        scrollWidth: row.scrollWidth,
+        viewportClip: clipAgainst(rowRect, { left: 0, right: document.documentElement.clientWidth, top: 0, bottom: innerHeight }),
+        sectionClip: clipAgainst(rowRect, sectionRect)
+      },
+      accent: shadowColors[0] || null,
+      border: shadowColors[1] || null,
+      accentContrastRatio: contrast(shadowColors[0], style.backgroundColor),
+      borderContrastRatio: contrast(shadowColors[1], style.backgroundColor),
+      badge: {
+        content: pseudo.content,
+        display: pseudo.display,
+        backgroundColor: pseudo.backgroundColor,
+        color: pseudo.color,
+        borderColor: pseudo.borderColor,
+        borderStyle: pseudo.borderStyle,
+        borderWidth: pseudo.borderWidth,
+        fontSize: pseudo.fontSize,
+        fontWeight: pseudo.fontWeight,
+        padding: pseudo.padding,
+        top: pseudo.top,
+        right: pseudo.right,
+        rect: rectValue(badgeRect),
+        textContrastRatio: contrast(pseudo.color, pseudo.backgroundColor),
+        borderContrastRatio: contrast(pseudo.borderColor, pseudo.backgroundColor),
+        viewportClip: clipAgainst(badgeRect, { left: 0, right: document.documentElement.clientWidth, top: 0, bottom: innerHeight }),
+        rowClip: clipAgainst(badgeRect, rowRect),
+        lifecycleRect: lifecycleRect ? rectValue(lifecycleRect) : null,
+        favoriteRect: favoriteRect ? rectValue(favoriteRect) : null,
+        lifecycleOverlap: overlaps(badgeRect, lifecycleRect),
+        favoriteOverlap: overlaps(badgeRect, favoriteRect)
+      }
+    };
+    row.classList.remove("is-detail-target");
+    return result;
+  })()`);
+}
+
+async function captureDetailPresentation(cdp, sessionId) {
+  const section = await captureBrowserStyle(cdp, sessionId, "#selectedChartSection");
+  const headingIdle = await captureBrowserStyle(cdp, sessionId, "#selectedChartBackLink");
+  const headingHover = await captureForcedPseudoStyle(cdp, sessionId, "#selectedChartBackLink", "hover");
+  const headingFocus = await captureForcedPseudoStyle(cdp, sessionId, "#selectedChartBackLink", "focus-visible");
+  const recentIdle = await captureBrowserStyle(cdp, sessionId, ".recent-chart-all-link");
+  const recentHover = await captureForcedPseudoStyle(cdp, sessionId, ".recent-chart-all-link", "hover");
+  const recentFocus = await captureForcedPseudoStyle(cdp, sessionId, ".recent-chart-all-link", "focus-visible");
+  const statusIdle = await captureDetailStatusStyle(cdp, sessionId, "idle");
+  const statusError = await captureDetailStatusStyle(cdp, sessionId, "error");
+  const statusSuccess = await captureDetailStatusStyle(cdp, sessionId, "success");
+  await evaluate(cdp, sessionId, `document.querySelector("#selectedChartStatus").classList.remove("is-error", "is-success")`);
+  const targets = {};
+  for (const versionId of ["version-active", "version-grace", "version-processing", "version-deleted"]) {
+    targets[versionId] = await captureDetailTargetState(cdp, sessionId, versionId);
+  }
+  await evaluate(cdp, sessionId, `document.querySelector('.version-row[data-version-id="version-active"]').classList.add("is-detail-target")`);
+  const targetFocus = await captureForcedPseudoStyle(
+    cdp,
+    sessionId,
+    '.version-row[data-version-id="version-active"]',
+    "focus"
+  );
+  await evaluate(cdp, sessionId, `document.querySelector('.version-row[data-version-id="version-active"]').classList.remove("is-detail-target")`);
+  const switchState = await evaluate(cdp, sessionId, `(() => {
+    const rows = [...document.querySelectorAll("#selectedChartCardSlot .version-row")];
+    rows.forEach((row) => row.classList.remove("is-detail-target"));
+    const oldRow = rows.find((row) => row.dataset.versionId === "version-active");
+    const nextRow = rows.find((row) => row.dataset.versionId === "version-grace");
+    oldRow.classList.add("is-detail-target");
+    const before = { count: rows.filter((row) => row.classList.contains("is-detail-target")).length, versionId: oldRow.dataset.versionId };
+    oldRow.classList.remove("is-detail-target");
+    nextRow.classList.add("is-detail-target");
+    const after = {
+      count: rows.filter((row) => row.classList.contains("is-detail-target")).length,
+      versionId: nextRow.dataset.versionId,
+      oldActive: oldRow.classList.contains("is-detail-target"),
+      nextActive: nextRow.classList.contains("is-detail-target")
+    };
+    nextRow.classList.remove("is-detail-target");
+    return { before, after, finalCount: rows.filter((row) => row.classList.contains("is-detail-target")).length };
+  })()`);
+  const selection = await evaluate(cdp, sessionId, `({
+    api: window.BmsChartDetail?.getSelection?.() || null,
+    chartId: new URL(location.href).searchParams.get("chartId"),
+    versionId: new URL(location.href).searchParams.get("versionId"),
+    sectionHidden: document.querySelector("#selectedChartSection").hidden,
+    cardCount: document.querySelectorAll("#selectedChartCardSlot > .chart-group").length,
+    versionCount: document.querySelectorAll("#selectedChartCardSlot .version-row").length
+  })`);
+  return {
+    section,
+    headingIdle, headingHover, headingFocus,
+    recentIdle, recentHover, recentFocus,
+    statusIdle, statusError, statusSuccess,
+    targets, targetFocus, switchState, selection
+  };
+}
+
+async function captureDetailRerenderRegression(cdp, sessionId) {
+  await setTheme(cdp, sessionId, "dark");
+  await cdp.send("Emulation.setDeviceMetricsOverride", {
+    width: 390,
+    height: 900,
+    deviceScaleFactor: 1,
+    mobile: false
+  }, sessionId);
+  await evaluate(cdp, sessionId, `window.__cssDetailRenderedCount = 0;
+    document.querySelector("#selectedChartSection").addEventListener("chart-detail:rendered", () => {
+      window.__cssDetailRenderedCount += 1;
+    });`);
+  const before = await evaluate(cdp, sessionId, `({
+    selection: window.BmsChartDetail.getSelection(),
+    cardCount: document.querySelectorAll("#selectedChartCardSlot > .chart-group").length,
+    versionCount: document.querySelectorAll("#selectedChartCardSlot .version-row").length
+  })`);
+  const appendResult = await evaluate(cdp, sessionId, `window.BmsChartDetail.showCreatedVersion({
+    chartId: "chart-audit",
+    versionId: "version-active",
+    message: "投稿しました。"
+  })`);
+  const afterAppend = await evaluate(cdp, sessionId, `({
+    selection: window.BmsChartDetail.getSelection(),
+    url: location.href,
+    cardCount: document.querySelectorAll("#selectedChartCardSlot > .chart-group").length,
+    versionCount: document.querySelectorAll("#selectedChartCardSlot .version-row").length,
+    targetCount: document.querySelectorAll("#selectedChartCardSlot .is-detail-target").length,
+    statusText: document.querySelector("#selectedChartStatus").textContent,
+    statusSuccess: document.querySelector("#selectedChartStatus").classList.contains("is-success"),
+    renderedCount: window.__cssDetailRenderedCount
+  })`);
+  const managementResult = await evaluate(cdp, sessionId, `window.BmsChartDetail.refreshAfterManagement({
+    chartId: "chart-audit",
+    outcome: "updated"
+  })`);
+  const afterManagement = await evaluate(cdp, sessionId, `({
+    selection: window.BmsChartDetail.getSelection(),
+    url: location.href,
+    cardCount: document.querySelectorAll("#selectedChartCardSlot > .chart-group").length,
+    versionCount: document.querySelectorAll("#selectedChartCardSlot .version-row").length,
+    targetCount: document.querySelectorAll("#selectedChartCardSlot .is-detail-target").length,
+    renderedCount: window.__cssDetailRenderedCount,
+    horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+  })`);
+  return { before, appendResult, afterAppend, managementResult, afterManagement };
+}
+
 async function captureControlInteractions(cdp, sessionId) {
   const interactions = {};
   for (const [name, selector] of Object.entries(detailControlSelectors)) {
@@ -1021,6 +1263,7 @@ async function captureMatrix(cdp, sessionId, pageKind) {
       try {
         const entry = { requestedTheme: theme, requestedWidth: width, ...(await evaluate(cdp, sessionId, expression)) };
         if (pageKind === "detail") {
+          entry.detailPresentation = await captureDetailPresentation(cdp, sessionId);
           entry.controlInteractions = await captureControlInteractions(cdp, sessionId);
           entry.favoriteInteractions = await captureFavoriteInteractions(cdp, sessionId);
         }
@@ -1101,6 +1344,66 @@ const favoriteControlColors = {
   }
 };
 
+const detailPresentationColors = {
+  white: {
+    sectionBackground: "rgb(243, 248, 246)",
+    sectionBorder: "rgb(183, 203, 197)",
+    link: "rgb(25, 84, 67)",
+    status: "rgb(90, 104, 100)",
+    error: "rgb(165, 55, 50)",
+    success: "rgb(23, 102, 71)",
+    focus: "rgb(36, 110, 91)",
+    targetBackground: "rgb(233, 246, 241)",
+    targetAccent: "rgb(35, 128, 111)",
+    targetBorder: "rgb(106, 148, 138)",
+    badgeBackground: "rgb(255, 255, 255)",
+    badgeText: "rgb(21, 95, 81)"
+  },
+  default: {
+    sectionBackground: "rgb(243, 248, 246)",
+    sectionBorder: "rgb(183, 203, 197)",
+    link: "rgb(21, 82, 65)",
+    status: "rgb(82, 99, 94)",
+    error: "rgb(159, 56, 51)",
+    success: "rgb(23, 102, 71)",
+    focus: "rgb(31, 107, 87)",
+    targetBackground: "rgb(233, 246, 241)",
+    targetAccent: "rgb(35, 128, 111)",
+    targetBorder: "rgb(106, 148, 138)",
+    badgeBackground: "rgb(255, 255, 255)",
+    badgeText: "rgb(21, 95, 81)"
+  },
+  dark: {
+    sectionBackground: "rgb(23, 35, 31)",
+    sectionBorder: "rgb(88, 113, 104)",
+    link: "rgb(99, 185, 155)",
+    status: "rgb(179, 192, 187)",
+    error: "rgb(255, 170, 164)",
+    success: "rgb(120, 215, 173)",
+    focus: "rgb(79, 165, 137)",
+    targetBackground: "rgb(32, 60, 51)",
+    targetAccent: "rgb(99, 185, 155)",
+    targetBorder: "rgb(118, 151, 139)",
+    badgeBackground: "rgb(38, 52, 47)",
+    badgeText: "rgb(212, 228, 222)"
+  }
+};
+
+function colorContrastRatio(first, second) {
+  const channels = (value) => String(value || "").match(/[\d.]+/g)?.slice(0, 3).map(Number) || [];
+  const luminance = (value) => {
+    const linear = channels(value).map((channel) => {
+      const normalized = channel / 255;
+      return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+    });
+    return (0.2126 * linear[0]) + (0.7152 * linear[1]) + (0.0722 * linear[2]);
+  };
+  const firstLuminance = luminance(first);
+  const secondLuminance = luminance(second);
+  return (Math.max(firstLuminance, secondLuminance) + 0.05)
+    / (Math.min(firstLuminance, secondLuminance) + 0.05);
+}
+
 function controlColorTuple(control) {
   return [control.backgroundColor, control.color, control.borderColor];
 }
@@ -1130,6 +1433,71 @@ function assertPageInvariants(snapshot, consoleMessages) {
     assert.ok(Number.parseFloat(entry.focusVisible?.outlineWidth || "0") >= 1, `focus-visible outline is too thin at ${entry.requestedTheme} ${entry.requestedWidth}px`);
     assert.deepEqual(entry.counts, detailCounts, `detail control counts changed at ${entry.requestedTheme} ${entry.requestedWidth}px`);
     assert.deepEqual(Object.keys(entry.controls), Object.keys(detailControlSelectors));
+    const detail = entry.detailPresentation;
+    const expectedDetail = detailPresentationColors[entry.requestedTheme];
+    assert.equal(detail.section.backgroundColor, expectedDetail.sectionBackground);
+    assert.ok(detail.section.borderColor.includes(expectedDetail.sectionBorder), "selected detail section border changed");
+    assert.equal(detail.section.visibleBackgroundColor, expectedDetail.sectionBackground);
+    for (const state of ["headingIdle", "headingHover", "headingFocus", "recentIdle", "recentHover", "recentFocus"]) {
+      assert.equal(detail[state].color, expectedDetail.link, `${state} link color changed`);
+      assert.ok(detail[state].contrastRatio >= 4.5, `${state} contrast ${detail[state].contrastRatio} is below 4.5`);
+    }
+    for (const state of ["headingHover", "headingFocus", "recentHover", "recentFocus"]) {
+      assert.equal(detail[state].matches, true, `${state} forced state did not apply`);
+    }
+    for (const state of ["headingFocus", "recentFocus"]) {
+      assert.notEqual(detail[state].outlineStyle, "none", `${state} outline is missing`);
+      assert.ok(Number.parseFloat(detail[state].outlineWidth) >= 1, `${state} outline is too thin`);
+      assert.ok(detail[state].outlineContrastRatio >= 3, `${state} outline contrast ${detail[state].outlineContrastRatio} is below 3`);
+    }
+    assert.equal(detail.statusIdle.color, expectedDetail.status);
+    assert.equal(detail.statusError.color, expectedDetail.error);
+    assert.equal(detail.statusSuccess.color, expectedDetail.success);
+    for (const state of ["statusIdle", "statusError", "statusSuccess"]) {
+      assert.ok(detail[state].contrastRatio >= 4.5, `${state} contrast ${detail[state].contrastRatio} is below 4.5`);
+    }
+    for (const [versionId, target] of Object.entries(detail.targets)) {
+      assert.equal(target.versionId, versionId);
+      assert.equal(target.classCount, 1, `${versionId} must be the sole detail target`);
+      assert.equal(target.row.backgroundColor, expectedDetail.targetBackground);
+      assert.equal(target.accent, expectedDetail.targetAccent);
+      assert.equal(target.border, expectedDetail.targetBorder);
+      assert.ok(target.accentContrastRatio >= 3, `${versionId} accent contrast ${target.accentContrastRatio} is below 3`);
+      assert.ok(target.borderContrastRatio >= 3, `${versionId} border contrast ${target.borderContrastRatio} is below 3`);
+      assert.equal(target.badge.backgroundColor, expectedDetail.badgeBackground);
+      assert.equal(target.badge.color, expectedDetail.badgeText);
+      assert.equal(target.badge.borderColor, expectedDetail.targetBorder);
+      assert.ok(target.badge.textContrastRatio >= 4.5, `${versionId} badge text contrast ${target.badge.textContrastRatio} is below 4.5`);
+      assert.ok(target.badge.borderContrastRatio >= 3, `${versionId} badge border contrast ${target.badge.borderContrastRatio} is below 3`);
+      assert.ok(target.row.scrollWidth <= target.row.clientWidth + 1, `${versionId} target row overflows horizontally`);
+      for (const side of ["left", "right", "top", "bottom"]) {
+        assert.equal(target.row.sectionClip[side], 0, `${versionId} row ${side} clips against the detail section`);
+        assert.equal(target.badge.rowClip[side], 0, `${versionId} target badge ${side} clips against its row`);
+      }
+      assert.equal(target.badge.lifecycleOverlap, false, `${versionId} target badge overlaps its lifecycle badge`);
+      assert.equal(target.badge.favoriteOverlap, false, `${versionId} target badge overlaps its favorite control`);
+    }
+    assert.equal(detail.targetFocus.matches, true, "detail target focus state did not apply");
+    assert.equal(detail.targetFocus.outlineColor, expectedDetail.focus);
+    assert.notEqual(detail.targetFocus.outlineStyle, "none", "detail target focus outline is missing");
+    assert.ok(Number.parseFloat(detail.targetFocus.outlineWidth) >= 2, "detail target focus outline is too thin");
+    assert.ok(
+      colorContrastRatio(detail.targetFocus.outlineColor, detail.targetFocus.backgroundColor) >= 3,
+      "detail target focus outline contrast is below 3"
+    );
+    assert.deepEqual(detail.switchState, {
+      before: { count: 1, versionId: "version-active" },
+      after: { count: 1, versionId: "version-grace", oldActive: false, nextActive: true },
+      finalCount: 0
+    });
+    assert.deepEqual(detail.selection, {
+      api: { chartId: "chart-audit", versionId: "version-active" },
+      chartId: "chart-audit",
+      versionId: "version-active",
+      sectionHidden: false,
+      cardCount: 1,
+      versionCount: versions.length
+    });
     for (const [name, expectedColors] of Object.entries(untouchedControlColors[entry.requestedTheme])) {
       assert.deepEqual(
         controlColorTuple(entry.controls[name]),
@@ -1303,6 +1671,35 @@ function assertPageInvariants(snapshot, consoleMessages) {
     const manual = entry.lifecycleGeometry.find((badge) => badge.dataVersionId === "version-manual");
     assert.match(manual.containers[".version-state-badges"].text, /没譜面/);
   }
+  const detailRerender = snapshot.detailRerender;
+  const expectedSelection = { chartId: "chart-audit", versionId: "version-active" };
+  assert.deepEqual(detailRerender.before, {
+    selection: expectedSelection,
+    cardCount: 1,
+    versionCount: versions.length
+  });
+  assert.equal(detailRerender.appendResult, true);
+  assert.deepEqual(detailRerender.afterAppend.selection, expectedSelection);
+  assert.equal(detailRerender.afterAppend.cardCount, 1);
+  assert.equal(detailRerender.afterAppend.versionCount, versions.length);
+  assert.equal(detailRerender.afterAppend.targetCount, 1);
+  assert.equal(detailRerender.afterAppend.statusText, "\u6295\u7a3f\u3057\u307e\u3057\u305f\u3002");
+  assert.equal(detailRerender.afterAppend.statusSuccess, true);
+  assert.equal(detailRerender.afterAppend.renderedCount, 1);
+  assert.equal(detailRerender.managementResult, true);
+  assert.deepEqual(detailRerender.afterManagement.selection, expectedSelection);
+  assert.equal(detailRerender.afterManagement.cardCount, 1);
+  assert.equal(detailRerender.afterManagement.versionCount, versions.length);
+  assert.equal(detailRerender.afterManagement.targetCount, 1);
+  assert.equal(detailRerender.afterManagement.renderedCount, 2);
+  assert.equal(detailRerender.afterManagement.horizontalOverflow, false);
+  for (const value of [detailRerender.afterAppend.url, detailRerender.afterManagement.url]) {
+    const url = new URL(value);
+    assert.equal(url.pathname, "/index.html");
+    assert.equal(url.searchParams.get("chartId"), "chart-audit");
+    assert.equal(url.searchParams.get("versionId"), "version-active");
+    assert.equal(url.hash, "#list");
+  }
   for (const entry of snapshot.compact.matrix) {
     assert.equal(entry.counts.compactRows, compactItems.length);
     assert.equal(entry.counts.originLinks, compactItems.length);
@@ -1326,14 +1723,10 @@ function reportKnownIssues(snapshot) {
     || dark390.known.favoriteIdle?.color === "rgb(182, 192, 201)") {
     throw new Error("KNOWN-CSS-004 regressed: dark favorite idle uses the fixed light color");
   }
-  const checks = [
-    ["KNOWN-CSS-005", new Set(themeAt1366.map((entry) => entry.known.detailTarget?.backgroundColor)).size === 1, "detail target fixed light background"]
-  ];
-  for (const [id, observed, label] of checks) {
-    if (!observed) {
-      throw new Error(`${id} is no longer observed; update the known-issue documentation before accepting the new behavior: ${JSON.stringify({ white390: white390.known, dark390: dark390.known, lifecycle: white390.elements.lifecycle })}`);
-    }
-    console.warn(`${id} observed (known issue, not an accepted visual specification): ${label}`);
+  if (new Set(themeAt1366.map((entry) => entry.known.detailTarget?.backgroundColor)).size === 1
+    || dark390.known.detailTarget?.backgroundColor === white390.known.detailTarget?.backgroundColor
+    || dark390.known.detailTarget?.backgroundColor === "rgb(233, 246, 241)") {
+    throw new Error("KNOWN-CSS-005 regressed: dark detail target uses the fixed light background");
   }
 }
 
@@ -1347,6 +1740,26 @@ function isAllowedMobileLayoutDifference(location) {
   if (/^elements\.[^.]+\[\d+\]\.parentRect\.height$/.test(rest)) return true;
   if (/^elements\.versionRows\[\d+\]\.(height|clientHeight|scrollHeight|scrollWidth|rect\.height|parentRect\.height)$/.test(rest)) return true;
   if (/^elements\.lifecycle\[\d+\]\.(rect\.(left|right)|parentRect|viewportClip)$/.test(rest)) return true;
+  return false;
+}
+
+function isAllowedDetailPresentationDifference(location, key) {
+  const match = location.match(/^detail\[(\d+)\]\.detailPresentation\.(.*)$/);
+  if (!match) return false;
+  const path = match[2];
+  const colorKeys = new Set([
+    "backgroundColor", "visibleBackgroundColor", "surroundingBackgroundColor", "color", "borderColor", "outline", "outlineColor",
+    "contrastRatio", "borderContrastRatio", "outlineContrastRatio", "boxShadow", "accent", "border",
+    "accentContrastRatio", "textContrastRatio"
+  ]);
+  if (colorKeys.has(key)) return true;
+  const isMobile = Number(match[1]) % widths.length === 0;
+  if (isMobile && /^targets\.[^.]+\.badge$/.test(path) && (key === "top" || key === "favoriteOverlap")) {
+    return true;
+  }
+  if (isMobile && /^targets\.[^.]+\.badge\.viewportClip$/.test(path) && (key === "top" || key === "bottom")) {
+    return true;
+  }
   return false;
 }
 
@@ -1371,6 +1784,7 @@ function compareValues(expected, actual, location = "snapshot") {
       const detailIndex = Number(location.match(/^detail\[(\d+)\]/)?.[1] ?? -1);
       const isDark = detailIndex >= themes.indexOf("dark") * widths.length;
       const isStoppedControl = expected.className?.split(/\s+/).includes("append-policy-disabled-button");
+      const isDetailTargetRow = expected.className?.split(/\s+/).includes("is-detail-target");
       const isStoppedSummary = /\.known\.appendStopped$/.test(location);
       const isStoppedInteraction = /\.controlInteractions\.appendStopped\.(?:hover|focusVisible|active)$/.test(location);
       const isFavoriteStyle = /\.(?:elements\.favorites\[\d+\]|known\.favoriteIdle|favoriteInteractions\.(?:filter(?:Idle|Hover|Focus|Active(?:Hover|Focus)?)|star(?:Idle|Hover|Focus|Favorite(?:Hover|Focus)?)))$/.test(location);
@@ -1384,9 +1798,17 @@ function compareValues(expected, actual, location = "snapshot") {
         && (changedInAllThemes.has(key) || (isDark && changedInDark.has(key)))) {
         continue;
       }
+      if (isAllowedDetailPresentationDifference(location, key)) continue;
+      if (/^detail\[\d+\]\.known\.detailTarget$/.test(location) && key === "backgroundColor") continue;
+      if (isDetailTargetRow && new Set([
+        "backgroundColor", "visibleBackgroundColor", "boxShadow", "contrastRatio",
+        "outline", "outlineColor", "outlineContrastRatio"
+      ]).has(key)) continue;
       if (isFavoriteStyle && favoriteStyleChanges.has(key)) continue;
       if (location.endsWith(".favoriteInteractions.runtimeStyles") && key === "favorite") continue;
       if (location.endsWith(".favoriteInteractions.behavior.storageAfterAdd.version-active") && key === "favoritedAt") continue;
+      if (location === "detailRerender" && key === "url") continue;
+      if (/^detailRerender\.(?:afterAppend|afterManagement)$/.test(location) && key === "url") continue;
       compareValues(expected[key], actual[key], `${location}.${key}`);
     }
     return;
@@ -1469,6 +1891,7 @@ async function run() {
     await installControlFixtures(cdp, sessionId);
     const detailNavigationMs = Number(process.hrtime.bigint() - navigationStart) / 1e6;
     const detail = await captureMatrix(cdp, sessionId, "detail");
+    const detailRerender = await captureDetailRerenderRegression(cdp, sessionId);
 
     const compactNavigationStart = process.hrtime.bigint();
     await cdp.send("Page.navigate", { url: `http://127.0.0.1:${staticPort}/list.html` }, sessionId);
@@ -1480,9 +1903,10 @@ async function run() {
       format: "bms-css-r4b2a-v1",
       fixture: { chartCount: 1, versionCount: versions.length, compactCount: compactItems.length },
       detail: detail.matrix,
+      detailRerender,
       compact: compact.matrix
     };
-    const wrapped = { detail: { matrix: detail.matrix }, compact: { matrix: compact.matrix } };
+    const wrapped = { detail: { matrix: detail.matrix }, detailRerender, compact: { matrix: compact.matrix } };
     assertPageInvariants(wrapped, consoleMessages);
     reportKnownIssues(wrapped);
 
@@ -1494,6 +1918,7 @@ async function run() {
       assert.equal(baseline.format, snapshot.format);
       compareValues(baseline.fixture, snapshot.fixture, "fixture");
       compareValues(baseline.detail, snapshot.detail, "detail");
+      compareValues(baseline.detailRerender, snapshot.detailRerender, "detailRerender");
       compareValues(baseline.compact, snapshot.compact, "compact");
       console.log(`css browser row height deltas: ${JSON.stringify(rowHeightDeltas(baseline, snapshot))}`);
     }

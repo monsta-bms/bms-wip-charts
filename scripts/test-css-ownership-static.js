@@ -175,7 +175,7 @@ check("index stylesheet order remains stable", () => {
     "theme.css",
     "favorites-list.css"
   ]);
-  const themeIndex = sources.index.indexOf("./theme.css?v=favorite-theme-r4b2d-01");
+  const themeIndex = sources.index.indexOf("./theme.css?v=detail-theme-r4b2e-01");
   const favoriteCssIndex = sources.index.indexOf("./favorites-list.css?v=favorite-theme-r4b2d-01");
   const favoriteScriptIndex = sources.index.indexOf("./favorites-list.js?v=favorite-theme-r4b2d-01");
   assert.ok(themeIndex >= 0 && themeIndex < favoriteCssIndex);
@@ -187,15 +187,17 @@ check("compact-list stylesheet order remains stable", () => {
   assert.deepEqual(stylesheetNames(sources.listHtml), ["style.css", "site-header.css", "list.css", "theme.css"]);
 });
 
-check("only the R4B2d favorite assets use the new cache key", () => {
+check("only the R4B2e detail styles use the new cache key", () => {
   assert.match(sources.index, /\.\/branch-tree-list\.css\?v=append-disabled-theme-r4b2c-01/);
-  assert.match(sources.index, /\.\/theme\.css\?v=favorite-theme-r4b2d-01/);
+  assert.match(sources.index, /\.\/chart-detail-link\.css\?v=detail-theme-r4b2e-01/);
+  assert.match(sources.index, /\.\/theme\.css\?v=detail-theme-r4b2e-01/);
+  assert.equal((sources.index.match(/detail-theme-r4b2e-01/g) || []).length, 2);
   assert.match(sources.index, /\.\/favorites-list\.css\?v=favorite-theme-r4b2d-01/);
   assert.match(sources.index, /\.\/favorites-list\.js\?v=favorite-theme-r4b2d-01/);
-  assert.equal((sources.index.match(/favorite-theme-r4b2d-01/g) || []).length, 3);
+  assert.equal((sources.index.match(/favorite-theme-r4b2d-01/g) || []).length, 2);
   assert.match(sources.index, /\.\/list-ui-refresh\.css\?v=css-cleanup-r4b2a-01/);
   assert.equal((sources.index.match(/css-cleanup-r4b2a-01/g) || []).length, 1);
-  assert.doesNotMatch(sources.listHtml, /favorite-theme-r4b2d-01|css-cleanup-r4b2a-01/);
+  assert.doesNotMatch(sources.listHtml, /detail-theme-r4b2e-01|favorite-theme-r4b2d-01|css-cleanup-r4b2a-01/);
 });
 
 check("favorite runtime style is removed while progress runtime style stays stable", () => {
@@ -209,8 +211,7 @@ check("protected CSS hashes remain stable", () => {
     [sources.list, "68f757317cf1b75819a2cbb3589e1563f2e87a7eaffe10cd103c46335e1b3f23"],
     [sources.treePolish, "e0d1cf234c249070294491982088d34812c602e92ccdca7377011d7292e9f4ad"],
     [sources.chartMiniview, "e92980af2dde81ce2051a9216d744d62ee9fbed18e8423f6461296f65791d49c"],
-    [sources.management, "d0b09e7e107d9dcaf5830f243761357462e27765bf3d24bfa78aad0a1b81bcb7"],
-    [sources.chartDetail, "bcbe6bfe1a77fc0117184b3d5acbd25d8e4c9fc51af990da941b09ded8346b2f"]
+    [sources.management, "d0b09e7e107d9dcaf5830f243761357462e27765bf3d24bfa78aad0a1b81bcb7"]
   ]);
   expected.forEach((hash, source) => assert.equal(sha256(source), hash));
 });
@@ -239,10 +240,10 @@ check("action and thumbnail gap values remain stable", () => {
   assert.equal(rulesFor(sources.treePolish, ".progress-thumbnail-graph")[0].declarations.gap, "14px");
 });
 
-check("fixed color counts isolate favorite colors in theme tokens", () => {
+check("fixed color counts isolate detail colors in theme tokens", () => {
   const expected = new Map([
     ["style", 65], ["branch", 73], ["refresh", 21], ["treePolish", 17],
-    ["chartMiniview", 40], ["management", 17], ["chartDetail", 18], ["theme", 222],
+    ["chartMiniview", 40], ["management", 17], ["chartDetail", 4], ["theme", 243],
     ["favorites", 0], ["favoriteCss", 0], ["progressThumbnail", 7]
   ]);
   expected.forEach((count, name) => assert.equal(fixedColorCount(sources[name]), count, name));
@@ -306,6 +307,92 @@ check("favorite semantic tokens exist for every theme and meet contrast targets"
       assert.notEqual(idleStar, "#b6c0c9");
     }
   }
+});
+
+check("detail presentation selectors consume semantic colors", () => {
+  const section = rulesFor(sources.chartDetail, ".selected-chart-section")[0].declarations;
+  assert.equal(section.background, "var(--detail-section-bg)");
+  assert.equal(section["border-block"], "1px solid var(--detail-section-border)");
+  assert.equal(rulesFor(sources.chartDetail, ".selected-chart-heading a")[0].declarations.color, "var(--primary-hover)");
+  assert.equal(rulesFor(sources.chartDetail, ".recent-chart-all-link")[0].declarations.color, "var(--primary-hover)");
+  assert.equal(rulesFor(sources.chartDetail, ".selected-chart-status")[0].declarations.color, "var(--muted)");
+  assert.equal(rulesFor(sources.chartDetail, ".selected-chart-status.is-error")[0].declarations.color, "var(--danger)");
+  assert.equal(rulesFor(sources.chartDetail, ".selected-chart-status.is-success")[0].declarations.color, "var(--success)");
+  assert.equal(rulesFor(sources.chartDetail, ".selected-chart-section .version-row:focus")[0].declarations.outline, "2px solid var(--primary)");
+  const target = rulesFor(sources.chartDetail, ".selected-chart-section .version-row.is-detail-target")[0].declarations;
+  assert.equal(target.background, "var(--detail-target-bg)");
+  assert.equal(target["box-shadow"], "inset 4px 0 0 var(--detail-target-accent), inset 0 0 0 1px var(--detail-target-border)");
+  const badge = rulesFor(sources.chartDetail, ".selected-chart-section .version-row.is-detail-target::after")[0].declarations;
+  assert.equal(badge.background, "var(--detail-target-badge-bg)");
+  assert.equal(badge.border, "1px solid var(--detail-target-border)");
+  assert.equal(badge.color, "var(--detail-target-badge-text)");
+  assert.equal(sources.theme.includes(".selected-chart-section"), false);
+  assert.equal(fixedColorCount(sources.chartDetail), 4);
+});
+
+check("detail semantic tokens exist for every theme and meet contrast targets", () => {
+  const tokenNames = [
+    "section-bg", "section-border", "target-bg", "target-accent", "target-border",
+    "target-badge-bg", "target-badge-text"
+  ];
+  tokenNames.forEach((token) => {
+    assert.equal((sources.theme.match(new RegExp(`--detail-${token}:`, "g")) || []).length, 3, token);
+  });
+  const expectations = [
+    ["html[data-theme=\"white\"]", "#f3f8f6", "#b7cbc5", "#e9f6f1", "#23806f", "#6a948a", "#ffffff", "#155f51"],
+    ["html[data-theme=\"default\"]", "#f3f8f6", "#b7cbc5", "#e9f6f1", "#23806f", "#6a948a", "#ffffff", "#155f51"],
+    ["html[data-theme=\"dark\"]", "#17231f", "#587168", "#203c33", "#63b99b", "#76978b", "#26342f", "#d4e4de"]
+  ];
+  for (const [selector, sectionBg, sectionBorder, targetBg, targetAccent, targetBorder, badgeBg, badgeText] of expectations) {
+    const themeRule = rulesFor(sources.theme, selector)[0].declarations;
+    assert.equal(themeRule["--detail-section-bg"], sectionBg);
+    assert.equal(themeRule["--detail-section-border"], sectionBorder);
+    assert.equal(themeRule["--detail-target-bg"], targetBg);
+    assert.equal(themeRule["--detail-target-accent"], targetAccent);
+    assert.equal(themeRule["--detail-target-border"], targetBorder);
+    assert.equal(themeRule["--detail-target-badge-bg"], badgeBg);
+    assert.equal(themeRule["--detail-target-badge-text"], badgeText);
+    assert.ok(contrastRatio(themeRule["--primary-hover"], sectionBg) >= 4.5, `${selector} detail link contrast is below 4.5`);
+    assert.ok(contrastRatio(themeRule["--muted"], sectionBg) >= 4.5, `${selector} detail status contrast is below 4.5`);
+    assert.ok(contrastRatio(themeRule["--danger"], sectionBg) >= 4.5, `${selector} detail error contrast is below 4.5`);
+    assert.ok(contrastRatio(themeRule["--success"], sectionBg) >= 4.5, `${selector} detail success contrast is below 4.5`);
+    assert.ok(contrastRatio(themeRule["--primary"], targetBg) >= 3, `${selector} detail focus contrast is below 3`);
+    assert.ok(contrastRatio(targetAccent, targetBg) >= 3, `${selector} detail accent contrast is below 3`);
+    assert.ok(contrastRatio(targetBorder, targetBg) >= 3, `${selector} detail target border contrast is below 3`);
+    assert.ok(contrastRatio(badgeText, badgeBg) >= 4.5, `${selector} detail badge text contrast is below 4.5`);
+    assert.ok(contrastRatio(targetBorder, badgeBg) >= 3, `${selector} detail badge border contrast is below 3`);
+    if (selector.includes("dark")) {
+      assert.notEqual(sectionBg, "#f3f8f6");
+      assert.notEqual(targetBg, "#e9f6f1");
+      assert.notEqual(badgeBg, "#ffffff");
+    }
+  }
+});
+
+check("detail mobile target badge avoids controls without changing row geometry", () => {
+  const blocks = declarationBlocks(sources.chartDetail, ".selected-chart-section .version-row.is-detail-target::after");
+  assert.equal(blocks.length, 3);
+  assert.equal(blocks[0].top, "7px");
+  assert.equal(blocks[0].right, "8px");
+  assert.equal(blocks[1].top, "4px");
+  assert.equal(blocks[1].right, "5px");
+  assert.deepEqual(blocks[2], { top: "44px" });
+  assert.match(sources.chartDetail, /@media \(max-width: 640px\)[\s\S]*\.version-row\.is-detail-target::after\s*\{\s*top: 44px;\s*\}/);
+});
+
+check("appended batch boundary remains outside R4B2e", () => {
+  assert.equal(rulesFor(sources.chartDetail, ".appended-batch-boundary")[0].declarations.color, "#6f9f93");
+  const line = rulesFor(sources.chartDetail, ".appended-batch-boundary::before")[0];
+  assert.ok(line.selectors.includes(".appended-batch-boundary::after"));
+  assert.equal(line.declarations.background, "#b7d0ca");
+  const mark = rulesFor(sources.chartDetail, ".appended-batch-boundary-mark")[0].declarations;
+  assert.equal(mark.border, "1px solid #6f9f93");
+  assert.equal(mark.background, "#f4f9f7");
+});
+
+check("R4B2e detail CSS hashes match the reviewed implementation", () => {
+  assert.equal(sha256(sources.chartDetail), "c45722a66d547ecb51825e67dc3e65cc31413f7820a5d34db8b45eb23dbe0882");
+  assert.equal(sha256(sources.theme), "579c9ec61c0c831fa10db54bb5c88e99a298fb1892a8738081c780edb6ff6ee0");
 });
 
 check("append-stopped component selector is narrowly owned by branch-tree-list", () => {
@@ -391,19 +478,19 @@ check("R4B2b does not use clipping or visual workarounds", () => {
   assert.doesNotMatch(mobileSource, /font-size\s*:|position\s*:\s*absolute|transform\s*:|margin-left\s*:\s*-|overflow\s*:\s*hidden|text-overflow\s*:|white-space\s*:\s*normal/);
 });
 
-check("only the favorite runtime CSS removal changes production JavaScript", () => {
+check("R4B2e leaves production JavaScript unchanged", () => {
   assert.equal(productionJsFiles.length, 30);
   assert.equal(sha256(productionJsAggregate), "67f0052442c01401d7a2b9b28889edbba890e570238e57e4932568af90a309c6");
 });
 
-check("resolved and remaining CSS issues are documented accurately", () => {
-  for (let index = 1; index <= 4; index += 1) {
+check("all known CSS issues are documented as resolved", () => {
+  for (let index = 1; index <= 5; index += 1) {
     const id = `KNOWN-CSS-00${index}`;
     assert.match(sources.spec, new RegExp(`${id}[^\\n]*修正済み`));
     assert.match(sources.test, new RegExp(`${id}[^\\n]*修正済み`));
   }
-  assert.match(sources.spec, /KNOWN-CSS-005/);
-  assert.match(sources.test, /KNOWN-CSS-005/);
+  assert.doesNotMatch(sources.spec, /未修正[^\n]*KNOWN-CSS-005|KNOWN-CSS-005[^\n]*未修正/);
+  assert.doesNotMatch(sources.test, /未修正[^\n]*KNOWN-CSS-005|KNOWN-CSS-005[^\n]*未修正/);
 });
 
 check("public HTML IDs remain unique", () => {
