@@ -1044,6 +1044,14 @@ RC★★変換:
 - 吹き出し開閉設定だけを`localStorage`の`bms-wip-charts:chart-metadata-extract:v1`へ欄別に保存し、候補、入力値、ファイル、Undoは保存しない。初期値は全欄openとし、JSON破損、SecurityError、quota errorは安全に既定値へ戻す。新しいファイル、ファイル解除、form reset、投稿成功では一時状態だけを破棄し、開閉設定は維持する。
 - Phase 9Cの`aria-invalid`とdanger色は候補表示に流用せず、既存`aria-describedby`へ候補status IDを集合追加する。candidate hostは動的な欄別エラーより前に置き、エラー強調との同時表示を許可する。390/760/1366px、`white/default/dark`、focus-visible、reduced motionへ対応する。
 
+## CANONICAL-SCHEMA-TEST-0009 全Migration追従
+
+- `schema/d1.sql`は、`worker/migrations`に存在する全Migrationを番号順に適用した後のcanonical stateを表す。既存D1はcanonical SQLを再適用せず、未適用Migrationだけを適用する。
+- canonical検証は`^\d{4}_.+\.sql$`に一致するMigrationを自動検出し、4桁番号の昇順で空の隔離SQLite DBへ適用する。手動の最終Migration番号・ファイル一覧は持たず、同番号の重複、連番欠落、読込不能、空Migrationを失敗とする。
+- 比較対象はuser table、columnの型・NOT NULL・DEFAULT・主キー位置、外部キー、明示／自動indexのunique・列順・partial条件、trigger／viewの正規化SQLとする。`sqlite_*`、`d1_migrations`、`_cf_KV`はschema object対象外とするが、自動indexの制約は名称ではなく構造で比較する。
+- 比較にはOS一時領域の独立した2つの空SQLite DBだけを使い、成功・失敗を問わずclose後に削除する。remote D1、既存local D1、実データ、Secretは使用しない。
+- 過去Migrationは不変とし、新Migration追加時は`schema/d1.sql`も同じ最終状態へ同期する。semantic差異はMigrationやcanonical schemaを自動編集せず、固定error codeとobject単位のstderr診断で失敗させる。
+
 ## DIFFICULTY-TABLE-VIEW Phase A 元BMSメタ情報保存
 
 - Migration `0009_version_source_metadata.sql`はversionと1対1の`version_source_metadata`を作る。`version_id`を主キーかつ`versions(id) ON DELETE CASCADE`とし、既存versionへの行はMigration時に作らない。

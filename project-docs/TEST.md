@@ -1387,9 +1387,14 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 
 ## DIFFICULTY-TABLE-VIEW Phase 0 canonical schema同期
 
-- `node scripts/test-canonical-d1-schema.mjs 8`で、Migration 0001～0008適用後と`schema/d1.sql`適用後のuser table、カラム名・型・NOT NULL・DEFAULT・主キー、外部キー、index名・列・unique・partial・並び順が一致すること。
-- `sqlite_master.sql`全文は比較せず、SQLite PRAGMAの構造情報を正規化して比較する。`d1_migrations`、`_cf_KV`、`sqlite_*`は対象外とする。
-- canonical schemaは既存Migrationの最終状態だけを表し、既存D1には引き続きMigrationを適用すること。
+- `node scripts/test-canonical-d1-schema.mjs`で、`worker/migrations`の`^\d{4}_.+\.sql$`を自動検出し、現在の0001～0009を4桁番号の昇順ですべて適用すること。最新Migration番号やファイル一覧をテストへ手動追加しない。
+- 同番号の重複、連番欠落、読込不能、空Migrationを`CANONICAL_SCHEMA_MIGRATION_DISCOVERY_FAILED`で拒否すること。不正名、SQL以外、Migrationディレクトリ外のSQLは対象外とし、0010 fixtureをコード変更なしで検出すること。
+- 全Migration DBと`schema/d1.sql` DBをOS一時領域へ別々に作り、user table、カラム名・型・NOT NULL・DEFAULT・主キー、外部キー、明示／自動indexのunique・列順・partial条件、trigger／viewの正規化SQLが一致すること。`d1_migrations`、`_cf_KV`、`sqlite_*`はschema object対象外とする。
+- SQL正規化はキーワードの大文字小文字、改行、連続空白、前後空白、`IF NOT EXISTS`だけを無意味な差として除外し、文字列リテラルや式の意味のある差を維持すること。自動indexは自動生成名ではなくorigin、unique、列と順序で比較すること。
+- table／column／FK／index／trigger／view fixtureで不足、余分、型、NOT NULL、DEFAULT、主キー、unique、列順、partial条件、正規化SQLの差を固定error codeで検出すること。不一致時はstage、Migrationファイル、object種別・名前、Migration側、canonical側をstderrへ出し、row、Secret、tokenを出さないこと。
+- `version_source_metadata`が両DBに存在し、column、nullable、default、`version_id`の主キーによる1対1制約、`versions(id) ON DELETE CASCADE`、`idx_version_source_metadata_status_updated`が一致すること。0009を除外するfixtureはtable不足として失敗すること。
+- 比較DBは空で既存local D1と共有せず、remote D1を使用しないこと。成功・失敗を問わずcloseして一時ディレクトリごと削除すること。
+- canonical schemaは全Migration適用後の最終状態だけを表す。過去Migrationは不変とし、新Migration追加時は`schema/d1.sql`も同期し、既存D1には引き続き未適用Migrationだけを適用すること。
 
 ## DIFFICULTY-TABLE-VIEW Phase A 元BMSメタ情報保存
 
@@ -1397,7 +1402,7 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 
 - `node worker/scripts/test-version-source-metadata.mjs`で、0001～0008後の0009、新規DBへの0001～0009、テーブル・index作成、既存versionを自動backfillしないことを確認する。
 - `status`は`succeeded/failed/unavailable`だけ、succeededは`error_code=NULL`、failed/unavailableは安全な`error_code`必須であること。source 4096/4097文字、encoding 64/65文字の境界を確認する。
-- version削除でmetadataがCASCADEされ、metadata削除からversion削除方向へ影響しないこと。`node scripts/test-canonical-d1-schema.mjs 9`で0001～0009とcanonical schemaのsemantic構造が一致すること。
+- version削除でmetadataがCASCADEされ、metadata削除からversion削除方向へ影響しないこと。`node scripts/test-canonical-d1-schema.mjs`で自動検出した全Migrationとcanonical schemaのsemantic構造が一致すること。
 - helperは元の全角文字、全角括弧、`obj:`記法を加工せず、空値だけをNULLにすること。Unicodeコードポイント4096文字を保存でき、長すぎる値は切り詰めず`SOURCE_METADATA_VALUE_TOO_LONG`にすること。
 - metadata warningの安全codeを維持し、不正codeは`SOURCE_METADATA_PARSE_FAILED`へ置換する。warning message/detailをmetadata行や追加console logへ保存しないこと。
 
@@ -1605,4 +1610,4 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 同一src再mountは同じimgを再利用して1件、URL変更は旧imgを置換して新img 1件、error時は枠を隠してfallbackを表示し、fallback内容なしでは`is-empty`を付ける。MutationObserver登録1件と直接schedulerのrequestAnimationFrame／cancel回数を維持し、Observer経由でもboundedなscheduleが発生することを確認する。
 - favorite-onlyは追加chart fetch 0、detailのappend-success／management-refreshは選択版と1 cardを維持する。load-moreはpipeline unit／staticでappend mode、新batchだけの補強、`stored-progress-thumbnails` order 300 required、`common-mount` 1回を回帰する。
 - 変更前snapshotはリポジトリ外の一時ファイルへ保存し、意図したruntime style 1→0、全テーマのempty文字、darkの画像枠背景／border以外を0.25px以内で比較する。全9条件で対象lifecycle row高さ差0px、compact一覧差分なし、横overflow／clipなしとし、比較後に一時snapshotを削除する。
-- R1 model、R2 Link UI、R3 Action UI、R4A pipeline、R4B1 dead-code、曲／DL、version list 4件、withdrawal active 18件、metadata parser／static、変更JavaScript構文、HTML重複ID、既知CSS warning 0件、`git diff --check`を回帰する。既知canonical schemaの0009不整合は本Phaseで変更しない。Pages、Worker、D1、R2、Cron、Secret、dependency、本番操作、push、deployは行わない。
+- R1 model、R2 Link UI、R3 Action UI、R4A pipeline、R4B1 dead-code、曲／DL、version list 4件、withdrawal active 18件、metadata parser／static、変更JavaScript構文、HTML重複ID、既知CSS warning 0件、`git diff --check`を回帰する。canonical schemaは全Migration自動検出テストで0009を含めて一致させる。Pages、Worker、D1、R2、Cron、Secret、dependency、本番操作、push、deployは行わない。
