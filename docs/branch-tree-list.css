@@ -529,7 +529,14 @@
   white-space: nowrap;
 }
 
-.append-policy-disabled-button:disabled {
+button.secondary.append-policy-disabled-button:disabled,
+button.secondary.append-policy-disabled-button:disabled:hover,
+button.secondary.append-policy-disabled-button:disabled:focus-visible,
+button.secondary.append-policy-disabled-button:disabled:active {
+  background: var(--append-disabled-bg, #eef3f1);
+  border-color: var(--append-disabled-border, var(--line, #cfd8d5));
+  box-shadow: var(--append-disabled-shadow, none);
+  color: var(--append-disabled-text, #65716e);
   cursor: not-allowed;
   opacity: 1;
 }

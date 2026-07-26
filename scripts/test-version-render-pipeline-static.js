@@ -325,13 +325,13 @@ check("only R4B1-modified render scripts use the cleanup cache key", () => {
     assert.ok(listSources.includes(`./${name}?v=version-link-ui-r2-01`), `${name} compact cache key mismatch`);
   });
 });
-check("protected CSS files are byte-for-byte unchanged", () => {
+check("CSS files match the reviewed R4B2c state", () => {
   const expected = new Map([
     ["docs/style.css", "2cb373b2344a61706e314fcca197939c0a03c864ef93c8e87fcec638b38bd49e"],
-    ["docs/branch-tree-list.css", "e741afedc1ed6f3c1c3c5a85caf70ef2d2fe93bca1cf2b6ecbcc047d94f06a7e"],
+    ["docs/branch-tree-list.css", "a88fd0f3003d06540675d8aec54899af4d624d22a3ea7f4f10bf71c87b0add2b"],
     ["docs/list-ui-refresh.css", "f630206e0a7ce75150b2305414ff85c6657244bfa0d58965594e29fb372b1d81"],
     ["docs/list.css", "68f757317cf1b75819a2cbb3589e1563f2e87a7eaffe10cd103c46335e1b3f23"],
-    ["docs/theme.css", "1ad383052779391c123b9a51109514285d224fe2e1edd9c6e321419f35f5b1e5"],
+    ["docs/theme.css", "f65605da3b8e663a29ac089e64248fc875d0420f9e2b453ffcefe4022547d8a3"],
     ["docs/tree-progress-polish.css", "e0d1cf234c249070294491982088d34812c602e92ccdca7377011d7292e9f4ad"],
     ["docs/chart-miniview.css", "e92980af2dde81ce2051a9216d744d62ee9fbed18e8423f6461296f65791d49c"]
   ]);

@@ -85,6 +85,20 @@ function fixedColorCount(source) {
   return (source.match(/#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)|hsla?\([^)]*\)/g) || []).length;
 }
 
+function contrastRatio(first, second) {
+  const luminance = (value) => {
+    const channels = [1, 3, 5].map((index) => Number.parseInt(value.slice(index, index + 2), 16) / 255)
+      .map((channel) => channel <= 0.04045
+        ? channel / 12.92
+        : ((channel + 0.055) / 1.055) ** 2.4);
+    return (0.2126 * channels[0]) + (0.7152 * channels[1]) + (0.0722 * channels[2]);
+  };
+  const firstLuminance = luminance(first);
+  const secondLuminance = luminance(second);
+  return (Math.max(firstLuminance, secondLuminance) + 0.05)
+    / (Math.min(firstLuminance, secondLuminance) + 0.05);
+}
+
 let checks = 0;
 function check(name, callback) {
   callback();
@@ -165,12 +179,13 @@ check("compact-list stylesheet order remains stable", () => {
   assert.deepEqual(stylesheetNames(sources.listHtml), ["style.css", "site-header.css", "list.css", "theme.css"]);
 });
 
-check("only the changed R4B2b stylesheet cache key changes", () => {
-  assert.match(sources.index, /\.\/branch-tree-list\.css\?v=lifecycle-mobile-r4b2b-01/);
-  assert.equal((sources.index.match(/lifecycle-mobile-r4b2b-01/g) || []).length, 1);
+check("only the changed R4B2c stylesheet cache keys change", () => {
+  assert.match(sources.index, /\.\/branch-tree-list\.css\?v=append-disabled-theme-r4b2c-01/);
+  assert.match(sources.index, /\.\/theme\.css\?v=append-disabled-theme-r4b2c-01/);
+  assert.equal((sources.index.match(/append-disabled-theme-r4b2c-01/g) || []).length, 2);
   assert.match(sources.index, /\.\/list-ui-refresh\.css\?v=css-cleanup-r4b2a-01/);
   assert.equal((sources.index.match(/css-cleanup-r4b2a-01/g) || []).length, 1);
-  assert.doesNotMatch(sources.listHtml, /lifecycle-mobile-r4b2b-01|css-cleanup-r4b2a-01/);
+  assert.doesNotMatch(sources.listHtml, /append-disabled-theme-r4b2c-01|css-cleanup-r4b2a-01/);
 });
 
 check("runtime style hashes remain stable", () => {
@@ -181,15 +196,18 @@ check("runtime style hashes remain stable", () => {
 check("protected CSS hashes remain stable", () => {
   const expected = new Map([
     [sources.style, "2cb373b2344a61706e314fcca197939c0a03c864ef93c8e87fcec638b38bd49e"],
-    [sources.branch, "e741afedc1ed6f3c1c3c5a85caf70ef2d2fe93bca1cf2b6ecbcc047d94f06a7e"],
     [sources.list, "68f757317cf1b75819a2cbb3589e1563f2e87a7eaffe10cd103c46335e1b3f23"],
-    [sources.theme, "1ad383052779391c123b9a51109514285d224fe2e1edd9c6e321419f35f5b1e5"],
     [sources.treePolish, "e0d1cf234c249070294491982088d34812c602e92ccdca7377011d7292e9f4ad"],
     [sources.chartMiniview, "e92980af2dde81ce2051a9216d744d62ee9fbed18e8423f6461296f65791d49c"],
     [sources.management, "d0b09e7e107d9dcaf5830f243761357462e27765bf3d24bfa78aad0a1b81bcb7"],
     [sources.chartDetail, "bcbe6bfe1a77fc0117184b3d5acbd25d8e4c9fc51af990da941b09ded8346b2f"]
   ]);
   expected.forEach((hash, source) => assert.equal(sha256(source), hash));
+});
+
+check("R4B2c CSS files match the reviewed semantic-color change", () => {
+  assert.equal(sha256(sources.branch), "a88fd0f3003d06540675d8aec54899af4d624d22a3ea7f4f10bf71c87b0add2b");
+  assert.equal(sha256(sources.theme), "f65605da3b8e663a29ac089e64248fc875d0420f9e2b453ffcefe4022547d8a3");
 });
 
 check("list-ui-refresh has the reviewed R4B2a hash", () => {
@@ -212,13 +230,58 @@ check("action and thumbnail gap values remain stable", () => {
   assert.equal(rulesFor(sources.treePolish, ".progress-thumbnail-graph")[0].declarations.gap, "14px");
 });
 
-check("fixed color counts have not increased", () => {
+check("fixed color counts match the reviewed R4B2c totals", () => {
   const expected = new Map([
-    ["style", 65], ["branch", 70], ["refresh", 21], ["treePolish", 17],
-    ["chartMiniview", 40], ["management", 17], ["chartDetail", 18], ["theme", 171],
+    ["style", 65], ["branch", 73], ["refresh", 21], ["treePolish", 17],
+    ["chartMiniview", 40], ["management", 17], ["chartDetail", 18], ["theme", 180],
     ["favorites", 14], ["progressThumbnail", 7]
   ]);
   expected.forEach((count, name) => assert.equal(fixedColorCount(sources[name]), count, name));
+});
+
+check("append-stopped component selector is narrowly owned by branch-tree-list", () => {
+  const selector = "button.secondary.append-policy-disabled-button:disabled";
+  const rules = rulesFor(sources.branch, selector);
+  assert.equal(rules.length, 1);
+  assert.deepEqual(rules[0].selectors, [
+    selector,
+    `${selector}:hover`,
+    `${selector}:focus-visible`,
+    `${selector}:active`
+  ]);
+  assert.ok(rules[0].selectors.every((value) => value.includes(".append-policy-disabled-button")));
+  assert.equal(rules[0].declarations.background, "var(--append-disabled-bg, #eef3f1)");
+  assert.equal(rules[0].declarations["border-color"], "var(--append-disabled-border, var(--line, #cfd8d5))");
+  assert.equal(rules[0].declarations["box-shadow"], "var(--append-disabled-shadow, none)");
+  assert.equal(rules[0].declarations.color, "var(--append-disabled-text, #65716e)");
+  assert.equal(rules[0].declarations.cursor, "not-allowed");
+  assert.equal(rules[0].declarations.opacity, "1");
+  assert.doesNotMatch(JSON.stringify(rules[0].declarations), /#2b3934|#76978b|#9caaa5/i);
+  assert.equal(sources.theme.includes(".append-policy-disabled-button"), false);
+});
+
+check("append-stopped semantic tokens exist for every theme and meet contrast targets", () => {
+  const expectations = [
+    ["html[data-theme=\"white\"]", "#eef3f1", "#cfd8d5", "#65716e", "none", "#ffffff"],
+    ["html[data-theme=\"default\"]", "#eef3f1", "#aab9b4", "#65716e", "none", "#f0f3f2"],
+    ["html[data-theme=\"dark\"]", "#2b3934", "#76978b", "#9caaa5", "inset 0 0 0 1px var(--append-disabled-border)", "#18211e"]
+  ];
+  for (const [selector, background, border, textColor, shadow, surrounding] of expectations) {
+    const rule = rulesFor(sources.theme, selector)[0];
+    assert.ok(rule, `${selector} theme rule missing`);
+    assert.equal(rule.declarations["--append-disabled-bg"], background);
+    assert.equal(rule.declarations["--append-disabled-border"], border);
+    assert.equal(rule.declarations["--append-disabled-text"], textColor);
+    assert.equal(rule.declarations["--append-disabled-shadow"], shadow);
+    assert.ok(contrastRatio(textColor, background) >= 4.5, `${selector} text contrast is below 4.5`);
+    if (selector.includes("dark")) {
+      assert.notEqual(background, "#eef3f1");
+      assert.ok(contrastRatio(border, surrounding) >= 3, "dark append border contrast is below 3");
+    }
+  }
+  for (const token of ["bg", "border", "text", "shadow"]) {
+    assert.equal((sources.theme.match(new RegExp(`--append-disabled-${token}:`, "g")) || []).length, 3);
+  }
 });
 
 check("mobile lifecycle layout belongs to branch-tree-list only", () => {
@@ -265,18 +328,18 @@ check("production JavaScript remains byte-for-byte unchanged", () => {
 });
 
 check("resolved and remaining CSS issues are documented accurately", () => {
-  for (let index = 1; index <= 2; index += 1) {
+  for (let index = 1; index <= 3; index += 1) {
     const id = `KNOWN-CSS-00${index}`;
     assert.match(sources.spec, new RegExp(`${id}[^\\n]*修正済み`));
     assert.match(sources.test, new RegExp(`${id}[^\\n]*修正済み`));
   }
-  for (let index = 3; index <= 5; index += 1) {
+  for (let index = 4; index <= 5; index += 1) {
     const id = `KNOWN-CSS-00${index}`;
     assert.match(sources.spec, new RegExp(id));
     assert.match(sources.test, new RegExp(id));
   }
-  assert.match(sources.spec, /KNOWN-CSS-003[\s\S]*KNOWN-CSS-005/);
-  assert.match(sources.test, /KNOWN-CSS-003[\s\S]*KNOWN-CSS-005/);
+  assert.match(sources.spec, /KNOWN-CSS-004[\s\S]*KNOWN-CSS-005/);
+  assert.match(sources.test, /KNOWN-CSS-004[\s\S]*KNOWN-CSS-005/);
 });
 
 check("public HTML IDs remain unique", () => {

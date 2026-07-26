@@ -32,6 +32,10 @@ html[data-theme="white"] {
   --dialog-backdrop: rgba(20, 30, 27, 0.4);
   --disabled-bg: #e3e9e7;
   --disabled-text: #6f7b77;
+  --append-disabled-bg: #eef3f1;
+  --append-disabled-border: #cfd8d5;
+  --append-disabled-text: #65716e;
+  --append-disabled-shadow: none;
   --header-bg: rgba(255, 255, 255, 0.97);
   --theme-tree-line-color: #71877f;
   --theme-tree-line-muted: #9aaba5;
@@ -87,6 +91,10 @@ html:not([data-theme]) {
   --dialog-backdrop: rgba(18, 28, 25, 0.46);
   --disabled-bg: #c6d0cd;
   --disabled-text: #65726e;
+  --append-disabled-bg: #eef3f1;
+  --append-disabled-border: #aab9b4;
+  --append-disabled-text: #65716e;
+  --append-disabled-shadow: none;
   --header-bg: rgba(240, 243, 242, 0.97);
   --theme-tree-line-color: #667e75;
   --theme-tree-line-muted: #8fa199;
@@ -141,6 +149,10 @@ html[data-theme="dark"] {
   --dialog-backdrop: rgba(0, 0, 0, 0.7);
   --disabled-bg: #2b3934;
   --disabled-text: #9caaa5;
+  --append-disabled-bg: #2b3934;
+  --append-disabled-border: #76978b;
+  --append-disabled-text: #9caaa5;
+  --append-disabled-shadow: inset 0 0 0 1px var(--append-disabled-border);
   --header-bg: rgba(24, 33, 30, 0.97);
   --theme-tree-line-color: #76978b;
   --theme-tree-line-muted: #586f67;

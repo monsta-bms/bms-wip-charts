@@ -1557,7 +1557,7 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 同static testでCSS読込順、対象linkだけのcache bust、変更対象外CSSとruntime styleのSHA-256、grid列定義数、actions/thumbnail/graph gap、固定色数、HTML ID重複なし、既知問題5件の文書化を確認する。`list-ui-refresh.css`だけはレビュー済みR4B2a hashへ更新する。
 - `node scripts/test-css-browser-regression.js`は外部dependencyなしでlocalhostの隔離fixtureとheadless browserを起動し、white/default/dark × 390/760/1366pxについて詳細版ツリーとcompact一覧を確認する。document横overflow、版・曲・DL・追記・管理・favorite・thumbnail件数、主要controlのviewport clip、computed width/min/max/height/display/position/overflow/gap/grid/colors、bounds、親clip、overlay、detail card幅、Console error/warningを取得する。
 - CSS変更前snapshotはリポジトリ外の一時ディレクトリへ`--write-snapshot`で保存し、変更後は`--compare-snapshot`で全9条件のcomputed styleとboundsを許容差0.25px以内で比較する。navigation時間と非同期header表示の影響を受ける絶対縦座標は性能・環境参考値であり、width/height、水平bounds、親clipと同じ厳密比較対象にしない。比較完了後はsnapshotと一時ディレクトリを削除する。
-- `KNOWN-CSS-001` pending clipと`KNOWN-CSS-002` processing clipはR4B2bで修正済み。`KNOWN-CSS-003` dark追記停止固定色、`KNOWN-CSS-004` favorite固定色、`KNOWN-CSS-005` detail対象背景固定色だけを既知問題warningとして残す。新しいcontrol clip、横overflow、固定色増加、Console warning/errorは失敗とする。
+- `KNOWN-CSS-001` pending clipと`KNOWN-CSS-002` processing clipはR4B2bで修正済み。`KNOWN-CSS-003` dark追記停止固定色はR4B2cで修正済み。`KNOWN-CSS-004` favorite固定色と`KNOWN-CSS-005` detail対象背景固定色だけを既知問題warningとして残す。新しいcontrol clip、横overflow、意図しない固定色増加、Console warning/errorは失敗とする。
 - R4B2a前後でthumbnailのcomputed width/max-width、bounding width/height、display、position、overflow、親cell、graph、画像枠、DOM件数、compact一覧を一致させる。画像比較dependencyは追加せず、computed styleとboundsを回帰基準にする。
 - R1 model、R2 Link UI、R3 Action UI、R4A pipeline、R4B1 dead-code、曲/DL static、version list 4件、withdrawal active、metadata parser/static、変更テストJS構文、CSS/runtime hash、HTML ID、`git diff --check`を回帰する。Pages、Worker、D1/R2、Migration、Secret、Cron、dependency、本番操作、push、deployは行わない。
 
@@ -1566,5 +1566,15 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - `node scripts/test-css-browser-regression.js`はgrace、manual、immediate、processing、tombstoned、deletedの正式badge classと文言を個別に検査する。white/default/dark × 390/760/1366pxでbadge、`.version-state-badges`、`.version-title-line`、`.version-label-stack`、`.version-tree-cell`、`.version-row`、viewportのbounding rectとclip量を取得する。
 - 390pxでは全badgeの上下左右clipを1px以内、badgeのscrollWidth/scrollHeightをclientWidth/clientHeight以内、badge内部`nowrap`、badge群とtitle lineの折返しを必須とする。documentと各rowの横overflow、曲・DL・追記・管理・favorite・thumbnailのviewport clipも失敗条件にする。
 - 変更前snapshotとの比較では390pxの折返しに伴う配置・row高さだけを許可し、幅・視覚style・DOM件数を維持する。760pxと1366pxはgeometry、row高さ、配置、thumbnail、tree、detail、操作欄を変更前と0.25px以内で一致させる。
-- `KNOWN-CSS-001`と`KNOWN-CSS-002`は修正済みとしてwarningを削除し、再発を通常のtest failureにする。warningは残存する`KNOWN-CSS-003`～`KNOWN-CSS-005`の3件だけとする。
+- `KNOWN-CSS-001`と`KNOWN-CSS-002`は修正済みとしてwarningを削除し、再発を通常のtest failureにする。R4B2b時点のwarningは`KNOWN-CSS-003`～`KNOWN-CSS-005`の3件とする。
+- 本番Pages、Worker、D1、R2、Cron、Secret、dependencyは操作しない。
+
+## VERSION-TREE-RENDER-CONSOLIDATION R4B2c 追記停止ボタン配色回帰
+
+- `node scripts/test-css-browser-regression.js`は追記投稿、追記停止、追記不可、旧形式、完成版置換済み中間履歴、投稿管理、DL不可、汎用secondary disabled、withdrawal action disabledをfixture化し、white／default／dark × 390／760／1366pxでcomputed style、属性、geometry、clipを取得する。
+- 追記停止は全テーマで本物のdisabled button、`type=button`、`aria-disabled=true`、`aria-describedby`、`cursor:not-allowed`、`opacity:1`、inline click handlerなしを維持する。プログラム的focusでactive elementにならず、`click()`でclick eventが発生しないことを確認する。
+- hover／focus-visible／activeを強制した場合も追記停止の背景、文字、border、inset borderが通常button色へ戻らないことを確認する。white／defaultは背景とborderを変更前snapshotと一致させ、文字は2.93:1だった`#82918d`から4.52:1の`#65716e`へ限定して変更する。
+- darkはlight固定背景`#eef3f1`を拒否し、背景`#2b3934`、文字`#9caaa5`、border`#76978b`、inset borderを必須とする。text/background contrastは全テーマ4.5:1以上、dark borderと周囲surfaceのcontrastは3:1以上とする。
+- 変更前snapshotとの比較では、追記停止の意図した色とcontrastだけを許可する。追記投稿、追記不可、旧形式、中間履歴、投稿管理、DL不可、汎用secondary disabled、withdrawal action、lifecycle badge、DOM件数、row geometry、grid、gap、runtime style、production JavaScriptは一致させる。
+- `KNOWN-CSS-003`は修正済みとしてwarningを削除し、darkでlight固定色へ戻った場合は通常のtest failureにする。既知問題warningは`KNOWN-CSS-004`と`KNOWN-CSS-005`の2件だけとする。
 - 本番Pages、Worker、D1、R2、Cron、Secret、dependencyは操作しない。

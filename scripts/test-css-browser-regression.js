@@ -15,6 +15,17 @@ const widths = [390, 760, 1366];
 const apiPort = 8788;
 const tolerance = 0.25;
 const startedAt = process.hrtime.bigint();
+const detailControlSelectors = {
+  appendAvailable: '.version-row[data-version-id="version-active"] .append-version-button',
+  appendStopped: ".append-policy-disabled-button",
+  appendUnavailable: ".css-regression-append-unavailable",
+  appendLegacy: ".css-regression-append-legacy",
+  appendIntermediate: ".css-regression-append-intermediate",
+  management: '.version-row[data-version-id="version-active"] .version-management-button',
+  downloadUnavailable: '.version-row[data-version-id="version-download-blocked"] .download-blocked-control',
+  genericSecondaryDisabled: ".css-regression-generic-secondary-disabled",
+  withdrawalActionDisabled: ".css-regression-withdrawal-action-disabled"
+};
 
 function option(name) {
   const index = process.argv.indexOf(name);
@@ -425,9 +436,146 @@ async function waitFor(cdp, sessionId, expression, label) {
   throw new Error(`Timed out waiting for ${label}: ${JSON.stringify(diagnostic)}`);
 }
 
+async function installControlFixtures(cdp, sessionId) {
+  await evaluate(cdp, sessionId, `(() => {
+    const existing = document.querySelector("#css-regression-control-fixtures");
+    if (existing) return true;
+    const actionUi = window.BmsVersionActionUi;
+    if (typeof actionUi?.createAppendControl !== "function") {
+      throw new Error("version Action UI is unavailable for CSS control fixtures");
+    }
+    const host = document.createElement("div");
+    host.id = "css-regression-control-fixtures";
+    host.className = "version-actions";
+    host.setAttribute("aria-label", "CSS regression controls");
+    const fixtureModel = (reason, label, available = false) => ({
+      canShowActions: true,
+      versionId: "css-regression-fixture",
+      append: {
+        available,
+        allowedByPolicy: reason !== "append_disabled",
+        hasProgressMap: reason !== "legacy_progress_map",
+        label,
+        reason
+      }
+    });
+    const appendUnavailable = actionUi.createAppendControl(
+      fixtureModel("inconsistent_data", "\u8ffd\u8a18\u4e0d\u53ef")
+    );
+    appendUnavailable.classList.add("css-regression-append-unavailable");
+    const appendLegacy = actionUi.createAppendControl(
+      fixtureModel("legacy_progress_map", "\u65e7\u5f62\u5f0f")
+    );
+    appendLegacy.classList.add("css-regression-append-legacy");
+    const appendIntermediate = actionUi.createAppendControl(
+      fixtureModel("superseded_intermediate", "\u8ffd\u8a18\u4e0d\u53ef")
+    );
+    appendIntermediate.classList.add("css-regression-append-intermediate");
+    const genericDisabled = document.createElement("button");
+    genericDisabled.className = "secondary css-regression-generic-secondary-disabled";
+    genericDisabled.type = "button";
+    genericDisabled.disabled = true;
+    genericDisabled.textContent = "Generic disabled";
+    const withdrawalDisabled = document.createElement("button");
+    withdrawalDisabled.className = "version-withdrawal-action-button css-regression-withdrawal-action-disabled";
+    withdrawalDisabled.type = "button";
+    withdrawalDisabled.disabled = true;
+    withdrawalDisabled.textContent = "Withdrawal disabled";
+    host.append(appendUnavailable, appendLegacy, appendIntermediate, genericDisabled, withdrawalDisabled);
+    document.body.appendChild(host);
+    return true;
+  })()`);
+}
+
+async function captureForcedPseudoStyle(cdp, sessionId, selector, pseudoClass) {
+  const { root: documentNode } = await cdp.send("DOM.getDocument", { depth: 0, pierce: true }, sessionId);
+  const { nodeId } = await cdp.send("DOM.querySelector", {
+    nodeId: documentNode.nodeId,
+    selector
+  }, sessionId);
+  assert.ok(nodeId, `control fixture is missing for ${selector}`);
+  await cdp.send("CSS.forcePseudoState", { nodeId, forcedPseudoClasses: [pseudoClass] }, sessionId);
+  try {
+    return await evaluate(cdp, sessionId, `(() => {
+      const element = document.querySelector(${JSON.stringify(selector)});
+      const style = getComputedStyle(element);
+      return {
+        matches: element.matches(${JSON.stringify(`:${pseudoClass}`)}),
+        backgroundColor: style.backgroundColor,
+        color: style.color,
+        borderColor: style.borderColor,
+        boxShadow: style.boxShadow,
+        outlineColor: style.outlineColor,
+        outlineStyle: style.outlineStyle,
+        outlineWidth: style.outlineWidth
+      };
+    })()`);
+  } finally {
+    await cdp.send("CSS.forcePseudoState", { nodeId, forcedPseudoClasses: [] }, sessionId);
+  }
+}
+
+async function captureControlInteractions(cdp, sessionId) {
+  const interactions = {};
+  for (const [name, selector] of Object.entries(detailControlSelectors)) {
+    const programmatic = await evaluate(cdp, sessionId, `(() => {
+      const element = document.querySelector(${JSON.stringify(selector)});
+      if (!element) return null;
+      const wasDisabled = element.matches(":disabled");
+      let clickEvents = 0;
+      const listener = () => { clickEvents += 1; };
+      if (wasDisabled) element.addEventListener("click", listener);
+      element.focus({ preventScroll: true });
+      const activeAfterFocus = document.activeElement === element;
+      if (wasDisabled) element.click();
+      if (wasDisabled) element.removeEventListener("click", listener);
+      element.blur();
+      return { activeAfterFocus, clickEvents, inlineClickHandler: typeof element.onclick === "function" };
+    })()`);
+    interactions[name] = {
+      programmatic,
+      hover: await captureForcedPseudoStyle(cdp, sessionId, selector, "hover"),
+      focusVisible: await captureForcedPseudoStyle(cdp, sessionId, selector, "focus-visible"),
+      active: await captureForcedPseudoStyle(cdp, sessionId, selector, "active")
+    };
+  }
+  return interactions;
+}
+
 function captureExpression(pageKind) {
   return `(async () => {
     const round = (value) => Number(Number(value || 0).toFixed(3));
+    const colorChannels = (value) => {
+      const channels = String(value || "").match(/[\\d.]+/g)?.map(Number) || [];
+      if (channels.length < 3) return null;
+      return channels.slice(0, 3);
+    };
+    const luminance = (channels) => {
+      const linear = channels.map((channel) => {
+        const value = channel / 255;
+        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+      });
+      return (0.2126 * linear[0]) + (0.7152 * linear[1]) + (0.0722 * linear[2]);
+    };
+    const contrast = (first, second) => {
+      const firstChannels = colorChannels(first);
+      const secondChannels = colorChannels(second);
+      if (!firstChannels || !secondChannels) return null;
+      const firstLuminance = luminance(firstChannels);
+      const secondLuminance = luminance(secondChannels);
+      return round((Math.max(firstLuminance, secondLuminance) + 0.05)
+        / (Math.min(firstLuminance, secondLuminance) + 0.05));
+    };
+    const effectiveBackground = (element) => {
+      let current = element;
+      while (current) {
+        const value = getComputedStyle(current).backgroundColor;
+        const channels = String(value || "").match(/[\\d.]+/g)?.map(Number) || [];
+        if (channels.length >= 3 && (channels.length < 4 || channels[3] > 0)) return value;
+        current = current.parentElement;
+      }
+      return "rgb(255, 255, 255)";
+    };
     const rectValue = (rect) => ({
       left: round(rect.left),
       right: round(rect.right),
@@ -442,15 +590,21 @@ function captureExpression(pageKind) {
       top: round(Math.max(0, containerRect.top - rect.top)),
       bottom: round(Math.max(0, rect.bottom - containerRect.bottom))
     });
-    const inspect = (selector) => [...document.querySelectorAll(selector)].map((element) => {
+    const describe = (element) => {
       const style = getComputedStyle(element);
       const rect = element.getBoundingClientRect();
       const parentRect = element.parentElement?.getBoundingClientRect?.() || rect;
+      const surroundingBackgroundColor = effectiveBackground(element.parentElement);
       return {
         tagName: element.tagName,
         className: String(element.className || ""),
         dataVersionId: element.closest(".version-row")?.dataset.versionId || "",
         text: String(element.textContent || "").trim(),
+        type: element.getAttribute("type"),
+        disabled: element.matches(":disabled"),
+        ariaDisabled: element.getAttribute("aria-disabled"),
+        ariaDescribedBy: element.getAttribute("aria-describedby"),
+        inlineClickHandler: typeof element.onclick === "function",
         display: style.display,
         flex: style.flex,
         flexBasis: style.flexBasis,
@@ -469,6 +623,16 @@ function captureExpression(pageKind) {
         backgroundColor: style.backgroundColor,
         color: style.color,
         borderColor: style.borderColor,
+        borderStyle: style.borderStyle,
+        borderWidth: style.borderWidth,
+        opacity: style.opacity,
+        cursor: style.cursor,
+        boxShadow: style.boxShadow,
+        outline: style.outline,
+        pointerEvents: style.pointerEvents,
+        surroundingBackgroundColor,
+        contrastRatio: contrast(style.color, style.backgroundColor),
+        borderContrastRatio: contrast(style.borderColor, surroundingBackgroundColor),
         clientWidth: element.clientWidth,
         scrollWidth: element.scrollWidth,
         clientHeight: element.clientHeight,
@@ -481,7 +645,8 @@ function captureExpression(pageKind) {
           right: round(Math.max(0, rect.right - document.documentElement.clientWidth))
         }
       };
-    });
+    };
+    const inspect = (selector) => [...document.querySelectorAll(selector)].map(describe);
     const selectors = ${pageKind === "detail" ? JSON.stringify({
       versionRows: ".version-row",
       actions: ".version-actions",
@@ -505,6 +670,9 @@ function captureExpression(pageKind) {
       downloads: ".compact-download-link, .compact-download-disabled"
     })};
     const elements = Object.fromEntries(Object.entries(selectors).map(([name, selector]) => [name, inspect(selector)]));
+    const controls = ${pageKind === "detail"
+      ? `Object.fromEntries(Object.entries(${JSON.stringify(detailControlSelectors)}).map(([name, selector]) => [name, describe(document.querySelector(selector))]))`
+      : "{}"};
     const lifecycleGeometry = [];
     if (${JSON.stringify(pageKind)} === "detail") {
       const badgeSelector = ".withdrawal-pending-badge, .withdrawal-processing-badge, .withdrawal-tombstone-badge";
@@ -611,6 +779,7 @@ function captureExpression(pageKind) {
       },
       counts: Object.fromEntries(Object.entries(elements).map(([name, items]) => [name, items.length])),
       elements,
+      controls,
       lifecycleGeometry,
       focusVisible,
       known: {
@@ -658,7 +827,11 @@ async function captureMatrix(cdp, sessionId, pageKind) {
       await new Promise((resolve) => setTimeout(resolve, 60));
       const expression = captureExpression(pageKind);
       try {
-        matrix.push({ requestedTheme: theme, requestedWidth: width, ...(await evaluate(cdp, sessionId, expression)) });
+        const entry = { requestedTheme: theme, requestedWidth: width, ...(await evaluate(cdp, sessionId, expression)) };
+        if (pageKind === "detail") {
+          entry.controlInteractions = await captureControlInteractions(cdp, sessionId);
+        }
+        matrix.push(entry);
       } catch (error) {
         error.message = `${error.message}\nCapture expression:\n${expression}`;
         throw error;
@@ -673,6 +846,43 @@ async function captureMatrix(cdp, sessionId, pageKind) {
 
 function findResult(matrix, theme, width) {
   return matrix.find((entry) => entry.requestedTheme === theme && entry.requestedWidth === width);
+}
+
+const untouchedControlColors = {
+  white: {
+    appendAvailable: ["rgb(232, 239, 237)", "rgb(25, 77, 63)", "rgb(158, 174, 169)"],
+    appendUnavailable: ["rgb(238, 243, 241)", "rgb(130, 145, 141)", "rgb(207, 216, 213)"],
+    appendLegacy: ["rgb(238, 243, 241)", "rgb(130, 145, 141)", "rgb(207, 216, 213)"],
+    appendIntermediate: ["rgb(238, 243, 241)", "rgb(130, 145, 141)", "rgb(207, 216, 213)"],
+    management: ["rgb(232, 239, 237)", "rgb(25, 77, 63)", "rgb(158, 174, 169)"],
+    downloadUnavailable: ["rgb(227, 233, 231)", "rgb(111, 123, 119)", "rgb(207, 216, 213)"],
+    genericSecondaryDisabled: ["rgb(238, 243, 241)", "rgb(130, 145, 141)", "rgb(207, 216, 213)"],
+    withdrawalActionDisabled: ["rgb(227, 233, 231)", "rgb(111, 123, 119)", "rgb(207, 216, 213)"]
+  },
+  default: {
+    appendAvailable: ["rgb(219, 230, 226)", "rgb(23, 76, 62)", "rgb(129, 151, 143)"],
+    appendUnavailable: ["rgb(238, 243, 241)", "rgb(130, 145, 141)", "rgb(170, 185, 180)"],
+    appendLegacy: ["rgb(238, 243, 241)", "rgb(130, 145, 141)", "rgb(170, 185, 180)"],
+    appendIntermediate: ["rgb(238, 243, 241)", "rgb(130, 145, 141)", "rgb(170, 185, 180)"],
+    management: ["rgb(219, 230, 226)", "rgb(23, 76, 62)", "rgb(129, 151, 143)"],
+    downloadUnavailable: ["rgb(198, 208, 205)", "rgb(101, 114, 110)", "rgb(170, 185, 180)"],
+    genericSecondaryDisabled: ["rgb(238, 243, 241)", "rgb(130, 145, 141)", "rgb(170, 185, 180)"],
+    withdrawalActionDisabled: ["rgb(198, 208, 205)", "rgb(101, 114, 110)", "rgb(170, 185, 180)"]
+  },
+  dark: {
+    appendAvailable: ["rgb(38, 52, 47)", "rgb(212, 228, 222)", "rgb(107, 129, 121)"],
+    appendUnavailable: ["rgb(238, 243, 241)", "rgb(130, 145, 141)", "rgb(70, 92, 84)"],
+    appendLegacy: ["rgb(238, 243, 241)", "rgb(130, 145, 141)", "rgb(70, 92, 84)"],
+    appendIntermediate: ["rgb(238, 243, 241)", "rgb(130, 145, 141)", "rgb(70, 92, 84)"],
+    management: ["rgb(38, 52, 47)", "rgb(212, 228, 222)", "rgb(107, 129, 121)"],
+    downloadUnavailable: ["rgb(43, 57, 52)", "rgb(156, 170, 165)", "rgb(70, 92, 84)"],
+    genericSecondaryDisabled: ["rgb(238, 243, 241)", "rgb(130, 145, 141)", "rgb(70, 92, 84)"],
+    withdrawalActionDisabled: ["rgb(43, 57, 52)", "rgb(156, 170, 165)", "rgb(70, 92, 84)"]
+  }
+};
+
+function controlColorTuple(control) {
+  return [control.backgroundColor, control.color, control.borderColor];
 }
 
 function assertPageInvariants(snapshot, consoleMessages) {
@@ -699,6 +909,60 @@ function assertPageInvariants(snapshot, consoleMessages) {
     assert.notEqual(entry.focusVisible?.outlineStyle, "none", `focus-visible outline missing at ${entry.requestedTheme} ${entry.requestedWidth}px`);
     assert.ok(Number.parseFloat(entry.focusVisible?.outlineWidth || "0") >= 1, `focus-visible outline is too thin at ${entry.requestedTheme} ${entry.requestedWidth}px`);
     assert.deepEqual(entry.counts, detailCounts, `detail control counts changed at ${entry.requestedTheme} ${entry.requestedWidth}px`);
+    assert.deepEqual(Object.keys(entry.controls), Object.keys(detailControlSelectors));
+    for (const [name, expectedColors] of Object.entries(untouchedControlColors[entry.requestedTheme])) {
+      assert.deepEqual(
+        controlColorTuple(entry.controls[name]),
+        expectedColors,
+        `${name} colors changed at ${entry.requestedTheme} ${entry.requestedWidth}px`
+      );
+    }
+    const stopped = entry.controls.appendStopped;
+    const expectedStopped = entry.requestedTheme === "dark"
+      ? ["rgb(43, 57, 52)", "rgb(156, 170, 165)", "rgb(118, 151, 139)"]
+      : [
+        "rgb(238, 243, 241)",
+        "rgb(101, 113, 110)",
+        entry.requestedTheme === "white" ? "rgb(207, 216, 213)" : "rgb(170, 185, 180)"
+      ];
+    assert.deepEqual(controlColorTuple(stopped), expectedStopped, `append-stopped semantic colors changed at ${entry.requestedTheme} ${entry.requestedWidth}px`);
+    assert.equal(stopped.tagName, "BUTTON");
+    assert.equal(stopped.type, "button");
+    assert.equal(stopped.text, "\u8ffd\u8a18\u505c\u6b62");
+    assert.equal(stopped.disabled, true);
+    assert.equal(stopped.ariaDisabled, "true");
+    assert.match(stopped.ariaDescribedBy, /^append-policy-description-/);
+    assert.equal(stopped.opacity, "1");
+    assert.equal(stopped.cursor, "not-allowed");
+    assert.equal(stopped.pointerEvents, "auto");
+    assert.equal(stopped.inlineClickHandler, false);
+    assert.ok(stopped.contrastRatio >= 4.5, `append-stopped contrast ${stopped.contrastRatio} is below 4.5 at ${entry.requestedTheme} ${entry.requestedWidth}px`);
+    if (entry.requestedTheme === "dark") {
+      assert.notEqual(stopped.backgroundColor, "rgb(238, 243, 241)");
+      assert.match(stopped.boxShadow, /inset/);
+      assert.ok(stopped.borderContrastRatio >= 3, `dark append-stopped border contrast ${stopped.borderContrastRatio} is below 3`);
+    } else {
+      assert.equal(stopped.boxShadow, "none");
+    }
+    const stoppedInteractions = entry.controlInteractions.appendStopped;
+    assert.deepEqual(stoppedInteractions.programmatic, {
+      activeAfterFocus: false,
+      clickEvents: 0,
+      inlineClickHandler: false
+    });
+    for (const state of ["hover", "focusVisible", "active"]) {
+      const forced = stoppedInteractions[state];
+      assert.equal(forced.matches, true, `forced ${state} state did not apply`);
+      assert.equal(forced.backgroundColor, stopped.backgroundColor, `append-stopped ${state} background changed`);
+      assert.equal(forced.color, stopped.color, `append-stopped ${state} text changed`);
+      assert.equal(forced.borderColor, stopped.borderColor, `append-stopped ${state} border changed`);
+      assert.equal(forced.boxShadow, stopped.boxShadow, `append-stopped ${state} shadow changed`);
+    }
+    for (const name of ["appendUnavailable", "appendLegacy", "appendIntermediate", "genericSecondaryDisabled", "withdrawalActionDisabled"]) {
+      assert.equal(entry.controls[name].disabled, true, `${name} must remain disabled`);
+      assert.equal(entry.controlInteractions[name].programmatic.activeAfterFocus, false, `${name} entered the focus order`);
+      assert.equal(entry.controlInteractions[name].programmatic.clickEvents, 0, `${name} emitted a click event`);
+    }
     for (const group of ["originLinks", "downloads", "appendControls", "managementControls", "favorites", "thumbnails"]) {
       for (const item of entry.elements[group]) {
         assert.equal(item.viewportClip.left, 0, `${group} left clip at ${entry.requestedWidth}px`);
@@ -760,8 +1024,11 @@ function reportKnownIssues(snapshot) {
   const white390 = findResult(snapshot.detail.matrix, "white", 390);
   const dark390 = findResult(snapshot.detail.matrix, "dark", 390);
   const themeAt1366 = themes.map((theme) => findResult(snapshot.detail.matrix, theme, 1366));
+  if (dark390.known.appendStopped?.backgroundColor === white390.known.appendStopped?.backgroundColor
+    || dark390.known.appendStopped?.backgroundColor === "rgb(238, 243, 241)") {
+    throw new Error("KNOWN-CSS-003 regressed: dark append-stopped uses the fixed light background");
+  }
   const checks = [
-    ["KNOWN-CSS-003", dark390.known.appendStopped?.backgroundColor === white390.known.appendStopped?.backgroundColor, "dark append-stopped fixed light background"],
     ["KNOWN-CSS-004", new Set(themeAt1366.map((entry) => JSON.stringify(entry.known.favoriteIdle))).size === 1, "favorite idle fixed color"],
     ["KNOWN-CSS-005", new Set(themeAt1366.map((entry) => entry.known.detailTarget?.backgroundColor)).size === 1, "detail target fixed light background"]
   ];
@@ -804,6 +1071,17 @@ function compareValues(expected, actual, location = "snapshot") {
       if (key === "navigationDurationMs") continue;
       if (key === "overlay") continue;
       if ((key === "top" || key === "bottom") && location.endsWith(".rect")) continue;
+      const detailIndex = Number(location.match(/^detail\[(\d+)\]/)?.[1] ?? -1);
+      const isDark = detailIndex >= themes.indexOf("dark") * widths.length;
+      const isStoppedControl = expected.className?.split(/\s+/).includes("append-policy-disabled-button");
+      const isStoppedSummary = /\.known\.appendStopped$/.test(location);
+      const isStoppedInteraction = /\.controlInteractions\.appendStopped\.(?:hover|focusVisible|active)$/.test(location);
+      const changedInAllThemes = new Set(["color", "contrastRatio", "outline", "outlineColor"]);
+      const changedInDark = new Set(["backgroundColor", "borderColor", "boxShadow", "borderContrastRatio"]);
+      if ((isStoppedControl || isStoppedSummary || isStoppedInteraction)
+        && (changedInAllThemes.has(key) || (isDark && changedInDark.has(key)))) {
+        continue;
+      }
       compareValues(expected[key], actual[key], `${location}.${key}`);
     }
     return;
@@ -857,6 +1135,8 @@ async function run() {
     await cdp.send("Page.enable", {}, sessionId);
     await cdp.send("Runtime.enable", {}, sessionId);
     await cdp.send("Log.enable", {}, sessionId);
+    await cdp.send("DOM.enable", {}, sessionId);
+    await cdp.send("CSS.enable", {}, sessionId);
     const consoleMessages = [];
     cdp.on((message) => {
       if (message.sessionId !== sessionId) return;
@@ -880,6 +1160,7 @@ async function run() {
       && document.querySelectorAll(".progress-thumbnail.has-progress-image.is-image-loaded").length === 1
       && document.querySelector("#progress-image-thumbnail-style")
       && document.querySelector("#favoriteListStyles")`, "detail fixture");
+    await installControlFixtures(cdp, sessionId);
     const detailNavigationMs = Number(process.hrtime.bigint() - navigationStart) / 1e6;
     const detail = await captureMatrix(cdp, sessionId, "detail");
 
