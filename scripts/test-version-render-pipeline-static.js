@@ -86,7 +86,7 @@ check("model, link UI, and Action UI precede every index renderer consumer", () 
     "./progress-thumbnail-list.js?v=chart-render-cleanup-r4b1-01",
     "./branch-append-ui.js?v=chart-render-pipeline-r4a-01",
     "./branch-tree-list.js?v=chart-render-pipeline-r4a-01",
-    "./favorites-list.js?v=chart-render-pipeline-r4a-01",
+    "./favorites-list.js?v=favorite-theme-r4b2d-01",
     "./version-management-ui.js?v=withdrawal-lifecycle-16r",
     "./chart-detail-link.js?v=chart-render-pipeline-r4a-01"
   ];
@@ -315,23 +315,24 @@ check("only R4B1-modified render scripts use the cleanup cache key", () => {
     "chart-render-pipeline.js",
     "branch-append-ui.js",
     "branch-tree-list.js",
-    "favorites-list.js",
     "chart-detail-link.js"
   ];
   unchangedR4aScripts.forEach((name) => {
     assert.ok(indexSources.includes(`./${name}?v=chart-render-pipeline-r4a-01`), `${name} cache key mismatch`);
   });
+  assert.ok(indexSources.includes("./favorites-list.js?v=favorite-theme-r4b2d-01"), "favorites-list.js cache key mismatch");
   ["version-ui-model.js", "version-link-ui.js", "list.js"].forEach((name) => {
     assert.ok(listSources.includes(`./${name}?v=version-link-ui-r2-01`), `${name} compact cache key mismatch`);
   });
 });
-check("CSS files match the reviewed R4B2c state", () => {
+check("CSS files match the reviewed R4B2d state", () => {
   const expected = new Map([
     ["docs/style.css", "2cb373b2344a61706e314fcca197939c0a03c864ef93c8e87fcec638b38bd49e"],
     ["docs/branch-tree-list.css", "a88fd0f3003d06540675d8aec54899af4d624d22a3ea7f4f10bf71c87b0add2b"],
     ["docs/list-ui-refresh.css", "f630206e0a7ce75150b2305414ff85c6657244bfa0d58965594e29fb372b1d81"],
     ["docs/list.css", "68f757317cf1b75819a2cbb3589e1563f2e87a7eaffe10cd103c46335e1b3f23"],
-    ["docs/theme.css", "f65605da3b8e663a29ac089e64248fc875d0420f9e2b453ffcefe4022547d8a3"],
+    ["docs/theme.css", "46ff89f17f026f8443fafaf34ab2054cde2f585db97a529314c8706e7fa92a8b"],
+    ["docs/favorites-list.css", "f9498bc2128e06da0a1de3a41e19949a3ee8afebfc46f266600026288d20cf7b"],
     ["docs/tree-progress-polish.css", "e0d1cf234c249070294491982088d34812c602e92ccdca7377011d7292e9f4ad"],
     ["docs/chart-miniview.css", "e92980af2dde81ce2051a9216d744d62ee9fbed18e8423f6461296f65791d49c"]
   ]);
@@ -339,8 +340,8 @@ check("CSS files match the reviewed R4B2c state", () => {
     assert.equal(sha256(fs.readFileSync(path.join(root, relativePath))), hash, relativePath);
   });
 });
-check("runtime style blocks are unchanged", () => {
-  assert.equal(sha256(runtimeStyle(favorites)), "ff8f76306c520d22e15244067ec7470568278a20fcf9ac9e4f60cc63210ad6b8");
+check("favorite runtime style is removed and progress runtime style is unchanged", () => {
+  assert.doesNotMatch(favorites, /injectStyles|favoriteListStyles|createElement\(["']style["']\)|style\.textContent/);
   assert.equal(sha256(runtimeStyle(progressThumbnail)), "280a1c0a18e3500bfda2f2e45ff58f8f0afcec26467192968f18a3036e2ac1e6");
 });
 check("R4A keeps DOM traversal growth bounded", () => {

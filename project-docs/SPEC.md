@@ -1172,7 +1172,7 @@ RC★★変換:
   - `KNOWN-CSS-001`: 390pxの深い版ツリーでpending lifecycle badgeが右端からクリップする場合がある（R4B2bで修正済み）。
   - `KNOWN-CSS-002`: 390pxの深い版ツリーでprocessing lifecycle badgeが右端からクリップする場合がある（R4B2bで修正済み）。
   - `KNOWN-CSS-003`: darkテーマでも追記停止ボタン背景にlight固定色が残る（R4B2cで修正済み）。
-  - `KNOWN-CSS-004`: favorite待機色に固定色が残る。
+  - `KNOWN-CSS-004`: favorite待機色に固定色が残る（R4B2dで修正済み）。
   - `KNOWN-CSS-005`: detail対象行の背景にlight固定色が残る。
 - 既知問題を正常仕様として固定しない。R4B2aの比較は今回の重複除去がそれらを増減させていないことだけを確認し、個別修正は後続Phaseへ分離する。
 
@@ -1181,11 +1181,20 @@ RC★★変換:
 - 390pxでは`.version-title-line`を折返し可能にし、`.version-state-badges`を`flex: 1 1 100%`で必要に応じて次行へ移す。バッジ群は複数行へ折返せるが、個々のlifecycleバッジは`white-space: nowrap`を維持し、pill内では改行しない。
 - lifecycle配置の正式所有者は`branch-tree-list.css`、色・border・padding・font-size等の視覚スタイル所有者は`version-management-ui.css`とする。版grid列、tree indent、actions/thumbnail gap、production JavaScript、HTML DOMは変更しない。
 - `KNOWN-CSS-001`（pendingの右クリップ）と`KNOWN-CSS-002`（processingの右クリップ）はR4B2bで修正済み。grace、manual、immediate、processing、tombstoned、deletedをコンテナ単位で検査し、再発は通常の回帰失敗とする。
-- 配色に関する`KNOWN-CSS-004`、`KNOWN-CSS-005`は未修正の既知問題として別Phaseへ残す。`KNOWN-CSS-003`はR4B2cで修正済み。
+- `KNOWN-CSS-004`はR4B2dで修正済み。配色に関する未修正の既知問題は`KNOWN-CSS-005`だけとし、`KNOWN-CSS-003`はR4B2cで修正済み。
 
 ## VERSION-TREE-RENDER-CONSOLIDATION R4B2c 追記停止ボタンのテーマ配色
 
 - `button.secondary.append-policy-disabled-button:disabled`とそのhover／focus-visible／active状態は`branch-tree-list.css`が対象selectorを所有し、`theme.css`の`--append-disabled-bg`、`--append-disabled-border`、`--append-disabled-text`、`--append-disabled-shadow`を使用する。汎用の`button.secondary:disabled`は変更しない。
 - white／defaultは従来の背景とborder-colorを維持する。従来の文字色`#82918d`は背景`#eef3f1`に対して2.93:1だったため、通常文字の最低目標4.5:1を満たす最小調整として専用文字色`#65716e`（4.52:1）を使用する。
 - darkは背景`#2b3934`、文字`#9caaa5`、border`#76978b`を使用し、geometryを変えないinset borderで周囲のdark surfaceから識別できるようにする。disabled属性、文言、class、aria、cursor、opacity、focus順、click不可の挙動は変更しない。
-- 通常の追記投稿、追記不可、旧形式、中間履歴、投稿管理、DL不可、汎用secondary disabled、withdrawal action、lifecycle badgeは対象外とする。`KNOWN-CSS-004`のfavorite待機色と`KNOWN-CSS-005`のdetail対象行背景は後続Phaseへ残す。
+- 通常の追記投稿、追記不可、旧形式、中間履歴、投稿管理、DL不可、汎用secondary disabled、withdrawal action、lifecycle badgeは対象外とする。`KNOWN-CSS-004`はR4B2dで修正済みとし、`KNOWN-CSS-005`のdetail対象行背景だけを後続Phaseへ残す。
+
+## VERSION-TREE-RENDER-CONSOLIDATION R4B2d favorite静的CSSとテーマ配色
+
+- favorite filter button、versionごとのfavorite button、favorite状態の版ラベル色、640px以下のfavorite filter幅は`favorites-list.css`を正式所有者とする。`.list-toolbar`の共通`display`、`align-items`、`gap`、`justify-content`は引き続き`style.css`が所有し、重複させない。
+- favorite配色は`theme.css`の`--favorite-filter-*`と`--favorite-star-*` semantic tokenを使用する。white／defaultは従来値を基準とし、星glyphのcontrast不足だけを最小調整する。darkはdark surface上のidle／hover／active配色へ切り替え、light固定背景と`#b6c0c9`固定待機色を使用しない。
+- `favorites-list.js`はfavoriteのlocalStorage、filter、data/post-render stage、button生成、aria、同一version同期と局所再描画だけを所有する。`injectStyles`、`#favoriteListStyles`、favorite用`createElement("style")`を廃止し、favorite runtime styleは0件とする。progress runtime styleは後続Phaseまで1件を維持する。
+- `index.html`は`theme.css`の直後、`favorites-list.js`の実行前に`favorites-list.css`を読み込む。R4B2dで変更するtheme CSS、favorite CSS、favorite JavaScriptだけに`favorite-theme-r4b2d-01`を使用し、`list.html`は変更しない。
+- filter文字は4.5:1以上、星glyphとfocus indicatorは3:1以上を目標とする。選択状態は色だけでなく`★`、`is-active`／`is-favorite`、`aria-pressed`でも識別し、favorite-only切替で追加fetchを行わない。
+- `KNOWN-CSS-004`はR4B2dで修正済みとし、再発は通常の回帰失敗にする。未修正の既知問題は`KNOWN-CSS-005`のdetail対象行背景だけとする。

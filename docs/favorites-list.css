@@ -1,0 +1,74 @@
+button.favorite-filter-toggle {
+  align-items: center;
+  background: var(--favorite-filter-bg);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 0.84rem;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+button.favorite-filter-toggle:hover,
+button.favorite-filter-toggle:focus-visible {
+  background: var(--favorite-filter-hover-bg);
+  border-color: var(--favorite-filter-hover-border);
+  color: var(--favorite-filter-hover-text);
+}
+
+button.favorite-filter-toggle.is-active,
+button.favorite-filter-toggle.is-active:hover,
+button.favorite-filter-toggle.is-active:focus-visible {
+  background: var(--favorite-filter-active-bg);
+  border-color: var(--favorite-filter-active-border);
+  color: var(--favorite-filter-active-text);
+}
+
+button.favorite-filter-toggle:focus-visible,
+button.favorite-version-button:focus-visible {
+  outline-color: var(--warning);
+}
+
+button.favorite-version-button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--favorite-star-idle-text);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 1rem;
+  height: 26px;
+  justify-content: center;
+  line-height: 1;
+  min-height: 26px;
+  padding: 0;
+  width: 26px;
+}
+
+button.favorite-version-button:hover,
+button.favorite-version-button:focus-visible {
+  background: var(--favorite-star-hover-bg);
+  border-color: var(--favorite-star-hover-border);
+  color: var(--favorite-star-hover-text);
+}
+
+button.favorite-version-button.is-favorite,
+button.favorite-version-button.is-favorite:hover,
+button.favorite-version-button.is-favorite:focus-visible {
+  background: var(--favorite-star-active-bg);
+  border-color: var(--favorite-star-active-border);
+  color: var(--favorite-star-active-text);
+}
+
+.version-row.is-favorite-version .version-main-label {
+  color: var(--primary-dark);
+}
+
+@media (max-width: 640px) {
+  .list-toolbar button.favorite-filter-toggle {
+    width: 100%;
+  }
+}

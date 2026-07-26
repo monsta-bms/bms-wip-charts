@@ -26,6 +26,7 @@ const sources = {
   style: read("docs/style.css"),
   list: read("docs/list.css"),
   favorites: read("docs/favorites-list.js"),
+  favoriteCss: read("docs/favorites-list.css"),
   progressThumbnail: read("docs/progress-thumbnail-list.js"),
   index: read("docs/index.html"),
   listHtml: read("docs/list.html"),
@@ -154,7 +155,7 @@ check("no media-query duplicate was introduced", () => {
 });
 
 check("runtime styles do not take over thumbnail sizing ownership", () => {
-  const runtime = `${runtimeStyle(sources.favorites)}\n${runtimeStyle(sources.progressThumbnail)}`;
+  const runtime = runtimeStyle(sources.progressThumbnail);
   assert.equal(rulesFor(runtime, selector).some((rule) => (
     Object.hasOwn(rule.declarations, "width") || Object.hasOwn(rule.declarations, "max-width")
   )), false);
@@ -171,25 +172,34 @@ check("index stylesheet order remains stable", () => {
     "version-management-ui.css",
     "post-form-ui.css",
     "chart-detail-link.css",
-    "theme.css"
+    "theme.css",
+    "favorites-list.css"
   ]);
+  const themeIndex = sources.index.indexOf("./theme.css?v=favorite-theme-r4b2d-01");
+  const favoriteCssIndex = sources.index.indexOf("./favorites-list.css?v=favorite-theme-r4b2d-01");
+  const favoriteScriptIndex = sources.index.indexOf("./favorites-list.js?v=favorite-theme-r4b2d-01");
+  assert.ok(themeIndex >= 0 && themeIndex < favoriteCssIndex);
+  assert.ok(favoriteCssIndex < sources.index.indexOf("</head>"));
+  assert.ok(favoriteCssIndex < favoriteScriptIndex);
 });
 
 check("compact-list stylesheet order remains stable", () => {
   assert.deepEqual(stylesheetNames(sources.listHtml), ["style.css", "site-header.css", "list.css", "theme.css"]);
 });
 
-check("only the changed R4B2c stylesheet cache keys change", () => {
+check("only the R4B2d favorite assets use the new cache key", () => {
   assert.match(sources.index, /\.\/branch-tree-list\.css\?v=append-disabled-theme-r4b2c-01/);
-  assert.match(sources.index, /\.\/theme\.css\?v=append-disabled-theme-r4b2c-01/);
-  assert.equal((sources.index.match(/append-disabled-theme-r4b2c-01/g) || []).length, 2);
+  assert.match(sources.index, /\.\/theme\.css\?v=favorite-theme-r4b2d-01/);
+  assert.match(sources.index, /\.\/favorites-list\.css\?v=favorite-theme-r4b2d-01/);
+  assert.match(sources.index, /\.\/favorites-list\.js\?v=favorite-theme-r4b2d-01/);
+  assert.equal((sources.index.match(/favorite-theme-r4b2d-01/g) || []).length, 3);
   assert.match(sources.index, /\.\/list-ui-refresh\.css\?v=css-cleanup-r4b2a-01/);
   assert.equal((sources.index.match(/css-cleanup-r4b2a-01/g) || []).length, 1);
-  assert.doesNotMatch(sources.listHtml, /append-disabled-theme-r4b2c-01|css-cleanup-r4b2a-01/);
+  assert.doesNotMatch(sources.listHtml, /favorite-theme-r4b2d-01|css-cleanup-r4b2a-01/);
 });
 
-check("runtime style hashes remain stable", () => {
-  assert.equal(sha256(runtimeStyle(sources.favorites)), "ff8f76306c520d22e15244067ec7470568278a20fcf9ac9e4f60cc63210ad6b8");
+check("favorite runtime style is removed while progress runtime style stays stable", () => {
+  assert.doesNotMatch(sources.favorites, /injectStyles|favoriteListStyles|createElement\(["']style["']\)|style\.textContent|document\.head\.appendChild\(style\)/);
   assert.equal(sha256(runtimeStyle(sources.progressThumbnail)), "280a1c0a18e3500bfda2f2e45ff58f8f0afcec26467192968f18a3036e2ac1e6");
 });
 
@@ -205,9 +215,8 @@ check("protected CSS hashes remain stable", () => {
   expected.forEach((hash, source) => assert.equal(sha256(source), hash));
 });
 
-check("R4B2c CSS files match the reviewed semantic-color change", () => {
+check("pre-R4B2d CSS files remain at their reviewed hashes", () => {
   assert.equal(sha256(sources.branch), "a88fd0f3003d06540675d8aec54899af4d624d22a3ea7f4f10bf71c87b0add2b");
-  assert.equal(sha256(sources.theme), "f65605da3b8e663a29ac089e64248fc875d0420f9e2b453ffcefe4022547d8a3");
 });
 
 check("list-ui-refresh has the reviewed R4B2a hash", () => {
@@ -230,13 +239,73 @@ check("action and thumbnail gap values remain stable", () => {
   assert.equal(rulesFor(sources.treePolish, ".progress-thumbnail-graph")[0].declarations.gap, "14px");
 });
 
-check("fixed color counts match the reviewed R4B2c totals", () => {
+check("fixed color counts isolate favorite colors in theme tokens", () => {
   const expected = new Map([
     ["style", 65], ["branch", 73], ["refresh", 21], ["treePolish", 17],
-    ["chartMiniview", 40], ["management", 17], ["chartDetail", 18], ["theme", 180],
-    ["favorites", 14], ["progressThumbnail", 7]
+    ["chartMiniview", 40], ["management", 17], ["chartDetail", 18], ["theme", 222],
+    ["favorites", 0], ["favoriteCss", 0], ["progressThumbnail", 7]
   ]);
   expected.forEach((count, name) => assert.equal(fixedColorCount(sources[name]), count, name));
+});
+
+check("favorite selectors and responsive ownership moved to static CSS", () => {
+  for (const selector of [
+    "button.favorite-filter-toggle",
+    "button.favorite-filter-toggle:hover",
+    "button.favorite-filter-toggle:focus-visible",
+    "button.favorite-filter-toggle.is-active",
+    "button.favorite-version-button",
+    "button.favorite-version-button:hover",
+    "button.favorite-version-button:focus-visible",
+    "button.favorite-version-button.is-favorite",
+    ".version-row.is-favorite-version .version-main-label"
+  ]) {
+    assert.match(sources.favoriteCss, new RegExp(selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  assert.equal(rulesFor(sources.favoriteCss, ".list-toolbar").length, 0);
+  assert.doesNotMatch(sources.favoriteCss, /\.list-toolbar\s*\{[^}]*\b(?:display|align-items|gap|justify-content)\s*:/s);
+  assert.match(sources.favoriteCss, /@media \(max-width: 640px\)[\s\S]*\.list-toolbar button\.favorite-filter-toggle\s*\{\s*width: 100%;\s*\}/);
+});
+
+check("favorite static CSS consumes semantic colors only", () => {
+  assert.equal(fixedColorCount(sources.favoriteCss), 0);
+  const colorDeclarations = leafRules(sources.favoriteCss).flatMap((rule) => Object.entries(rule.declarations)
+    .filter(([property]) => /^(?:background|border(?:-color)?|color|outline-color)$/.test(property))
+    .map(([, value]) => value));
+  assert.ok(colorDeclarations.length >= 12);
+  colorDeclarations.forEach((value) => assert.match(value, /^(?:transparent|var\(--[a-z0-9-]+\)|1px solid (?:transparent|var\(--[a-z0-9-]+\)))$/));
+});
+
+check("favorite semantic tokens exist for every theme and meet contrast targets", () => {
+  const tokens = [
+    "filter-bg", "filter-hover-bg", "filter-hover-border", "filter-hover-text",
+    "filter-active-bg", "filter-active-border", "filter-active-text", "star-idle-text",
+    "star-hover-bg", "star-hover-border", "star-hover-text", "star-active-bg",
+    "star-active-border", "star-active-text"
+  ];
+  tokens.forEach((token) => {
+    assert.equal((sources.theme.match(new RegExp(`--favorite-${token}:`, "g")) || []).length, 3, token);
+  });
+  const expectations = [
+    ["html[data-theme=\"white\"]", "#ffffff", "#5a6864", "#fff8e6", "#8a5a00", "#fff4d6", "#7a4b00", "#77838e", "#fff7df"],
+    ["html[data-theme=\"default\"]", "#ffffff", "#52635e", "#fff8e6", "#8a5a00", "#fff4d6", "#7a4b00", "#77838e", "#fff7df"],
+    ["html[data-theme=\"dark\"]", "#202b27", "#b3c0bb", "#3d321b", "#f2c66d", "#4a3b1d", "#ffe0a0", "#93a29d", "#18211e"]
+  ];
+  for (const [selector, filterBg, filterText, hoverBg, hoverText, activeBg, activeText, idleStar, starIdleBg] of expectations) {
+    const rule = rulesFor(sources.theme, selector)[0];
+    assert.ok(rule, `${selector} theme rule missing`);
+    assert.equal(rule.declarations["--favorite-filter-bg"], filterBg);
+    assert.ok(contrastRatio(filterText, filterBg) >= 4.5, `${selector} filter idle contrast is below 4.5`);
+    assert.ok(contrastRatio(hoverText, hoverBg) >= 4.5, `${selector} filter hover contrast is below 4.5`);
+    assert.ok(contrastRatio(activeText, activeBg) >= 4.5, `${selector} filter active contrast is below 4.5`);
+    assert.ok(contrastRatio(idleStar, starIdleBg) >= 3, `${selector} star idle contrast is below 3`);
+    assert.ok(contrastRatio(rule.declarations["--favorite-star-hover-text"], rule.declarations["--favorite-star-hover-bg"]) >= 3);
+    assert.ok(contrastRatio(rule.declarations["--favorite-star-active-text"], rule.declarations["--favorite-star-active-bg"]) >= 3);
+    if (selector.includes("dark")) {
+      assert.notEqual(filterBg, "#ffffff");
+      assert.notEqual(idleStar, "#b6c0c9");
+    }
+  }
 });
 
 check("append-stopped component selector is narrowly owned by branch-tree-list", () => {
@@ -322,24 +391,19 @@ check("R4B2b does not use clipping or visual workarounds", () => {
   assert.doesNotMatch(mobileSource, /font-size\s*:|position\s*:\s*absolute|transform\s*:|margin-left\s*:\s*-|overflow\s*:\s*hidden|text-overflow\s*:|white-space\s*:\s*normal/);
 });
 
-check("production JavaScript remains byte-for-byte unchanged", () => {
+check("only the favorite runtime CSS removal changes production JavaScript", () => {
   assert.equal(productionJsFiles.length, 30);
-  assert.equal(sha256(productionJsAggregate), "ae1031cf14736bf72464b5a46c41a9175e0ae6cac58c05b412b96c2ed8691f9a");
+  assert.equal(sha256(productionJsAggregate), "67f0052442c01401d7a2b9b28889edbba890e570238e57e4932568af90a309c6");
 });
 
 check("resolved and remaining CSS issues are documented accurately", () => {
-  for (let index = 1; index <= 3; index += 1) {
+  for (let index = 1; index <= 4; index += 1) {
     const id = `KNOWN-CSS-00${index}`;
     assert.match(sources.spec, new RegExp(`${id}[^\\n]*修正済み`));
     assert.match(sources.test, new RegExp(`${id}[^\\n]*修正済み`));
   }
-  for (let index = 4; index <= 5; index += 1) {
-    const id = `KNOWN-CSS-00${index}`;
-    assert.match(sources.spec, new RegExp(id));
-    assert.match(sources.test, new RegExp(id));
-  }
-  assert.match(sources.spec, /KNOWN-CSS-004[\s\S]*KNOWN-CSS-005/);
-  assert.match(sources.test, /KNOWN-CSS-004[\s\S]*KNOWN-CSS-005/);
+  assert.match(sources.spec, /KNOWN-CSS-005/);
+  assert.match(sources.test, /KNOWN-CSS-005/);
 });
 
 check("public HTML IDs remain unique", () => {

@@ -141,6 +141,7 @@ check("modified scripts keep their order and use the R4B1 cache key", () => {
   const branchAppendIndex = indexHtml.indexOf("./branch-append-ui.js?v=chart-render-pipeline-r4a-01");
   assert.ok(pipelineIndex >= 0 && pipelineIndex < appIndex);
   assert.ok(appIndex < progressIndex && progressIndex < branchAppendIndex);
+  assert.ok(indexHtml.includes("./favorites-list.js?v=favorite-theme-r4b2d-01"));
 });
 
 assert.ok(passed >= 20, `expected at least 20 checks, got ${passed}`);

@@ -21,95 +21,6 @@
       : null;
   }
 
-  function injectStyles() {
-    if (document.querySelector("#favoriteListStyles")) {
-      return;
-    }
-
-    const style = document.createElement("style");
-    style.id = "favoriteListStyles";
-    style.textContent = `
-      .list-toolbar {
-        align-items: center;
-        display: flex;
-        gap: 8px;
-        justify-content: flex-end;
-      }
-
-      button.favorite-filter-toggle {
-        align-items: center;
-        background: #ffffff;
-        border: 1px solid var(--line);
-        color: var(--muted);
-        display: inline-flex;
-        font-size: 0.84rem;
-        gap: 6px;
-        min-height: 34px;
-        padding: 0 12px;
-        white-space: nowrap;
-      }
-
-      button.favorite-filter-toggle:hover,
-      button.favorite-filter-toggle:focus-visible {
-        background: #fff8e6;
-        border-color: rgba(217, 154, 0, 0.4);
-        color: #8a5a00;
-      }
-
-      button.favorite-filter-toggle.is-active,
-      button.favorite-filter-toggle.is-active:hover,
-      button.favorite-filter-toggle.is-active:focus-visible {
-        background: #fff4d6;
-        border-color: rgba(245, 184, 46, 0.58);
-        color: #7a4b00;
-      }
-
-      button.favorite-version-button {
-        align-items: center;
-        background: transparent;
-        border: 1px solid transparent;
-        border-radius: 999px;
-        color: #b6c0c9;
-        display: inline-flex;
-        flex: 0 0 auto;
-        font-size: 1rem;
-        height: 26px;
-        justify-content: center;
-        line-height: 1;
-        min-height: 26px;
-        padding: 0;
-        width: 26px;
-      }
-
-      button.favorite-version-button:hover,
-      button.favorite-version-button:focus-visible {
-        background: #fff7df;
-        border-color: rgba(217, 154, 0, 0.34);
-        color: #d99a00;
-      }
-
-      button.favorite-version-button.is-favorite,
-      button.favorite-version-button.is-favorite:hover,
-      button.favorite-version-button.is-favorite:focus-visible {
-        background: #fff4d6;
-        border-color: rgba(245, 184, 46, 0.36);
-        color: #f5b82e;
-      }
-
-      .version-row.is-favorite-version .version-main-label {
-        color: var(--primary-dark);
-      }
-
-      @media (max-width: 640px) {
-        .list-toolbar,
-        .list-toolbar button.favorite-filter-toggle {
-          width: 100%;
-        }
-      }
-    `;
-    document.head.appendChild(style);
-  }
-
   function html(value) {
     if (typeof escapeHtml === "function") {
       return escapeHtml(value);
@@ -575,6 +486,5 @@
 
   window.mountFavoriteButtons = mountFavorites;
 
-  injectStyles();
   updateFilterButton();
 })();

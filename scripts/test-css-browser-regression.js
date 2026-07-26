@@ -291,7 +291,18 @@ function createStaticServer() {
       return;
     }
     try {
-      const body = fs.readFileSync(filePath);
+      let body = fs.readFileSync(filePath);
+      if (relativePath === "index.html") {
+        const source = body.toString("utf8");
+        const marker = '<div class="section-heading recent-chart-heading">';
+        const favoriteFilterFixture = `
+          <div class="list-toolbar" id="css-regression-favorite-toolbar">
+            <button class="favorite-filter-toggle" id="favoriteFilterToggle" type="button" aria-pressed="false">☆ お気に入りのみ</button>
+          </div>
+        `;
+        assert.ok(source.includes(marker), "favorite filter fixture marker is missing");
+        body = Buffer.from(source.replace(marker, `${favoriteFilterFixture}${marker}`), "utf8");
+      }
       response.statusCode = 200;
       response.setHeader("Cache-Control", "no-store");
       response.setHeader("Content-Type", contentTypes.get(path.extname(filePath).toLowerCase()) || "application/octet-stream");
@@ -430,7 +441,8 @@ async function waitFor(cdp, sessionId, expression, label) {
     thumbnails: document.querySelectorAll(".thumbnail-cell .progress-thumbnail").length,
     compactRows: document.querySelectorAll(".compact-version-row").length,
     progressStyle: Boolean(document.querySelector("#progress-image-thumbnail-style")),
-    favoriteStyle: Boolean(document.querySelector("#favoriteListStyles")),
+    favoriteRuntimeStyle: Boolean(document.querySelector("#favoriteListStyles")),
+    favoriteStylesheet: [...document.styleSheets].some((sheet) => sheet.href && new URL(sheet.href).pathname.endsWith("/favorites-list.css")),
     bodyText: document.body?.innerText?.slice(0, 500) || ""
   })`);
   throw new Error(`Timed out waiting for ${label}: ${JSON.stringify(diagnostic)}`);
@@ -483,8 +495,107 @@ async function installControlFixtures(cdp, sessionId) {
     withdrawalDisabled.textContent = "Withdrawal disabled";
     host.append(appendUnavailable, appendLegacy, appendIntermediate, genericDisabled, withdrawalDisabled);
     document.body.appendChild(host);
+    const favoriteSource = document.querySelector('.version-row[data-version-id="version-active"] .favorite-version-button');
+    const favoriteRoot = document.querySelector("#list");
+    if (!favoriteSource || !favoriteRoot) {
+      throw new Error("favorite duplicate fixture source is unavailable");
+    }
+    const favoriteDuplicateHost = document.createElement("div");
+    favoriteDuplicateHost.id = "css-regression-favorite-duplicate-host";
+    favoriteDuplicateHost.hidden = true;
+    const favoriteDuplicate = favoriteSource.cloneNode(true);
+    favoriteDuplicate.classList.add("css-regression-favorite-duplicate");
+    favoriteDuplicateHost.appendChild(favoriteDuplicate);
+    favoriteRoot.appendChild(favoriteDuplicateHost);
     return true;
   })()`);
+}
+
+function browserStyleExpression(selector) {
+  return `(() => {
+    const element = document.querySelector(${JSON.stringify(selector)});
+    if (!element) return null;
+    const round = (value) => Number(Number(value || 0).toFixed(3));
+    const colorChannels = (value) => {
+      const channels = String(value || "").match(/[\\d.]+/g)?.map(Number) || [];
+      return channels.length >= 3 ? channels : null;
+    };
+    const luminance = (channels) => {
+      const linear = channels.slice(0, 3).map((channel) => {
+        const value = channel / 255;
+        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+      });
+      return (0.2126 * linear[0]) + (0.7152 * linear[1]) + (0.0722 * linear[2]);
+    };
+    const contrast = (first, second) => {
+      const firstChannels = colorChannels(first);
+      const secondChannels = colorChannels(second);
+      if (!firstChannels || !secondChannels) return null;
+      const firstLuminance = luminance(firstChannels);
+      const secondLuminance = luminance(secondChannels);
+      return round((Math.max(firstLuminance, secondLuminance) + 0.05)
+        / (Math.min(firstLuminance, secondLuminance) + 0.05));
+    };
+    const effectiveBackground = (start) => {
+      let current = start;
+      while (current) {
+        const value = getComputedStyle(current).backgroundColor;
+        const channels = colorChannels(value);
+        if (channels && (channels.length < 4 || channels[3] > 0)) return value;
+        current = current.parentElement;
+      }
+      return "rgb(255, 255, 255)";
+    };
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    const backgroundColor = style.backgroundColor;
+    const backgroundChannels = colorChannels(backgroundColor);
+    const visibleBackgroundColor = backgroundChannels && backgroundChannels.length >= 4 && backgroundChannels[3] === 0
+      ? effectiveBackground(element.parentElement)
+      : backgroundColor;
+    const surroundingBackgroundColor = effectiveBackground(element.parentElement);
+    return {
+      tagName: element.tagName,
+      className: String(element.className || ""),
+      text: String(element.textContent || "").trim(),
+      ariaPressed: element.getAttribute("aria-pressed"),
+      ariaLabel: element.getAttribute("aria-label"),
+      title: element.getAttribute("title"),
+      backgroundColor,
+      visibleBackgroundColor,
+      surroundingBackgroundColor,
+      color: style.color,
+      borderColor: style.borderColor,
+      borderStyle: style.borderStyle,
+      borderWidth: style.borderWidth,
+      outlineColor: style.outlineColor,
+      outlineStyle: style.outlineStyle,
+      outlineWidth: style.outlineWidth,
+      outlineOffset: style.outlineOffset,
+      opacity: style.opacity,
+      cursor: style.cursor,
+      display: style.display,
+      width: style.width,
+      height: style.height,
+      contrastRatio: contrast(style.color, visibleBackgroundColor),
+      borderContrastRatio: contrast(style.borderColor, surroundingBackgroundColor),
+      outlineContrastRatio: contrast(style.outlineColor, surroundingBackgroundColor),
+      rect: {
+        left: round(rect.left), right: round(rect.right), top: round(rect.top), bottom: round(rect.bottom),
+        width: round(rect.width), height: round(rect.height)
+      },
+      viewportClip: {
+        left: round(Math.max(0, -rect.left)),
+        right: round(Math.max(0, rect.right - document.documentElement.clientWidth)),
+        top: round(Math.max(0, -rect.top)),
+        bottom: round(Math.max(0, rect.bottom - innerHeight))
+      }
+    };
+  })()`;
+}
+
+async function captureBrowserStyle(cdp, sessionId, selector) {
+  return evaluate(cdp, sessionId, browserStyleExpression(selector));
 }
 
 async function captureForcedPseudoStyle(cdp, sessionId, selector, pseudoClass) {
@@ -496,23 +607,104 @@ async function captureForcedPseudoStyle(cdp, sessionId, selector, pseudoClass) {
   assert.ok(nodeId, `control fixture is missing for ${selector}`);
   await cdp.send("CSS.forcePseudoState", { nodeId, forcedPseudoClasses: [pseudoClass] }, sessionId);
   try {
-    return await evaluate(cdp, sessionId, `(() => {
-      const element = document.querySelector(${JSON.stringify(selector)});
-      const style = getComputedStyle(element);
-      return {
-        matches: element.matches(${JSON.stringify(`:${pseudoClass}`)}),
-        backgroundColor: style.backgroundColor,
-        color: style.color,
-        borderColor: style.borderColor,
-        boxShadow: style.boxShadow,
-        outlineColor: style.outlineColor,
-        outlineStyle: style.outlineStyle,
-        outlineWidth: style.outlineWidth
-      };
-    })()`);
+    const style = await captureBrowserStyle(cdp, sessionId, selector);
+    style.matches = await evaluate(cdp, sessionId, `document.querySelector(${JSON.stringify(selector)}).matches(${JSON.stringify(`:${pseudoClass}`)})`);
+    style.boxShadow = await evaluate(cdp, sessionId, `getComputedStyle(document.querySelector(${JSON.stringify(selector)})).boxShadow`);
+    return style;
   } finally {
     await cdp.send("CSS.forcePseudoState", { nodeId, forcedPseudoClasses: [] }, sessionId);
   }
+}
+
+async function clickAndSettle(cdp, sessionId, selector) {
+  await evaluate(cdp, sessionId, `(async () => {
+    const element = document.querySelector(${JSON.stringify(selector)});
+    if (!element) throw new Error("interaction fixture is missing");
+    element.click();
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  })()`);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+}
+
+async function captureFavoriteInteractions(cdp, sessionId) {
+  const filterSelector = "#favoriteFilterToggle";
+  const starSelector = '.version-row[data-version-id="version-active"] .favorite-version-button';
+  const duplicateSelector = ".css-regression-favorite-duplicate";
+  const storageKey = "bms-wip-charts:favorites:v1";
+  const resourceCount = () => evaluate(cdp, sessionId, `performance.getEntriesByType("resource")
+    .filter((entry) => new URL(entry.name).pathname === "/api/charts").length`);
+
+  if (await evaluate(cdp, sessionId, `document.querySelector(${JSON.stringify(filterSelector)}).classList.contains("is-active")`)) {
+    await clickAndSettle(cdp, sessionId, filterSelector);
+  }
+  if (await evaluate(cdp, sessionId, `document.querySelector(${JSON.stringify(starSelector)}).classList.contains("is-favorite")`)) {
+    await clickAndSettle(cdp, sessionId, starSelector);
+  }
+
+  const beforeResources = await resourceCount();
+  const filterIdle = await captureBrowserStyle(cdp, sessionId, filterSelector);
+  const filterHover = await captureForcedPseudoStyle(cdp, sessionId, filterSelector, "hover");
+  const filterFocus = await captureForcedPseudoStyle(cdp, sessionId, filterSelector, "focus-visible");
+  await clickAndSettle(cdp, sessionId, filterSelector);
+  const filterActive = await captureBrowserStyle(cdp, sessionId, filterSelector);
+  const filterActiveHover = await captureForcedPseudoStyle(cdp, sessionId, filterSelector, "hover");
+  const filterActiveFocus = await captureForcedPseudoStyle(cdp, sessionId, filterSelector, "focus-visible");
+  const filterOn = await evaluate(cdp, sessionId, `(() => {
+    const button = document.querySelector(${JSON.stringify(filterSelector)});
+    return { active: button.classList.contains("is-active"), ariaPressed: button.getAttribute("aria-pressed"), text: button.textContent, title: button.title };
+  })()`);
+  await clickAndSettle(cdp, sessionId, filterSelector);
+  const filterOff = await evaluate(cdp, sessionId, `(() => {
+    const button = document.querySelector(${JSON.stringify(filterSelector)});
+    return { active: button.classList.contains("is-active"), ariaPressed: button.getAttribute("aria-pressed"), text: button.textContent, title: button.title };
+  })()`);
+
+  const starIdle = await captureBrowserStyle(cdp, sessionId, starSelector);
+  const starHover = await captureForcedPseudoStyle(cdp, sessionId, starSelector, "hover");
+  const starFocus = await captureForcedPseudoStyle(cdp, sessionId, starSelector, "focus-visible");
+  await clickAndSettle(cdp, sessionId, starSelector);
+  const starFavorite = await captureBrowserStyle(cdp, sessionId, starSelector);
+  const starFavoriteHover = await captureForcedPseudoStyle(cdp, sessionId, starSelector, "hover");
+  const starFavoriteFocus = await captureForcedPseudoStyle(cdp, sessionId, starSelector, "focus-visible");
+  const storageAfterAdd = await evaluate(cdp, sessionId, `JSON.parse(localStorage.getItem(${JSON.stringify(storageKey)}) || "{}")`);
+  const favoriteOn = await evaluate(cdp, sessionId, `(() => {
+    const button = document.querySelector(${JSON.stringify(starSelector)});
+    const duplicate = document.querySelector(${JSON.stringify(duplicateSelector)});
+    return {
+      active: button.classList.contains("is-favorite"),
+      rowActive: button.closest(".version-row").classList.contains("is-favorite-version"),
+      ariaPressed: button.getAttribute("aria-pressed"), ariaLabel: button.getAttribute("aria-label"),
+      text: button.textContent, title: button.title,
+      duplicateActive: duplicate.classList.contains("is-favorite"), duplicateAriaPressed: duplicate.getAttribute("aria-pressed"), duplicateText: duplicate.textContent
+    };
+  })()`);
+  await clickAndSettle(cdp, sessionId, starSelector);
+  const storageAfterRemove = await evaluate(cdp, sessionId, `JSON.parse(localStorage.getItem(${JSON.stringify(storageKey)}) || "{}")`);
+  const favoriteOff = await evaluate(cdp, sessionId, `(() => {
+    const button = document.querySelector(${JSON.stringify(starSelector)});
+    const duplicate = document.querySelector(${JSON.stringify(duplicateSelector)});
+    return {
+      active: button.classList.contains("is-favorite"),
+      rowActive: button.closest(".version-row").classList.contains("is-favorite-version"),
+      ariaPressed: button.getAttribute("aria-pressed"), ariaLabel: button.getAttribute("aria-label"),
+      text: button.textContent, title: button.title,
+      duplicateActive: duplicate.classList.contains("is-favorite"), duplicateAriaPressed: duplicate.getAttribute("aria-pressed"), duplicateText: duplicate.textContent
+    };
+  })()`);
+  const afterResources = await resourceCount();
+  const toolbar = await captureBrowserStyle(cdp, sessionId, "#css-regression-favorite-toolbar");
+  const runtimeStyles = await evaluate(cdp, sessionId, `({
+    favorite: document.querySelectorAll("#favoriteListStyles").length,
+    progress: document.querySelectorAll("#progress-image-thumbnail-style").length,
+    total: document.querySelectorAll("style").length
+  })`);
+  return {
+    filterIdle, filterHover, filterFocus, filterActive, filterActiveHover, filterActiveFocus,
+    starIdle, starHover, starFocus, starFavorite, starFavoriteHover, starFavoriteFocus,
+    behavior: { filterOn, filterOff, favoriteOn, favoriteOff, storageAfterAdd, storageAfterRemove, chartFetchDelta: afterResources - beforeResources },
+    toolbar,
+    runtimeStyles
+  };
 }
 
 async function captureControlInteractions(cdp, sessionId) {
@@ -830,6 +1022,7 @@ async function captureMatrix(cdp, sessionId, pageKind) {
         const entry = { requestedTheme: theme, requestedWidth: width, ...(await evaluate(cdp, sessionId, expression)) };
         if (pageKind === "detail") {
           entry.controlInteractions = await captureControlInteractions(cdp, sessionId);
+          entry.favoriteInteractions = await captureFavoriteInteractions(cdp, sessionId);
         }
         matrix.push(entry);
       } catch (error) {
@@ -878,6 +1071,33 @@ const untouchedControlColors = {
     downloadUnavailable: ["rgb(43, 57, 52)", "rgb(156, 170, 165)", "rgb(70, 92, 84)"],
     genericSecondaryDisabled: ["rgb(238, 243, 241)", "rgb(130, 145, 141)", "rgb(70, 92, 84)"],
     withdrawalActionDisabled: ["rgb(43, 57, 52)", "rgb(156, 170, 165)", "rgb(70, 92, 84)"]
+  }
+};
+
+const favoriteControlColors = {
+  white: {
+    filterIdle: ["rgb(255, 255, 255)", "rgb(90, 104, 100)", "rgb(207, 216, 213)"],
+    filterHover: ["rgb(255, 248, 230)", "rgb(138, 90, 0)", "rgba(217, 154, 0, 0.4)"],
+    filterActive: ["rgb(255, 244, 214)", "rgb(122, 75, 0)", "rgba(245, 184, 46, 0.58)"],
+    starIdle: ["rgba(0, 0, 0, 0)", "rgb(119, 131, 142)", "rgba(0, 0, 0, 0)"],
+    starHover: ["rgb(255, 247, 223)", "rgb(138, 90, 0)", "rgba(217, 154, 0, 0.34)"],
+    starFavorite: ["rgb(255, 244, 214)", "rgb(122, 75, 0)", "rgba(245, 184, 46, 0.36)"]
+  },
+  default: {
+    filterIdle: ["rgb(255, 255, 255)", "rgb(82, 99, 94)", "rgb(170, 185, 180)"],
+    filterHover: ["rgb(255, 248, 230)", "rgb(138, 90, 0)", "rgba(217, 154, 0, 0.4)"],
+    filterActive: ["rgb(255, 244, 214)", "rgb(122, 75, 0)", "rgba(245, 184, 46, 0.58)"],
+    starIdle: ["rgba(0, 0, 0, 0)", "rgb(119, 131, 142)", "rgba(0, 0, 0, 0)"],
+    starHover: ["rgb(255, 247, 223)", "rgb(138, 90, 0)", "rgba(217, 154, 0, 0.34)"],
+    starFavorite: ["rgb(255, 244, 214)", "rgb(122, 75, 0)", "rgba(245, 184, 46, 0.36)"]
+  },
+  dark: {
+    filterIdle: ["rgb(32, 43, 39)", "rgb(179, 192, 187)", "rgb(70, 92, 84)"],
+    filterHover: ["rgb(61, 50, 27)", "rgb(242, 198, 109)", "rgb(159, 122, 50)"],
+    filterActive: ["rgb(74, 59, 29)", "rgb(255, 224, 160)", "rgb(194, 153, 67)"],
+    starIdle: ["rgba(0, 0, 0, 0)", "rgb(147, 162, 157)", "rgba(0, 0, 0, 0)"],
+    starHover: ["rgb(61, 50, 27)", "rgb(242, 198, 109)", "rgb(159, 122, 50)"],
+    starFavorite: ["rgb(74, 59, 29)", "rgb(255, 224, 160)", "rgb(194, 153, 67)"]
   }
 };
 
@@ -963,6 +1183,80 @@ function assertPageInvariants(snapshot, consoleMessages) {
       assert.equal(entry.controlInteractions[name].programmatic.activeAfterFocus, false, `${name} entered the focus order`);
       assert.equal(entry.controlInteractions[name].programmatic.clickEvents, 0, `${name} emitted a click event`);
     }
+    const favorite = entry.favoriteInteractions;
+    const expectedFavorite = favoriteControlColors[entry.requestedTheme];
+    assert.deepEqual(controlColorTuple(favorite.filterIdle), expectedFavorite.filterIdle);
+    assert.deepEqual(controlColorTuple(favorite.filterHover), expectedFavorite.filterHover);
+    assert.deepEqual(controlColorTuple(favorite.filterFocus), expectedFavorite.filterHover);
+    assert.deepEqual(controlColorTuple(favorite.filterActive), expectedFavorite.filterActive);
+    assert.deepEqual(controlColorTuple(favorite.filterActiveHover), expectedFavorite.filterActive);
+    assert.deepEqual(controlColorTuple(favorite.filterActiveFocus), expectedFavorite.filterActive);
+    assert.deepEqual(controlColorTuple(favorite.starIdle), expectedFavorite.starIdle);
+    assert.deepEqual(controlColorTuple(favorite.starHover), expectedFavorite.starHover);
+    assert.deepEqual(controlColorTuple(favorite.starFocus), expectedFavorite.starHover);
+    assert.deepEqual(controlColorTuple(favorite.starFavorite), expectedFavorite.starFavorite);
+    assert.deepEqual(controlColorTuple(favorite.starFavoriteHover), expectedFavorite.starFavorite);
+    assert.deepEqual(controlColorTuple(favorite.starFavoriteFocus), expectedFavorite.starFavorite);
+    for (const state of ["filterIdle", "filterHover", "filterFocus", "filterActive", "filterActiveHover", "filterActiveFocus"]) {
+      assert.ok(favorite[state].contrastRatio >= 4.5, `${state} contrast ${favorite[state].contrastRatio} is below 4.5`);
+    }
+    for (const state of ["starIdle", "starHover", "starFocus", "starFavorite", "starFavoriteHover", "starFavoriteFocus"]) {
+      assert.ok(favorite[state].contrastRatio >= 3, `${state} contrast ${favorite[state].contrastRatio} is below 3`);
+    }
+    for (const state of ["filterFocus", "filterActiveFocus", "starFocus", "starFavoriteFocus"]) {
+      assert.equal(favorite[state].matches, true, `${state} forced focus-visible did not apply`);
+      assert.notEqual(favorite[state].outlineStyle, "none", `${state} outline is missing`);
+      assert.ok(Number.parseFloat(favorite[state].outlineWidth) >= 1, `${state} outline is too thin`);
+      assert.ok(favorite[state].outlineContrastRatio >= 3, `${state} outline contrast ${favorite[state].outlineContrastRatio} is below 3`);
+    }
+    assert.deepEqual(favorite.behavior.filterOn, {
+      active: true,
+      ariaPressed: "true",
+      text: "★ お気に入りのみ",
+      title: "通常一覧に戻す"
+    });
+    assert.deepEqual(favorite.behavior.filterOff, {
+      active: false,
+      ariaPressed: "false",
+      text: "☆ お気に入りのみ",
+      title: "お気に入りversionと祖先だけを表示"
+    });
+    assert.deepEqual(favorite.behavior.favoriteOn, {
+      active: true,
+      rowActive: true,
+      ariaPressed: "true",
+      ariaLabel: "お気に入りから外す",
+      text: "★",
+      title: "お気に入りから外す",
+      duplicateActive: true,
+      duplicateAriaPressed: "true",
+      duplicateText: "★"
+    });
+    assert.deepEqual(favorite.behavior.favoriteOff, {
+      active: false,
+      rowActive: false,
+      ariaPressed: "false",
+      ariaLabel: "お気に入りに追加",
+      text: "☆",
+      title: "お気に入りに追加",
+      duplicateActive: false,
+      duplicateAriaPressed: "false",
+      duplicateText: "☆"
+    });
+    assert.deepEqual(Object.keys(favorite.behavior.storageAfterAdd), ["version-active"]);
+    assert.equal(favorite.behavior.storageAfterAdd["version-active"].versionId, "version-active");
+    assert.match(favorite.behavior.storageAfterAdd["version-active"].favoritedAt, /^\d{4}-\d{2}-\d{2}T/);
+    assert.deepEqual(favorite.behavior.storageAfterRemove, {});
+    assert.equal(favorite.behavior.chartFetchDelta, 0, "favorite-only rerender must not fetch charts again");
+    assert.deepEqual(favorite.runtimeStyles, { favorite: 0, progress: 1, total: 1 });
+    for (const state of ["filterIdle", "filterHover", "filterFocus", "filterActive", "filterActiveHover", "filterActiveFocus", "starIdle", "starHover", "starFocus", "starFavorite", "starFavoriteHover", "starFavoriteFocus"]) {
+      for (const side of ["left", "right"]) {
+        assert.equal(favorite[state].viewportClip[side], 0, `${state} ${side} clip at ${entry.requestedTheme} ${entry.requestedWidth}px`);
+      }
+    }
+    if (entry.requestedWidth === 390) {
+      assert.ok(Math.abs(favorite.toolbar.rect.width - favorite.filterIdle.rect.width) <= 1, "390px favorite filter must fill its toolbar");
+    }
     for (const group of ["originLinks", "downloads", "appendControls", "managementControls", "favorites", "thumbnails"]) {
       for (const item of entry.elements[group]) {
         assert.equal(item.viewportClip.left, 0, `${group} left clip at ${entry.requestedWidth}px`);
@@ -1028,8 +1322,11 @@ function reportKnownIssues(snapshot) {
     || dark390.known.appendStopped?.backgroundColor === "rgb(238, 243, 241)") {
     throw new Error("KNOWN-CSS-003 regressed: dark append-stopped uses the fixed light background");
   }
+  if (dark390.known.favoriteIdle?.color === white390.known.favoriteIdle?.color
+    || dark390.known.favoriteIdle?.color === "rgb(182, 192, 201)") {
+    throw new Error("KNOWN-CSS-004 regressed: dark favorite idle uses the fixed light color");
+  }
   const checks = [
-    ["KNOWN-CSS-004", new Set(themeAt1366.map((entry) => JSON.stringify(entry.known.favoriteIdle))).size === 1, "favorite idle fixed color"],
     ["KNOWN-CSS-005", new Set(themeAt1366.map((entry) => entry.known.detailTarget?.backgroundColor)).size === 1, "detail target fixed light background"]
   ];
   for (const [id, observed, label] of checks) {
@@ -1076,12 +1373,20 @@ function compareValues(expected, actual, location = "snapshot") {
       const isStoppedControl = expected.className?.split(/\s+/).includes("append-policy-disabled-button");
       const isStoppedSummary = /\.known\.appendStopped$/.test(location);
       const isStoppedInteraction = /\.controlInteractions\.appendStopped\.(?:hover|focusVisible|active)$/.test(location);
+      const isFavoriteStyle = /\.(?:elements\.favorites\[\d+\]|known\.favoriteIdle|favoriteInteractions\.(?:filter(?:Idle|Hover|Focus|Active(?:Hover|Focus)?)|star(?:Idle|Hover|Focus|Favorite(?:Hover|Focus)?)))$/.test(location);
+      const favoriteStyleChanges = new Set([
+        "backgroundColor", "visibleBackgroundColor", "surroundingBackgroundColor", "color", "borderColor",
+        "outline", "outlineColor", "contrastRatio", "borderContrastRatio", "outlineContrastRatio", "boxShadow"
+      ]);
       const changedInAllThemes = new Set(["color", "contrastRatio", "outline", "outlineColor"]);
       const changedInDark = new Set(["backgroundColor", "borderColor", "boxShadow", "borderContrastRatio"]);
       if ((isStoppedControl || isStoppedSummary || isStoppedInteraction)
         && (changedInAllThemes.has(key) || (isDark && changedInDark.has(key)))) {
         continue;
       }
+      if (isFavoriteStyle && favoriteStyleChanges.has(key)) continue;
+      if (location.endsWith(".favoriteInteractions.runtimeStyles") && key === "favorite") continue;
+      if (location.endsWith(".favoriteInteractions.behavior.storageAfterAdd.version-active") && key === "favoritedAt") continue;
       compareValues(expected[key], actual[key], `${location}.${key}`);
     }
     return;
@@ -1159,7 +1464,8 @@ async function run() {
       && document.querySelectorAll(".progress-thumbnail-image-wrap img.progress-thumbnail-image").length === 1
       && document.querySelectorAll(".progress-thumbnail.has-progress-image.is-image-loaded").length === 1
       && document.querySelector("#progress-image-thumbnail-style")
-      && document.querySelector("#favoriteListStyles")`, "detail fixture");
+      && !document.querySelector("#favoriteListStyles")
+      && [...document.styleSheets].some((sheet) => sheet.href && new URL(sheet.href).pathname.endsWith("/favorites-list.css"))`, "detail fixture");
     await installControlFixtures(cdp, sessionId);
     const detailNavigationMs = Number(process.hrtime.bigint() - navigationStart) / 1e6;
     const detail = await captureMatrix(cdp, sessionId, "detail");
