@@ -322,3 +322,12 @@ PROG-01ではWorker本体の実装を変更しないため、DB migrationだけ�
 - DLリンクが `https://bms-wip-charts-worker.monsta3228gsl.workers.dev/api/files/...` を指すことを確認する。
 - CORSエラーが出る場合は、`ALLOWED_ORIGINS` に `https://monsta-bms.github.io` が含まれていることを確認する。
 - `HASH_SECRET` と `ADMIN_TOKEN` がCloudflare secretsに設定されていることを確認する。
+
+## リポジトリ衛生と履歴書換え後の注意
+
+- `.wrangler`はローカル状態、`node_modules`は依存生成物、`.deploy-logs`はローカルログとして扱い、Gitへcommitしない。
+- ローカルSQLite／DB、`.dev.vars`、`.env`、credentialファイル、誤ってdirectoryとして作られた`.gitignore`もcommitしない。
+- `git add .`の前に`node scripts/test-repository-hygiene.mjs`を実行し、成功した場合だけstageする。
+- ローカルの履歴書換えは実施済みだが、GitHubへのforce pushはまだ実施していない。履歴書換え済みcloneから通常のpushを行わない。
+- 将来force pushを実施した後は、古いcloneを使用せず新しくcloneする。共同作業者やforkへの影響、branch protection、GitHub cache／Support対応を別手順で確認する。
+- 履歴監査でcredential候補が検出された場合、値を文書へ記録せず、関連するcredentialをrotation／revokeしてから本番操作を検討する。

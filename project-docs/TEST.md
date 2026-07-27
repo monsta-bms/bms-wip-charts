@@ -1611,3 +1611,11 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - favorite-onlyは追加chart fetch 0、detailのappend-success／management-refreshは選択版と1 cardを維持する。load-moreはpipeline unit／staticでappend mode、新batchだけの補強、`stored-progress-thumbnails` order 300 required、`common-mount` 1回を回帰する。
 - 変更前snapshotはリポジトリ外の一時ファイルへ保存し、意図したruntime style 1→0、全テーマのempty文字、darkの画像枠背景／border以外を0.25px以内で比較する。全9条件で対象lifecycle row高さ差0px、compact一覧差分なし、横overflow／clipなしとし、比較後に一時snapshotを削除する。
 - R1 model、R2 Link UI、R3 Action UI、R4A pipeline、R4B1 dead-code、曲／DL、version list 4件、withdrawal active 18件、metadata parser／static、変更JavaScript構文、HTML重複ID、既知CSS warning 0件、`git diff --check`を回帰する。canonical schemaは全Migration自動検出テストで0009を含めて一致させる。Pages、Worker、D1、R2、Cron、Secret、dependency、本番操作、push、deployは行わない。
+
+## SECURITY-HISTORY-CLEANUP repository hygiene
+
+- 2026-07-27に、ローカルWrangler状態、依存物、ローカルDB、秘密設定ファイル、誤配置pathを作業用cloneの全Git履歴から除去した。GitHubへのforce pushは別Phaseであり、まだ実施していない。
+- `node scripts/test-repository-hygiene.mjs`を`git add .`より前に実行する。追跡中の`.wrangler`、`node_modules`、SQLite／DB、`.dev.vars`、`.env`、`.deploy-logs`、root `wrangler.jsonc`、`.gitignore` directory、既知のtypo pathを拒否する。
+- hygiene testは必要なignore規則とexampleファイルの許可も確認する。失敗時に出すのは固定error code、path、件数、ignore判定だけで、ファイル本文や設定値は読み上げない。
+- 履歴監査ではSecret値、利用者データ、SQLite row、password hashを記録・表示しない。credential候補を検出した場合は、履歴除去とは別にrotation／revokeを必須とする。
+- force push後は古いcloneを再利用せず、破棄して新しくcloneする。GitHub cacheやSupport対応の要否はforce push後に別途判断する。
