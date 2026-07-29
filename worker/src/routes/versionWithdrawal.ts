@@ -1,7 +1,7 @@
-import { hashWithSecret } from "../utils/hash";
 import { buildRequestFingerprint } from "../utils/requestFingerprint";
 import { finalizeVersionWithdrawal } from "../services/versionWithdrawalFinalizer";
 import { apiError, Env, errorDetail, jsonResponse, methodNotAllowed, ok } from "../utils/response";
+import { hashWithdrawalIdempotency, verifyPasswordHash } from "../utils/securityHash";
 import {
   PublicLifecycleStatus,
   resolvePublicLifecycleStatus,
@@ -42,6 +42,7 @@ type ManagedVersionRow = {
   chart_id: string;
   song_id: string;
   password_hash: string;
+  password_hash_version: number;
   file_sha256: string | null;
   is_hidden: number;
   chart_is_hidden: number;
@@ -126,9 +127,9 @@ async function writeLifecycleLog(
 ): Promise<void> {
   await env.DB.prepare(`
     INSERT INTO post_logs (
-      id, action, song_id, chart_id, version_id, ip_hash, ua_hash,
+      id, action, song_id, chart_id, version_id, ip_hash, ua_hash, fingerprint_hash_version,
       file_sha256, result, error_code, detail
-    ) VALUES (?, 'withdraw_version', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, 'withdraw_version', ?, ?, ?, ?, ?, 2, ?, ?, ?, ?)
   `).bind(
     makeId("post_log"),
     context.songId,
@@ -227,6 +228,7 @@ async function selectManagedVersion(env: Env, versionId: string): Promise<Manage
       versions.chart_id,
       charts.song_id,
       versions.password_hash,
+      versions.password_hash_version,
       versions.file_sha256,
       versions.is_hidden,
       charts.is_hidden AS chart_is_hidden,
@@ -291,6 +293,7 @@ async function selectWithdrawalByIdempotencyHash(env: Env, hash: string): Promis
       END AS can_cancel
     FROM version_withdrawals
     WHERE idempotency_key_hash = ?
+      AND idempotency_hash_version = 2
     LIMIT 1
   `).bind(hash).first<WithdrawalRow>();
 }
@@ -490,6 +493,7 @@ async function isRateLimited(env: Env, context: LogContext): Promise<boolean> {
     FROM post_logs
     WHERE ip_hash = ?
       AND ua_hash = ?
+      AND fingerprint_hash_version = 2
       AND action IN ('withdraw_version', 'request_delete')
       AND result = 'rejected'
       AND error_code = 'INVALID_PASSWORD'
@@ -524,7 +528,20 @@ async function authenticate(
   context.versionId = version.id;
   context.fileSha256 = version.file_sha256;
 
-  if (await hashWithSecret(`password:${password}`, secret) !== version.password_hash) {
+  const passwordResult = await verifyPasswordHash(
+    secret,
+    password,
+    version.password_hash,
+    Number(version.password_hash_version)
+  );
+  if (passwordResult === "legacy") {
+    return { response: await fail(request, env, context, operation, {
+      status: 409,
+      code: "MANAGEMENT_PASSWORD_EXPIRED",
+      message: "セキュリティ更新により、この投稿の管理パスワードは失効しました。管理者へお問い合わせください。"
+    }) };
+  }
+  if (passwordResult !== "verified") {
     return { response: await fail(request, env, context, operation, {
       status: 401,
       code: "INVALID_PASSWORD",
@@ -608,12 +625,13 @@ async function insertWithdrawal(
       id, version_id, chart_id, status, request_mode, requested_at, scheduled_at,
       handling_mode, request_reason,
       processing_mode, attempt_count, idempotency_key_hash,
-      requester_ip_hash, requester_ua_hash, created_at, updated_at
+      idempotency_hash_version, requester_ip_hash, requester_ua_hash,
+      fingerprint_hash_version, created_at, updated_at
     )
     SELECT
       ?, versions.id, versions.chart_id, 'pending', ?, CURRENT_TIMESTAMP,
       ${scheduledAtSql}, ?, ?,
-      NULL, 0, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      NULL, 0, ?, 2, ?, ?, 2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     FROM versions
     INNER JOIN charts ON charts.id = versions.chart_id
     WHERE versions.id = ?
@@ -989,11 +1007,13 @@ export async function handleVersionWithdrawalRoute(
   }
   if (request.method !== "POST") return methodNotAllowed(request, env, request.method);
 
-  const secret = env.HASH_SECRET?.trim();
-  if (!secret) {
-    return apiError(request, env, 500, "SERVER_CONFIG_ERROR", "サーバー設定が不足しています。", "HASH_SECRET is not configured.");
+  const abuseSecret = env.ABUSE_HASH_SECRET?.trim();
+  const passwordSecret = env.PASSWORD_HASH_SECRET?.trim();
+  const idempotencySecret = env.WITHDRAWAL_IDEMPOTENCY_SECRET?.trim();
+  if (!abuseSecret || !passwordSecret || (action === "withdrawal" && !idempotencySecret)) {
+    return apiError(request, env, 500, "SERVER_CONFIG_ERROR", "サーバー設定が不足しています。", "Required security hash secrets are not configured.");
   }
-  const fingerprint = await buildRequestFingerprint(request, secret);
+  const fingerprint = await buildRequestFingerprint(request, abuseSecret);
   const context = emptyLogContext(fingerprint.ipHash, fingerprint.uaHash);
   const parsed = action === "withdrawal" ? await parseRequestBody(request) : await parseCancelBody(request);
   if (isFailure(parsed)) {
@@ -1003,9 +1023,9 @@ export async function handleVersionWithdrawalRoute(
   try {
     let idempotencyHash: string | null = null;
     if (action === "withdrawal") {
-      idempotencyHash = await hashWithSecret(
-        `withdrawal-idempotency:${(parsed as RequestBody).idempotencyKey}`,
-        secret
+      idempotencyHash = await hashWithdrawalIdempotency(
+        idempotencySecret!,
+        (parsed as RequestBody).idempotencyKey
       );
       const existing = await selectWithdrawalByIdempotencyHash(env, idempotencyHash);
       if (existing) {
@@ -1033,7 +1053,7 @@ export async function handleVersionWithdrawalRoute(
       context,
       normalizedVersionId,
       parsed.password,
-      secret,
+      passwordSecret,
       action === "withdrawal" ? "request" : "cancel"
     );
     if ("response" in authenticated) return authenticated.response;

@@ -103,6 +103,7 @@ CREATE TABLE IF NOT EXISTS versions (
   delete_requested_at TEXT,
   hidden_at TEXT,
   download_blocked_at TEXT,
+  password_hash_version INTEGER NOT NULL DEFAULT 1 CHECK (password_hash_version IN (1, 2)),
   FOREIGN KEY (chart_id) REFERENCES charts(id) ON DELETE RESTRICT,
   FOREIGN KEY (parent_version_id) REFERENCES versions(id) ON DELETE RESTRICT,
   CHECK (
@@ -131,6 +132,7 @@ CREATE TABLE IF NOT EXISTS delete_requests (
   handled_at TEXT,
   handled_by TEXT,
   admin_note TEXT,
+  fingerprint_hash_version INTEGER NOT NULL DEFAULT 1 CHECK (fingerprint_hash_version IN (1, 2)),
   FOREIGN KEY (version_id) REFERENCES versions(id) ON DELETE RESTRICT,
   FOREIGN KEY (chart_id) REFERENCES charts(id) ON DELETE RESTRICT
 );
@@ -148,6 +150,7 @@ CREATE TABLE IF NOT EXISTS post_logs (
   error_code TEXT,
   detail TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  fingerprint_hash_version INTEGER NOT NULL DEFAULT 1 CHECK (fingerprint_hash_version IN (1, 2)),
   FOREIGN KEY (song_id) REFERENCES songs(id) ON DELETE SET NULL,
   FOREIGN KEY (chart_id) REFERENCES charts(id) ON DELETE SET NULL,
   FOREIGN KEY (version_id) REFERENCES versions(id) ON DELETE SET NULL
@@ -163,6 +166,7 @@ CREATE TABLE IF NOT EXISTS bans (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   expired_at TEXT,
   disabled_at TEXT,
+  ban_hash_version INTEGER CHECK (ban_hash_version IS NULL OR ban_hash_version IN (1, 2)),
   UNIQUE (ban_type, ban_value)
 );
 
@@ -213,6 +217,8 @@ CREATE TABLE IF NOT EXISTS version_withdrawals (
   request_reason TEXT CHECK (
     request_reason IS NULL OR length(trim(request_reason)) BETWEEN 10 AND 500
   ),
+  idempotency_hash_version INTEGER NOT NULL DEFAULT 1 CHECK (idempotency_hash_version IN (1, 2)),
+  fingerprint_hash_version INTEGER NOT NULL DEFAULT 1 CHECK (fingerprint_hash_version IN (1, 2)),
   CHECK (scheduled_at >= requested_at)
 );
 
@@ -298,6 +304,9 @@ CREATE INDEX IF NOT EXISTS idx_versions_collapsed_by_version
 CREATE INDEX IF NOT EXISTS idx_versions_created_at
   ON versions (created_at DESC);
 
+CREATE INDEX IF NOT EXISTS idx_versions_password_hash_version
+  ON versions (password_hash_version, id);
+
 CREATE INDEX IF NOT EXISTS idx_delete_requests_version
   ON delete_requests (version_id);
 
@@ -307,11 +316,20 @@ CREATE INDEX IF NOT EXISTS idx_delete_requests_chart
 CREATE INDEX IF NOT EXISTS idx_delete_requests_status_created_at
   ON delete_requests (status, created_at DESC);
 
+CREATE INDEX IF NOT EXISTS idx_delete_requests_fingerprint_version_created
+  ON delete_requests (fingerprint_hash_version, created_at DESC);
+
 CREATE INDEX IF NOT EXISTS idx_post_logs_ip_hash_created_at
   ON post_logs (ip_hash, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_post_logs_ua_hash_created_at
   ON post_logs (ua_hash, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_post_logs_fingerprint_version_ip_created
+  ON post_logs (fingerprint_hash_version, ip_hash, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_post_logs_fingerprint_version_ua_created
+  ON post_logs (fingerprint_hash_version, ua_hash, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_post_logs_file_sha256
   ON post_logs (file_sha256);
@@ -324,6 +342,9 @@ CREATE INDEX IF NOT EXISTS idx_post_logs_result_error_created_at
 
 CREATE INDEX IF NOT EXISTS idx_bans_type_value_active
   ON bans (ban_type, ban_value, active);
+
+CREATE INDEX IF NOT EXISTS idx_bans_hash_version_type_value_active
+  ON bans (ban_hash_version, ban_type, ban_value, active);
 
 CREATE INDEX IF NOT EXISTS idx_bans_active_expired_at
   ON bans (active, expired_at);
@@ -349,6 +370,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_version_withdrawals_active_version
 
 CREATE INDEX IF NOT EXISTS idx_version_withdrawals_handling_schedule
   ON version_withdrawals (status, handling_mode, scheduled_at, id);
+
+CREATE INDEX IF NOT EXISTS idx_version_withdrawals_idempotency_version_hash
+  ON version_withdrawals (idempotency_hash_version, idempotency_key_hash);
 
 CREATE INDEX IF NOT EXISTS idx_version_source_metadata_status_updated
   ON version_source_metadata (status, updated_at, version_id);

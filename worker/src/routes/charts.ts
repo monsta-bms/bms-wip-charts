@@ -3,10 +3,11 @@ import { analyzeUploadedBmsBytes } from "../utils/bmsUploadAnalysis";
 import { parseAllowAppend } from "../utils/appendPolicy";
 import { validateChartName } from "../utils/chartName";
 import { sanitizeFileName, validateUploadFile } from "../utils/fileValidation";
-import { hashWithSecret, sha256HexFromBuffer } from "../utils/hash";
+import { sha256HexFromBuffer } from "../utils/hash";
 import { normalizeOriginUrl } from "../utils/originUrl";
 import { prepareProgressMap } from "../utils/progressMap";
 import { buildRequestFingerprint } from "../utils/requestFingerprint";
+import { hashPassword } from "../utils/securityHash";
 import { apiError, Env, errorDetail, methodNotAllowed, ok } from "../utils/response";
 import {
   buildVersionSourceMetadataInsertStatement,
@@ -543,11 +544,12 @@ async function writePostLog(
       version_id,
       ip_hash,
       ua_hash,
+      fingerprint_hash_version,
       file_sha256,
       result,
       error_code,
       detail
-    ) VALUES (?, 'create_chart', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, 'create_chart', ?, ?, ?, ?, ?, 2, ?, ?, ?, ?)
   `).bind(
     makeId("post_log"),
     context.songId ?? null,
@@ -1233,7 +1235,7 @@ async function parseCreateChartInput(
       comment,
       isRejected,
       allowAppend: allowAppend.value,
-      passwordHash: await hashWithSecret(`password:${password}`, secret),
+      passwordHash: await hashPassword(secret, password),
       metadataWarning,
       parsedMetadata,
       extension: validation.extension
@@ -1242,11 +1244,16 @@ async function parseCreateChartInput(
 }
 
 async function handleCreateChart(request: Request, env: Env): Promise<Response> {
-  const secret = env.HASH_SECRET?.trim();
-  if (!secret) {
-    console.error("[create-chart-config] HASH_SECRET secret is not configured", {
+  const abuseSecret = env.ABUSE_HASH_SECRET?.trim();
+  const passwordSecret = env.PASSWORD_HASH_SECRET?.trim();
+  if (!abuseSecret || !passwordSecret) {
+    const missingSecrets = [
+      ...(abuseSecret ? [] : ["ABUSE_HASH_SECRET"]),
+      ...(passwordSecret ? [] : ["PASSWORD_HASH_SECRET"])
+    ];
+    console.error("[create-chart-config] security hash secret is not configured", {
       code: "SERVER_CONFIG_ERROR",
-      target: "HASH_SECRET"
+      missingSecrets
     });
 
     return apiError(
@@ -1255,15 +1262,15 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
       500,
       "SERVER_CONFIG_ERROR",
       "サーバー設定が不足しています。",
-      "HASH_SECRET secret is not configured."
+      "Required security hash secrets are not configured."
     );
   }
 
   let context: PostLogContext | null = null;
 
   try {
-    context = await buildPostLogContext(request, secret);
-    const parsed = await parseCreateChartInput(request, env, context, secret);
+    context = await buildPostLogContext(request, abuseSecret);
+    const parsed = await parseCreateChartInput(request, env, context, passwordSecret);
     if (!parsed.ok) {
       return parsed.response;
     }
@@ -1613,10 +1620,11 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
         file_sha256,
         r2_key,
         password_hash,
+        password_hash_version,
         download_blocked,
         download_block_reason,
         completed_at
-      ) VALUES (?, ?, NULL, 1, '', 'root', ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?)
+      ) VALUES (?, ?, NULL, 1, '', 'root', ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2, 0, NULL, ?)
     `).bind(
       versionId,
       chartId,
@@ -1665,11 +1673,12 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
         version_id,
         ip_hash,
         ua_hash,
+        fingerprint_hash_version,
         file_sha256,
         result,
         error_code,
         detail
-      ) VALUES (?, 'create_chart', ?, ?, ?, ?, ?, ?, 'accepted', NULL, ?)
+      ) VALUES (?, 'create_chart', ?, ?, ?, ?, ?, 2, ?, 'accepted', NULL, ?)
     `).bind(
       makeId("post_log"),
       songId,

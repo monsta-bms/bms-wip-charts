@@ -3,7 +3,9 @@ export type Env = {
   FILES: R2Bucket;
   ALLOWED_ORIGIN?: string;
   ALLOWED_ORIGINS?: string;
-  HASH_SECRET?: string;
+  PASSWORD_HASH_SECRET?: string;
+  ABUSE_HASH_SECRET?: string;
+  WITHDRAWAL_IDEMPOTENCY_SECRET?: string;
   ADMIN_TOKEN?: string;
   TURNSTILE_SECRET?: string;
   TURNSTILE_MODE?: string;

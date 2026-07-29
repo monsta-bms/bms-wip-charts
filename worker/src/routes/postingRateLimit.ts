@@ -176,6 +176,7 @@ async function readRateAggregates(
         unixepoch(created_at) AS created_unix
       FROM post_logs
       WHERE ip_hash = ?
+        AND fingerprint_hash_version = 2
         AND action IN ('create_chart', 'append_version')
         AND created_at >= datetime('now', '-24 hours')
     ), classified AS (
@@ -226,9 +227,9 @@ async function writeRateLimitedPostLog(
   try {
     await env.DB.prepare(`
       INSERT INTO post_logs (
-        id, action, song_id, chart_id, version_id, ip_hash, ua_hash,
+        id, action, song_id, chart_id, version_id, ip_hash, ua_hash, fingerprint_hash_version,
         file_sha256, result, error_code, detail
-      ) VALUES (?, ?, NULL, ?, NULL, ?, ?, NULL, 'rejected', 'POST_RATE_LIMITED', ?)
+      ) VALUES (?, ?, NULL, ?, NULL, ?, ?, 2, NULL, 'rejected', 'POST_RATE_LIMITED', ?)
     `).bind(
       makeId("post_log"),
       action,

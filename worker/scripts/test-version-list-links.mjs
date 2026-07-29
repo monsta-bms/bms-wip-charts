@@ -15,7 +15,9 @@ const migrationFiles = [
   "0005_version_chart_name.sql",
   "0006_append_policy.sql",
   "0007_version_withdrawals.sql",
-  "0008_withdrawal_handling.sql"
+  "0008_withdrawal_handling.sql",
+  "0009_version_source_metadata.sql",
+  "0010_security_hash_key_versions.sql"
 ];
 
 async function importBundled(entryPoint) {
@@ -39,7 +41,12 @@ const harness = createTestHarness({
   workers: [{
     configPath: "wrangler.toml",
     vars: { ALLOWED_ORIGINS: "http://localhost" },
-    secrets: { HASH_SECRET: "isolated-list-secret", ADMIN_TOKEN: "isolated-list-admin" }
+    secrets: {
+      PASSWORD_HASH_SECRET: "isolated-list-password",
+      ABUSE_HASH_SECRET: "isolated-list-abuse",
+      WITHDRAWAL_IDEMPOTENCY_SECRET: "isolated-list-withdrawal",
+      ADMIN_TOKEN: "isolated-list-admin"
+    }
   }]
 });
 

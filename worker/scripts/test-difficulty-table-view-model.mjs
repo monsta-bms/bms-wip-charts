@@ -16,7 +16,8 @@ const migrationFiles = [
   "0006_append_policy.sql",
   "0007_version_withdrawals.sql",
   "0008_withdrawal_handling.sql",
-  "0009_version_source_metadata.sql"
+  "0009_version_source_metadata.sql",
+  "0010_security_hash_key_versions.sql"
 ];
 
 let passed = 0;
@@ -53,7 +54,11 @@ const harness = createTestHarness({
   workers: [{
     configPath: "wrangler.toml",
     vars: { ALLOWED_ORIGINS: "http://localhost" },
-    secrets: { HASH_SECRET: "isolated-difficulty-table-secret" }
+    secrets: {
+      PASSWORD_HASH_SECRET: "isolated-difficulty-table-password",
+      ABUSE_HASH_SECRET: "isolated-difficulty-table-abuse",
+      WITHDRAWAL_IDEMPOTENCY_SECRET: "isolated-difficulty-table-withdrawal"
+    }
   }]
 });
 

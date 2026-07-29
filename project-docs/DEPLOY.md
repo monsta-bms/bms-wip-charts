@@ -321,7 +321,7 @@ PROG-01ではWorker本体の実装を変更しないため、DB migrationだけ�
 - 投稿成功後に一覧が自動更新されることを確認する。
 - DLリンクが `https://bms-wip-charts-worker.monsta3228gsl.workers.dev/api/files/...` を指すことを確認する。
 - CORSエラーが出る場合は、`ALLOWED_ORIGINS` に `https://monsta-bms.github.io` が含まれていることを確認する。
-- `HASH_SECRET` と `ADMIN_TOKEN` がCloudflare secretsに設定されていることを確認する。
+- `ADMIN_TOKEN`、`PASSWORD_HASH_SECRET`、`ABUSE_HASH_SECRET`、`WITHDRAWAL_IDEMPOTENCY_SECRET`、`TURNSTILE_SECRET`、`TURNSTILE_MODE`がCloudflare secretsに設定され、旧共通鍵名が残っていないことを確認する。
 
 ## リポジトリ衛生と履歴書換え後の注意
 
@@ -331,3 +331,22 @@ PROG-01ではWorker本体の実装を変更しないため、DB migrationだけ�
 - ローカルの履歴書換えは実施済みだが、GitHubへのforce pushはまだ実施していない。履歴書換え済みcloneから通常のpushを行わない。
 - 将来force pushを実施した後は、古いcloneを使用せず新しくcloneする。共同作業者やforkへの影響、branch protection、GitHub cache／Support対応を別手順で確認する。
 - 履歴監査でcredential候補が検出された場合、値を文書へ記録せず、関連するcredentialをrotation／revokeしてから本番操作を検討する。
+
+## SECURITY-HASH-DOMAIN-SEPARATION 本番cutover runbook（今回未実行）
+
+この順序はWrangler 4.105.0の`versions upload --secrets-file`、`versions deploy <version>@100`、`versions secret delete`、`d1 migrations apply --remote`を前提とする。Secret値をshell引数、console、Git管理下へ出さず、回復用ファイルはrepository外へ置く。
+
+1. ADMIN_TOKENの単独ローテーション済みdeploymentとrepository外の回復用原本を確認する。
+2. 現行Workerの通常lifecycleを使い、version 1 withdrawalの`pending`と`processing`を0件にする。Migration前は本番D1へCOUNTだけのread-only SELECTを行い、IDや理由を表示しない。
+3. D1の復旧点を確認する。必要ならrepository外へ`npx.cmd wrangler d1 export DB --remote --config .\wrangler.toml --output <repository外path>`でbackupし、出力をGitへ追加しない。
+4. `npx.cmd wrangler d1 migrations apply DB --remote --config .\wrangler.toml`で0010だけを適用する。Wranglerが取得するmigration backupを記録し、適用後は書込みを再開する前にschemaを確認する。
+5. 互いに独立した新しい`PASSWORD_HASH_SECRET`、`ABUSE_HASH_SECRET`、`WITHDRAWAL_IDEMPOTENCY_SECRET`を暗号学的乱数で生成し、repository外へACLを制限して保存する。旧共通鍵を再利用しない。
+6. 新コードと3 Secretを単一candidateへまとめる。repository外の一時secrets fileを用い、`npx.cmd wrangler versions upload --config .\wrangler.toml --secrets-file <repository外path> --tag security-hash-v2 --message "Separate security hash domains"`を実行する。省略Secretは削除されず、ADMIN_TOKENとTURNSTILE_SECRETは維持されることをversion metadataで確認する。
+7. candidateのversion ID、Worker名、binding名、script差分を確認する。preview URLまたはversion overrideでhealth、public list、RC、read-only admin、tokenなし／dummy拒否を確認し、書込みAPIはまだ実行しない。
+8. candidateがlatest versionであることを確認してから、`node .\scripts\security-hash-cutover-preflight.mjs --remote --config .\wrangler.toml`を実行する。schema、latest-version required secret名、production旧Secret参照、legacy active withdrawalがすべて合格し、`SECURITY_HASH_CUTOVER_READY`になるまでtrafficを切り替えない。
+9. `npx.cmd wrangler versions deploy <candidate-version-id>@100 --config .\wrangler.toml --dry-run -y`を先に通し、その後同じversion IDを`--dry-run`なしの100%でdeployする。traffic splitは行わない。
+10. 正式URLでhealth、public list、RC★／RC★★、新ADMIN_TOKENのread-only admin、tokenなし／dummy拒否、version 2の投稿／管理／withdrawalを確認する。旧passwordは`MANAGEMENT_PASSWORD_EXPIRED`となること、旧hash BAN 2件とrate limit履歴が新照合へ引き継がれないことを確認する。
+11. `npx.cmd wrangler versions secret delete HASH_SECRET --config .\wrangler.toml --tag remove-legacy-hash-secret --message "Remove retired shared hash secret"`で旧名を除いたversionを作る。そのversionのcode／bindingが直前candidateと同等であることを確認し、100% deployする。
+12. `npx.cmd wrangler versions secret list --latest-version --config .\wrangler.toml`でSecret名だけを確認し、旧名0件、新required名すべて存在を確認する。値は表示しない。これを旧共通鍵の本番失効完了とする。
+13. health／public／admin／withdrawalを再確認し、Release final QAを完了する。異常時は直前の既知正常versionを100%へ戻し、D1はmigration backupからの復旧手順を別途判断する。旧共通鍵fallbackをコードへ戻さない。
+14. 本番cutover完了後に限り、履歴書換え済みcloneから`--force-with-lease`でGit履歴を反映する。古いcloneを隔離し、GitHub cache／Support対応の要否を判断する。

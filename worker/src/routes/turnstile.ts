@@ -280,9 +280,9 @@ async function writeTurnstileRejectionLog(
   try {
     await env.DB.prepare(`
       INSERT INTO post_logs (
-        id, action, song_id, chart_id, version_id, ip_hash, ua_hash,
+        id, action, song_id, chart_id, version_id, ip_hash, ua_hash, fingerprint_hash_version,
         file_sha256, result, error_code, detail
-      ) VALUES (?, ?, NULL, ?, NULL, ?, ?, NULL, 'rejected', ?, ?)
+      ) VALUES (?, ?, NULL, ?, NULL, ?, ?, 2, NULL, 'rejected', ?, ?)
     `).bind(
       makeId("post_log"),
       action,

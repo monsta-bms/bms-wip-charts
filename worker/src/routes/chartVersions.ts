@@ -3,9 +3,10 @@ import { analyzeUploadedBmsBytes } from "../utils/bmsUploadAnalysis";
 import { parseAllowAppend } from "../utils/appendPolicy";
 import { validateChartName } from "../utils/chartName";
 import { sanitizeFileName, validateUploadFile } from "../utils/fileValidation";
-import { hashWithSecret, sha256HexFromBuffer } from "../utils/hash";
+import { sha256HexFromBuffer } from "../utils/hash";
 import { hasUsableStoredProgressMap, prepareAppendProgressMap } from "../utils/progressMap";
 import { buildRequestFingerprint } from "../utils/requestFingerprint";
+import { hashPassword } from "../utils/securityHash";
 import { apiError, Env, errorDetail, methodNotAllowed, ok } from "../utils/response";
 import {
   buildVersionSourceMetadataInsertStatement,
@@ -196,11 +197,12 @@ async function writePostLog(
       version_id,
       ip_hash,
       ua_hash,
+      fingerprint_hash_version,
       file_sha256,
       result,
       error_code,
       detail
-    ) VALUES (?, 'append_version', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, 'append_version', ?, ?, ?, ?, ?, 2, ?, ?, ?, ?)
   `).bind(
     makeId("post_log"),
     context.songId ?? null,
@@ -465,7 +467,7 @@ async function materializeAppendVersionInput(
       bmsAnalysis,
       analysisWarnings,
       bmsAnalysisFailed,
-      passwordHash: await hashWithSecret(`password:${password}`, secret),
+      passwordHash: await hashPassword(secret, password),
       parsedMetadata,
       metadataWarning,
       extension: validation.extension
@@ -674,16 +676,21 @@ function buildSafeR2Key(chartId: string, branchPath: string, fileId: string, ext
 }
 
 async function handleAppendVersion(request: Request, env: Env, chartId: string): Promise<Response> {
-  const secret = env.HASH_SECRET?.trim();
-  if (!secret) {
-    console.error("[append-version-config] HASH_SECRET secret is not configured", {
+  const abuseSecret = env.ABUSE_HASH_SECRET?.trim();
+  const passwordSecret = env.PASSWORD_HASH_SECRET?.trim();
+  if (!abuseSecret || !passwordSecret) {
+    const missingSecrets = [
+      ...(abuseSecret ? [] : ["ABUSE_HASH_SECRET"]),
+      ...(passwordSecret ? [] : ["PASSWORD_HASH_SECRET"])
+    ];
+    console.error("[append-version-config] security hash secret is not configured", {
       code: "SERVER_CONFIG_ERROR",
-      target: "HASH_SECRET"
+      missingSecrets
     });
-    return apiError(request, env, 500, "SERVER_CONFIG_ERROR", "サーバー設定が不足しています。", "HASH_SECRET secret is not configured.");
+    return apiError(request, env, 500, "SERVER_CONFIG_ERROR", "サーバー設定が不足しています。", "Required security hash secrets are not configured.");
   }
 
-  const context = await buildPostLogContext(request, secret);
+  const context = await buildPostLogContext(request, abuseSecret);
   context.chartId = chartId;
 
   try {
@@ -699,7 +706,7 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
     }
 
     const { chart, parent } = parentValidation.value;
-    const materialized = await materializeAppendVersionInput(request, env, context, secret, formInput);
+    const materialized = await materializeAppendVersionInput(request, env, context, passwordSecret, formInput);
     if (!materialized.ok) {
       return materialized.response;
     }
@@ -987,6 +994,7 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
           file_sha256,
           r2_key,
           password_hash,
+          password_hash_version,
           download_blocked,
           download_block_reason,
           completed_at
@@ -995,7 +1003,7 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
           ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL,
           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?, 0, NULL, ?
+          ?, ?, ?, ?, 2, 0, NULL, ?
         WHERE EXISTS (
           SELECT 1
           FROM versions AS parent
@@ -1099,12 +1107,13 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
         version_id,
         ip_hash,
         ua_hash,
+        fingerprint_hash_version,
         file_sha256,
         result,
         error_code,
         detail
       )
-      SELECT ?, 'append_version', ?, ?, ?, ?, ?, ?, 'accepted', NULL, ?
+      SELECT ?, 'append_version', ?, ?, ?, ?, ?, 2, ?, 'accepted', NULL, ?
       WHERE EXISTS (SELECT 1 FROM versions WHERE id = ?)
     `).bind(
       makeId("post_log"),

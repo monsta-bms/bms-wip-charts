@@ -11,7 +11,7 @@ export async function enforcePreMultipartPostingProtection(
   action: PostingAction,
   chartId: string | null = null
 ): Promise<Response | null> {
-  const secret = env.HASH_SECRET?.trim();
+  const secret = env.ABUSE_HASH_SECRET?.trim();
   if (!secret) {
     return apiError(
       request,

@@ -31,12 +31,14 @@ type AdminPostLogRow = {
   file_sha256: string | null;
   version_id: string | null;
   chart_id: string | null;
+  fingerprint_hash_version: number;
 };
 
 type BanSourceRow = {
   post_log_id: string;
   ip_hash: string;
   file_sha256: string | null;
+  fingerprint_hash_version: number;
 };
 
 type ExistingBanRow = {
@@ -57,6 +59,7 @@ type AdminBanListRow = {
   expired_at: string | null;
   disabled_at: string | null;
   effective_state: "active" | "expired" | "disabled";
+  ban_hash_version: number | null;
 };
 
 type LiftBanRow = {
@@ -125,8 +128,8 @@ function expirationForDuration(duration: BanDuration): string | null {
   return toD1Timestamp(new Date(Date.now() + durationMs[duration]));
 }
 
-function getHashSecret(env: Env): string | null {
-  return env.HASH_SECRET?.trim() || null;
+function getAbuseHashSecret(env: Env): string | null {
+  return env.ABUSE_HASH_SECRET?.trim() || null;
 }
 
 async function writeBanAdminLog(
@@ -183,9 +186,9 @@ async function writeBlockedPostLog(
   try {
     await env.DB.prepare(`
       INSERT INTO post_logs (
-        id, action, song_id, chart_id, version_id, ip_hash, ua_hash,
+        id, action, song_id, chart_id, version_id, ip_hash, ua_hash, fingerprint_hash_version,
         file_sha256, result, error_code, detail
-      ) VALUES (?, ?, NULL, ?, NULL, ?, ?, NULL, 'rejected', 'POSTING_BLOCKED', ?)
+      ) VALUES (?, ?, NULL, ?, NULL, ?, ?, 2, NULL, 'rejected', 'POSTING_BLOCKED', ?)
     `).bind(
       makeId("post_log"),
       action,
@@ -218,6 +221,7 @@ async function findFingerprintBan(
     SELECT ban_type
     FROM bans
     WHERE active = 1
+      AND ban_hash_version = 2
       AND disabled_at IS NULL
       AND (expired_at IS NULL OR expired_at > CURRENT_TIMESTAMP)
       AND (
@@ -236,7 +240,7 @@ export async function enforcePreMultipartPostingBan(
   chartId: string | null = null,
   existingFingerprint?: RequestFingerprint
 ): Promise<Response | null> {
-  const secret = getHashSecret(env);
+  const secret = getAbuseHashSecret(env);
   if (!secret) {
     return apiError(
       request,
@@ -308,9 +312,9 @@ export async function listAdminPostLogs(request: Request, env: Env): Promise<Res
   if (request.method !== "GET") {
     return methodNotAllowed(request, env, request.method);
   }
-  const secret = getHashSecret(env);
+  const secret = getAbuseHashSecret(env);
   if (!secret) {
-    return apiError(request, env, 500, "CONFIG_MISSING", "管理機能の設定が不足しています。", "HASH_SECRET is not configured.");
+    return apiError(request, env, 500, "CONFIG_MISSING", "管理機能の設定が不足しています。", "ABUSE_HASH_SECRET is not configured.");
   }
 
   const url = new URL(request.url);
@@ -333,7 +337,8 @@ export async function listAdminPostLogs(request: Request, env: Env): Promise<Res
         ua_hash,
         file_sha256,
         version_id,
-        chart_id
+        chart_id,
+        fingerprint_hash_version
       FROM post_logs
       ORDER BY created_at DESC, id DESC
       LIMIT ? OFFSET ?
@@ -353,7 +358,8 @@ export async function listAdminPostLogs(request: Request, env: Env): Promise<Res
         hasIpHash: Boolean(row.ip_hash),
         hasUaHash: Boolean(row.ua_hash),
         hasFileSha256: Boolean(row.file_sha256),
-        canBanIp: Boolean(row.ip_hash) && row.ip_hash !== unknownIpHash,
+        canBanIp: Number(row.fingerprint_hash_version) === 2 && Boolean(row.ip_hash) && row.ip_hash !== unknownIpHash,
+        fingerprintHashVersion: Number(row.fingerprint_hash_version),
         versionId: row.version_id,
         chartId: row.chart_id,
         detailSummary: row.error_code
@@ -404,7 +410,7 @@ async function readCreateBanBody(
 
 async function selectBanSource(env: Env, postLogId: string): Promise<BanSourceRow | null> {
   return env.DB.prepare(`
-    SELECT id AS post_log_id, ip_hash, file_sha256
+    SELECT id AS post_log_id, ip_hash, file_sha256, fingerprint_hash_version
     FROM post_logs
     WHERE id = ?
     LIMIT 1
@@ -420,9 +426,9 @@ export async function createAdminBan(request: Request, env: Env): Promise<Respon
     await writeBanAdminLog(env, "create_ban", "warning", parsed.code, { errorCode: parsed.code });
     return parsed.response;
   }
-  const secret = getHashSecret(env);
+  const secret = getAbuseHashSecret(env);
   if (!secret) {
-    return apiError(request, env, 500, "CONFIG_MISSING", "管理機能の設定が不足しています。", "HASH_SECRET is not configured.");
+    return apiError(request, env, 500, "CONFIG_MISSING", "管理機能の設定が不足しています。", "ABUSE_HASH_SECRET is not configured.");
   }
 
   const input = parsed.value;
@@ -440,7 +446,11 @@ export async function createAdminBan(request: Request, env: Env): Promise<Respon
 
   const banValue = input.targetType === "ip_hash" ? source.ip_hash : source.file_sha256;
   const unknownIpHash = await getUnknownIpHash(secret);
-  if (!banValue || (input.targetType === "ip_hash" && banValue === unknownIpHash)) {
+  if (
+    !banValue
+    || (input.targetType === "ip_hash" && Number(source.fingerprint_hash_version) !== 2)
+    || (input.targetType === "ip_hash" && banValue === unknownIpHash)
+  ) {
     await writeBanAdminLog(env, "create_ban", "warning", "BAN_SOURCE_HASH_NOT_AVAILABLE", { sourcePostLogId: input.sourcePostLogId, targetType: input.targetType, reasonLength: input.reason.length, duration: input.duration, errorCode: "BAN_SOURCE_HASH_NOT_AVAILABLE" });
     return apiError(request, env, 409, "BAN_SOURCE_HASH_NOT_AVAILABLE", "このログからBAN対象を取得できません。", "The selected source hash is missing or represents an unknown IP marker.");
   }
@@ -453,21 +463,23 @@ export async function createAdminBan(request: Request, env: Env): Promise<Respon
       SELECT id, active, disabled_at, expired_at
       FROM bans
       WHERE ban_type = ? AND ban_value = ?
+        AND COALESCE(ban_hash_version, 0) = ?
       LIMIT 1
-    `).bind(input.targetType, banValue).first<ExistingBanRow>();
+    `).bind(input.targetType, banValue, input.targetType === "ip_hash" ? 2 : 0).first<ExistingBanRow>();
 
     const banId = existing?.id ?? makeId("ban");
     if (existing) {
       await env.DB.prepare(`
         UPDATE bans
-        SET reason = ?, active = 1, expired_at = ?, disabled_at = NULL, updated_at = CURRENT_TIMESTAMP
+        SET reason = ?, active = 1, expired_at = ?, disabled_at = NULL,
+          ban_hash_version = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).bind(input.reason, expiresAt, banId).run();
+      `).bind(input.reason, expiresAt, input.targetType === "ip_hash" ? 2 : null, banId).run();
     } else {
       await env.DB.prepare(`
-        INSERT INTO bans (id, ban_type, ban_value, reason, active, expired_at)
-        VALUES (?, ?, ?, ?, 1, ?)
-      `).bind(banId, input.targetType, banValue, input.reason, expiresAt).run();
+        INSERT INTO bans (id, ban_type, ban_value, reason, active, expired_at, ban_hash_version)
+        VALUES (?, ?, ?, ?, 1, ?, ?)
+      `).bind(banId, input.targetType, banValue, input.reason, expiresAt, input.targetType === "ip_hash" ? 2 : null).run();
     }
 
     await writeBanAdminLog(env, "create_ban", "info", null, {
@@ -538,6 +550,7 @@ export async function listAdminBans(request: Request, env: Env): Promise<Respons
         updated_at,
         expired_at,
         disabled_at,
+        ban_hash_version,
         ${effectiveStateSql} AS effective_state
       FROM bans
       WHERE ${whereSql}
@@ -558,7 +571,10 @@ export async function listAdminBans(request: Request, env: Env): Promise<Respons
         updatedAt: row.updated_at,
         expiredAt: row.expired_at,
         disabledAt: row.disabled_at,
-        state: row.effective_state
+        state: row.effective_state,
+        banHashVersion: row.ban_hash_version === null ? null : Number(row.ban_hash_version),
+        legacyKeyInvalidated: (row.ban_type === "ip_hash" || row.ban_type === "ua_hash")
+          && Number(row.ban_hash_version) === 1
       })),
       state,
       page,

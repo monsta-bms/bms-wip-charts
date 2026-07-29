@@ -1,5 +1,6 @@
-import { hashWithSecret } from "../utils/hash";
+import { buildRequestFingerprint } from "../utils/requestFingerprint";
 import { apiError, Env, errorDetail, methodNotAllowed, ok } from "../utils/response";
+import { verifyPasswordHash } from "../utils/securityHash";
 
 const MAX_DELETE_REQUEST_REASON_LENGTH = 500;
 const INVALID_PASSWORD_LIMIT = 5;
@@ -13,6 +14,7 @@ type VersionLifecycleRow = {
   chart_id: string;
   song_id: string;
   password_hash: string;
+  password_hash_version: number;
   file_sha256: string | null;
   is_hidden: number;
   withdrawn_at: string | null;
@@ -61,20 +63,11 @@ function makeId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID()}`;
 }
 
-function getClientIpMarker(request: Request): string {
-  return request.headers.get("CF-Connecting-IP")?.trim()
-    || request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim()
-    || "unknown";
-}
-
-function getUserAgentMarker(request: Request): string {
-  return request.headers.get("User-Agent")?.trim() || "unknown";
-}
-
 async function buildLifecycleContext(request: Request, secret: string): Promise<LifecycleContext> {
+  const fingerprint = await buildRequestFingerprint(request, secret);
   return {
-    ipHash: await hashWithSecret(`ip:${getClientIpMarker(request)}`, secret),
-    uaHash: await hashWithSecret(`ua:${getUserAgentMarker(request)}`, secret)
+    ipHash: fingerprint.ipHash,
+    uaHash: fingerprint.uaHash
   };
 }
 
@@ -95,11 +88,12 @@ async function writePostLog(
       version_id,
       ip_hash,
       ua_hash,
+      fingerprint_hash_version,
       file_sha256,
       result,
       error_code,
       detail
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 2, ?, ?, ?, ?)
   `).bind(
     makeId("post_log"),
     action,
@@ -246,6 +240,7 @@ async function isRateLimited(env: Env, context: LifecycleContext): Promise<boole
     FROM post_logs
     WHERE ip_hash = ?
       AND ua_hash = ?
+      AND fingerprint_hash_version = 2
       AND action IN ('withdraw_version', 'request_delete')
       AND result = 'rejected'
       AND error_code = 'INVALID_PASSWORD'
@@ -266,6 +261,7 @@ async function selectVersion(env: Env, versionId: string): Promise<VersionLifecy
       versions.chart_id,
       charts.song_id,
       versions.password_hash,
+      versions.password_hash_version,
       versions.file_sha256,
       versions.is_hidden,
       versions.withdrawn_at,
@@ -513,8 +509,24 @@ async function authenticateVersion(
   context.versionId = version.id;
   context.fileSha256 = version.file_sha256;
 
-  const submittedHash = await hashWithSecret(`password:${password}`, secret);
-  if (submittedHash !== version.password_hash) {
+  const passwordResult = await verifyPasswordHash(
+    secret,
+    password,
+    version.password_hash,
+    Number(version.password_hash_version)
+  );
+  if (passwordResult === "legacy") {
+    return {
+      ok: false,
+      response: await failLifecycle(request, env, context, action, {
+        status: 409,
+        code: "MANAGEMENT_PASSWORD_EXPIRED",
+        message: "セキュリティ更新により、この投稿の管理パスワードは失効しました。管理者へお問い合わせください。",
+        detail: "The stored management password uses a retired hash key version."
+      })
+    };
+  }
+  if (passwordResult !== "verified") {
     return {
       ok: false,
       response: await failLifecycle(request, env, context, action, {
@@ -696,9 +708,10 @@ async function handleDeleteRequest(
           message,
           requester_ip_hash,
           requester_ua_hash,
+          fingerprint_hash_version,
           status
         )
-        SELECT ?, ?, ?, ?, ?, ?, 'pending'
+        SELECT ?, ?, ?, ?, ?, ?, 2, 'pending'
         WHERE NOT EXISTS (
           SELECT 1
           FROM delete_requests
@@ -810,16 +823,22 @@ export async function handleVersionLifecycleRoute(
     return apiError(request, env, 404, "VERSION_NOT_FOUND", "対象のversionが見つかりません。", "versionId path parameter is empty.");
   }
 
-  const secret = env.HASH_SECRET?.trim();
-  if (!secret) {
-    console.error("[version-lifecycle-config] HASH_SECRET secret is not configured", {
+  const abuseSecret = env.ABUSE_HASH_SECRET?.trim();
+  const passwordSecret = env.PASSWORD_HASH_SECRET?.trim();
+  if (!abuseSecret || !passwordSecret) {
+    const missingSecrets = [
+      ...(abuseSecret ? [] : ["ABUSE_HASH_SECRET"]),
+      ...(passwordSecret ? [] : ["PASSWORD_HASH_SECRET"])
+    ];
+    console.error("[version-lifecycle-config] security hash secret is not configured", {
       code: "SERVER_CONFIG_ERROR",
-      action
+      action,
+      missingSecrets
     });
-    return apiError(request, env, 500, "SERVER_CONFIG_ERROR", "サーバー設定が不足しています。", "HASH_SECRET secret is not configured.");
+    return apiError(request, env, 500, "SERVER_CONFIG_ERROR", "サーバー設定が不足しています。", "Required security hash secrets are not configured.");
   }
 
-  const context = await buildLifecycleContext(request, secret);
+  const context = await buildLifecycleContext(request, abuseSecret);
   const parsed = await parseRequestBody(request);
   if (!parsed.ok) {
     return failLifecycle(request, env, context, action, parsed.failure);
@@ -857,7 +876,7 @@ export async function handleVersionLifecycleRoute(
     action,
     normalizedVersionId,
     parsed.value.password,
-    secret
+    passwordSecret
   );
   if (!authenticated.ok) {
     return authenticated.response;

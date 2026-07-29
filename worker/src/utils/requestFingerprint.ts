@@ -1,4 +1,4 @@
-import { hashWithSecret } from "./hash";
+import { hashAbuseSubject } from "./securityHash";
 
 export type RequestFingerprint = {
   ipHash: string;
@@ -36,13 +36,13 @@ export async function buildRequestFingerprint(
 ): Promise<RequestFingerprint> {
   const ip = getClientIpMarker(request);
   return {
-    ipHash: await hashWithSecret(`ip:${ip.marker}`, secret),
-    uaHash: await hashWithSecret(`ua:${getUserAgentMarker(request)}`, secret),
+    ipHash: await hashAbuseSubject(secret, "ip", ip.marker),
+    uaHash: await hashAbuseSubject(secret, "ua", getUserAgentMarker(request)),
     ipKnown: ip.known,
     ipSource: ip.source
   };
 }
 
 export async function getUnknownIpHash(secret: string): Promise<string> {
-  return hashWithSecret("ip:unknown", secret);
+  return hashAbuseSubject(secret, "ip", "unknown");
 }

@@ -18,7 +18,8 @@ const migrationFiles = [
   "0006_append_policy.sql",
   "0007_version_withdrawals.sql",
   "0008_withdrawal_handling.sql",
-  "0009_version_source_metadata.sql"
+  "0009_version_source_metadata.sql",
+  "0010_security_hash_key_versions.sql"
 ];
 const TEST_SECRET = "isolated-source-metadata-secret";
 const TEST_PASSWORD = "isolated-source-metadata-password";
@@ -237,7 +238,9 @@ const harness = createTestHarness({
       TURNSTILE_MODE: "observe"
     },
     secrets: {
-      HASH_SECRET: TEST_SECRET,
+      PASSWORD_HASH_SECRET: TEST_SECRET,
+      ABUSE_HASH_SECRET: TEST_SECRET,
+      WITHDRAWAL_IDEMPOTENCY_SECRET: TEST_SECRET,
       ADMIN_TOKEN: "isolated-source-metadata-admin"
     }
   }]

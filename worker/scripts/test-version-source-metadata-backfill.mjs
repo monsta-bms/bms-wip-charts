@@ -18,7 +18,8 @@ const migrationFiles = [
   "0006_append_policy.sql",
   "0007_version_withdrawals.sql",
   "0008_withdrawal_handling.sql",
-  "0009_version_source_metadata.sql"
+  "0009_version_source_metadata.sql",
+  "0010_security_hash_key_versions.sql"
 ];
 const ADMIN_TOKEN = "isolated-backfill-admin-token";
 const textEncoder = new TextEncoder();
@@ -72,7 +73,9 @@ const harness = createTestHarness({
     vars: { ALLOWED_ORIGINS: "http://localhost" },
     secrets: {
       ADMIN_TOKEN,
-      HASH_SECRET: "isolated-backfill-hash-secret"
+      PASSWORD_HASH_SECRET: "isolated-backfill-password-secret",
+      ABUSE_HASH_SECRET: "isolated-backfill-abuse-secret",
+      WITHDRAWAL_IDEMPOTENCY_SECRET: "isolated-backfill-withdrawal-secret"
     }
   }]
 });
@@ -826,7 +829,7 @@ async function runTests() {
     assert.match(source, /originUrl/u);
     assert.match(source, /downloadUrl/u);
   });
-  await check(79, "withdrawal active 18件の回帰テスト入口を維持", async () => {
+  await check(79, "withdrawal active 20件の回帰テスト入口を維持", async () => {
     const source = await readFile(resolve(workerRoot, "scripts/test-version-withdrawal-active.mjs"), "utf8");
     assert.match(source, /version withdrawal active isolated tests/u);
   });

@@ -17,11 +17,12 @@ const migrationFiles = [
   "0006_append_policy.sql",
   "0007_version_withdrawals.sql",
   "0008_withdrawal_handling.sql",
-  "0009_version_source_metadata.sql"
+  "0009_version_source_metadata.sql",
+  "0010_security_hash_key_versions.sql"
 ];
 const NOW = new Date("2026-07-22T03:00:00.000Z");
 const PAST_SQL = "2026-07-22 02:00:00";
-const FUTURE_SQL = "2026-07-29 03:00:00";
+const FUTURE_SQL = "2099-07-29 03:00:00";
 const TEST_SECRET = "isolated-test-secret";
 const TEST_PASSWORD = "isolated-password";
 const TEST_ADMIN_TOKEN = "isolated-admin-token";
@@ -41,10 +42,12 @@ async function importBundled(entryPoint) {
   return import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 }
 
-const [indexModule, finalizerModule, activeRunnerModule] = await Promise.all([
+const [indexModule, finalizerModule, activeRunnerModule, securityHashModule, bansModule] = await Promise.all([
   importBundled("src/index.ts"),
   importBundled("src/services/versionWithdrawalFinalizer.ts"),
-  importBundled("src/services/versionWithdrawalActiveRunner.ts")
+  importBundled("src/services/versionWithdrawalActiveRunner.ts"),
+  importBundled("src/utils/securityHash.ts"),
+  importBundled("src/routes/bans.ts")
 ]);
 
 const harness = createTestHarness({
@@ -56,7 +59,9 @@ const harness = createTestHarness({
       WITHDRAWAL_CRON_MODE: "active"
     },
     secrets: {
-      HASH_SECRET: TEST_SECRET,
+      PASSWORD_HASH_SECRET: TEST_SECRET,
+      ABUSE_HASH_SECRET: TEST_SECRET,
+      WITHDRAWAL_IDEMPOTENCY_SECRET: TEST_SECRET,
       ADMIN_TOKEN: TEST_ADMIN_TOKEN
     }
   }]
@@ -97,13 +102,6 @@ async function all(sql, ...bindings) {
   return result.results ?? [];
 }
 
-async function sha256Hex(value) {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
-
 async function createVersion(options = {}) {
   sequence += 1;
   const suffix = `${sequence}`;
@@ -124,14 +122,17 @@ async function createVersion(options = {}) {
       VALUES (?, ?, ?, ?)
     `).bind(chartId, songId, `Chart ${suffix}`, `chart ${suffix}`).run();
   }
-  const passwordHash = await sha256Hex(`${TEST_SECRET}:password:${TEST_PASSWORD}`);
+  const passwordHashVersion = options.passwordHashVersion ?? 2;
+  const passwordHash = passwordHashVersion === 2
+    ? await securityHashModule.hashPassword(TEST_SECRET, TEST_PASSWORD)
+    : "retired-legacy-password-hash";
   const versionNumber = options.versionNumber ?? (options.parentVersionId ? 2 : 1);
   await env.DB.prepare(`
     INSERT INTO versions (
       id, chart_id, parent_version_id, version_number, branch_label, branch_path,
       author, progress, comment, difficulty, level,
       title, artist, file_id, file_name, file_size, file_sha256, r2_key,
-      password_hash, download_blocked, download_block_reason, is_hidden,
+      password_hash, password_hash_version, download_blocked, download_block_reason, is_hidden,
       created_at, updated_at, completed_at, progress_map_json,
       progress_image_key, progress_image_mime, progress_image_size,
       chart_name, normalized_chart_name, allow_append, withdrawal_download_blocked
@@ -139,7 +140,7 @@ async function createVersion(options = {}) {
       ?, ?, ?, ?, '', ?,
       'Tester', ?, '', ?, ?,
       ?, 'Tester', ?, ?, ?, ?, ?,
-      ?, ?, ?, ?,
+      ?, ?, ?, ?, ?,
       ?, ?, ?, ?,
       ?, ?, ?,
       ?, ?, ?, ?
@@ -160,6 +161,7 @@ async function createVersion(options = {}) {
     `sha256_${suffix}`,
     r2Key,
     passwordHash,
+    passwordHashVersion,
     options.downloadBlocked ? 1 : 0,
     options.downloadBlocked ? "admin_blocked" : null,
     options.hidden ? 1 : 0,
@@ -849,7 +851,13 @@ try {
       handlingMode: "manual_review",
       reason: "管理画面に表示する隔離テスト理由です。"
     });
-    const publicEnv = { ...env, HASH_SECRET: TEST_SECRET, ADMIN_TOKEN: TEST_ADMIN_TOKEN };
+    const publicEnv = {
+      ...env,
+      PASSWORD_HASH_SECRET: TEST_SECRET,
+      ABUSE_HASH_SECRET: TEST_SECRET,
+      WITHDRAWAL_IDEMPOTENCY_SECRET: TEST_SECRET,
+      ADMIN_TOKEN: TEST_ADMIN_TOKEN
+    };
     const fileResponse = await indexModule.default.fetch(
       new Request(`http://localhost/api/files/${manual.fileId}`),
       publicEnv
@@ -910,6 +918,149 @@ try {
     assert.equal(canceled.status, "canceled");
     assert.equal(canceled.withdrawal_download_blocked, 0);
     assert.equal(canceled.download_blocked, 1);
+  });
+
+  await check("version 2 idempotency is stable and legacy management passwords are explicitly expired", async () => {
+    await resetIsolation();
+    const publicEnv = {
+      ...env,
+      PASSWORD_HASH_SECRET: TEST_SECRET,
+      ABUSE_HASH_SECRET: TEST_SECRET,
+      WITHDRAWAL_IDEMPOTENCY_SECRET: TEST_SECRET,
+      ADMIN_TOKEN: TEST_ADMIN_TOKEN
+    };
+    const target = await createVersion();
+    const requestBody = {
+      password: TEST_PASSWORD,
+      idempotencyKey: "isolated-withdrawal-idempotency-key",
+      reason: "隔離テスト用の取り下げ申請理由です。"
+    };
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const response = await indexModule.default.fetch(
+        new Request(`http://localhost/api/versions/${target.versionId}/withdrawal`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "CF-Connecting-IP": "192.0.2.44",
+            "User-Agent": "withdrawal-idempotency-fixture"
+          },
+          body: JSON.stringify(requestBody)
+        }),
+        publicEnv
+      );
+      assert.equal(response.status, 200);
+    }
+    const withdrawal = await first(`
+      SELECT COUNT(*) AS count,
+        MIN(idempotency_hash_version) AS idempotency_hash_version,
+        MIN(fingerprint_hash_version) AS fingerprint_hash_version
+      FROM version_withdrawals
+      WHERE version_id = ?
+    `, target.versionId);
+    assert.equal(Number(withdrawal.count), 1);
+    assert.equal(Number(withdrawal.idempotency_hash_version), 2);
+    assert.equal(Number(withdrawal.fingerprint_hash_version), 2);
+
+    const legacyTarget = await createVersion({ passwordHashVersion: 1 });
+    await createWithdrawal(legacyTarget, { scheduledAt: FUTURE_SQL });
+    const legacyResponse = await indexModule.default.fetch(
+      new Request(`http://localhost/api/versions/${legacyTarget.versionId}/withdrawal/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: TEST_PASSWORD })
+      }),
+      publicEnv
+    );
+    assert.equal(legacyResponse.status, 409);
+    assert.equal((await legacyResponse.json()).code, "MANAGEMENT_PASSWORD_EXPIRED");
+  });
+
+  await check("version 2 abuse fingerprints create matching bans while legacy hashes stay ineligible", async () => {
+    await resetIsolation();
+    const publicEnv = {
+      ...env,
+      PASSWORD_HASH_SECRET: TEST_SECRET,
+      ABUSE_HASH_SECRET: TEST_SECRET,
+      WITHDRAWAL_IDEMPOTENCY_SECRET: TEST_SECRET,
+      ADMIN_TOKEN: TEST_ADMIN_TOKEN
+    };
+    const ipMarker = "192.0.2.77";
+    const uaMarker = "abuse-domain-fixture";
+    const ipHash = await securityHashModule.hashAbuseSubject(TEST_SECRET, "ip", ipMarker);
+    const uaHash = await securityHashModule.hashAbuseSubject(TEST_SECRET, "ua", uaMarker);
+    await env.DB.prepare(`
+      INSERT INTO post_logs (
+        id, action, ip_hash, ua_hash, fingerprint_hash_version, result
+      ) VALUES ('version2-ban-source', 'create_chart', ?, ?, 2, 'rejected')
+    `).bind(ipHash, uaHash).run();
+    const createResponse = await indexModule.default.fetch(
+      new Request("http://localhost/api/admin/bans", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${TEST_ADMIN_TOKEN}`
+        },
+        body: JSON.stringify({
+          sourcePostLogId: "version2-ban-source",
+          targetType: "ip_hash",
+          reason: "隔離テスト用のversion 2 BANです。",
+          duration: "24h"
+        })
+      }),
+      publicEnv
+    );
+    assert.equal(createResponse.status, 200);
+    const storedBan = await first("SELECT active, ban_hash_version FROM bans WHERE ban_value = ?", ipHash);
+    assert.equal(Number(storedBan.active), 1);
+    assert.equal(Number(storedBan.ban_hash_version), 2);
+
+    const blocked = await bansModule.enforcePreMultipartPostingBan(
+      new Request("http://localhost/api/charts", {
+        headers: { "CF-Connecting-IP": ipMarker, "User-Agent": uaMarker }
+      }),
+      publicEnv,
+      "create_chart"
+    );
+    assert.equal(blocked?.status, 403);
+
+    await env.DB.prepare(`
+      INSERT INTO post_logs (
+        id, action, ip_hash, ua_hash, fingerprint_hash_version, result
+      ) VALUES ('legacy-ban-source', 'create_chart', ?, ?, 1, 'rejected')
+    `).bind(ipHash, uaHash).run();
+    const legacySourceResponse = await indexModule.default.fetch(
+      new Request("http://localhost/api/admin/bans", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${TEST_ADMIN_TOKEN}`
+        },
+        body: JSON.stringify({
+          sourcePostLogId: "legacy-ban-source",
+          targetType: "ip_hash",
+          reason: "旧鍵sourceはBANへ再利用しません。",
+          duration: "24h"
+        })
+      }),
+      publicEnv
+    );
+    assert.equal(legacySourceResponse.status, 409);
+    assert.equal((await legacySourceResponse.json()).code, "BAN_SOURCE_HASH_NOT_AVAILABLE");
+
+    const legacyIpMarker = "192.0.2.88";
+    const legacyIpHash = await securityHashModule.hashAbuseSubject(TEST_SECRET, "ip", legacyIpMarker);
+    await env.DB.prepare(`
+      INSERT INTO bans (id, ban_type, ban_value, reason, active, ban_hash_version)
+      VALUES ('legacy-active-ban', 'ip_hash', ?, 'legacy fixture', 1, 1)
+    `).bind(legacyIpHash).run();
+    const legacyIgnored = await bansModule.enforcePreMultipartPostingBan(
+      new Request("http://localhost/api/charts", {
+        headers: { "CF-Connecting-IP": legacyIpMarker, "User-Agent": uaMarker }
+      }),
+      publicEnv,
+      "create_chart"
+    );
+    assert.equal(legacyIgnored, null);
   });
 
   await check("daily R2 cleanup cron remains independent", async () => {

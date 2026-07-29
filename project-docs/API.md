@@ -1544,3 +1544,11 @@ Phase A時点ではsource metadata、解析状態、内部error codeを上記res
 `dryRun=false`では`admin_logs.action='version_source_metadata_backfill'`へsystem summaryを1件保存する。個別failed/unavailable診断はversion単位で最大10件。summary detailはrun ID、request条件、各件数、cursor、所要時間だけをsnake_caseで保存する。全件正常は`info/completed`、個別問題ありは`warning/completed_with_errors`、候補SELECT失敗は`error/failed`。ログ失敗はAPI結果を上書きせず、本文・R2 key・ファイル名・URL・token・IP/UAをログへ含めない。
 
 入力不正は400 `INVALID_SOURCE_METADATA_BACKFILL_REQUEST`。候補SELECT等の実行全体失敗は500 `SOURCE_METADATA_BACKFILL_FAILED`を返し、内部例外、SQL、Secretはdetailへ出さない。Phase B単体では既存の公開chart/version/難易度表responseを変更しない。難易度表dataの後方互換な拡張はPhase C仕様を現行とする。
+
+## Security hash key version
+
+- 投稿作成・追記で保存する管理パスワードhashは`password_hash_version=2`である。管理操作はversion 2だけをHMAC検証し、version 1にはHTTP 409、`code=MANAGEMENT_PASSWORD_EXPIRED`を返す。旧共通鍵での再検証は行わない。
+- すべての新規`post_logs`は`fingerprint_hash_version=2`、新規withdrawalは`idempotency_hash_version=2`と`fingerprint_hash_version=2`、新規legacy delete requestは`fingerprint_hash_version=2`で保存する。これらのversion列とhash本文は公開APIへ返さない。
+- 管理者の投稿ログ一覧は`fingerprintHashVersion`を返し、version 1ログからIP hash BANを作成できない。BAN一覧は`banHashVersion`と`legacyKeyInvalidated`を返す。file SHA-256 BANの`banHashVersion`はNULLであり、security Secretのkey version対象外である。
+- 取り下げ冪等性検索は`idempotency_hash_version=2`を必須とする。version 1のterminal audit rowと同じhash文字列が存在しても、新しいrequestの重複判定へ使用しない。
+- security hash設定不足は既存のJSON error形式`code`、`message`、`detail`で返す。Secret値、入力password、idempotency key、完全なfingerprintはresponseやlogへ含めない。

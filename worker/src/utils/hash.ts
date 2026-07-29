@@ -15,14 +15,6 @@ export async function sha256HexFromBuffer(buffer: ArrayBuffer): Promise<string> 
   return toHex(digest);
 }
 
-export async function hashWithSecret(value: string, secret: string): Promise<string> {
-  if (!secret) {
-    throw new Error("HASH_SECRET is not configured");
-  }
-
-  return sha256Hex(`${secret}:${value}`);
-}
-
 const md5ShiftAmounts = [
   7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22,
   5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20,

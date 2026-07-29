@@ -1610,7 +1610,7 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 同一src再mountは同じimgを再利用して1件、URL変更は旧imgを置換して新img 1件、error時は枠を隠してfallbackを表示し、fallback内容なしでは`is-empty`を付ける。MutationObserver登録1件と直接schedulerのrequestAnimationFrame／cancel回数を維持し、Observer経由でもboundedなscheduleが発生することを確認する。
 - favorite-onlyは追加chart fetch 0、detailのappend-success／management-refreshは選択版と1 cardを維持する。load-moreはpipeline unit／staticでappend mode、新batchだけの補強、`stored-progress-thumbnails` order 300 required、`common-mount` 1回を回帰する。
 - 変更前snapshotはリポジトリ外の一時ファイルへ保存し、意図したruntime style 1→0、全テーマのempty文字、darkの画像枠背景／border以外を0.25px以内で比較する。全9条件で対象lifecycle row高さ差0px、compact一覧差分なし、横overflow／clipなしとし、比較後に一時snapshotを削除する。
-- R1 model、R2 Link UI、R3 Action UI、R4A pipeline、R4B1 dead-code、曲／DL、version list 4件、withdrawal active 18件、metadata parser／static、変更JavaScript構文、HTML重複ID、既知CSS warning 0件、`git diff --check`を回帰する。canonical schemaは全Migration自動検出テストで0009を含めて一致させる。Pages、Worker、D1、R2、Cron、Secret、dependency、本番操作、push、deployは行わない。
+- R1 model、R2 Link UI、R3 Action UI、R4A pipeline、R4B1 dead-code、曲／DL、version list 4件、withdrawal active 20件、metadata parser／static、変更JavaScript構文、HTML重複ID、既知CSS warning 0件、`git diff --check`を回帰する。canonical schemaは全Migration自動検出テストで0010まで一致させる。Pages、Worker、D1、R2、Cron、Secret、dependency、本番操作、push、deployは行わない。
 
 ## SECURITY-HISTORY-CLEANUP repository hygiene
 
@@ -1619,3 +1619,12 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - hygiene testは必要なignore規則とexampleファイルの許可も確認する。失敗時に出すのは固定error code、path、件数、ignore判定だけで、ファイル本文や設定値は読み上げない。
 - 履歴監査ではSecret値、利用者データ、SQLite row、password hashを記録・表示しない。credential候補を検出した場合は、履歴除去とは別にrotation／revokeを必須とする。
 - force push後は古いcloneを再利用せず、破棄して新しくcloneする。GitHub cacheやSupport対応の要否はforce push後に別途判断する。
+
+## SECURITY-HASH-DOMAIN-SEPARATION
+
+- `node worker/scripts/test-security-hash-domain-separation.mjs`でHMAC決定性、Secret／domain／version分離、空Secret拒否、timing-safe比較、管理password version 2、version 1失効、fingerprint marker分離、BAN／rate limitのversion 2限定、withdrawal冪等性、Migrationのlegacyラベルとhash BAN無効化、preflight固定結果を確認する。
+- `node scripts/test-canonical-d1-schema.mjs`はMigration 0001～0010を自動検出し、`schema/d1.sql`とのcolumn、default、CHECK、index一致を確認する。0010を除外した比較が失敗することも必須とする。
+- `node worker/scripts/test-version-withdrawal-active.mjs`でversion 2 idempotency replayが1行に収束すること、保存versionが2であること、legacy passwordが`MANAGEMENT_PASSWORD_EXPIRED`になること、既存のclaim／lease／retry／race／manual review／R2冪等性を確認する。
+- `node worker/scripts/security-hash-cutover-preflight.mjs --local <SQLite path> --secret-names ADMIN_TOKEN,PASSWORD_HASH_SECRET,ABUSE_HASH_SECRET,WITHDRAWAL_IDEMPOTENCY_SECRET,TURNSTILE_SECRET,TURNSTILE_MODE`はローカルDBをread-onlyで開く。`--remote`は明示時だけ本番D1へSELECT／PRAGMAとlatest-version secret名一覧を実行し、COUNT以外のD1 row本文を表示しない。
+- preflightは`SECURITY_HASH_CUTOVER_READY`、`SECURITY_HASH_CUTOVER_BLOCKED_ACTIVE_WITHDRAWALS`、`SECURITY_HASH_CUTOVER_SCHEMA_NOT_READY`、`SECURITY_HASH_CUTOVER_LEGACY_SECRET_REFERENCE`のいずれかを最終行へ出す。legacy pending／processing、schema不足、required secret名不足、productionの旧Secret参照をそれぞれblockingとする。
+- 回帰では投稿・追記metadata、difficulty view model／HTML、version list、withdrawal active、canonical、repository hygiene、Worker typecheck、Wrangler dry-run、`git diff --check`を実行する。Secret値、hash本文、D1 row本文をtest outputへ出さない。

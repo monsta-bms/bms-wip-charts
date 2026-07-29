@@ -642,6 +642,9 @@ async function run() {
   await check("0009 version source metadata is included", async () => {
     assert.ok(migrationNames.includes("0009_version_source_metadata.sql"));
   });
+  await check("0010 security hash key versions is included", async () => {
+    assert.ok(migrationNames.includes("0010_security_hash_key_versions.sql"));
+  });
   await check("migrations are sorted by their four-digit prefix", async () => {
     assert.deepEqual(
       migrations.map((migration) => migration.number),
@@ -897,6 +900,22 @@ async function run() {
       );
       assert.ok(differences.some((difference) => difference.code === errorCodes.objectMissing
         && difference.objectName === metadataTable));
+    } finally {
+      database.close();
+    }
+  });
+
+  await check("excluding 0010 fails the canonical comparison", async () => {
+    const database = new DatabaseSync(":memory:");
+    try {
+      database.exec("PRAGMA foreign_keys = ON;");
+      await applyMigrations(database, migrations.filter((migration) => migration.number < 10));
+      const differences = compareSchemaSnapshots(
+        inspectSchema(database),
+        comparisonResult.canonicalSchema
+      );
+      assert.ok(differences.some((difference) => difference.code === errorCodes.columnMismatch
+        || difference.code === errorCodes.indexMismatch));
     } finally {
       database.close();
     }

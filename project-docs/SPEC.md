@@ -1224,3 +1224,13 @@ RC★★変換:
 - `progress-thumbnail-list.js`は進捗model、canvas／SVG、動的inline CSS custom property、画像URL解決、load／error／fallback、再mount、MutationObserver、requestAnimationFrame scheduler、公開global、`stored-progress-thumbnails` post-render stageだけを所有する。`ensureProgressImageThumbnailStyle`と`#progress-image-thumbnail-style`を廃止し、production runtime `<style>`はfavoriteとprogressを含め0件とする。
 - `index.html`は`theme.css`→`favorites-list.css`→`progress-thumbnail-list.css`の順でhead内に読み込み、progress JavaScriptより先に適用する。R4B2fで変更するtheme CSS、progress CSS、progress JavaScriptだけに`progress-style-r4b2f-01`を使用し、`list.html`は変更しない。
 - 画像load成功、同一src再mount、URL変更、decode error、map fallback、empty、URL欠落、不正画像source、blob拒否、favorite-only、detail再描画、load-moreの既存契約を維持する。CSS移設によりObserver callback、scheduler、pipeline stage、版行geometry、lifecycle／favorite／detail表示を増減させない。
+
+## SECURITY-HASH-DOMAIN-SEPARATION
+
+- 永続的なsecurity hashはHMAC-SHA-256とし、key versionは整数で管理する。version 1は旧共通鍵方式、version 2は用途別HMAC方式である。新規書込みはversion 2だけを使用し、旧共通鍵によるfallback、previous key、dual-readは設けない。
+- Secretは`PASSWORD_HASH_SECRET`（管理パスワード）、`ABUSE_HASH_SECRET`（IP／UA fingerprintとhash BAN）、`WITHDRAWAL_IDEMPOTENCY_SECRET`（取り下げ冪等性）へ分離する。domain labelはそれぞれ`password`、`abuse-subject`、`withdrawal-idempotency`とし、messageへservice名、domain、key version、canonical inputを区切って含める。
+- `versions.password_hash_version=1`の管理パスワードはsecurity cutover時に失効し、新Secretでは検証しない。利用者操作には`MANAGEMENT_PASSWORD_EXPIRED`を返し、ADMIN_TOKENによる既存の管理者経路を維持する。plaintextがないため自動再hashは行わない。
+- `post_logs.fingerprint_hash_version=1`は新しいrate limit集計へ含めない。cutover直後はfingerprint単位のrate limit履歴が実質リセットされ、旧ログは通常cleanupまで監査用に保持する。
+- IP／UAのBANは投稿ログのfingerprintと同じ`abuse-subject` domainを使用する。Migration 0010はversion 1のhash BANを再hashせず無効化し、file SHA-256 BANはそのまま維持する。管理APIは旧鍵BANを`legacyKeyInvalidated=true`で識別でき、新しいhash BANだけをversion 2で照合する。
+- `version_withdrawals`はidempotencyとrequester fingerprintに別々のversion列を持つ。version 1のterminal行は監査用に保持するが、新しい冪等性照合はversion 2だけを対象とする。version 1の`pending`または`processing`が1件でも存在する間はcutoverを禁止し、既存lifecycle処理で安全な状態へ解消する。
+- `delete_requests`のfingerprintもversion管理する。旧行はversion 1として保持し、新規行だけversion 2で記録する。公開レスポンスへhash値、Secret値、fingerprintを追加しない。

@@ -22,5 +22,9 @@ bucket_name = "wip-bms-charts-files"
 
 # 秘密情報はこのファイルに書かず、Cloudflare secrets で設定する。
 # 想定secret:
-# - HASH_SECRET
 # - ADMIN_TOKEN
+# - PASSWORD_HASH_SECRET
+# - ABUSE_HASH_SECRET
+# - WITHDRAWAL_IDEMPOTENCY_SECRET
+# - TURNSTILE_SECRET
+# - TURNSTILE_MODE
