@@ -1,5 +1,9 @@
 import { apiError, Env, errorDetail, methodNotAllowed, ok } from "../utils/response";
 import {
+  ADMIN_WITHDRAWAL_REJECTION_REASON,
+  resolveVersionWithdrawal
+} from "../services/versionWithdrawalResolution";
+import {
   createAdminBan,
   liftAdminBan,
   listAdminBans,
@@ -53,6 +57,11 @@ type DeleteRequestActionRow = {
 
 type AdminNoteBody = {
   adminNote: string;
+};
+
+type ManualWithdrawalRejectBody = {
+  reasonCode: typeof ADMIN_WITHDRAWAL_REJECTION_REASON;
+  note: string;
 };
 
 type AdminLogContext = {
@@ -462,6 +471,166 @@ async function listManualWithdrawalRequests(request: Request, env: Env): Promise
       "WITHDRAWAL_LIST_FAILED",
       "取り下げ申請一覧の取得に失敗しました。",
       `D1 manual withdrawal query failed: ${errorDetail(error)}`
+    );
+  }
+}
+
+async function parseManualWithdrawalRejectBody(
+  request: Request,
+  env: Env
+): Promise<{ ok: true; value: ManualWithdrawalRejectBody } | { ok: false; response: Response }> {
+  const contentType = request.headers.get("Content-Type")?.toLowerCase() ?? "";
+  if (!contentType.includes("application/json")) {
+    return {
+      ok: false,
+      response: apiError(
+        request,
+        env,
+        400,
+        "INVALID_WITHDRAWAL_REJECTION",
+        "却下理由の形式が不正です。",
+        "Content-Type must be application/json."
+      )
+    };
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch (error) {
+    return {
+      ok: false,
+      response: apiError(
+        request,
+        env,
+        400,
+        "INVALID_WITHDRAWAL_REJECTION",
+        "却下理由の形式が不正です。",
+        `Request body must be valid JSON: ${errorDetail(error)}`
+      )
+    };
+  }
+
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return {
+      ok: false,
+      response: apiError(
+        request,
+        env,
+        400,
+        "INVALID_WITHDRAWAL_REJECTION",
+        "却下理由の形式が不正です。",
+        "Request body must be a JSON object."
+      )
+    };
+  }
+
+  const candidate = body as Record<string, unknown>;
+  const reasonCode = typeof candidate.reasonCode === "string" ? candidate.reasonCode.trim() : "";
+  const note = typeof candidate.note === "string" ? candidate.note.trim() : "";
+  if (reasonCode !== ADMIN_WITHDRAWAL_REJECTION_REASON) {
+    return {
+      ok: false,
+      response: apiError(
+        request,
+        env,
+        400,
+        "INVALID_WITHDRAWAL_REJECTION_REASON",
+        "却下理由コードが不正です。",
+        `reasonCode must be ${ADMIN_WITHDRAWAL_REJECTION_REASON}.`
+      )
+    };
+  }
+  if (candidate.note !== undefined && typeof candidate.note !== "string") {
+    return {
+      ok: false,
+      response: apiError(
+        request,
+        env,
+        400,
+        "INVALID_WITHDRAWAL_REJECTION",
+        "管理メモの形式が不正です。",
+        "note must be a string."
+      )
+    };
+  }
+  if (note.length > MAX_ADMIN_NOTE_LENGTH) {
+    return {
+      ok: false,
+      response: apiError(
+        request,
+        env,
+        400,
+        "INVALID_WITHDRAWAL_REJECTION",
+        "管理メモが長すぎます。",
+        `note must be ${MAX_ADMIN_NOTE_LENGTH} characters or less.`
+      )
+    };
+  }
+  return {
+    ok: true,
+    value: { reasonCode: ADMIN_WITHDRAWAL_REJECTION_REASON, note }
+  };
+}
+
+async function rejectManualWithdrawal(
+  request: Request,
+  env: Env,
+  withdrawalId: string
+): Promise<Response> {
+  if (request.method !== "POST") return methodNotAllowed(request, env, request.method);
+  const parsed = await parseManualWithdrawalRejectBody(request, env);
+  if (!parsed.ok) return parsed.response;
+
+  try {
+    const result = await resolveVersionWithdrawal(env, {
+      actor: "admin_reject",
+      withdrawalId,
+      adminNoteLength: parsed.value.note.length
+    });
+    if (!result.ok) {
+      const status = result.reason === "not_found" ? 404 : 409;
+      const code = result.reason === "not_found"
+        ? "WITHDRAWAL_NOT_FOUND"
+        : result.reason === "not_allowed"
+          ? "WITHDRAWAL_REJECTION_NOT_ALLOWED"
+          : "WITHDRAWAL_STATE_CONFLICT";
+      return apiError(
+        request,
+        env,
+        status,
+        code,
+        result.reason === "not_found"
+          ? "取り下げ申請が見つかりません。"
+          : "この取り下げ申請は管理者却下できません。",
+        `Current status is ${result.currentStatus ?? "unknown"}; handling mode is ${result.handlingMode ?? "unknown"}.`
+      );
+    }
+    return ok(request, env, {
+      ok: true,
+      outcome: result.outcome,
+      requestId: result.withdrawalId,
+      previousStatus: result.previousStatus,
+      currentStatus: result.currentStatus,
+      handlingMode: result.handlingMode,
+      withdrawalBlockReleased: result.withdrawalBlockReleased,
+      downloadRestored: result.downloadRestored,
+      auditId: result.auditId,
+      auditRecorded: result.auditRecorded
+    }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    console.error("[admin-withdrawal-reject] failed", {
+      code: "WITHDRAWAL_REJECTION_FAILED",
+      withdrawalId,
+      message: errorDetail(error)
+    });
+    return apiError(
+      request,
+      env,
+      500,
+      "WITHDRAWAL_REJECTION_FAILED",
+      "取り下げ申請の却下に失敗しました。",
+      "D1 withdrawal rejection failed."
     );
   }
 }
@@ -1013,6 +1182,14 @@ export async function handleAdminRoute(
 
   if (segments.length === 1 && segments[0] === "version-withdrawals") {
     return listManualWithdrawalRequests(request, env);
+  }
+
+  if (
+    segments.length === 3
+    && segments[0] === "version-withdrawals"
+    && segments[2] === "reject"
+  ) {
+    return rejectManualWithdrawal(request, env, segments[1]);
   }
 
   if (

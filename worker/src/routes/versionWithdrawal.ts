@@ -1,5 +1,6 @@
 import { buildRequestFingerprint } from "../utils/requestFingerprint";
 import { finalizeVersionWithdrawal } from "../services/versionWithdrawalFinalizer";
+import { resolveVersionWithdrawal } from "../services/versionWithdrawalResolution";
 import { apiError, Env, errorDetail, jsonResponse, methodNotAllowed, ok } from "../utils/response";
 import { hashWithdrawalIdempotency, verifyPasswordHash } from "../utils/securityHash";
 import {
@@ -891,39 +892,13 @@ async function handleCancel(
     });
   }
 
-  const results = await env.DB.batch([
-    env.DB.prepare(`
-      UPDATE version_withdrawals
-      SET
-        status = 'canceled',
-        canceled_at = CURRENT_TIMESTAMP,
-        resolved_at = CURRENT_TIMESTAMP,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-        AND status = 'pending'
-        AND (
-          handling_mode = 'manual_review'
-          OR (handling_mode = 'grace_auto_delete' AND CURRENT_TIMESTAMP < scheduled_at)
-        )
-    `).bind(latest.id),
-    env.DB.prepare(`
-      UPDATE versions
-      SET withdrawal_download_blocked = 0, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-        AND EXISTS (
-          SELECT 1 FROM version_withdrawals
-          WHERE id = ? AND status = 'canceled'
-        )
-        AND NOT EXISTS (
-          SELECT 1 FROM version_withdrawals AS active
-          WHERE active.version_id = versions.id
-            AND active.status IN ('pending', 'processing')
-        )
-    `).bind(version.id, latest.id)
-  ]);
-  const updated = results[0];
+  const resolution = await resolveVersionWithdrawal(env, {
+    actor: "submitter_cancel",
+    withdrawalId: latest.id,
+    expectedVersionId: version.id
+  });
 
-  if (Number(updated.meta.changes ?? 0) === 0) {
+  if (!resolution.ok) {
     latest = await selectLatestWithdrawal(env, version.id);
     if (latest?.status === "canceled") {
       return respondFromExisting(request, env, context, version, latest, "cancel");

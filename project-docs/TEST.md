@@ -1263,6 +1263,9 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - grace/manual pendingは最近の投稿、list、検索、COUNT、お気に入り、chart詳細へ残り、RC★/RC★★だけから除外されること。processing/tombstoned/deletedは通常公開対象外であること。
 - 期限前graceは処理せず、期限到達graceの依存なしはdeletedになること。期限到達までに依存が増えた場合はR2を触らずpending/manual_reviewへ移り、自動墓標化されないこと。
 - manual reviewはpending/processingともfinalizer/observer候補外であること。observerはdue graceまたは期限切れprocessingの依存なしを`would_delete`/`would_retry_delete`、依存ありを`would_move_to_manual_review`とし、observe前後でD1/R2本体が不変であること。
+- 管理者却下APIはtokenなし・不正tokenを401、pendingの自動処理modeとprocessingを409にし、正しいtokenのpending/manual reviewだけを`canceled`へ移すこと。version/chart/fileとR2 objectは不変、R2 deleteは0回、申請専用DL停止だけが解除され、独立した`download_blocked=1`は維持されること。
+- 管理者却下の再送と同時実行は安全な既処理応答になり、`reject_version_withdrawal`監査が1件だけで本文・tokenを含まないこと。投稿者取消、Cron、finalizer、active suiteに回帰がないこと。
+- `reject-manual-withdrawals.mjs`は既定dry-runでPOSTせず、`--execute --expected-count N`の件数完全一致時だけadmin APIを呼ぶこと。標準出力は件数だけで、token、withdrawal ID、利用者情報を含まないこと。
 - 管理画面でmanual reviewのversion、申請日時、理由、handling mode、依存内訳を確認でき、公開画面には理由を表示しないこと。
 - 4条件すべてで指定された見出し・説明・状態文・確認ボタンを表示し、pendingでは「DL停止・自動削除待ち」または「DL停止・管理者確認待ち」と取消説明を表示すること。
 - white/default/dark、390/760/1366px、Pages構文、HTML重複ID、Worker typecheck、Wrangler dry-run、`git diff --check`を確認すること。

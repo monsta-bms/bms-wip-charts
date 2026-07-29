@@ -1,5 +1,11 @@
 # デプロイ手順
 
+## manual review非破壊復旧
+
+現行schema 0001～0009でHASH用途分離前のWorkerを一時復旧する場合は、`3564a2dbe8ac1c853f879abf8707211434c0d08c`を基点にした専用branchから、管理者却下機能だけを含むversionを`wrangler versions upload --strict`で作成する。Migration、Secret変更、Pages反映は同時に行わない。candidateのWorker名・bindings・preview health・admin認証を確認してから1 version 100%でdeployする。
+
+管理者却下scriptは`worker/scripts/reject-manual-withdrawals.mjs`で、引数なしは読み取り専用dry-runである。本番書込みは事前に一覧件数を確認し、`node .\scripts\reject-manual-withdrawals.mjs --execute --expected-count 2`のように期待件数を明示した場合だけ行う。ADMIN_TOKENは既定のrepository外保存fileから読み、値や対象IDを出力しない。完了後はpending/manual reviewとprocessingが0、監査が対象件数分、version/chart/file不変であることを読み取り確認する。
+
 ## 正式な安全デプロイ手順
 
 API Workerを確認・デプロイするときは、リポジトリ直下の専用BATだけを使用する。

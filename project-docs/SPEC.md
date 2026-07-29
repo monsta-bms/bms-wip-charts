@@ -989,7 +989,8 @@ RC★★変換:
 - 削除阻止依存は、公開状態を問わない全直接子version、`collapsed_by_version_id`参照、旧`delete_requests`参照とする。`allow_append`は分類条件に使わず、Pagesが表示中の子件数だけで確定しない。
 - `immediate_delete`は理由不要・取消不可で、既存finalizerを同期実行して譜面R2、progressImage、versionを物理削除する。
 - `grace_auto_delete`は理由を必須とし、申請から7日後を`scheduled_at`へ保存する。期限前は取消可能で、期限到達時に依存なしなら物理削除する。期限までに依存が増えた場合はR2やversionを削除せず、pendingのまま`manual_review`へ移す。通常の自動経路では墓標化しない。
-- `manual_review`は理由を必須とし、自動処理候補および自動墓標化対象から除外する。管理画面には理由・申請日時・version識別情報・依存内訳を読み取り専用で表示し、最終判断操作は後続フェーズとする。
+- `manual_review`は理由を必須とし、自動処理候補および自動墓標化対象から除外する。管理画面には理由・申請日時・version識別情報・依存内訳を表示する。管理者は認証済みAPIから申請を非破壊で却下できるが、削除・墓標化の決定操作は含めない。
+- 管理者却下は`pending/manual_review`だけをCAS更新し、既存terminal状態`canceled`へ移す。version、chart、file、R2 objectは変更せず、`versions.withdrawal_download_blocked`だけを他のactive申請がない場合に解除する。独立した`download_blocked`は維持する。同じ却下の再送は既処理結果を返し、`admin_logs`の`reject_version_withdrawal`監査は1件だけとする。
 - 非即時申請の理由は前後空白を除去し、10～500文字とする。公開API、公開一覧、post_logs、consoleへ理由本文を出さず、ADMIN_TOKEN認証済み管理APIだけが返す。
 - `versions.withdrawal_download_blocked`を取り下げ専用DL停止として使う。`downloadAvailable`は既存`download_blocked`と専用停止の両方が0の場合だけtrue。取消時は専用停止だけを0へ戻し、既存の管理者停止等を解除しない。
 - `grace_auto_delete`と`manual_review`のpendingは、最近の投稿、`list.html`、検索、件数、お気に入り、詳細版ツリーへ残す。DLは404で停止し、追記は`allow_append`に従う。RC★/RC★★からは除外する。processing/tombstoned/deletedは従来どおり通常公開対象外とする。

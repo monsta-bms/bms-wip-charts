@@ -1495,7 +1495,13 @@ pendingのgrace/manualは通常のchart/version一覧APIへ残り、`handlingMod
 
 ### `GET /api/admin/version-withdrawals`
 
-`Authorization: Bearer <ADMIN_TOKEN>`必須の読み取り専用一覧。現在は`handlingMode=manual_review`だけを受け付け、`page`、`pageSize`でページングする。返却項目はwithdrawal/version/chart識別情報、曲名・差分名・版表示、申請日時、申請理由、`handlingMode`、`status`、依存有無と直接子・折り畳み参照・旧削除申請の件数。公開APIから理由や内部依存件数は返さない。管理者の最終削除・墓標化操作は本APIに含めない。
+`Authorization: Bearer <ADMIN_TOKEN>`必須の一覧。現在は`handlingMode=manual_review`だけを受け付け、`page`、`pageSize`でページングする。返却項目はwithdrawal/version/chart識別情報、曲名・差分名・版表示、申請日時、申請理由、`handlingMode`、`status`、依存有無と直接子・折り畳み参照・旧削除申請の件数。公開APIから理由や内部依存件数は返さない。管理者の削除・墓標化操作は含めない。
+
+### `POST /api/admin/version-withdrawals/:withdrawalId/reject`
+
+`Authorization: Bearer <ADMIN_TOKEN>`と`Content-Type: application/json`を必須とし、`pending/manual_review`申請だけを非破壊で却下する。bodyは固定`reasonCode: "security_hash_cutover"`と省略可能な1000文字以下の`note`を受け付ける。terminal stateは既存の`canceled`で、version/chart/file/R2は削除せず、申請専用DL停止だけを解除し、独立した管理DL停止は解除しない。
+
+成功時は`outcome`（`rejected`または`already_rejected`）、request ID、前後status、handling mode、専用DL停止解除・DL復旧の真偽、audit IDと今回記録したかだけを返す。申請本文や利用者情報は返さない。同じ却下の再送はHTTP 200で既存auditを返し、別のterminal結果、processing、自動処理mode、CAS競合はHTTP 409とする。監査は`admin_logs.action='reject_version_withdrawal'`、`target_type='version_withdrawal'`、`reason='security_hash_cutover'`へ1件だけ保存し、Secret、Authorization、note本文を保存しない。
 
 期限到達時の自動処理対象は`status='pending' AND handling_mode='grace_auto_delete' AND scheduled_at<=CURRENT_TIMESTAMP`と、lease期限切れのimmediate/grace processingだけ。依存なしは物理削除、依存ありは`status=pending/handling_mode=manual_review`へ移し、R2・versionを削除しない。manual reviewはpending/processingともclaimしない。
 

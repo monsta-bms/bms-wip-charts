@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import wrangler from "wrangler";
+import { runManualWithdrawalRecovery } from "./reject-manual-withdrawals.mjs";
 
 const { createTestHarness, unstable_splitSqlQuery: splitSqlQuery } = wrangler;
 
@@ -1061,6 +1062,185 @@ try {
       "create_chart"
     );
     assert.equal(legacyIgnored, null);
+  });
+
+  await check("admin manual withdrawal rejection is authenticated, non-destructive, and idempotent", async () => {
+    await resetIsolation();
+    const manual = await createVersion({ downloadBlocked: true });
+    const withdrawal = await createWithdrawal(manual, {
+      handlingMode: "manual_review",
+      reason: "管理者却下経路の隔離テスト理由です。"
+    });
+    const autoTarget = await createVersion();
+    const autoWithdrawal = await createWithdrawal(autoTarget, {
+      handlingMode: "grace_auto_delete",
+      scheduledAt: FUTURE_SQL
+    });
+    const processingTarget = await createVersion();
+    const processingWithdrawal = await createWithdrawal(processingTarget, {
+      handlingMode: "manual_review",
+      status: "processing"
+    });
+    const spy = makeR2Spy(env.FILES);
+    const publicEnv = {
+      ...env,
+      FILES: spy.binding,
+      HASH_SECRET: TEST_SECRET,
+      ADMIN_TOKEN: TEST_ADMIN_TOKEN
+    };
+    const endpoint = `http://localhost/api/admin/version-withdrawals/${withdrawal.withdrawalId}/reject`;
+    const body = JSON.stringify({ reasonCode: "security_hash_cutover" });
+    const invoke = (token = TEST_ADMIN_TOKEN, target = endpoint) => indexModule.default.fetch(
+      new Request(target, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body
+      }),
+      publicEnv
+    );
+
+    const unauthenticated = await indexModule.default.fetch(
+      new Request(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body }),
+      publicEnv
+    );
+    assert.equal(unauthenticated.status, 401);
+    assert.equal((await invoke("wrong-admin-token")).status, 401);
+    assert.equal((await invoke(
+      TEST_ADMIN_TOKEN,
+      `http://localhost/api/admin/version-withdrawals/${autoWithdrawal.withdrawalId}/reject`
+    )).status, 409);
+    assert.equal((await invoke(
+      TEST_ADMIN_TOKEN,
+      `http://localhost/api/admin/version-withdrawals/${processingWithdrawal.withdrawalId}/reject`
+    )).status, 409);
+
+    const firstResponse = await invoke();
+    assert.equal(firstResponse.status, 200);
+    const firstBody = await firstResponse.json();
+    assert.equal(firstBody.outcome, "rejected");
+    assert.equal(firstBody.auditRecorded, true);
+    assert.equal(firstBody.withdrawalBlockReleased, true);
+    assert.equal(firstBody.downloadRestored, false);
+    const afterFirst = await first(`
+      SELECT
+        withdrawals.status,
+        versions.withdrawal_download_blocked,
+        versions.download_blocked,
+        versions.r2_key,
+        versions.file_id
+      FROM version_withdrawals AS withdrawals
+      INNER JOIN versions ON versions.id = withdrawals.version_id
+      WHERE withdrawals.id = ?
+    `, withdrawal.withdrawalId);
+    assert.equal(afterFirst.status, "canceled");
+    assert.equal(afterFirst.withdrawal_download_blocked, 0);
+    assert.equal(afterFirst.download_blocked, 1);
+    assert.equal(afterFirst.r2_key, manual.r2Key);
+    assert.equal(afterFirst.file_id, manual.fileId);
+    assert.notEqual(await env.FILES.head(manual.r2Key), null);
+    assert.equal(spy.deleteCalls.length, 0);
+    assert.equal((await first("SELECT COUNT(*) AS count FROM versions WHERE id = ?", manual.versionId)).count, 1);
+    assert.equal((await first("SELECT COUNT(*) AS count FROM charts WHERE id = ?", manual.chartId)).count, 1);
+    assert.equal((await first("SELECT COUNT(*) AS count FROM songs WHERE id = ?", manual.songId)).count, 1);
+    assert.equal((await first(`
+      SELECT COUNT(*) AS count FROM admin_logs
+      WHERE action = 'reject_version_withdrawal' AND target_id = ?
+    `, withdrawal.withdrawalId)).count, 1);
+
+    const replayResponse = await invoke();
+    assert.equal(replayResponse.status, 200);
+    const replayBody = await replayResponse.json();
+    assert.equal(replayBody.outcome, "already_rejected");
+    assert.equal(replayBody.auditRecorded, false);
+    assert.equal(replayBody.auditId, firstBody.auditId);
+    assert.equal((await first(`
+      SELECT COUNT(*) AS count FROM admin_logs
+      WHERE action = 'reject_version_withdrawal' AND target_id = ?
+    `, withdrawal.withdrawalId)).count, 1);
+
+    const concurrentTarget = await createVersion();
+    const concurrentWithdrawal = await createWithdrawal(concurrentTarget, {
+      handlingMode: "manual_review"
+    });
+    const concurrentEndpoint = `http://localhost/api/admin/version-withdrawals/${concurrentWithdrawal.withdrawalId}/reject`;
+    const concurrentResponses = await Promise.all([
+      invoke(TEST_ADMIN_TOKEN, concurrentEndpoint),
+      invoke(TEST_ADMIN_TOKEN, concurrentEndpoint)
+    ]);
+    assert.deepEqual(concurrentResponses.map((response) => response.status), [200, 200]);
+    const concurrentBodies = await Promise.all(concurrentResponses.map((response) => response.json()));
+    assert.equal(concurrentBodies.filter((value) => value.outcome === "rejected").length, 1);
+    assert.equal(concurrentBodies.filter((value) => value.outcome === "already_rejected").length, 1);
+    assert.equal((await first(`
+      SELECT COUNT(*) AS count FROM admin_logs
+      WHERE action = 'reject_version_withdrawal' AND target_id = ?
+    `, concurrentWithdrawal.withdrawalId)).count, 1);
+    assert.equal(spy.deleteCalls.length, 0);
+  });
+
+  await check("manual withdrawal recovery runner defaults to dry-run and requires an exact execute count", async () => {
+    const token = "runner-test-token";
+    const ids = ["withdrawal_runner_1", "withdrawal_runner_2"];
+    const makeList = (items) => ({
+      ok: true,
+      items: items.map((withdrawalId) => ({
+        withdrawalId,
+        status: "pending",
+        handlingMode: "manual_review"
+      })),
+      total: items.length
+    });
+    const calls = [];
+    const lines = [];
+    let remaining = [...ids];
+    const fetchImpl = async (url, init = {}) => {
+      calls.push({ url, init });
+      assert.equal(init.headers.Authorization, `Bearer ${token}`);
+      if (init.method === "POST") {
+        const id = decodeURIComponent(url.split("/").at(-2));
+        remaining = remaining.filter((candidate) => candidate !== id);
+        return new Response(JSON.stringify({ ok: true, outcome: "rejected" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+      return new Response(JSON.stringify(makeList(remaining)), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    };
+    const readFileImpl = async () => token;
+
+    const dryRun = await runManualWithdrawalRecovery({ fetchImpl, readFileImpl, writeLine: (line) => lines.push(line) });
+    assert.equal(dryRun.mode, "dry-run");
+    assert.equal(calls.filter((call) => call.init.method === "POST").length, 0);
+    assert.match(lines[0], /candidate_count=2/);
+
+    await assert.rejects(
+      runManualWithdrawalRecovery({
+        argv: ["--execute", "--expected-count", "3"],
+        fetchImpl,
+        readFileImpl,
+        writeLine: (line) => lines.push(line)
+      }),
+      /EXPECTED_COUNT_MISMATCH/
+    );
+    assert.equal(calls.filter((call) => call.init.method === "POST").length, 0);
+
+    const executed = await runManualWithdrawalRecovery({
+      argv: ["--execute", "--expected-count", "2"],
+      fetchImpl,
+      readFileImpl,
+      writeLine: (line) => lines.push(line)
+    });
+    assert.equal(executed.rejectedCount, 2);
+    assert.equal(executed.remainingCount, 0);
+    assert.equal(calls.filter((call) => call.init.method === "POST").length, 2);
+    const visibleOutput = lines.join("\n");
+    assert.doesNotMatch(visibleOutput, /runner-test-token|withdrawal_runner_/);
   });
 
   await check("daily R2 cleanup cron remains independent", async () => {
