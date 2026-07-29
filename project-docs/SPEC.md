@@ -1235,3 +1235,4 @@ RC★★変換:
 - IP／UAのBANは投稿ログのfingerprintと同じ`abuse-subject` domainを使用する。Migration 0010はversion 1のhash BANを再hashせず無効化し、file SHA-256 BANはそのまま維持する。管理APIは旧鍵BANを`legacyKeyInvalidated=true`で識別でき、新しいhash BANだけをversion 2で照合する。
 - `version_withdrawals`はidempotencyとrequester fingerprintに別々のversion列を持つ。version 1のterminal行は監査用に保持するが、新しい冪等性照合はversion 2だけを対象とする。version 1の`pending`または`processing`が1件でも存在する間はcutoverを禁止し、既存lifecycle処理で安全な状態へ解消する。
 - `delete_requests`のfingerprintもversion管理する。旧行はversion 1として保持し、新規行だけversion 2で記録する。公開レスポンスへhash値、Secret値、fingerprintを追加しない。
+- cutover preflightはローカル`node_modules/wrangler/package.json`の`bin`を解決し、`process.execPath`からWrangler JavaScriptを引数配列・`shell=false`・timeout付きで実行する。Migration 0010前でもwithdrawalのpending/processing件数は常にCOUNTし、remote Secret名はproductionの`secret list --format json`だけから取得する。candidateの必須Secretは`wrangler.toml`の`secrets.required`、`versions upload`、`versions view --json`、preview runtimeで別途検証し、latest-version secret listへ依存しない。

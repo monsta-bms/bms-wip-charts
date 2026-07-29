@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -7,9 +7,14 @@ import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import {
   REQUIRED_SECRET_NAMES,
+  SecurityHashPreflightError,
   evaluateCutoverSnapshot,
   inspectLocalDatabase,
-  parseVersionSecretNames
+  inspectRemoteDatabase,
+  parseSecretListNames,
+  parseWranglerJson,
+  resolveWranglerEntrypoint,
+  runWranglerProcess
 } from "./security-hash-cutover-preflight.mjs";
 
 const workerRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -138,8 +143,12 @@ await check("production TypeScript has zero legacy secret references", async () 
   for (const path of files) assert.doesNotMatch(await readFile(path, "utf8"), /\bHASH_SECRET\b/u, path);
 });
 
-await check("Wrangler latest-version output parsing keeps secret names only", async () => {
-  const names = parseVersionSecretNames(`-- Version fixture (0%) secrets --\nSecret Name: ADMIN_TOKEN\nSecret Name: ABUSE_HASH_SECRET\n`);
+await check("production secret list JSON parsing keeps secret names only", async () => {
+  const names = parseSecretListNames([
+    { name: "ADMIN_TOKEN", type: "secret_text" },
+    { name: "ABUSE_HASH_SECRET", type: "secret_text" },
+    { name: "invalid-name", type: "secret_text" }
+  ]);
   assert.deepEqual(names, ["ADMIN_TOKEN", "ABUSE_HASH_SECRET"]);
 });
 
@@ -182,6 +191,118 @@ await check("dedicated secrets are passed only to their matching hash helpers", 
 
 const temporaryRoot = await mkdtemp(join(tmpdir(), "bms-security-hash-"));
 try {
+  await check("Wrangler entrypoint resolves string and object bin metadata", async () => {
+    for (const [name, bin] of [
+      ["string-bin", "./bin/wrangler.js"],
+      ["object-bin", { wrangler: "./bin/wrangler.js" }]
+    ]) {
+      const root = join(temporaryRoot, name);
+      const packageRoot = join(root, "node_modules", "wrangler");
+      await mkdir(join(packageRoot, "bin"), { recursive: true });
+      await writeFile(join(packageRoot, "package.json"), JSON.stringify({ bin }), "utf8");
+      await writeFile(join(packageRoot, "bin", "wrangler.js"), "", "utf8");
+      assert.equal(
+        resolveWranglerEntrypoint({ root }),
+        resolve(packageRoot, "bin", "wrangler.js")
+      );
+    }
+  });
+
+  await check("Wrangler entrypoint reports fixed package and bin errors", async () => {
+    const missingRoot = join(temporaryRoot, "missing-package");
+    await mkdir(missingRoot, { recursive: true });
+    assert.throws(
+      () => resolveWranglerEntrypoint({ root: missingRoot }),
+      (error) => error instanceof SecurityHashPreflightError
+        && error.code === "WRANGLER_PACKAGE_NOT_FOUND"
+    );
+    const noBinRoot = join(temporaryRoot, "missing-bin");
+    const packageRoot = join(noBinRoot, "node_modules", "wrangler");
+    await mkdir(packageRoot, { recursive: true });
+    await writeFile(join(packageRoot, "package.json"), "{}", "utf8");
+    assert.throws(
+      () => resolveWranglerEntrypoint({ root: noBinRoot }),
+      (error) => error instanceof SecurityHashPreflightError
+        && error.code === "WRANGLER_BIN_NOT_FOUND"
+    );
+  });
+
+  await check("Wrangler process uses Node, argument arrays, shell false, and a timeout", async () => {
+    let invocation = null;
+    const commandText = "SELECT 1; harmless-literal";
+    const output = runWranglerProcess(
+      ["d1", "execute", "DB", "--command", commandText],
+      {
+        root: workerRoot,
+        timeoutMs: 1234,
+        spawnSyncImpl(command, args, options) {
+          invocation = { command, args, options };
+          return { status: 0, stdout: "[]", stderr: "" };
+        }
+      }
+    );
+    assert.equal(output, "[]");
+    assert.equal(invocation.command, process.execPath);
+    assert.equal(invocation.options.shell, false);
+    assert.equal(invocation.options.timeout, 1234);
+    assert.equal(invocation.args.at(-1), commandText);
+    assert.equal(invocation.args.includes(commandText), true);
+  });
+
+  await check("Wrangler process and JSON failures use fixed safe codes", async () => {
+    assert.throws(
+      () => runWranglerProcess([], {
+        root: workerRoot,
+        spawnSyncImpl: () => ({ status: 1, stdout: "", stderr: "sensitive fixture" })
+      }),
+      (error) => error.code === "WRANGLER_PROCESS_FAILED"
+        && !String(error).includes("sensitive fixture")
+    );
+    assert.throws(
+      () => runWranglerProcess([], {
+        root: workerRoot,
+        spawnSyncImpl: () => ({ status: null, stdout: "", stderr: "", error: { code: "ETIMEDOUT" } })
+      }),
+      (error) => error.code === "WRANGLER_PROCESS_TIMEOUT"
+    );
+    assert.throws(
+      () => parseWranglerJson("not-json"),
+      (error) => error.code === "WRANGLER_JSON_INVALID"
+    );
+    assert.equal(parseWranglerJson('[{"results":[{"count":2}]}]')[0].results[0].count, 2);
+  });
+
+  await check("remote preflight reports active counts before migration without latest-version lookup", async () => {
+    const invocations = [];
+    const result = inspectRemoteDatabase("fixture-wrangler.toml", {
+      runJson(args) {
+        invocations.push(args);
+        const sql = args[args.indexOf("--command") + 1];
+        if (typeof sql === "string" && sql.startsWith("PRAGMA table_info")) {
+          return [{ results: [{ name: "id" }, { name: "status" }] }];
+        }
+        if (sql?.includes("status = 'pending'")) return [{ results: [{ count: 0 }] }];
+        if (sql?.includes("status = 'processing'")) return [{ results: [{ count: 0 }] }];
+        if (args[0] === "secret") {
+          return [{ name: "ADMIN_TOKEN" }, { name: "TURNSTILE_SECRET" }, { name: "TURNSTILE_MODE" }];
+        }
+        throw new Error("Unexpected fixture command");
+      }
+    });
+    assert.equal(result.outcome, "SECURITY_HASH_CUTOVER_SCHEMA_NOT_READY");
+    assert.equal(result.summary.schema_ready, false);
+    assert.equal(result.summary.legacy_withdrawal_pending_count, 0);
+    assert.equal(result.summary.legacy_withdrawal_processing_count, 0);
+    assert.equal(result.summary.missing_required_secret_count, 3);
+    assert.equal(invocations.some((args) => args.includes("latest-version")), false);
+    assert.equal(invocations.some((args) => args[0] === "versions"), false);
+  });
+
+  await check("preflight source does not invoke command wrappers", async () => {
+    const preflight = await source("scripts/security-hash-cutover-preflight.mjs");
+    assert.doesNotMatch(preflight, /npx\.cmd|shell\s*:\s*true/u);
+  });
+
   const migrationDatabase = new DatabaseSync(join(temporaryRoot, "migration.sqlite"));
   for (let number = 1; number <= 9; number += 1) {
     const prefix = String(number).padStart(4, "0");

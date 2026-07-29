@@ -11,6 +11,16 @@ crons = ["0 18 * * *", "0 * * * *"]
 ALLOWED_ORIGINS = "https://monsta-bms.github.io,http://localhost:8787"
 WITHDRAWAL_CRON_MODE = "active"
 
+[secrets]
+required = [
+  "ADMIN_TOKEN",
+  "PASSWORD_HASH_SECRET",
+  "ABUSE_HASH_SECRET",
+  "WITHDRAWAL_IDEMPOTENCY_SECRET",
+  "TURNSTILE_SECRET",
+  "TURNSTILE_MODE"
+]
+
 [[d1_databases]]
 binding = "DB"
 database_name = "wip-bms-charts-db"
