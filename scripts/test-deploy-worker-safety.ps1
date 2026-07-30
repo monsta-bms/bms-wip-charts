@@ -27,6 +27,22 @@ function Assert-TestEqual {
     }
 }
 
+function Assert-TestArrayEqual {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Actual,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Expected,
+        [Parameter(Mandatory = $true)][string]$Message
+    )
+    if ($Actual.Count -ne $Expected.Count) {
+        throw ("{0}: expected count {1}, actual {2}" -f $Message, $Expected.Count, $Actual.Count)
+    }
+    for ($index = 0; $index -lt $Expected.Count; $index++) {
+        if ([string]$Actual[$index] -cne [string]$Expected[$index]) {
+            throw ("{0}: mismatch at index {1}" -f $Message, $index)
+        }
+    }
+}
+
 function Assert-ThrowsDeployCode {
     param(
         [Parameter(Mandatory = $true)][string]$ExpectedCode,
@@ -74,6 +90,16 @@ crons = ["0 18 * * *", "0 * * * *"]
 [vars]
 WITHDRAWAL_CRON_MODE = "active"
 
+[secrets]
+required = [
+  "ADMIN_TOKEN",
+  "PASSWORD_HASH_SECRET",
+  "ABUSE_HASH_SECRET",
+  "WITHDRAWAL_IDEMPOTENCY_SECRET",
+  "TURNSTILE_SECRET",
+  "TURNSTILE_MODE"
+]
+
 [[d1_databases]]
 binding = "DB"
 database_name = "wip-bms-charts-db"
@@ -83,6 +109,38 @@ database_id = "fixture-database-id"
 binding = "FILES"
 bucket_name = "wip-bms-charts-files"
 '@
+}
+
+function Set-RequiredArrayDefinition {
+    param(
+        [Parameter(Mandatory = $true)][string]$Toml,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$RequiredValue
+    )
+    $pattern = [regex]::new('(?ms)(^\[secrets\]\s*^required\s*=\s*)\[.*?^\]', [Text.RegularExpressions.RegexOptions]::Multiline -bor [Text.RegularExpressions.RegexOptions]::Singleline)
+    $evaluator = [Text.RegularExpressions.MatchEvaluator]{
+        param($match)
+        return $match.Groups[1].Value + $RequiredValue
+    }
+    $updated = $pattern.Replace($Toml, $evaluator, 1)
+    Assert-TestTrue -Condition ($updated -cne $Toml) -Message "required array fixture was not replaced"
+    return $updated
+}
+
+function ConvertTo-TomlStringArrayFixture {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][AllowEmptyString()][string[]]$Values,
+        [switch]$TrailingComma
+    )
+    $lines = New-Object System.Collections.Generic.List[string]
+    [void]$lines.Add("[")
+    for ($index = 0; $index -lt $Values.Count; $index++) {
+        $escaped = $Values[$index].Replace('\', '\\').Replace('"', '\"')
+        $needsComma = $index -lt ($Values.Count - 1) -or $TrailingComma
+        $suffix = if ($needsComma) { "," } else { "" }
+        [void]$lines.Add(('  "' + $escaped + '"' + $suffix))
+    }
+    [void]$lines.Add("]")
+    return $lines.ToArray() -join "`n"
 }
 
 function Write-ConfigFixture {
@@ -101,6 +159,15 @@ function Assert-ConfigTextAllowed {
     Write-ConfigFixture -Path $Path -Content $Content
     $config = Read-WranglerSafetyConfig -Path $Path
     Assert-WranglerSafetyConfig -Config $config | Out-Null
+}
+
+function Read-ConfigTextFixture {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Content
+    )
+    Write-ConfigFixture -Path $Path -Content $Content
+    return Read-WranglerSafetyConfig -Path $Path
 }
 
 function Assert-ConfigTextRejected {
@@ -397,6 +464,136 @@ try {
         Assert-TestTrue -Condition (-not (Test-ProductionDeployRequested -DeployMode $true -Confirmation "")) -Message "empty confirmation requested production deploy"
         Assert-TestTrue -Condition (-not (Test-ProductionDeployRequested -DeployMode $true -Confirmation "y")) -Message "short confirmation requested production deploy"
         Assert-TestEqual -Actual $script:ProductionDeployInvocationCount -Expected 0 -Message "batch safety tests invoked production deploy"
+    }
+    Invoke-SafetyTest "44 current wrangler.toml is parsed and allowed" {
+        $currentConfig = Read-WranglerSafetyConfig -Path (Join-Path $repositoryRoot "worker\wrangler.toml")
+        Assert-WranglerSafetyConfig -Config $currentConfig | Out-Null
+        Assert-TestArrayEqual -Actual @($currentConfig.RequiredSecrets) -Expected @($script:ExpectedRequiredSecrets) -Message "current required secrets mismatch"
+    }
+    Invoke-SafetyTest "45 one-line crons array remains supported" {
+        $parsed = Read-ConfigTextFixture -Path $configPath -Content (Get-ValidToml)
+        Assert-TestArrayEqual -Actual @($parsed.Crons) -Expected @($script:ExpectedCrons) -Message "one-line crons mismatch"
+    }
+    Invoke-SafetyTest "46 multiline required array is parsed" {
+        $parsed = Read-ConfigTextFixture -Path $configPath -Content (Get-ValidToml)
+        Assert-TestArrayEqual -Actual @($parsed.RequiredSecrets) -Expected @($script:ExpectedRequiredSecrets) -Message "multiline required secrets mismatch"
+    }
+    Invoke-SafetyTest "47 multiline required array permits trailing comma" {
+        $requiredValue = ConvertTo-TomlStringArrayFixture -Values $script:ExpectedRequiredSecrets -TrailingComma
+        $fixture = Set-RequiredArrayDefinition -Toml (Get-ValidToml) -RequiredValue $requiredValue
+        Assert-ConfigTextAllowed -Path $configPath -Content $fixture
+    }
+    Invoke-SafetyTest "48 array element line permits trailing comment" {
+        $requiredValue = @(
+            "[",
+            '  "ADMIN_TOKEN", # admin binding name',
+            '  "PASSWORD_HASH_SECRET", # password hash binding name',
+            '  "ABUSE_HASH_SECRET",',
+            '  "WITHDRAWAL_IDEMPOTENCY_SECRET",',
+            '  "TURNSTILE_SECRET",',
+            '  "TURNSTILE_MODE" # mode binding name',
+            "]"
+        ) -join "`n"
+        $fixture = Set-RequiredArrayDefinition -Toml (Get-ValidToml) -RequiredValue $requiredValue
+        Assert-ConfigTextAllowed -Path $configPath -Content $fixture
+    }
+    Invoke-SafetyTest "49 hash inside quoted array string is not a comment" {
+        $fixture = Set-RequiredArrayDefinition -Toml (Get-ValidToml) -RequiredValue '["name#fragment"] # array comment'
+        $parsed = Read-ConfigTextFixture -Path $configPath -Content $fixture
+        Assert-TestArrayEqual -Actual @($parsed.RequiredSecrets) -Expected @("name#fragment") -Message "quoted hash was truncated"
+    }
+    Invoke-SafetyTest "50 brackets and escaped quote inside string do not close array" {
+        $fixture = Set-RequiredArrayDefinition -Toml (Get-ValidToml) -RequiredValue '["escaped quote \" with [brackets]"]'
+        $parsed = Read-ConfigTextFixture -Path $configPath -Content $fixture
+        Assert-TestArrayEqual -Actual @($parsed.RequiredSecrets) -Expected @('escaped quote " with [brackets]') -Message "quoted brackets or escape were parsed incorrectly"
+    }
+    Invoke-SafetyTest "51 empty array is parsed" {
+        $fixture = Set-RequiredArrayDefinition -Toml (Get-ValidToml) -RequiredValue '[]'
+        $parsed = Read-ConfigTextFixture -Path $configPath -Content $fixture
+        Assert-TestEqual -Actual @($parsed.RequiredSecrets).Count -Expected 0 -Message "empty array was not empty"
+    }
+    Invoke-SafetyTest "52 unterminated array is rejected with fixed code" {
+        $fixture = "[secrets]`nrequired = [`n  `"ADMIN_TOKEN`""
+        Assert-ConfigTextRejected -Path $configPath -Content $fixture -Code "DEPLOY_CONFIG_ARRAY_UNTERMINATED"
+    }
+    Invoke-SafetyTest "53 nested array is rejected with fixed code" {
+        $fixture = Set-RequiredArrayDefinition -Toml (Get-ValidToml) -RequiredValue '[["ADMIN_TOKEN"]]'
+        Assert-ConfigTextRejected -Path $configPath -Content $fixture -Code "DEPLOY_CONFIG_ARRAY_INVALID"
+    }
+    Invoke-SafetyTest "54 numeric array element is rejected with fixed code" {
+        $fixture = Set-RequiredArrayDefinition -Toml (Get-ValidToml) -RequiredValue '[123]'
+        Assert-ConfigTextRejected -Path $configPath -Content $fixture -Code "DEPLOY_CONFIG_ARRAY_INVALID"
+    }
+    Invoke-SafetyTest "55 missing comma is rejected with fixed code" {
+        $fixture = Set-RequiredArrayDefinition -Toml (Get-ValidToml) -RequiredValue '["ADMIN_TOKEN" "PASSWORD_HASH_SECRET"]'
+        Assert-ConfigTextRejected -Path $configPath -Content $fixture -Code "DEPLOY_CONFIG_ARRAY_INVALID"
+    }
+    Invoke-SafetyTest "56 missing required secret name is rejected" {
+        $names = @($script:ExpectedRequiredSecrets | Where-Object { $_ -cne "TURNSTILE_MODE" })
+        $requiredValue = ConvertTo-TomlStringArrayFixture -Values $names
+        $fixture = Set-RequiredArrayDefinition -Toml (Get-ValidToml) -RequiredValue $requiredValue
+        Assert-ConfigTextRejected -Path $configPath -Content $fixture -Code "DEPLOY_REQUIRED_SECRETS_MISMATCH"
+    }
+    Invoke-SafetyTest "57 extra required secret name is rejected" {
+        $names = @($script:ExpectedRequiredSecrets) + @("EXTRA_SECRET")
+        $requiredValue = ConvertTo-TomlStringArrayFixture -Values $names
+        $fixture = Set-RequiredArrayDefinition -Toml (Get-ValidToml) -RequiredValue $requiredValue
+        Assert-ConfigTextRejected -Path $configPath -Content $fixture -Code "DEPLOY_REQUIRED_SECRETS_MISMATCH"
+    }
+    Invoke-SafetyTest "58 duplicate required secret name is rejected" {
+        $names = @($script:ExpectedRequiredSecrets) + @("ADMIN_TOKEN")
+        $requiredValue = ConvertTo-TomlStringArrayFixture -Values $names
+        $fixture = Set-RequiredArrayDefinition -Toml (Get-ValidToml) -RequiredValue $requiredValue
+        Assert-ConfigTextRejected -Path $configPath -Content $fixture -Code "DEPLOY_REQUIRED_SECRETS_MISMATCH"
+    }
+    Invoke-SafetyTest "59 parser errors do not expose secret token or hash values" {
+        $adminValue = "fixture-admin-token-sensitive-value"
+        $tokenValue = "fixture-turnstile-token-sensitive-value"
+        $hashValue = "fixture-password-hash-sensitive-value"
+        $fixture = "[vars]`nADMIN_TOKEN = `"$adminValue`"`nTURNSTILE_SECRET = `"$tokenValue`"`nPASSWORD_HASH_SECRET = `"$hashValue`"`n[secrets]`nrequired = [`n  `"ADMIN_TOKEN`""
+        Write-ConfigFixture -Path $configPath -Content $fixture
+        $caught = $null
+        try {
+            Read-WranglerSafetyConfig -Path $configPath | Out-Null
+        }
+        catch {
+            $caught = $_.Exception
+        }
+        Assert-TestTrue -Condition ($null -ne $caught) -Message "sensitive parser fixture was not rejected"
+        Assert-TestEqual -Actual ([string]$caught.Data["Code"]) -Expected "DEPLOY_CONFIG_ARRAY_UNTERMINATED" -Message "sensitive parser fixture error code mismatch"
+        $logPath = Join-Path $tempDirectory "parser-sensitive-error.log"
+        $context = [pscustomobject]@{ LogPath = $logPath }
+        Write-DeployLog -Context $context -Level "ERROR" -NoConsole -Message ("code=" + $caught.Data["Code"] + " cause=" + $caught.Message + " guidance=" + $caught.Data["Guidance"])
+        $logged = Get-Content -LiteralPath $logPath -Raw -Encoding UTF8
+        foreach ($forbidden in @($adminValue, $tokenValue, $hashValue)) {
+            Assert-TestTrue -Condition (-not $logged.Contains($forbidden)) -Message "parser error log exposed a sensitive fixture value"
+        }
+    }
+    Invoke-SafetyTest "60 empty required secret name is rejected" {
+        $names = @($script:ExpectedRequiredSecrets) + @("")
+        $requiredValue = ConvertTo-TomlStringArrayFixture -Values $names
+        $fixture = Set-RequiredArrayDefinition -Toml (Get-ValidToml) -RequiredValue $requiredValue
+        Assert-ConfigTextRejected -Path $configPath -Content $fixture -Code "DEPLOY_REQUIRED_SECRETS_MISMATCH"
+    }
+    Invoke-SafetyTest "61 required secret order is ignored" {
+        $names = @("TURNSTILE_MODE", "TURNSTILE_SECRET", "WITHDRAWAL_IDEMPOTENCY_SECRET", "ABUSE_HASH_SECRET", "PASSWORD_HASH_SECRET", "ADMIN_TOKEN")
+        $requiredValue = ConvertTo-TomlStringArrayFixture -Values $names
+        $fixture = Set-RequiredArrayDefinition -Toml (Get-ValidToml) -RequiredValue $requiredValue
+        Assert-ConfigTextAllowed -Path $configPath -Content $fixture
+    }
+    Invoke-SafetyTest "62 section header inside array is rejected" {
+        $fixture = "[secrets]`nrequired = [`n[vars]`nWITHDRAWAL_CRON_MODE = `"active`""
+        Assert-ConfigTextRejected -Path $configPath -Content $fixture -Code "DEPLOY_CONFIG_ARRAY_INVALID"
+    }
+    Invoke-SafetyTest "63 inline table array element is rejected" {
+        $fixture = Set-RequiredArrayDefinition -Toml (Get-ValidToml) -RequiredValue '[{ name = "ADMIN_TOKEN" }]'
+        Assert-ConfigTextRejected -Path $configPath -Content $fixture -Code "DEPLOY_CONFIG_ARRAY_INVALID"
+    }
+    Invoke-SafetyTest "64 required secret names are case-sensitive" {
+        $names = @($script:ExpectedRequiredSecrets | ForEach-Object { if ($_ -ceq "ADMIN_TOKEN") { "admin_token" } else { $_ } })
+        $requiredValue = ConvertTo-TomlStringArrayFixture -Values $names
+        $fixture = Set-RequiredArrayDefinition -Toml (Get-ValidToml) -RequiredValue $requiredValue
+        Assert-ConfigTextRejected -Path $configPath -Content $fixture -Code "DEPLOY_REQUIRED_SECRETS_MISMATCH"
     }
 }
 finally {

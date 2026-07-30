@@ -20,6 +20,14 @@ $script:ExpectedCrons = @(
     "0 18 * * *",
     "0 * * * *"
 )
+$script:ExpectedRequiredSecrets = @(
+    "ADMIN_TOKEN",
+    "PASSWORD_HASH_SECRET",
+    "ABUSE_HASH_SECRET",
+    "WITHDRAWAL_IDEMPOTENCY_SECRET",
+    "TURNSTILE_SECRET",
+    "TURNSTILE_MODE"
+)
 $script:ExpectedConfirmation = "DEPLOY bms-wip-charts-worker"
 $script:SafeDeployMainInvocationCount = 0
 $script:ProductionDeployInvocationCount = 0
@@ -249,8 +257,176 @@ function Remove-TomlComment {
     return $builder.ToString()
 }
 
-function ConvertFrom-TomlSafetyValue {
+function Throw-TomlArraySafetyError {
+    param(
+        [Parameter(Mandatory = $true)][ValidateSet("DEPLOY_CONFIG_ARRAY_UNTERMINATED", "DEPLOY_CONFIG_ARRAY_INVALID")][string]$Code,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Section,
+        [Parameter(Mandatory = $true)][string]$Key
+    )
+
+    $sectionName = if ([string]::IsNullOrEmpty($Section)) { "<root>" } else { $Section }
+    $message = if ($Code -ceq "DEPLOY_CONFIG_ARRAY_UNTERMINATED") {
+        "TOML配列の閉じ括弧がありません。section=$sectionName key=$Key"
+    }
+    else {
+        "TOML配列が不正です。section=$sectionName key=$Key"
+    }
+    Throw-DeploySafetyError -Code $Code -Stage "config" -Message $message -Guidance "worker/wrangler.tomlの文字列配列構文を確認してください。"
+}
+
+function Get-TomlSafetyArrayScan {
     param([Parameter(Mandatory = $true)][string]$Value)
+
+    $trimmed = $Value.Trim()
+    $depth = 0
+    $nested = $false
+    $invalid = -not $trimmed.StartsWith("[", [StringComparison]::Ordinal)
+    $closed = $false
+    $inSingle = $false
+    $inDouble = $false
+    $escaped = $false
+
+    for ($index = 0; -not $invalid -and $index -lt $trimmed.Length; $index++) {
+        $character = $trimmed[$index]
+        if ($inDouble) {
+            if ($escaped) {
+                $escaped = $false
+                continue
+            }
+            if ($character -eq '\') {
+                $escaped = $true
+                continue
+            }
+            if ($character -eq '"') {
+                $inDouble = $false
+            }
+            continue
+        }
+        if ($inSingle) {
+            if ($character -eq "'") {
+                $inSingle = $false
+            }
+            continue
+        }
+        if ($character -eq '"') {
+            $inDouble = $true
+            continue
+        }
+        if ($character -eq "'") {
+            $inSingle = $true
+            continue
+        }
+        if ($character -eq '[') {
+            $depth++
+            if ($depth -gt 1) {
+                $nested = $true
+            }
+            continue
+        }
+        if ($character -eq ']') {
+            if ($depth -le 0) {
+                $invalid = $true
+                continue
+            }
+            $depth--
+            if ($depth -eq 0) {
+                $closed = $true
+                if ($index + 1 -lt $trimmed.Length -and -not [string]::IsNullOrWhiteSpace($trimmed.Substring($index + 1))) {
+                    $invalid = $true
+                }
+                break
+            }
+        }
+    }
+
+    if ($inSingle -or $inDouble -or $escaped) {
+        $invalid = $true
+    }
+    return [pscustomobject]@{
+        Closed = $closed
+        Nested = $nested
+        Invalid = $invalid
+    }
+}
+
+function ConvertTo-TomlSafetyLogicalLines {
+    param([Parameter(Mandatory = $true)][AllowEmptyCollection()][AllowEmptyString()][string[]]$RawLines)
+
+    $logicalLines = New-Object System.Collections.Generic.List[string]
+    $section = ""
+    $pendingBuilder = $null
+    $pendingKey = ""
+    $pendingSection = ""
+
+    foreach ($rawLine in $RawLines) {
+        $line = (Remove-TomlComment -Line $rawLine).Trim()
+        if ($null -ne $pendingBuilder) {
+            if ([string]::IsNullOrWhiteSpace($line)) {
+                continue
+            }
+            if ($line -match '^\[\[([^\]]+)\]\]$' -or $line -match '^\[([^\]]+)\]$') {
+                Throw-TomlArraySafetyError -Code "DEPLOY_CONFIG_ARRAY_INVALID" -Section $pendingSection -Key $pendingKey
+            }
+            [void]$pendingBuilder.Append(" ")
+            [void]$pendingBuilder.Append($line)
+            $scan = Get-TomlSafetyArrayScan -Value $pendingBuilder.ToString().Substring($pendingBuilder.ToString().IndexOf("=") + 1)
+            if ($scan.Invalid -or $scan.Nested) {
+                Throw-TomlArraySafetyError -Code "DEPLOY_CONFIG_ARRAY_INVALID" -Section $pendingSection -Key $pendingKey
+            }
+            if ($scan.Closed) {
+                [void]$logicalLines.Add($pendingBuilder.ToString())
+                $pendingBuilder = $null
+                $pendingKey = ""
+                $pendingSection = ""
+            }
+            continue
+        }
+
+        if ([string]::IsNullOrWhiteSpace($line)) {
+            continue
+        }
+        if ($line -match '^\[\[([^\]]+)\]\]$') {
+            $section = $matches[1]
+            [void]$logicalLines.Add($line)
+            continue
+        }
+        if ($line -match '^\[([^\]]+)\]$') {
+            $section = $matches[1]
+            [void]$logicalLines.Add($line)
+            continue
+        }
+        if ($line -match '^([A-Za-z0-9_.-]+)\s*=\s*(.+)$') {
+            $key = $matches[1]
+            $rawValue = $matches[2].Trim()
+            if ($rawValue.StartsWith("[", [StringComparison]::Ordinal)) {
+                $scan = Get-TomlSafetyArrayScan -Value $rawValue
+                if ($scan.Invalid -or $scan.Nested) {
+                    Throw-TomlArraySafetyError -Code "DEPLOY_CONFIG_ARRAY_INVALID" -Section $section -Key $key
+                }
+                if (-not $scan.Closed) {
+                    $pendingBuilder = New-Object Text.StringBuilder
+                    [void]$pendingBuilder.Append($line)
+                    $pendingKey = $key
+                    $pendingSection = $section
+                    continue
+                }
+            }
+        }
+        [void]$logicalLines.Add($line)
+    }
+
+    if ($null -ne $pendingBuilder) {
+        Throw-TomlArraySafetyError -Code "DEPLOY_CONFIG_ARRAY_UNTERMINATED" -Section $pendingSection -Key $pendingKey
+    }
+    return $logicalLines.ToArray()
+}
+
+function ConvertFrom-TomlSafetyValue {
+    param(
+        [Parameter(Mandatory = $true)][string]$Value,
+        [Parameter(Mandatory = $true)][string]$Key,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Section
+    )
 
     $trimmed = $Value.Trim()
     if ($trimmed -match '^"((?:\\.|[^"\\])*)"$') {
@@ -265,26 +441,87 @@ function ConvertFrom-TomlSafetyValue {
     if ($trimmed -ceq "false") {
         return $false
     }
-    if ($trimmed.StartsWith("[") -and $trimmed.EndsWith("]")) {
-        $inside = $trimmed.Substring(1, $trimmed.Length - 2)
-        if ([string]::IsNullOrWhiteSpace($inside)) {
-            return ,@()
+    if ($trimmed.StartsWith("[", [StringComparison]::Ordinal)) {
+        $scan = Get-TomlSafetyArrayScan -Value $trimmed
+        if ($scan.Invalid -or $scan.Nested) {
+            Throw-TomlArraySafetyError -Code "DEPLOY_CONFIG_ARRAY_INVALID" -Section $Section -Key $Key
         }
-        $pattern = '"((?:\\.|[^"\\])*)"|''([^'']*)'''
+        if (-not $scan.Closed) {
+            Throw-TomlArraySafetyError -Code "DEPLOY_CONFIG_ARRAY_UNTERMINATED" -Section $Section -Key $Key
+        }
+
         $values = New-Object System.Collections.Generic.List[string]
-        foreach ($match in [regex]::Matches($inside, $pattern)) {
-            if ($match.Groups[1].Success) {
-                $values.Add(($match.Groups[1].Value -replace '\\"', '"' -replace '\\\\', '\'))
+        $index = 1
+        while ($index -lt $trimmed.Length) {
+            while ($index -lt $trimmed.Length -and [char]::IsWhiteSpace($trimmed[$index])) {
+                $index++
             }
-            else {
-                $values.Add($match.Groups[2].Value)
+            if ($index -ge $trimmed.Length) {
+                Throw-TomlArraySafetyError -Code "DEPLOY_CONFIG_ARRAY_UNTERMINATED" -Section $Section -Key $Key
+            }
+            if ($trimmed[$index] -eq ']') {
+                $index++
+                while ($index -lt $trimmed.Length -and [char]::IsWhiteSpace($trimmed[$index])) {
+                    $index++
+                }
+                if ($index -ne $trimmed.Length) {
+                    Throw-TomlArraySafetyError -Code "DEPLOY_CONFIG_ARRAY_INVALID" -Section $Section -Key $Key
+                }
+                return ,($values.ToArray())
+            }
+
+            $quote = $trimmed[$index]
+            if ($quote -ne '"' -and $quote -ne "'") {
+                Throw-TomlArraySafetyError -Code "DEPLOY_CONFIG_ARRAY_INVALID" -Section $Section -Key $Key
+            }
+            $index++
+            $builder = New-Object Text.StringBuilder
+            $stringClosed = $false
+            while ($index -lt $trimmed.Length) {
+                $character = $trimmed[$index]
+                if ($quote -eq '"' -and $character -eq '\') {
+                    [void]$builder.Append($character)
+                    $index++
+                    if ($index -ge $trimmed.Length) {
+                        Throw-TomlArraySafetyError -Code "DEPLOY_CONFIG_ARRAY_INVALID" -Section $Section -Key $Key
+                    }
+                    [void]$builder.Append($trimmed[$index])
+                    $index++
+                    continue
+                }
+                if ($character -eq $quote) {
+                    $stringClosed = $true
+                    $index++
+                    break
+                }
+                [void]$builder.Append($character)
+                $index++
+            }
+            if (-not $stringClosed) {
+                Throw-TomlArraySafetyError -Code "DEPLOY_CONFIG_ARRAY_INVALID" -Section $Section -Key $Key
+            }
+
+            $parsedValue = $builder.ToString()
+            if ($quote -eq '"') {
+                $parsedValue = $parsedValue -replace '\\"', '"' -replace '\\\\', '\'
+            }
+            [void]$values.Add($parsedValue)
+
+            while ($index -lt $trimmed.Length -and [char]::IsWhiteSpace($trimmed[$index])) {
+                $index++
+            }
+            if ($index -ge $trimmed.Length) {
+                Throw-TomlArraySafetyError -Code "DEPLOY_CONFIG_ARRAY_UNTERMINATED" -Section $Section -Key $Key
+            }
+            if ($trimmed[$index] -eq ',') {
+                $index++
+                continue
+            }
+            if ($trimmed[$index] -ne ']') {
+                Throw-TomlArraySafetyError -Code "DEPLOY_CONFIG_ARRAY_INVALID" -Section $Section -Key $Key
             }
         }
-        $remainder = [regex]::Replace($inside, $pattern, "")
-        if ($remainder -notmatch '^\s*(,\s*)*$') {
-            Throw-DeploySafetyError -Code "DEPLOY_CONFIG_INVALID" -Stage "config" -Message "TOML配列を安全に解析できません。" -Guidance "worker/wrangler.tomlの配列形式を確認してください。"
-        }
-        return ,($values.ToArray())
+        Throw-TomlArraySafetyError -Code "DEPLOY_CONFIG_ARRAY_UNTERMINATED" -Section $Section -Key $Key
     }
     return $trimmed
 }
@@ -298,9 +535,11 @@ function Read-WranglerSafetyConfig {
 
     try {
         $rawLines = @(Get-Content -LiteralPath $Path -Encoding UTF8)
+        $logicalLines = @(ConvertTo-TomlSafetyLogicalLines -RawLines $rawLines)
         $top = @{}
         $triggers = @{}
         $variables = @{}
+        $secrets = @{}
         $d1Entries = New-Object System.Collections.Generic.List[object]
         $r2Entries = New-Object System.Collections.Generic.List[object]
         $section = ""
@@ -309,8 +548,8 @@ function Read-WranglerSafetyConfig {
         $hasAssets = $false
         $hasSite = $false
 
-        foreach ($rawLine in $rawLines) {
-            $line = (Remove-TomlComment -Line $rawLine).Trim()
+        foreach ($logicalLine in $logicalLines) {
+            $line = $logicalLine.Trim()
             if (-not [string]::IsNullOrWhiteSpace($line)) {
                 $cleanLines.Add($line)
             }
@@ -339,7 +578,7 @@ function Read-WranglerSafetyConfig {
                 Throw-DeploySafetyError -Code "DEPLOY_CONFIG_INVALID" -Stage "config" -Message "TOML設定行を安全に解析できません。" -Guidance "worker/wrangler.tomlの構文を確認してください。"
             }
             $key = $matches[1]
-            $value = ConvertFrom-TomlSafetyValue -Value $matches[2]
+            $value = ConvertFrom-TomlSafetyValue -Value $matches[2] -Key $key -Section $section
             if ($key -ieq "assets" -or $key -imatch '^assets\.') { $hasAssets = $true }
             if ($key -ieq "site" -or $key -imatch '^site\.') { $hasSite = $true }
 
@@ -348,6 +587,9 @@ function Read-WranglerSafetyConfig {
             }
             elseif ($section -ceq "vars") {
                 $variables[$key] = $value
+            }
+            elseif ($section -ceq "secrets") {
+                $secrets[$key] = $value
             }
             elseif (($section -ceq "d1_databases" -or $section -ceq "r2_buckets") -and $null -ne $currentTable) {
                 $currentTable[$key] = $value
@@ -366,6 +608,7 @@ function Read-WranglerSafetyConfig {
             WorkersDev = $top["workers_dev"]
             Crons = if ($triggers.ContainsKey("crons")) { @($triggers["crons"]) } else { @() }
             WithdrawalMode = $variables["WITHDRAWAL_CRON_MODE"]
+            RequiredSecrets = if ($secrets.ContainsKey("required")) { @($secrets["required"]) } else { @() }
             D1 = $d1Entries.ToArray()
             R2 = $r2Entries.ToArray()
             HasAssets = $hasAssets
@@ -407,6 +650,32 @@ function Assert-WranglerSafetyConfig {
 
     if ($Config.WithdrawalMode -cne $script:ExpectedWithdrawalMode) {
         Throw-DeploySafetyError -Code "DEPLOY_WITHDRAWAL_MODE_MISMATCH" -Stage "config" -Message "WITHDRAWAL_CRON_MODEがactiveではありません。" -Guidance "意図した緊急停止でないことを確認してactiveへ戻してください。"
+    }
+
+    $actualRequiredSecrets = @($Config.RequiredSecrets | ForEach-Object { [string]$_ })
+    $expectedSecretSet = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($expectedSecret in $script:ExpectedRequiredSecrets) {
+        [void]$expectedSecretSet.Add($expectedSecret)
+    }
+    $secretCounts = [System.Collections.Generic.Dictionary[string, int]]::new([StringComparer]::Ordinal)
+    foreach ($actualSecret in $actualRequiredSecrets) {
+        if ($secretCounts.ContainsKey($actualSecret)) {
+            $secretCounts[$actualSecret]++
+        }
+        else {
+            $secretCounts[$actualSecret] = 1
+        }
+    }
+    $missingSecrets = @($script:ExpectedRequiredSecrets | Where-Object { -not $secretCounts.ContainsKey($_) })
+    $extraSecrets = @($secretCounts.Keys | Where-Object { -not [string]::IsNullOrEmpty($_) -and -not $expectedSecretSet.Contains($_) } | Sort-Object -CaseSensitive)
+    $duplicateSecrets = @($secretCounts.Keys | Where-Object { -not [string]::IsNullOrEmpty($_) -and $secretCounts[$_] -gt 1 } | Sort-Object -CaseSensitive)
+    $hasEmptySecret = @($actualRequiredSecrets | Where-Object { [string]::IsNullOrEmpty($_) }).Count -gt 0
+    if ($actualRequiredSecrets.Count -ne $script:ExpectedRequiredSecrets.Count -or $missingSecrets.Count -gt 0 -or $extraSecrets.Count -gt 0 -or $duplicateSecrets.Count -gt 0 -or $hasEmptySecret) {
+        $missingText = if ($missingSecrets.Count -eq 0) { "none" } else { $missingSecrets -join "," }
+        $extraText = if ($extraSecrets.Count -eq 0) { "none" } else { $extraSecrets -join "," }
+        $duplicateText = if ($duplicateSecrets.Count -eq 0) { "none" } else { $duplicateSecrets -join "," }
+        $message = "RequiredSecretsが固定期待値と一致しません。expectedCount={0} actualCount={1} missing={2} extra={3} duplicate={4}" -f $script:ExpectedRequiredSecrets.Count, $actualRequiredSecrets.Count, $missingText, $extraText, $duplicateText
+        Throw-DeploySafetyError -Code "DEPLOY_REQUIRED_SECRETS_MISMATCH" -Stage "config" -Message $message -Guidance "[secrets] requiredのSecret名だけを確認してください。Secret値は取得・表示しないでください。"
     }
 
     $actualCrons = @($Config.Crons)
@@ -809,6 +1078,7 @@ function Invoke-SafeWorkerDeploy {
         Write-DeployLog -Context $context -Level "OK" -Message ("[OK] D1: " + $script:ExpectedDatabaseBinding + " -> " + $script:ExpectedDatabaseName)
         Write-DeployLog -Context $context -Level "OK" -Message ("[OK] R2: " + $script:ExpectedBucketBinding + " -> " + $script:ExpectedBucketName)
         Write-DeployLog -Context $context -Level "OK" -Message ("[OK] Withdrawal mode: " + $script:ExpectedWithdrawalMode)
+        Write-DeployLog -Context $context -Level "OK" -Message ("[OK] Required secret name count: " + $config.RequiredSecrets.Count)
         foreach ($cron in $script:ExpectedCrons) {
             Write-DeployLog -Context $context -Level "OK" -Message ("[OK] Cron: " + $cron)
         }

@@ -1487,6 +1487,7 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 
 ## SAFE-WORKER-DEPLOY
 
+- `test-deploy-worker-safety.ps1`は`deploy-worker.ps1`をdot-sourceし、実際の`Read-WranglerSafetyConfig`と`Assert-WranglerSafetyConfig`で1行・複数行のflat文字列配列、comment・escape・trailing comma、配列異常の固定error code、`[secrets] required`の6件完全一致・順不同・case-sensitive検証、設定本文の非露出を確認する。
 - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-deploy-worker-safety.ps1`で、本番Cloudflareへ接続しないfixture安全テストを実行する。deploy scriptはdot-source時にmainを起動せず、本番deploy関数の呼出件数が0であることを確認する。
 - 正しいconfigを許可し、Worker名、main、workers_dev、D1 binding/name/空database ID、R2 binding/name、active mode、Cron不足・余分、assets、site、docs参照の各不一致を固定error codeで拒否する。
 - root `wrangler.jsonc`、不正またはAPI Worker以外を指すredirectを拒否し、API Worker設定を指す安全なredirectだけを許可する。実ファイルを自動削除しない。
