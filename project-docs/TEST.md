@@ -1633,3 +1633,20 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - Windows Node 24ではローカルWrangler packageのstring/object両方の`bin`を解決し、Node executable、引数配列、`shell=false`、timeoutで起動すること。package/bin不足、process failure、timeout、invalid JSONを固定codeで失敗させ、command文字列をshellへ連結せず、preflight sourceに`npx.cmd`とlatest-version参照がないこと。
 - preflightは`SECURITY_HASH_CUTOVER_READY`、`SECURITY_HASH_CUTOVER_BLOCKED_ACTIVE_WITHDRAWALS`、`SECURITY_HASH_CUTOVER_SCHEMA_NOT_READY`、`SECURITY_HASH_CUTOVER_LEGACY_SECRET_REFERENCE`のいずれかを最終行へ出す。legacy pending／processing、schema不足、required secret名不足、productionの旧Secret参照をそれぞれblockingとする。
 - 回帰では投稿・追記metadata、difficulty view model／HTML、version list、withdrawal active、canonical、repository hygiene、Worker typecheck、Wrangler dry-run、`git diff --check`を実行する。Secret値、hash本文、D1 row本文をtest outputへ出さない。
+
+## RELEASE-FINAL-QA-2026-07-30
+
+- 実行日時: 2026-07-30T21:25:25+09:00。開始HEADは`d88a8a4d330d81c6e3e95aa6794bdc2d5e5338f2`、開始時の`origin/main`は`2fd0ef37dd57d20125195e10198ac563fdc1110c`で、remote 0／local 1 commitの期待履歴とclean worktreeを確認した。
+- parser safety suiteは64/64、repository hygieneは17/17、canonical D1 schemaは42/42で成功し、Migration 0001～0010とcanonical schemaの一致を確認した。
+- security hash domain separation 29/29、version withdrawal active 22/22、version source metadata 22/22、metadata backfill 87/87、difficulty view model 20/20、difficulty HTML 77/77、version list links 4/4が成功した。
+- Version UI Model 67/67、Link UI 56/56、Action UI 73/73、chart render pipeline 45/45、chart render dead-code 22/22、version render pipeline static 41/41、CSS ownership／HTML ID／既知warning 37/37が成功した。metadata parser／staticとsong/chart link staticも成功した。
+- JavaScript構文は`docs`、`scripts`、`worker/scripts`の53ファイルで成功した。ローカルbrowser regressionはdetail 9条件＋compact 9条件で成功し、Console error／warningは0／0だった。
+- Worker typecheckは成功した。`deploy:check`は`mode=check`、`status=passed`、`typecheck=passed`、`dryRun=passed`、`deploy=not_run`だった。独立した`wrangler deploy --dry-run`も成功し、本番Worker deployは0件だった。
+- 正式Pagesはindex／list／detailが各HTTP 200だった。white／default／dark × 390／760／1366pxを各画面で確認した27条件で、runtime style 0件、horizontal overflow 0件、clipping 0件、操作不能な重なり0件、Console error／warning 0／0だった。
+- 正式Pagesでfavorite追加・解除、favorite-only 1件絞込、load-more 10件から20件への追加、compact list 20件、progress thumbnailの選択移動、disabled append control、選択中chart detail 1件を確認した。active withdrawalが0件のため本番lifecycle badgeは0件で、lifecycle全状態はローカル回帰で確認した。
+- Production API read-onlyはhealth 200、public list 200、RC★ 200、RC★★ 200、ADMIN_TOKEN認証済みadmin GET 200、tokenなし401、dummy token 401だった。withdrawal reject POSTを含むproduction writeは0件だった。
+- production Secret名は`ADMIN_TOKEN`、`PASSWORD_HASH_SECRET`、`ABUSE_HASH_SECRET`、`WITHDRAWAL_IDEMPOTENCY_SECRET`、`TURNSTILE_SECRET`、`TURNSTILE_MODE`の6件で、不足・余分・重複は0件、`HASH_SECRET`は不存在だった。Secret操作は0件だった。
+- production trafficはWorker version `53dd79bc-d120-478b-91d6-9c7da1311052`の単一version 100%だった。現行deployment IDは`96714720-b698-4c01-9329-63c5af3cbf5b`だった。
+- 本番D1の未適用Migrationは0件で、適用済み10件の最新が`0010_security_hash_key_versions.sql`だった。read-only preflightはpending 0件、processing 0件、`SECURITY_HASH_CUTOVER_READY`だった。
+- GitHub履歴は旧HEAD、`.wrangler`、`node_modules`、`.dev.vars`、SQLite／DBが各0件、fork 0件、local／remote tag 0件だった。旧commit URLのHTTP 200は失敗にせず、外部対応状態を`GITHUB_CACHE_PURGE_REQUEST_REQUIRED`とする。
+- production write 0件、Worker deploy 0件、Secret操作0件、push 0件。`git diff --check`は成功した。
