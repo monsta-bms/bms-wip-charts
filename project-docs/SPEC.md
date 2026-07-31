@@ -1,5 +1,14 @@
 # BMS WIP Charts 仕様書
 
+## SITE-COPY-EDITOR-01 文章編集ワークフロー
+
+- 公開PagesとWorkerの利用者向け文章はソースコードを正データとし、`site-copy/site-copy-manifest.json`で固定ID、PAGES／WORKER区分、構造locator、現在値SHA-256、保護トークンを管理する。manifestに本文や編集後の値は保存しない。
+- 利用者が編集するのはrepository外へexportする`BMS差分共有サイト_文章編集.txt`の各`【編集後】`欄だけとする。TXTはUTF-8 BOMあり／なしとCRLF／LFを受け付け、内部ではLFへ正規化する。ID、metadata、区切り、`【現在】`、保護トークンは変更できない。
+- HTMLはelementの構造パス、属性名、text node番号、前後anchor hashで特定する。JavaScript／TypeScriptは所属function／const、文字列の役割、前後anchor hash、同一コンテナ内の出現番号で特定し、行番号や全文一括置換は使用しない。locatorは反映前に一意性とsource baselineを再検査する。
+- template literalの式は`{COUNT}`等の固定トークンへ変換し、TXT取込み時に個数と保護ブロック構造を検査する。HTMLタグ、URL、error code、API route、JSON key、Secret名、SQL、ログdetail、利用者データは編集対象にしない。
+- `scripts/site-copy/export-site-copy.mjs`はmain、clean worktree、origin/mainとの意図した同期、root `wrangler.jsonc`不存在を確認してから、TXT、manifest snapshot、本文を含まない診断ログをrepository外へ生成する。`validate-site-copy.mjs`はTXT形式とbaseline、`diff-site-copy.mjs`はdry-run概要、`apply-site-copy.mjs`は一意な文章範囲だけをtransactionalに反映する。applyは既定でdry-runとし、明示的な`--apply`がある場合だけ書き込む。
+- PAGES変更は通常pushの別承認、WORKER変更はpush後のsafe deployの別承認を必要とする。TXT取込み、dry-run、applyのどの段階でもpush、Worker deploy、D1／R2／Secret操作、production writeを自動実行しない。
+
 ## POST-FORM-TREE-12 ファイル欄整列・要約・版ツリー接続
 
 解析済みファイル欄は、単体BMS/BME/BMLでは「解析完了・外側ファイル名・block数/サイズ」を1行に置き、空の補助行を作らない。ZIPでは同じ主行の下に内部BMS名を補助行として追加する。変更・解除はファイル表示とは別の操作領域に置き、PCでは表示欄の中央、スマホでは表示欄の下へ整列する。

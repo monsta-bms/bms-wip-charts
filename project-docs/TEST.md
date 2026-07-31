@@ -1,5 +1,13 @@
 # テスト手順
 
+## SITE-COPY-EDITOR-01
+
+- `node scripts/test-site-copy-editor.mjs`でexport、無編集round trip、1件／複数件apply計画、LF／CRLF、UTF-8 BOM、ID重複／不足／未知、metadata改変、保護トークン不足／余分、空欄、最大文字数、source hash、曖昧locator、Secret候補、診断ログ非漏えい、header／catalog／manifest hash、実manifestの固定IDとlocator解決を検査する。
+- `node scripts/site-copy/validate-site-copy.mjs --txt <TXT> --snapshot <snapshot>`は固定error codeで破損を拒否し、無編集exportでは`changeCount: 0`と`SITE_COPY_TXT_VALIDATION_COMPLETE`を返すこと。`node scripts/site-copy/diff-site-copy.mjs`は変更ID、対象区分、文字数、必要なpush／safe deployだけをdry-run表示すること。
+- `node scripts/site-copy/apply-site-copy.mjs`は既定でファイルを書き換えず、`--apply`指定時もclean worktree、source baseline、保護トークン、一意locatorを必須とする。複数fileは全置換を事前計画し、途中失敗時は書込み済みfileを復元すること。
+- 初回export前に`node scripts/test-repository-hygiene.mjs`、`node scripts/test-canonical-d1-schema.mjs`、全site-copy scriptの`node --check`、HTML ID検査、主要UI static回帰、Worker typecheck、`git diff --check`を実行する。TXT、snapshot、export log／resultはrepository外へ置き、一時fixtureは終了時に削除する。
+- 初回export後は生成TXTとsnapshotをそのままvalidateし、entry総数、PAGES／WORKER内訳、manual review、group別件数、template／rich件数を確認する。本番Worker deploy、D1／R2／Secret操作、production write、pushは行わない。
+
 ## POST-FORM-TREE-12
 
 - 単体BMS/BME/BMLの解析済み欄で空の補助行がなく、解析完了、ファイル名、block数/サイズ、変更・解除が視覚的に中央揃えになること。
