@@ -3,20 +3,16 @@ import path from "node:path";
 import {
   assertExportRepository,
   buildExport,
-  groupCounts,
+  exportSummary,
+  GUIDE_FILENAME,
   loadManifest,
-  safeDiagnostic,
   SiteCopyError,
-  TXT_FILENAME
+  UI_FILENAME
 } from "./site-copy-core.mjs";
 
 function parseArgs(argv) {
   const rootDir = path.resolve(import.meta.dirname, "../..");
-  const options = {
-    rootDir,
-    manifestPath: null,
-    outputDir: "C:\\Users\\longa\\Documents\\Tools\\bms-wip-charts-copy"
-  };
+  const options = { rootDir, manifestPath: null, outputDir: "C:\\Users\\longa\\Documents\\Tools\\bms-wip-charts-copy" };
   for (let index = 0; index < argv.length; index += 1) {
     if (argv[index] === "--root") options.rootDir = path.resolve(argv[++index]);
     else if (argv[index] === "--manifest") options.manifestPath = path.resolve(argv[++index]);
@@ -32,34 +28,32 @@ try {
   const repo = assertExportRepository(options.rootDir);
   const manifest = loadManifest(options.manifestPath);
   const result = buildExport(options.rootDir, manifest);
+  const summary = exportSummary(manifest, result);
   const catalogDir = path.join(options.outputDir, manifest.catalogId);
   fs.mkdirSync(catalogDir, { recursive: true });
-  const txtPath = path.join(options.outputDir, TXT_FILENAME);
+  const uiPath = path.join(options.outputDir, UI_FILENAME);
+  const guidePath = path.join(options.outputDir, GUIDE_FILENAME);
   const snapshotPath = path.join(catalogDir, "site-copy-manifest.snapshot.json");
   const logPath = path.join(catalogDir, "site-copy-export.log");
   const resultPath = path.join(catalogDir, "site-copy-export-result.json");
-  fs.writeFileSync(txtPath, result.txt, "utf8");
+  fs.writeFileSync(uiPath, result.uiTxt, "utf8");
+  fs.writeFileSync(guidePath, result.guideTxt, "utf8");
   fs.writeFileSync(snapshotPath, result.snapshotText, "utf8");
-  const diagnostic = safeDiagnostic({
+  const diagnostic = {
     mode: "export",
     timestamp: result.snapshot.exportedAt,
     head: repo.head,
-    manifestSha256: result.manifestSha256,
-    catalogId: manifest.catalogId,
-    entryCount: result.snapshot.entries.length,
-    pagesCount: result.snapshot.entries.filter((entry) => entry.deploymentTarget === "PAGES").length,
-    workerCount: result.snapshot.entries.filter((entry) => entry.deploymentTarget === "WORKER").length,
-    manualReviewCount: manifest.manualReview?.length ?? 0,
-    paths: [txtPath, snapshotPath],
+    snapshotSha256: result.snapshotSha256,
+    ...summary,
+    paths: [uiPath, guidePath, snapshotPath],
     code: "SITE_COPY_EXPORT_COMPLETE",
     status: "passed"
-  });
+  };
   fs.writeFileSync(logPath, `${Object.entries(diagnostic).map(([key, value]) => `${key}=${JSON.stringify(value)}`).join("\n")}\n`, "utf8");
-  fs.writeFileSync(resultPath, `${JSON.stringify({ ...diagnostic, groupCounts: groupCounts(result.snapshot.entries) }, null, 2)}\n`, "utf8");
-  process.stdout.write(`${JSON.stringify({ ...diagnostic, txtPath, snapshotPath, logPath, resultPath, groupCounts: groupCounts(result.snapshot.entries) }, null, 2)}\n`);
+  fs.writeFileSync(resultPath, `${JSON.stringify(diagnostic, null, 2)}\n`, "utf8");
+  process.stdout.write(`${JSON.stringify({ ...diagnostic, uiPath, guidePath, snapshotPath, logPath, resultPath }, null, 2)}\n`);
 } catch (error) {
   const known = error instanceof SiteCopyError;
-  const code = known ? error.code : "SITE_COPY_EXPORT_UNSUPPORTED_TEXT";
-  process.stderr.write(`${JSON.stringify({ code, message: known ? error.message : "export処理に失敗しました。", detail: known ? error.detail : { errorType: error?.constructor?.name ?? "Error" } })}\n`);
+  process.stderr.write(`${JSON.stringify({ code: known ? error.code : "SITE_COPY_EXPORT_REPO_INVALID", message: known ? error.message : "export処理に失敗しました。", detail: known ? error.detail : { errorType: error?.constructor?.name ?? "Error" } })}\n`);
   process.exitCode = 1;
 }

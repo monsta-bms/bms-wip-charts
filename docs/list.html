@@ -18,15 +18,15 @@
 
       <main class="compact-list-page">
         <header class="compact-list-header">
-          <h1>投稿一覧</h1>
-          <p>公開中の版を、日付や進捗と一緒にコンパクトに表示します。</p>
+          <h1 data-copy-key="list-page-title">投稿一覧</h1>
+          <p data-copy-key="list-page-description">公開中の版を、日付や進捗と一緒にコンパクトに表示します。</p>
         </header>
 
         <section class="compact-search" aria-labelledby="compactSearchHeading">
           <h2 id="compactSearchHeading">検索</h2>
           <div class="compact-filter-panel">
             <form id="compactSearchForm" class="compact-search-form" role="search">
-              <label for="compactSearchInput">曲名・アーティスト・差分名・差分作者</label>
+              <label for="compactSearchInput" data-copy-key="list-search-label">曲名・アーティスト・差分名・差分作者</label>
               <div class="compact-search-controls">
                 <input
                   id="compactSearchInput"
@@ -36,7 +36,7 @@
                   autocomplete="off"
                   placeholder="曲名・アーティスト・差分名・差分作者"
                 >
-                <button type="submit">検索</button>
+                <button type="submit" data-copy-key="list-search-submit">検索</button>
                 <button id="compactSearchClear" class="secondary" type="button">クリア</button>
               </div>
             </form>
@@ -47,10 +47,10 @@
                 <fieldset class="compact-filter-fieldset">
                   <legend class="visually-hidden">状態</legend>
                   <div class="compact-radio-group compact-status-options">
-                    <label class="compact-radio-choice"><input type="radio" name="compactStatus" value="all"><span>すべて</span></label>
-                    <label class="compact-radio-choice"><input type="radio" name="compactStatus" value="complete"><span>完成</span></label>
-                    <label class="compact-radio-choice"><input type="radio" name="compactStatus" value="incomplete"><span>未完成</span></label>
-                    <label class="compact-radio-choice"><input type="radio" name="compactStatus" value="rejected"><span>没譜面</span></label>
+                    <label class="compact-radio-choice"><input type="radio" name="compactStatus" value="all"><span data-copy-key="list-status-all">すべて</span></label>
+                    <label class="compact-radio-choice"><input type="radio" name="compactStatus" value="complete"><span data-copy-key="list-status-complete">完成</span></label>
+                    <label class="compact-radio-choice"><input type="radio" name="compactStatus" value="incomplete"><span data-copy-key="list-status-incomplete">未完成</span></label>
+                    <label class="compact-radio-choice"><input type="radio" name="compactStatus" value="rejected"><span data-copy-key="list-status-rejected">没譜面</span></label>
                   </div>
                 </fieldset>
               </div>
@@ -60,8 +60,8 @@
                 <fieldset class="compact-filter-fieldset">
                   <legend class="visually-hidden">並び順と期間の基準</legend>
                   <div class="compact-radio-group compact-sort-options">
-                    <label class="compact-radio-choice"><input type="radio" name="compactSort" value="new"><span>新着順</span></label>
-                    <label class="compact-radio-choice"><input type="radio" name="compactSort" value="updated"><span>更新順</span></label>
+                    <label class="compact-radio-choice"><input type="radio" name="compactSort" value="new"><span data-copy-key="list-sort-new">新着順</span></label>
+                    <label class="compact-radio-choice"><input type="radio" name="compactSort" value="updated"><span data-copy-key="list-sort-updated">更新順</span></label>
                   </div>
                 </fieldset>
               </div>
@@ -92,7 +92,7 @@
                   <legend class="visually-hidden">その他の条件</legend>
                   <label class="compact-favorite-filter">
                     <input id="compactFavoriteOnly" type="checkbox">
-                    <span>お気に入りのみ</span>
+                    <span data-copy-key="list-favorites-only">お気に入りのみ</span>
                   </label>
                 </fieldset>
               </div>
@@ -113,7 +113,7 @@
             <span>リンク</span>
           </div>
           <div id="compactVersionList" class="compact-version-list" aria-busy="true">
-            <p class="compact-list-state">読み込み中...</p>
+            <p class="compact-list-state" data-copy-key="list-loading">読み込み中...</p>
           </div>
           <p id="compactListFeedback" class="compact-list-feedback" role="status" aria-live="polite" hidden></p>
           <div class="compact-retry-row">

@@ -1,13 +1,13 @@
 # BMS WIP Charts 仕様書
 
-## SITE-COPY-EDITOR-01 文章編集ワークフロー
+## SITE-COPY-EDITOR-01 v1.1 ブロック文章編集ワークフロー
 
-- 公開PagesとWorkerの利用者向け文章はソースコードを正データとし、`site-copy/site-copy-manifest.json`で固定ID、PAGES／WORKER区分、構造locator、現在値SHA-256、保護トークンを管理する。manifestに本文や編集後の値は保存しない。
-- 利用者が編集するのはrepository外へexportする`BMS差分共有サイト_文章編集.txt`の各`【編集後】`欄だけとする。TXTはUTF-8 BOMあり／なしとCRLF／LFを受け付け、内部ではLFへ正規化する。ID、metadata、区切り、`【現在】`、保護トークンは変更できない。
-- HTMLはelementの構造パス、属性名、text node番号、前後anchor hashで特定する。JavaScript／TypeScriptは所属function／const、文字列の役割、前後anchor hash、同一コンテナ内の出現番号で特定し、行番号や全文一括置換は使用しない。locatorは反映前に一意性とsource baselineを再検査する。
-- template literalの式は`{COUNT}`等の固定トークンへ変換し、TXT取込み時に個数と保護ブロック構造を検査する。HTMLタグ、URL、error code、API route、JSON key、Secret名、SQL、ログdetail、利用者データは編集対象にしない。
-- `scripts/site-copy/export-site-copy.mjs`はmain、clean worktree、origin/mainとの意図した同期、root `wrangler.jsonc`不存在を確認してから、TXT、manifest snapshot、本文を含まない診断ログをrepository外へ生成する。`validate-site-copy.mjs`はTXT形式とbaseline、`diff-site-copy.mjs`はdry-run概要、`apply-site-copy.mjs`は一意な文章範囲だけをtransactionalに反映する。applyは既定でdry-runとし、明示的な`--apply`がある場合だけ書き込む。
-- PAGES変更は通常pushの別承認、WORKER変更はpush後のsafe deployの別承認を必要とする。TXT取込み、dry-run、applyのどの段階でもpush、Worker deploy、D1／R2／Secret操作、production writeを自動実行しない。
+- 公開Pagesの利用者向けUI文言とガイド本文はソースコードを正データとし、`site-copy/site-copy-manifest.json`で論理ブロック、構造locator、現在値SHA-256を管理する。manifestと診断ログに編集後本文を保存せず、Worker、API error、ARIA、placeholder、内部識別子は対象外とする。
+- 利用者が編集するのはrepository外の`BMS差分共有サイト_UI文章編集.txt`と`BMS差分共有サイト_ガイド全文編集.txt`だけとする。UI文言は15個の論理ブロック内の名称付き欄、ガイドは`GUIDE_INTRO`、`GUIDE_QUICK_USE`、`GUIDE_FEATURE_INDEX`、`GUIDE_POSTING`、`GUIDE_PROGRESS`、`GUIDE_DIFFICULTY`、`GUIDE_MANAGEMENT`、`GUIDE_SAFETY`の8章を章単位で編集する。
+- ガイド編集形式は見出しレベル1～3、段落、箇条書き、番号付きリストを許可する。リンク先は`POST_FORM`、`LIST`、`RC_STAR`、`RC_DOUBLE_STAR`の固定`LINK`識別子だけを使用でき、識別子の追加・削除・変更、任意URL、HTML、実行コードは拒否する。機能索引の内部アンカー5件は固定構造として維持する。
+- `docs/guide.html`の各章は一意な`data-copy-section`で特定する。UIのHTML文言は`id`または`data-copy-key`、JavaScript文言は文字列ordinalと前後anchor hashで特定し、反映前後に一意性とsource baselineを再検査する。行番号やファイル全文の一致だけには依存しない。
+- `scripts/site-copy/export-site-copy.mjs`はmain、clean worktree、origin/mainとの同期条件、root `wrangler.jsonc`不存在を確認して2つのTXTとsnapshotをrepository外へ生成する。`validate-site-copy.mjs`は両TXTとbaselineを検査し、`diff-site-copy.mjs`はUI欄とガイド段落の変更概要だけをdry-run表示する。
+- `apply-site-copy.mjs`は既定でdry-runとし、明示的な`--apply`がある場合だけ全変更を事前計画して書き込む。途中失敗時は一時backupから全ファイルを復元し、backupを削除する。TXT取込み、dry-run、applyのいずれもpush、Pages／Worker deploy、D1／R2／Secret操作、production writeを自動実行しない。
 
 ## POST-FORM-TREE-12 ファイル欄整列・要約・版ツリー接続
 

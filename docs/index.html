@@ -31,20 +31,20 @@
 
             <h1 id="recycleOverviewTitle">
               全差分作者が求めていた
-              <span>没譜面・未完成譜面の専用投稿サイト</span>
+              <span data-copy-key="home-overview-title-line-2">没譜面・未完成譜面の専用投稿サイト</span>
             </h1>
-            <p class="recycle-overview-description">
+            <p class="recycle-overview-description" data-copy-key="home-overview-description">
               追記機能・難易度表機能つき
             </p>
             <p class="recycle-overview-note">
-              <strong>アカウント登録は不要です。</strong>
-              <span>音源ファイルはアップロードできません。</span>
+              <strong data-copy-key="home-overview-note-primary">アカウント登録は不要です。</strong>
+              <span data-copy-key="home-overview-note-secondary">音源ファイルはアップロードできません。</span>
             </p>
           </div>
           <nav class="recycle-overview-actions" aria-label="主要な操作">
-            <a class="recycle-cta recycle-cta-primary" href="./index.html#post">差分を投稿する</a>
-            <a class="recycle-cta" href="./list.html">投稿一覧を見る</a>
-            <a class="recycle-cta" href="./guide.html">概要＆使い方</a>
+            <a class="recycle-cta recycle-cta-primary" href="./index.html#post" data-copy-key="home-action-post">差分を投稿する</a>
+            <a class="recycle-cta" href="./list.html" data-copy-key="home-action-list">投稿一覧を見る</a>
+            <a class="recycle-cta" href="./guide.html" data-copy-key="home-action-guide">概要＆使い方</a>
           </nav>
         </section>
 
@@ -120,7 +120,7 @@
                     <span class="file-drop-file-name" id="chartFileDropFileName" hidden></span>
                     <span class="file-drop-internal-name" id="chartFileDropInternalName" hidden></span>
                     <span class="file-drop-details" id="chartFileDropHelp">.bms / .bme / .bml / .zip<br>最大5MB（BMS単体は2MB）</span>
-                    <span class="file-drop-note">音源ファイルはアップロードできません</span>
+                    <span class="file-drop-note" data-copy-key="post-file-note">音源ファイルはアップロードできません</span>
                   </button>
                   <div class="file-drop-actions" id="chartFileDropActions" hidden>
                     <button class="secondary" id="chartFileChangeButton" type="button">変更</button>
@@ -403,7 +403,7 @@
 
           <div class="section-heading recent-chart-heading">
             <h2 id="listTitle">最近の投稿</h2>
-            <a class="recent-chart-all-link" href="./list.html">すべての投稿を見る</a>
+            <a class="recent-chart-all-link" href="./list.html" data-copy-key="home-recent-all">すべての投稿を見る</a>
           </div>
           <p id="chartListFeedback" role="status" aria-live="polite" hidden></p>
           <div class="chart-list" id="chartList"></div>
@@ -473,7 +473,7 @@
 
         <p class="version-management-message" id="versionManagementMessage" role="status" aria-live="polite" hidden></p>
         <div class="version-management-buttons">
-          <button class="secondary" type="button" data-version-management-close>キャンセル</button>
+          <button class="secondary" type="button" data-version-management-close data-copy-key="management-cancel">キャンセル</button>
         </div>
       </form>
     </dialog>

@@ -2,11 +2,11 @@
 
 ## SITE-COPY-EDITOR-01
 
-- `node scripts/test-site-copy-editor.mjs`でexport、無編集round trip、1件／複数件apply計画、LF／CRLF、UTF-8 BOM、ID重複／不足／未知、metadata改変、保護トークン不足／余分、空欄、最大文字数、source hash、曖昧locator、Secret候補、診断ログ非漏えい、header／catalog／manifest hash、実manifestの固定IDとlocator解決を検査する。
-- `node scripts/site-copy/validate-site-copy.mjs --txt <TXT> --snapshot <snapshot>`は固定error codeで破損を拒否し、無編集exportでは`changeCount: 0`と`SITE_COPY_TXT_VALIDATION_COMPLETE`を返すこと。`node scripts/site-copy/diff-site-copy.mjs`は変更ID、対象区分、文字数、必要なpush／safe deployだけをdry-run表示すること。
-- `node scripts/site-copy/apply-site-copy.mjs`は既定でファイルを書き換えず、`--apply`指定時もclean worktree、source baseline、保護トークン、一意locatorを必須とする。複数fileは全置換を事前計画し、途中失敗時は書込み済みfileを復元すること。
-- 初回export前に`node scripts/test-repository-hygiene.mjs`、`node scripts/test-canonical-d1-schema.mjs`、全site-copy scriptの`node --check`、HTML ID検査、主要UI static回帰、Worker typecheck、`git diff --check`を実行する。TXT、snapshot、export log／resultはrepository外へ置き、一時fixtureは終了時に削除する。
-- 初回export後は生成TXTとsnapshotをそのままvalidateし、entry総数、PAGES／WORKER内訳、manual review、group別件数、template／rich件数を確認する。本番Worker deploy、D1／R2／Secret操作、production write、pushは行わない。
+- `node scripts/test-site-copy-editor.mjs`で2ファイルexport、無編集round trip、UIブロック編集、ガイド章全体編集、段落と箇条書きの追加／削除、小見出し変更、固定LINK、SECTION不足／未知／重複／未終了、HTML／任意URL拒否、source baseline、LF／CRLF／BOM、正常apply、途中失敗rollbackと一時backup削除を検査する。
+- 実manifestはUI 15ブロック／85欄、ガイド8章、manual review 0件、対象がすべてPAGESであることを確認する。`docs/guide.html`の8個の`data-copy-section`と公開HTMLのIDは重複を許可しない。
+- `node scripts/site-copy/validate-site-copy.mjs --ui <UI TXT> --guide <GUIDE TXT> --snapshot <snapshot>`は固定error codeで破損を拒否し、無編集exportではUI／ガイド変更0件と`SITE_COPY_GUIDE_DRY_RUN_COMPLETE`を返すこと。`diff-site-copy.mjs`はUI欄の変更前後文字数とガイドの追加／削除段落だけを表示すること。
+- `node scripts/site-copy/apply-site-copy.mjs`は既定でファイルを書き換えず、`--apply`指定時もclean worktree、source baseline、一意locator、固定LINK、反映後のHTML→編集形式往復一致を必須とする。複数fileを全置換前に計画し、途中失敗時は書込み済みfileを復元すること。
+- 初回export前にrepository hygiene、canonical D1 schema、全site-copy scriptの`node --check`、HTML ID、主要Pages static／browser回帰、Worker typecheck、`git diff --check`を実行する。TXT、snapshot、export log／resultはrepository外へ置き、一時fixtureは終了時に削除する。本番deploy、D1／R2／Secret操作、production write、pushは行わない。
 
 ## POST-FORM-TREE-12
 

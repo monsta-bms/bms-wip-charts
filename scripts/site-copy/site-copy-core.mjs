@@ -1,54 +1,41 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 
-export const SCHEMA_VERSION = 1;
-export const TXT_FILENAME = "BMS差分共有サイト_文章編集.txt";
-export const ENTRY_SEPARATOR = "=".repeat(64);
-export const FIELD_SEPARATOR = "-".repeat(64);
-
-export const GROUPS = Object.freeze([
-  "01 共通ヘッダー・ナビゲーション",
-  "02 トップページ概要",
-  "03 投稿フォーム",
-  "04 投稿・追記の状態表示",
-  "05 投稿一覧・検索",
-  "06 詳細・版ツリー",
-  "07 お気に入り",
-  "08 管理操作・取り下げ・削除申請",
-  "09 概要＆使い方",
-  "10 難易度表",
-  "11 更新履歴",
-  "12 エラー・警告・確認文",
-  "13 アクセシビリティ文言",
-  "14 その他"
+export const MANIFEST_VERSION = 2;
+export const UI_FILENAME = "BMS差分共有サイト_UI文章編集.txt";
+export const GUIDE_FILENAME = "BMS差分共有サイト_ガイド全文編集.txt";
+export const UI_HEADER = "# BMS-WIP UI COPY EDIT v1";
+export const GUIDE_HEADER = "# BMS-WIP GUIDE EDIT v1";
+export const GUIDE_SECTION_IDS = Object.freeze([
+  "GUIDE_INTRO",
+  "GUIDE_QUICK_USE",
+  "GUIDE_FEATURE_INDEX",
+  "GUIDE_POSTING",
+  "GUIDE_PROGRESS",
+  "GUIDE_DIFFICULTY",
+  "GUIDE_MANAGEMENT",
+  "GUIDE_SAFETY"
 ]);
-
-const GROUP_ID_PREFIX = Object.freeze({
-  "01": "COMMON",
-  "02": "HOME",
-  "03": "POST",
-  "04": "STATUS",
-  "05": "LIST",
-  "06": "DETAIL",
-  "07": "FAVORITES",
-  "08": "MANAGEMENT",
-  "09": "GUIDE",
-  "10": "DIFFICULTY",
-  "11": "CHANGELOG",
-  "12": "MESSAGE",
-  "13": "ACCESSIBILITY",
-  "14": "OTHER"
+export const LINK_TARGETS = Object.freeze({
+  POST_FORM: "./index.html#post",
+  LIST: "./list.html",
+  RC_STAR: "https://bms-wip-charts-worker.monsta3228gsl.workers.dev/difficulty-tables/rc-star",
+  RC_DOUBLE_STAR: "https://bms-wip-charts-worker.monsta3228gsl.workers.dev/difficulty-tables/rc-double-star"
 });
 
-const HTML_ATTRIBUTES = new Set(["aria-label", "alt", "placeholder", "title"]);
-const HTML_VOID_ELEMENTS = new Set([
-  "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta",
-  "param", "source", "track", "wbr"
+const INTERNAL_GUIDE_LINKS = Object.freeze([
+  ["#posting", "GUIDE_POSTING"],
+  ["#progress", "GUIDE_PROGRESS"],
+  ["#difficulty", "GUIDE_DIFFICULTY"],
+  ["#management", "GUIDE_MANAGEMENT"],
+  ["#safety", "GUIDE_SAFETY"]
 ]);
-const SECRET_NAME_PATTERN = /(?:ADMIN_TOKEN|PASSWORD_HASH_SECRET|ABUSE_HASH_SECRET|WITHDRAWAL_IDEMPOTENCY_SECRET|TURNSTILE_SECRET|TURNSTILE_MODE)/u;
-const SECRET_VALUE_PATTERN = /(?:BEGIN [A-Z ]*PRIVATE KEY|\$2[aby]\$\d{2}\$[./A-Za-z0-9]{40,}|(?:api|access|auth|bearer|secret|token|password)[_-]?(?:key|token|secret)?\s*[:=]\s*[A-Za-z0-9_./+\-=]{16,})/iu;
+const VOID_TAGS = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"]);
+const FORBIDDEN_URL = /(?:https?:\/\/|www\.|javascript\s*:|data\s*:|\.\/|\/api\/)/iu;
+const FORBIDDEN_CODE = /(?:<\/?[A-Za-z!]|\b(?:function|const|let|var)\s+[A-Za-z_$]|\b(?:iframe|script|style)\s*[:{(])/iu;
 
 export class SiteCopyError extends Error {
   constructor(code, message, detail = {}) {
@@ -74,848 +61,10 @@ export function canonicalJson(value) {
 export function readUtf8(filePath) {
   const bytes = fs.readFileSync(filePath);
   const text = bytes.toString("utf8");
-  if (Buffer.from(text, "utf8").compare(bytes) !== 0 && Buffer.from(`\uFEFF${text}`, "utf8").compare(bytes) !== 0) {
-    throw new SiteCopyError("SITE_COPY_TXT_INVALID_ENCODING", "UTF-8として読み込めません。", { path: filePath });
+  if (!Buffer.from(text, "utf8").equals(bytes)) {
+    throw new SiteCopyError("SITE_COPY_GUIDE_PARSE_FAILED", "UTF-8として読み込めません。", { path: filePath });
   }
   return normalizeNewlines(text);
-}
-
-function decodeHtml(value) {
-  const named = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: "\u00a0" };
-  return value.replace(/&(?:#(\d+)|#x([0-9a-f]+)|([a-z]+));/giu, (match, decimal, hex, name) => {
-    if (decimal) return String.fromCodePoint(Number(decimal));
-    if (hex) return String.fromCodePoint(Number.parseInt(hex, 16));
-    return named[name.toLowerCase()] ?? match;
-  });
-}
-
-function encodeHtmlText(value) {
-  return value.replace(/&/gu, "&amp;").replace(/</gu, "&lt;").replace(/>/gu, "&gt;");
-}
-
-function encodeHtmlAttribute(value, quote) {
-  let encoded = encodeHtmlText(value);
-  encoded = quote === "\"" ? encoded.replace(/"/gu, "&quot;") : encoded.replace(/'/gu, "&#39;");
-  return encoded;
-}
-
-function decodeJsString(raw) {
-  let output = "";
-  for (let index = 0; index < raw.length; index += 1) {
-    const character = raw[index];
-    if (character !== "\\") {
-      output += character;
-      continue;
-    }
-    index += 1;
-    if (index >= raw.length) {
-      output += "\\";
-      break;
-    }
-    const escaped = raw[index];
-    const simple = { n: "\n", r: "\r", t: "\t", b: "\b", f: "\f", v: "\v", 0: "\0" };
-    if (Object.hasOwn(simple, escaped)) {
-      output += simple[escaped];
-    } else if (escaped === "\n") {
-      // JavaScript line continuation.
-    } else if (escaped === "\r") {
-      if (raw[index + 1] === "\n") index += 1;
-    } else if (escaped === "x" && /^[0-9a-f]{2}$/iu.test(raw.slice(index + 1, index + 3))) {
-      output += String.fromCodePoint(Number.parseInt(raw.slice(index + 1, index + 3), 16));
-      index += 2;
-    } else if (escaped === "u" && raw[index + 1] === "{") {
-      const close = raw.indexOf("}", index + 2);
-      const code = close >= 0 ? raw.slice(index + 2, close) : "";
-      if (/^[0-9a-f]{1,6}$/iu.test(code)) {
-        output += String.fromCodePoint(Number.parseInt(code, 16));
-        index = close;
-      } else {
-        output += `\\${escaped}`;
-      }
-    } else if (escaped === "u" && /^[0-9a-f]{4}$/iu.test(raw.slice(index + 1, index + 5))) {
-      output += String.fromCharCode(Number.parseInt(raw.slice(index + 1, index + 5), 16));
-      index += 4;
-    } else {
-      output += escaped;
-    }
-  }
-  return output;
-}
-
-function encodeJsString(value, quote) {
-  return value
-    .replace(/\\/gu, "\\\\")
-    .replace(/\r/gu, "\\r")
-    .replace(/\n/gu, "\\n")
-    .replace(/\u2028/gu, "\\u2028")
-    .replace(/\u2029/gu, "\\u2029")
-    .replace(new RegExp(quote.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "gu"), `\\${quote}`);
-}
-
-function escapeTemplateStatic(value) {
-  return value.replace(/\\/gu, "\\\\").replace(/`/gu, "\\`").replace(/\$\{/gu, "\\${");
-}
-
-function isMeaningfulText(value) {
-  const trimmed = value.trim();
-  return trimmed.length > 0 && /[\p{L}\p{N}ぁ-んァ-ヶ一-龠]/u.test(trimmed);
-}
-
-function hasEditableStaticText(value) {
-  const withoutTokens = value.replace(/\{[A-Z][A-Z0-9_]*\}/gu, "").trim();
-  return isMeaningfulText(withoutTokens);
-}
-
-function isSecretCandidate(value) {
-  return SECRET_VALUE_PATTERN.test(value);
-}
-
-function normalizeAnchor(value) {
-  return value.replace(/\s+/gu, " ").trim();
-}
-
-function anchorHash(source, start, end, direction) {
-  const width = 120;
-  const value = direction === "before"
-    ? source.slice(Math.max(0, start - width), start)
-    : source.slice(end, Math.min(source.length, end + width));
-  return sha256(normalizeAnchor(value));
-}
-
-function findTagEnd(source, start) {
-  let quote = null;
-  for (let index = start; index < source.length; index += 1) {
-    const character = source[index];
-    if (quote) {
-      if (character === quote) quote = null;
-    } else if (character === "\"" || character === "'") {
-      quote = character;
-    } else if (character === ">") {
-      return index;
-    }
-  }
-  return -1;
-}
-
-function htmlStructuralCandidates(source, options = {}) {
-  const candidates = [];
-  const stack = [{ name: "#document", path: "#document", childCounts: new Map(), textCount: 0, skip: false }];
-  let cursor = 0;
-  while (cursor < source.length) {
-    const open = source.indexOf("<", cursor);
-    const textEnd = open < 0 ? source.length : open;
-    if (textEnd > cursor) {
-      const parent = stack[stack.length - 1];
-      parent.textCount += 1;
-      if (!parent.skip) {
-        const raw = source.slice(cursor, textEnd);
-        const leading = raw.match(/^\s*/u)?.[0].length ?? 0;
-        const trailing = raw.match(/\s*$/u)?.[0].length ?? 0;
-        const start = cursor + leading;
-        const end = textEnd - trailing;
-        if (end > start) {
-          const value = decodeHtml(source.slice(start, end));
-          if (isMeaningfulText(value)) {
-            candidates.push({
-              value,
-              rangeStart: start,
-              rangeEnd: end,
-              kind: value.includes("\n") ? "MULTILINE_TEXT" : "PLAIN_TEXT",
-              role: "text",
-              locatorType: options.locatorType ?? "HTML_STRUCTURAL",
-              locator: {
-                structuralPath: parent.path,
-                textNode: parent.textCount,
-                beforeAnchorSha256: anchorHash(source, start, end, "before"),
-                afterAnchorSha256: anchorHash(source, start, end, "after")
-              },
-              syntax: "html-text",
-              protectedTokens: []
-            });
-          }
-        }
-      }
-    }
-    if (open < 0) break;
-    if (source.startsWith("<!--", open)) {
-      const close = source.indexOf("-->", open + 4);
-      cursor = close < 0 ? source.length : close + 3;
-      continue;
-    }
-    const close = findTagEnd(source, open + 1);
-    if (close < 0) break;
-    const tagSource = source.slice(open + 1, close);
-    if (/^\s*[!?]/u.test(tagSource)) {
-      cursor = close + 1;
-      continue;
-    }
-    const closingMatch = tagSource.match(/^\s*\/\s*([A-Za-z][\w:-]*)/u);
-    if (closingMatch) {
-      const tagName = closingMatch[1].toLowerCase();
-      for (let index = stack.length - 1; index > 0; index -= 1) {
-        const popped = stack.pop();
-        if (popped.name === tagName) break;
-      }
-      cursor = close + 1;
-      continue;
-    }
-    const openingMatch = tagSource.match(/^\s*([A-Za-z][\w:-]*)/u);
-    if (!openingMatch) {
-      cursor = close + 1;
-      continue;
-    }
-    const tagName = openingMatch[1].toLowerCase();
-    const parent = stack[stack.length - 1];
-    const ordinal = (parent.childCounts.get(tagName) ?? 0) + 1;
-    parent.childCounts.set(tagName, ordinal);
-    const idMatch = tagSource.match(/\bid\s*=\s*(["'])(.*?)\1/iu);
-    const classMatch = tagSource.match(/\bclass\s*=\s*(["'])(.*?)\1/iu);
-    const firstClass = classMatch?.[2].trim().split(/\s+/u).find(Boolean);
-    const pathPart = idMatch
-      ? `${tagName}#${idMatch[2]}`
-      : firstClass
-        ? `${tagName}.${firstClass}:nth-of-type(${ordinal})`
-        : `${tagName}:nth-of-type(${ordinal})`;
-    const elementPath = `${parent.path}>${pathPart}`;
-    const attributePattern = /([^\s"'<>/=]+)\s*=\s*(["'])([\s\S]*?)\2/gu;
-    for (const match of tagSource.matchAll(attributePattern)) {
-      const attributeName = match[1].toLowerCase();
-      if (!HTML_ATTRIBUTES.has(attributeName)) continue;
-      const rawValue = match[3];
-      const value = decodeHtml(rawValue);
-      if (!isMeaningfulText(value)) continue;
-      const tagRelativeValueStart = match.index + match[0].indexOf(match[2]) + 1;
-      const start = open + 1 + tagRelativeValueStart;
-      const end = start + rawValue.length;
-      candidates.push({
-        value,
-        rangeStart: start,
-        rangeEnd: end,
-        kind: "ATTRIBUTE_TEXT",
-        role: `attribute:${attributeName}`,
-        locatorType: options.locatorType ?? "HTML_STRUCTURAL",
-        locator: {
-          structuralPath: elementPath,
-          attribute: attributeName,
-          beforeAnchorSha256: anchorHash(source, start, end, "before"),
-          afterAnchorSha256: anchorHash(source, start, end, "after")
-        },
-        syntax: "html-attribute",
-        quote: match[2],
-        protectedTokens: []
-      });
-    }
-    const selfClosing = /\/\s*$/u.test(tagSource) || HTML_VOID_ELEMENTS.has(tagName);
-    if (!selfClosing) {
-      stack.push({
-        name: tagName,
-        path: elementPath,
-        childCounts: new Map(),
-        textCount: 0,
-        skip: parent.skip || tagName === "script" || tagName === "style"
-      });
-    }
-    cursor = close + 1;
-  }
-  return candidates;
-}
-
-function skipQuoted(source, start, quote) {
-  for (let index = start + 1; index < source.length; index += 1) {
-    if (source[index] === "\\") {
-      index += 1;
-    } else if (source[index] === quote) {
-      return index + 1;
-    }
-  }
-  return source.length;
-}
-
-function skipBlockComment(source, start) {
-  const close = source.indexOf("*/", start + 2);
-  return close < 0 ? source.length : close + 2;
-}
-
-function skipLineComment(source, start) {
-  const close = source.indexOf("\n", start + 2);
-  return close < 0 ? source.length : close + 1;
-}
-
-function looksLikeRegexStart(source, start) {
-  const before = source.slice(Math.max(0, start - 80), start);
-  const significant = before.match(/(?:^|[\s;{}])(?:return|throw|case|delete|void|typeof|instanceof|in|of)\s*$/u);
-  if (significant) return true;
-  const previous = before.match(/\S(?=\s*$)/u)?.[0];
-  return previous == null || /[([{:;,=!?&|+*%^~<>-]/u.test(previous);
-}
-
-function skipRegex(source, start) {
-  let inClass = false;
-  for (let index = start + 1; index < source.length; index += 1) {
-    const character = source[index];
-    if (character === "\\") {
-      index += 1;
-    } else if (character === "[") {
-      inClass = true;
-    } else if (character === "]") {
-      inClass = false;
-    } else if (character === "/" && !inClass) {
-      index += 1;
-      while (/[A-Za-z]/u.test(source[index] ?? "")) index += 1;
-      return index;
-    } else if (character === "\n" || character === "\r") {
-      return start + 1;
-    }
-  }
-  return source.length;
-}
-
-function readTemplate(source, start) {
-  const parts = [];
-  let rawStart = start + 1;
-  let cursor = rawStart;
-  while (cursor < source.length) {
-    if (source[cursor] === "\\") {
-      cursor += 2;
-      continue;
-    }
-    if (source[cursor] === "`") {
-      parts.push({ type: "raw", start: rawStart, end: cursor });
-      return { start, end: cursor + 1, parts };
-    }
-    if (source[cursor] === "$" && source[cursor + 1] === "{") {
-      parts.push({ type: "raw", start: rawStart, end: cursor });
-      const expressionStart = cursor;
-      cursor += 2;
-      let depth = 1;
-      while (cursor < source.length && depth > 0) {
-        const character = source[cursor];
-        if (character === "\"" || character === "'") {
-          cursor = skipQuoted(source, cursor, character);
-        } else if (character === "`") {
-          cursor = readTemplate(source, cursor).end;
-        } else if (source.startsWith("//", cursor)) {
-          cursor = skipLineComment(source, cursor);
-        } else if (source.startsWith("/*", cursor)) {
-          cursor = skipBlockComment(source, cursor);
-        } else if (character === "/" && looksLikeRegexStart(source, cursor)) {
-          cursor = skipRegex(source, cursor);
-        } else {
-          if (character === "{") depth += 1;
-          if (character === "}") depth -= 1;
-          cursor += 1;
-        }
-      }
-      if (depth !== 0) return { start, end: source.length, parts, unterminated: true };
-      parts.push({ type: "expression", start: expressionStart, end: cursor });
-      rawStart = cursor;
-      continue;
-    }
-    cursor += 1;
-  }
-  return { start, end: source.length, parts, unterminated: true };
-}
-
-function scanJsTokens(source) {
-  const tokens = [];
-  for (let cursor = 0; cursor < source.length;) {
-    if (source.startsWith("//", cursor)) {
-      cursor = skipLineComment(source, cursor);
-      continue;
-    }
-    if (source.startsWith("/*", cursor)) {
-      cursor = skipBlockComment(source, cursor);
-      continue;
-    }
-    if (source[cursor] === "/" && looksLikeRegexStart(source, cursor)) {
-      cursor = skipRegex(source, cursor);
-      continue;
-    }
-    const character = source[cursor];
-    if (character === "\"" || character === "'") {
-      const end = skipQuoted(source, cursor, character);
-      tokens.push({ type: "string", start: cursor, end, quote: character, contentStart: cursor + 1, contentEnd: end - 1 });
-      cursor = end;
-      continue;
-    }
-    if (character === "`") {
-      const token = readTemplate(source, cursor);
-      tokens.push({ type: "template", ...token, contentStart: cursor + 1, contentEnd: token.end - 1 });
-      cursor = token.end;
-      continue;
-    }
-    cursor += 1;
-  }
-  return tokens;
-}
-
-function inferContainer(source, position) {
-  const before = source.slice(Math.max(0, position - 5000), position);
-  const patterns = [
-    /(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{[^{}]*$/u,
-    /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>[^{}]*\{?[^{}]*$/u,
-    /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*[^;]*$/u
-  ];
-  for (const pattern of patterns) {
-    const match = before.match(pattern);
-    if (match) return match[1];
-  }
-  return "module";
-}
-
-function inferRole(source, start, end) {
-  const before = source.slice(Math.max(0, start - 180), start);
-  const after = source.slice(end, Math.min(source.length, end + 80));
-  if (/aria-label\s*=|setAttribute\(\s*["']aria-label["']/u.test(before)) return "aria-label";
-  if (/placeholder\s*=|\.placeholder\s*=/u.test(before)) return "placeholder";
-  if (/\.title\s*=|title\s*:/u.test(before)) return "title";
-  if (/confirm\s*\([^)]*$/u.test(before)) return "confirm";
-  if (/alert\s*\([^)]*$/u.test(before)) return "alert";
-  const call = inferCallArgument(source, start, ["apiError", "publicError", "jsonError"]);
-  if (call?.name === "apiError") return call.argumentIndex === 4 ? "api-message" : call.argumentIndex > 4 ? "api-detail" : "string";
-  if (call?.name === "publicError") return call.argumentIndex === 3 ? "api-message" : "string";
-  if (call?.name === "jsonError") return call.argumentIndex === 3 || call.argumentIndex === 4 ? "api-message" : "string";
-  if (/\bmessage\s*:\s*$/u.test(before)) return "message";
-  if (/(?:textContent|innerText)\s*=\s*$/u.test(before)) return "text-content";
-  if (/(?:status|error|warning|notice|feedback|summary|label|heading|button)[A-Za-z_$]*\s*(?:=|:)\s*$/iu.test(before)) return "ui-status";
-  if (/\.(?:setAttribute|insertAdjacentHTML)\s*\([^,]*,?[^)]*$/u.test(before)) return "dom-content";
-  if (/\b(?:throw\s+new\s+Error|console\.(?:log|warn|error|info|debug))\s*\([^)]*$/u.test(before)) return "internal";
-  if (/^(?:\s*[,;)])/u.test(after) && /(?:button|label|title|heading|caption)/iu.test(before)) return "ui-label";
-  return "string";
-}
-
-function inferCallArgument(source, position, names) {
-  const searchStart = Math.max(0, position - 2400);
-  const prefix = source.slice(searchStart, position);
-  let selected = null;
-  for (const name of names) {
-    const pattern = new RegExp(`\\b${name}\\s*\\(`, "gu");
-    for (const match of prefix.matchAll(pattern)) {
-      if (!selected || match.index > selected.index) selected = { name, index: match.index, open: match.index + match[0].lastIndexOf("(") };
-    }
-  }
-  if (!selected) return null;
-  let argumentIndex = 0;
-  const stack = [];
-  for (let cursor = searchStart + selected.open + 1; cursor < position;) {
-    if (source.startsWith("//", cursor)) {
-      cursor = skipLineComment(source, cursor);
-      continue;
-    }
-    if (source.startsWith("/*", cursor)) {
-      cursor = skipBlockComment(source, cursor);
-      continue;
-    }
-    const character = source[cursor];
-    if (character === "\"" || character === "'") {
-      cursor = skipQuoted(source, cursor, character);
-      continue;
-    }
-    if (character === "`") {
-      cursor = readTemplate(source, cursor).end;
-      continue;
-    }
-    if (character === "(" || character === "[" || character === "{") stack.push(character);
-    else if (character === ")" || character === "]" || character === "}") {
-      if (stack.length === 0 && character === ")") return null;
-      stack.pop();
-    } else if (character === "," && stack.length === 0) argumentIndex += 1;
-    cursor += 1;
-  }
-  return { name: selected.name, argumentIndex };
-}
-
-function tokenBase(expression) {
-  const normalized = expression.replace(/^\$\{|\}$/gu, "").trim();
-  if (/\.length\b/u.test(normalized)) return "COUNT";
-  const identifiers = normalized.match(/[A-Za-z_$][\w$]*/gu) ?? [];
-  const ignored = new Set(["escapeHtml", "String", "Number", "format", "toString", "map", "join"]);
-  const candidate = [...identifiers].reverse().find((value) => !ignored.has(value)) ?? "VALUE";
-  return candidate.replace(/([a-z0-9])([A-Z])/gu, "$1_$2").replace(/[^A-Za-z0-9]+/gu, "_").toUpperCase();
-}
-
-function buildTemplateModel(source, token) {
-  const bindings = [];
-  const usedNames = new Map();
-  const virtualSegments = [];
-  let virtual = "";
-  for (const part of token.parts) {
-    if (part.type === "raw") {
-      const decoded = decodeJsString(source.slice(part.start, part.end));
-      const virtualStart = virtual.length;
-      virtual += decoded;
-      virtualSegments.push({ type: "raw", virtualStart, virtualEnd: virtual.length, sourceStart: part.start, sourceEnd: part.end });
-      continue;
-    }
-    const expression = source.slice(part.start, part.end);
-    const base = tokenBase(expression);
-    const count = (usedNames.get(base) ?? 0) + 1;
-    usedNames.set(base, count);
-    const name = count === 1 ? base : `${base}_${count}`;
-    const displayToken = `{${name}}`;
-    const virtualStart = virtual.length;
-    virtual += displayToken;
-    virtualSegments.push({ type: "expression", virtualStart, virtualEnd: virtual.length, sourceStart: part.start, sourceEnd: part.end, displayToken, expression });
-    bindings.push({ token: displayToken, expression });
-  }
-  return { virtual, virtualSegments, bindings };
-}
-
-function virtualOffsetToSource(segments, offset, edge) {
-  for (const segment of segments) {
-    if (offset < segment.virtualStart || offset > segment.virtualEnd) continue;
-    if (segment.type === "expression") return edge === "start" ? segment.sourceStart : segment.sourceEnd;
-    const delta = Math.max(0, Math.min(offset - segment.virtualStart, segment.sourceEnd - segment.sourceStart));
-    return segment.sourceStart + delta;
-  }
-  const last = segments.at(-1);
-  return last?.sourceEnd ?? 0;
-}
-
-function templateBindingsForValue(bindings, value) {
-  return bindings.filter((binding) => value.includes(binding.token));
-}
-
-function codeCandidate(source, token, value, start, end, options = {}) {
-  const container = inferContainer(source, token.start);
-  const role = options.role ?? inferRole(source, start, end);
-  const bindings = options.bindings ?? [];
-  return {
-    value,
-    rangeStart: start,
-    rangeEnd: end,
-    kind: bindings.length > 0 ? "TEMPLATE_TEXT" : options.kind ?? "PLAIN_TEXT",
-    role,
-    locatorType: options.locatorType ?? "CODE_ANCHOR",
-    locator: {
-      container,
-      role,
-      beforeAnchorSha256: anchorHash(source, start, end, "before"),
-      afterAnchorSha256: anchorHash(source, start, end, "after")
-    },
-    syntax: options.syntax ?? "js-string",
-    quote: token.quote,
-    protectedTokens: bindings.map((binding) => binding.token),
-    templateBindings: bindings
-  };
-}
-
-function shouldIncludeCodeCandidate(value, role, sourcePath, source, start) {
-  if (!isMeaningfulText(value) || isSecretCandidate(value)) return false;
-  if (/^(?:https?:|application\/|text\/|#[0-9A-Fa-f]{3,8}$|[A-Z][A-Z0-9_]{2,})/u.test(value.trim())) return false;
-  const before = source.slice(Math.max(0, start - 220), start);
-  if (role === "internal" || /(?:console\.(?:log|warn|error|info|debug)|throw\s+new\s+Error)\s*\([^)]*$/u.test(before)) return false;
-  const isWorker = sourcePath.startsWith("worker/");
-  if (isWorker) {
-    if (sourcePath.endsWith("difficultyTableHtml.ts")) {
-      if (role === "text" || role.startsWith("attribute:")) return hasEditableStaticText(value);
-      return /[ぁ-んァ-ヶ一-龠]/u.test(value);
-    }
-    if (sourcePath.endsWith("difficultyTables.ts") && /(?:name|label)\s*:\s*$/u.test(before)) return true;
-    if (sourcePath.endsWith("difficultyTables.ts") && /(?:publicError\s*\(|message\s*:)/u.test(before)) return /[ぁ-んァ-ヶ一-龠]/u.test(value);
-    return role === "api-message" || (role === "message" && /[ぁ-んァ-ヶ一-龠]/u.test(value));
-  }
-  if (/[ぁ-んァ-ヶ一-龠]/u.test(value)) return true;
-  return role !== "string" && /[A-Za-z]/u.test(value) && value.trim().includes(" ");
-}
-
-function codeCandidates(source, sourcePath) {
-  const candidates = [];
-  for (const token of scanJsTokens(source)) {
-    if (token.type === "string") {
-      const value = decodeJsString(source.slice(token.contentStart, token.contentEnd));
-      if (/<[A-Za-z!/]/u.test(value)) {
-        for (const htmlCandidate of htmlStructuralCandidates(value, { locatorType: "STRING_HTML_STRUCTURAL" })) {
-          const start = token.contentStart + htmlCandidate.rangeStart;
-          const end = token.contentStart + htmlCandidate.rangeEnd;
-          if (!shouldIncludeCodeCandidate(htmlCandidate.value, htmlCandidate.role, sourcePath, source, start)) continue;
-          const candidate = codeCandidate(source, token, htmlCandidate.value, start, end, {
-            role: htmlCandidate.role,
-            kind: htmlCandidate.kind,
-            locatorType: "STRING_HTML_STRUCTURAL",
-            syntax: htmlCandidate.syntax === "html-attribute" ? "js-html-attribute" : "js-html-text"
-          });
-          candidate.locator.structuralPath = htmlCandidate.locator.structuralPath;
-          if (htmlCandidate.locator.attribute) candidate.locator.attribute = htmlCandidate.locator.attribute;
-          if (htmlCandidate.locator.textNode) candidate.locator.textNode = htmlCandidate.locator.textNode;
-          candidate.htmlQuote = htmlCandidate.quote;
-          candidates.push(candidate);
-        }
-        continue;
-      }
-      const role = inferRole(source, token.contentStart, token.contentEnd);
-      if (shouldIncludeCodeCandidate(value, role, sourcePath, source, token.contentStart)) {
-        candidates.push(codeCandidate(source, token, value, token.contentStart, token.contentEnd, {
-          role,
-          kind: role === "api-message" || (sourcePath.startsWith("worker/") && role === "message") ? "API_MESSAGE" : "PLAIN_TEXT"
-        }));
-      }
-      continue;
-    }
-    if (token.unterminated) continue;
-    const model = buildTemplateModel(source, token);
-    if (/<[A-Za-z!/]/u.test(model.virtual)) {
-      const htmlCandidates = htmlStructuralCandidates(model.virtual, { locatorType: "TEMPLATE_HTML_STRUCTURAL" });
-      for (const htmlCandidate of htmlCandidates) {
-        const bindings = templateBindingsForValue(model.bindings, htmlCandidate.value);
-        const start = virtualOffsetToSource(model.virtualSegments, htmlCandidate.rangeStart, "start");
-        const end = virtualOffsetToSource(model.virtualSegments, htmlCandidate.rangeEnd, "end");
-        const value = htmlCandidate.value;
-        const role = htmlCandidate.role;
-        if (!shouldIncludeCodeCandidate(value, role, sourcePath, source, start)) continue;
-        const candidate = codeCandidate(source, token, value, start, end, {
-          role,
-          kind: htmlCandidate.kind,
-          locatorType: "TEMPLATE_HTML_STRUCTURAL",
-          syntax: htmlCandidate.syntax === "html-attribute" ? "template-html-attribute" : "template-html-text",
-          bindings
-        });
-        candidate.locator.structuralPath = htmlCandidate.locator.structuralPath;
-        if (htmlCandidate.locator.attribute) candidate.locator.attribute = htmlCandidate.locator.attribute;
-        if (htmlCandidate.locator.textNode) candidate.locator.textNode = htmlCandidate.locator.textNode;
-        candidate.quote = htmlCandidate.quote;
-        candidates.push(candidate);
-      }
-    } else {
-      const value = model.virtual;
-      const role = inferRole(source, token.contentStart, token.contentEnd);
-      if (hasEditableStaticText(value) && shouldIncludeCodeCandidate(value, role, sourcePath, source, token.contentStart)) {
-        candidates.push(codeCandidate(source, token, value, token.contentStart, token.contentEnd, {
-          role,
-          kind: "TEMPLATE_TEXT",
-          syntax: "js-template",
-          bindings: model.bindings
-        }));
-      }
-    }
-  }
-  return candidates;
-}
-
-function cssCandidates(source) {
-  const candidates = [];
-  const pattern = /\bcontent\s*:\s*(["'])([\s\S]*?)\1/gu;
-  for (const match of source.matchAll(pattern)) {
-    const value = decodeJsString(match[2]);
-    if (!/[ぁ-んァ-ヶ一-龠]/u.test(value)) continue;
-    const start = match.index + match[0].indexOf(match[1]) + 1;
-    const end = start + match[2].length;
-    candidates.push({
-      value,
-      rangeStart: start,
-      rangeEnd: end,
-      kind: "PLAIN_TEXT",
-      role: "css-content",
-      locatorType: "CSS_DECLARATION",
-      locator: {
-        property: "content",
-        beforeAnchorSha256: anchorHash(source, start, end, "before"),
-        afterAnchorSha256: anchorHash(source, start, end, "after")
-      },
-      syntax: "css-string",
-      quote: match[1],
-      protectedTokens: []
-    });
-  }
-  return candidates;
-}
-
-export function scanSource(sourcePath, source) {
-  let candidates = [];
-  if (sourcePath.endsWith(".html")) candidates = htmlStructuralCandidates(source);
-  else if (sourcePath.endsWith(".js") || sourcePath.endsWith(".ts")) candidates = codeCandidates(source, sourcePath);
-  else if (sourcePath.endsWith(".css")) candidates = cssCandidates(source);
-  const occurrences = new Map();
-  for (const candidate of candidates) {
-    candidate.sourceNewline = source.slice(candidate.rangeStart, candidate.rangeEnd).includes("\r\n") ? "\r\n" : "\n";
-    candidate.value = normalizeNewlines(candidate.value);
-    const base = `${candidate.locatorType}:${JSON.stringify(candidate.locator)}`;
-    const occurrence = (occurrences.get(base) ?? 0) + 1;
-    occurrences.set(base, occurrence);
-    candidate.locator.occurrenceWithinContainer = occurrence;
-  }
-  return candidates;
-}
-
-function groupFor(sourcePath, candidate) {
-  const lower = `${sourcePath} ${candidate.role}`.toLowerCase();
-  const structuralPath = candidate.locator.structuralPath ?? "";
-  if (candidate.role === "aria-label" || candidate.role.startsWith("attribute:aria") || candidate.role === "attribute:alt") return GROUPS[12];
-  if (candidate.kind === "API_MESSAGE" || /error|warning|confirm|alert|notice|feedback|message|status/u.test(candidate.role)) return GROUPS[11];
-  if (sourcePath === "docs/index.html") {
-    if (/recycleOverviewTitle|recycle-overview/u.test(structuralPath)) return GROUPS[1];
-    if (/versionManagement|withdrawal/u.test(structuralPath)) return GROUPS[7];
-    if (/selectedChart/u.test(structuralPath)) return GROUPS[5];
-    if (/>section#list|listTitle/u.test(structuralPath)) return GROUPS[4];
-    if (/>section#post|chartForm|submitTitle/u.test(structuralPath)) return GROUPS[2];
-  }
-  if (/site-header|theme-controller/u.test(lower)) return GROUPS[0];
-  if (/difficultytable/u.test(lower)) return GROUPS[9];
-  if (/changelog/u.test(lower)) return GROUPS[10];
-  if (/guide/u.test(lower)) return GROUPS[8];
-  if (/admin|management|withdrawal|ban/u.test(lower)) return GROUPS[7];
-  if (/favorite/u.test(lower)) return GROUPS[6];
-  if (/branch|tree|chart-detail|version-/u.test(lower)) return GROUPS[5];
-  if (/list/u.test(lower)) return GROUPS[4];
-  if (/post-form|turnstile|chart-metadata|progress-image|local-bms|zip-bms|index\.html/u.test(lower)) {
-    if (/status|解析|投稿中|成功|失敗|読み込み/u.test(candidate.value)) return GROUPS[3];
-    return GROUPS[2];
-  }
-  if (/docs\/app\.js/u.test(lower)) return GROUPS[3];
-  if (/docs\/index\.html/u.test(lower)) return GROUPS[1];
-  return GROUPS[13];
-}
-
-function sourceSlug(sourcePath) {
-  return sourcePath.replace(/[^A-Za-z0-9]+/gu, "_").replace(/^_|_$/gu, "").toUpperCase();
-}
-
-function kindSlug(kind) {
-  return ({ PLAIN_TEXT: "TEXT", MULTILINE_TEXT: "MULTILINE", ATTRIBUTE_TEXT: "ATTRIBUTE", TEMPLATE_TEXT: "TEMPLATE", RICH_TEXT: "RICH", API_MESSAGE: "API" })[kind] ?? "TEXT";
-}
-
-function locatorIdentity(locatorType, locator) {
-  return `${locatorType}:${JSON.stringify(locator)}`;
-}
-
-export function inventoryRepository(rootDir, catalogId, baseCommit) {
-  const paths = [];
-  for (const name of fs.readdirSync(path.join(rootDir, "docs"))) {
-    const relative = `docs/${name}`;
-    if (/\.(?:html|js|css)$/u.test(name)) paths.push(relative);
-  }
-  for (const directory of ["worker/src/routes", "worker/src/services"]) {
-    for (const name of fs.readdirSync(path.join(rootDir, directory))) {
-      if (name.endsWith(".ts")) paths.push(`${directory}/${name}`);
-    }
-  }
-  paths.push("worker/src/utils/difficultyTableHtml.ts");
-  paths.sort((a, b) => a.localeCompare(b, "en"));
-  const rawEntries = [];
-  const manualReview = [];
-  for (const sourcePath of paths) {
-    const source = fs.readFileSync(path.join(rootDir, sourcePath), "utf8");
-    for (const candidate of scanSource(sourcePath, source)) {
-      if (isSecretCandidate(candidate.value)) {
-        throw new SiteCopyError("SITE_COPY_EXPORT_SECRET_CANDIDATE", "Secret候補を検出したためexportを停止しました。", { path: sourcePath, count: 1 });
-      }
-      if (SECRET_NAME_PATTERN.test(candidate.value) && !sourcePath.startsWith("worker/src/utils/difficultyTableHtml")) {
-        // Secret names are explicitly outside the editable-copy contract.
-        continue;
-      }
-      rawEntries.push({ sourcePath, candidate, group: groupFor(sourcePath, candidate) });
-    }
-  }
-  rawEntries.sort((left, right) => {
-    const groupCompare = left.group.localeCompare(right.group, "ja");
-    if (groupCompare !== 0) return groupCompare;
-    const pathCompare = left.sourcePath.localeCompare(right.sourcePath, "en");
-    if (pathCompare !== 0) return pathCompare;
-    return left.candidate.rangeStart - right.candidate.rangeStart;
-  });
-  const counters = new Map();
-  const locatorSet = new Set();
-  const entries = rawEntries.map(({ sourcePath, candidate, group }) => {
-    const groupNumber = group.slice(0, 2);
-    const counterKey = `${groupNumber}:${sourcePath}:${candidate.kind}`;
-    const number = (counters.get(counterKey) ?? 0) + 1;
-    counters.set(counterKey, number);
-    const id = `${GROUP_ID_PREFIX[groupNumber]}.${sourceSlug(sourcePath)}.${kindSlug(candidate.kind)}_${String(number).padStart(3, "0")}`;
-    const locatorKey = `${sourcePath}:${locatorIdentity(candidate.locatorType, candidate.locator)}`;
-    if (locatorSet.has(locatorKey)) {
-      throw new SiteCopyError("SITE_COPY_EXPORT_AMBIGUOUS_LOCATOR", "locatorが重複しました。", { path: sourcePath, count: 2 });
-    }
-    locatorSet.add(locatorKey);
-    return {
-      id,
-      group,
-      displayLocation: `${sourcePath} > ${candidate.locator.container ?? candidate.locator.structuralPath ?? candidate.role} > ${candidate.role}`,
-      deploymentTarget: sourcePath.startsWith("worker/") ? "WORKER" : "PAGES",
-      kind: candidate.kind,
-      sourcePath,
-      locatorType: candidate.locatorType,
-      locator: candidate.locator,
-      sourceValueSha256: sha256(candidate.value),
-      allowEmpty: false,
-      maxLength: null,
-      protectedTokens: candidate.protectedTokens,
-      relatedIds: [],
-      retired: false
-    };
-  });
-  const duplicateIds = entries.filter((entry, index) => entries.findIndex((item) => item.id === entry.id) !== index);
-  if (duplicateIds.length > 0) {
-    throw new SiteCopyError("SITE_COPY_EXPORT_DUPLICATE_ID", "固定IDが重複しました。", { count: duplicateIds.length, ids: [...new Set(duplicateIds.map((entry) => entry.id))] });
-  }
-  return { manifestVersion: SCHEMA_VERSION, catalogId, baseCommit, entries, manualReview };
-}
-
-export function loadManifest(filePath) {
-  const manifest = JSON.parse(readUtf8(filePath));
-  if (manifest.manifestVersion !== SCHEMA_VERSION || !Array.isArray(manifest.entries)) {
-    throw new SiteCopyError("SITE_COPY_TXT_SCHEMA_UNSUPPORTED", "manifest schemaに対応していません。", { schemaVersion: manifest.manifestVersion });
-  }
-  return manifest;
-}
-
-function candidateMatchesEntry(candidate, entry) {
-  if (candidate.locatorType !== entry.locatorType) return false;
-  const expected = entry.locator;
-  const actual = candidate.locator;
-  for (const key of Object.keys(expected)) {
-    if (actual[key] !== expected[key]) return false;
-  }
-  return true;
-}
-
-function candidateMatchesStableLocator(candidate, entry) {
-  if (candidate.locatorType !== entry.locatorType) return false;
-  const keys = entry.locatorType.includes("HTML")
-    ? ["structuralPath", "attribute", "textNode", "container", "role", "occurrenceWithinContainer"]
-    : ["container", "role", "property", "occurrenceWithinContainer"];
-  return keys.every((key) => entry.locator[key] === undefined || candidate.locator[key] === entry.locator[key]);
-}
-
-export function resolveEntry(rootDir, entry, sourceCache = new Map()) {
-  const absolutePath = path.join(rootDir, entry.sourcePath);
-  let source = sourceCache.get(entry.sourcePath);
-  if (source === undefined) {
-    source = fs.readFileSync(absolutePath, "utf8");
-    sourceCache.set(entry.sourcePath, source);
-  }
-  const matches = scanSource(entry.sourcePath, source).filter((candidate) => candidateMatchesEntry(candidate, entry));
-  if (matches.length !== 1) {
-    throw new SiteCopyError("SITE_COPY_EXPORT_AMBIGUOUS_LOCATOR", "locatorを一意に解決できません。", { id: entry.id, path: entry.sourcePath, count: matches.length });
-  }
-  const candidate = matches[0];
-  if (sha256(candidate.value) !== entry.sourceValueSha256) {
-    throw new SiteCopyError("SITE_COPY_SOURCE_BASELINE_MISMATCH", "source baselineが一致しません。", { id: entry.id, path: entry.sourcePath });
-  }
-  return { source, candidate };
-}
-
-export function assertManifest(manifest, rootDir) {
-  const ids = new Set();
-  const locators = new Set();
-  const sourceCache = new Map();
-  for (const entry of manifest.entries.filter((item) => !item.retired)) {
-    if (!/^[A-Z0-9._]+$/u.test(entry.id) || !GROUPS.includes(entry.group) || !["PAGES", "WORKER"].includes(entry.deploymentTarget)) {
-      throw new SiteCopyError("SITE_COPY_EXPORT_UNSUPPORTED_TEXT", "manifest entryの分類が不正です。", { id: entry.id });
-    }
-    if (path.isAbsolute(entry.sourcePath) || entry.sourcePath.split("/").includes("..") || Object.keys(entry.locator).some((key) => /^(?:line|lineNumber)$/iu.test(key))) {
-      throw new SiteCopyError("SITE_COPY_EXPORT_UNSUPPORTED_TEXT", "manifest locatorが不正です。", { id: entry.id, path: entry.sourcePath });
-    }
-    if (ids.has(entry.id)) throw new SiteCopyError("SITE_COPY_EXPORT_DUPLICATE_ID", "固定IDが重複しています。", { id: entry.id, count: 2 });
-    ids.add(entry.id);
-    const locatorKey = `${entry.sourcePath}:${locatorIdentity(entry.locatorType, entry.locator)}`;
-    if (locators.has(locatorKey)) throw new SiteCopyError("SITE_COPY_EXPORT_AMBIGUOUS_LOCATOR", "locatorが重複しています。", { id: entry.id, path: entry.sourcePath, count: 2 });
-    locators.add(locatorKey);
-    const { candidate } = resolveEntry(rootDir, entry, sourceCache);
-    if (JSON.stringify(candidate.protectedTokens) !== JSON.stringify(entry.protectedTokens)) {
-      throw new SiteCopyError("SITE_COPY_EXPORT_TEMPLATE_UNSAFE", "保護トークン定義がsourceと一致しません。", { id: entry.id, count: candidate.protectedTokens.length });
-    }
-  }
-  return sourceCache;
 }
 
 function git(rootDir, args) {
@@ -941,340 +90,873 @@ export function assertExportRepository(rootDir) {
     throw new SiteCopyError("SITE_COPY_EXPORT_REPO_INVALID", "対象repositoryの正式originではありません。", { remote: "origin" });
   }
   const head = git(rootDir, ["rev-parse", "HEAD"]);
-  const originMain = git(rootDir, ["rev-parse", "origin/main"]);
   const counts = git(rootDir, ["rev-list", "--left-right", "--count", "origin/main...HEAD"]).split(/\s+/u).map(Number);
-  if (counts[0] !== 0 || (head !== originMain && counts[1] < 1)) {
-    throw new SiteCopyError("SITE_COPY_EXPORT_REPO_INVALID", "origin/mainとの同期状態が不正です。", { behind: counts[0], ahead: counts[1] });
-  }
-  return { head, originMain, behind: counts[0], ahead: counts[1] };
+  if (counts[0] !== 0) throw new SiteCopyError("SITE_COPY_EXPORT_REPO_INVALID", "origin/mainより遅れています。", { behind: counts[0], ahead: counts[1] });
+  return { head, behind: counts[0], ahead: counts[1] };
 }
 
-function entryMetadata(entry) {
-  return {
-    "ID": entry.id,
-    "グループ": entry.group,
-    "画面上の場所": entry.displayLocation,
-    "反映先": entry.deploymentTarget,
-    "種別": entry.kind,
-    "空欄許可": entry.allowEmpty ? "YES" : "NO",
-    "最大文字数": entry.maxLength == null ? "NONE" : String(entry.maxLength),
-    "保護トークン": entry.protectedTokens.length === 0 ? "NONE" : entry.protectedTokens.join(", "),
-    "関連項目": entry.relatedIds.length === 0 ? "NONE" : entry.relatedIds.join(", "),
-    "元ファイル": entry.sourcePath,
-    "元位置": JSON.stringify(entry.locator),
-    "元文章SHA256": entry.sourceValueSha256
-  };
-}
-
-export function buildExport(rootDir, manifest, exportedAt = new Date().toISOString()) {
-  const sourceCache = assertManifest(manifest, rootDir);
-  const head = git(rootDir, ["rev-parse", "HEAD"]);
-  const activeEntries = manifest.entries.filter((entry) => !entry.retired);
-  const snapshotEntries = activeEntries.map((entry) => {
-    const { candidate } = resolveEntry(rootDir, entry, sourceCache);
-    return { ...entry, currentValue: candidate.value };
+function decodeHtml(value) {
+  const named = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: "\u00a0" };
+  return value.replace(/&(?:#(\d+)|#x([0-9a-f]+)|([a-z]+));/giu, (match, decimal, hex, name) => {
+    if (decimal) return String.fromCodePoint(Number(decimal));
+    if (hex) return String.fromCodePoint(Number.parseInt(hex, 16));
+    return named[name.toLowerCase()] ?? match;
   });
-  const snapshot = {
-    manifestVersion: manifest.manifestVersion,
-    catalogId: manifest.catalogId,
-    baseCommit: head,
-    exportedAt,
-    entries: snapshotEntries
-  };
-  const snapshotText = canonicalJson(snapshot);
-  const manifestSha256 = sha256(snapshotText);
-  const header = [
-    "# BMS-WIP SITE COPY EDIT v1",
-    "# このファイルでは「編集後」欄だけを書き換えてください。",
-    "# ID、種別、対象、保護トークン、区切り行は変更しないでください。",
-    `SCHEMA_VERSION: ${SCHEMA_VERSION}`,
-    `CATALOG_ID: ${manifest.catalogId}`,
-    `BASE_COMMIT: ${head}`,
-    `MANIFEST_SHA256: ${manifestSha256}`,
-    `EXPORTED_AT: ${exportedAt}`,
-    `ENTRY_COUNT: ${snapshotEntries.length}`,
-    ""
-  ];
-  const chunks = [...header];
-  for (const group of GROUPS) {
-    const entries = snapshotEntries.filter((entry) => entry.group === group);
-    if (entries.length === 0) continue;
-    chunks.push(`## ${group}`, "");
-    for (const entry of entries) {
-      chunks.push(ENTRY_SEPARATOR);
-      const metadata = entryMetadata(entry);
-      for (const [name, value] of Object.entries(metadata)) chunks.push(`${name}: ${value}`);
-      chunks.push(FIELD_SEPARATOR, "【現在】", entry.currentValue, FIELD_SEPARATOR, "【編集後】", entry.currentValue, ENTRY_SEPARATOR, "");
+}
+
+function encodeHtml(value) {
+  return value.replace(/&/gu, "&amp;").replace(/</gu, "&lt;").replace(/>/gu, "&gt;").replace(/"/gu, "&quot;");
+}
+
+function findTagEnd(source, start) {
+  let quote = null;
+  for (let index = start; index < source.length; index += 1) {
+    const character = source[index];
+    if (quote) {
+      if (character === quote) quote = null;
+    } else if (character === "\"" || character === "'") quote = character;
+    else if (character === ">") return index;
+  }
+  return -1;
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function findElement(source, locator) {
+  const attributeName = locator.elementId ? "id" : locator.copySection ? "data-copy-section" : "data-copy-key";
+  const attributeValue = locator.elementId ?? locator.copySection ?? locator.copyKey;
+  const pattern = new RegExp(`<([A-Za-z][\\w:-]*)\\b[^>]*\\b${escapeRegex(attributeName)}\\s*=\\s*(["'])${escapeRegex(attributeValue)}\\2[^>]*>`, "giu");
+  const matches = [...source.matchAll(pattern)];
+  if (matches.length !== 1) return { matches: matches.length };
+  const match = matches[0];
+  const tagName = match[1].toLowerCase();
+  const openStart = match.index;
+  const openEnd = findTagEnd(source, openStart + 1);
+  if (openEnd < 0 || VOID_TAGS.has(tagName)) return { matches: 0 };
+  let depth = 1;
+  let cursor = openEnd + 1;
+  while (cursor < source.length) {
+    const tagStart = source.indexOf("<", cursor);
+    if (tagStart < 0) break;
+    if (source.startsWith("<!--", tagStart)) {
+      const commentEnd = source.indexOf("-->", tagStart + 4);
+      cursor = commentEnd < 0 ? source.length : commentEnd + 3;
+      continue;
     }
+    const tagEnd = findTagEnd(source, tagStart + 1);
+    if (tagEnd < 0) break;
+    const tag = source.slice(tagStart + 1, tagEnd);
+    const close = tag.match(/^\s*\/\s*([A-Za-z][\w:-]*)/u);
+    const open = tag.match(/^\s*([A-Za-z][\w:-]*)/u);
+    if (close?.[1].toLowerCase() === tagName) depth -= 1;
+    else if (open?.[1].toLowerCase() === tagName && !/\/\s*$/u.test(tag)) depth += 1;
+    if (depth === 0) return { matches: 1, tagName, openStart, openEnd: openEnd + 1, innerStart: openEnd + 1, innerEnd: tagStart, closeEnd: tagEnd + 1 };
+    cursor = tagEnd + 1;
   }
-  return { snapshot, snapshotText, manifestSha256, txt: `${chunks.join("\n")}\n` };
+  return { matches: 0 };
 }
 
-function parseHeader(lines) {
-  const requiredComments = [
-    "# BMS-WIP SITE COPY EDIT v1",
-    "# このファイルでは「編集後」欄だけを書き換えてください。",
-    "# ID、種別、対象、保護トークン、区切り行は変更しないでください。"
-  ];
-  if (requiredComments.some((value, index) => lines[index] !== value)) {
-    throw new SiteCopyError("SITE_COPY_TXT_INVALID_HEADER", "TXT headerが不正です。", {});
+function directTextRanges(source, element) {
+  const ranges = [];
+  let depth = 0;
+  let cursor = element.innerStart;
+  while (cursor < element.innerEnd) {
+    const tagStart = source.indexOf("<", cursor);
+    const textEnd = tagStart < 0 || tagStart > element.innerEnd ? element.innerEnd : tagStart;
+    if (depth === 0 && textEnd > cursor) {
+      const raw = source.slice(cursor, textEnd);
+      const leading = raw.match(/^\s*/u)?.[0].length ?? 0;
+      const trailing = raw.match(/\s*$/u)?.[0].length ?? 0;
+      if (textEnd - trailing > cursor + leading) ranges.push({ start: cursor + leading, end: textEnd - trailing });
+    }
+    if (tagStart < 0 || tagStart >= element.innerEnd) break;
+    const tagEnd = findTagEnd(source, tagStart + 1);
+    if (tagEnd < 0 || tagEnd > element.innerEnd) break;
+    const tag = source.slice(tagStart + 1, tagEnd);
+    const close = tag.match(/^\s*\/\s*([A-Za-z][\w:-]*)/u);
+    const open = tag.match(/^\s*([A-Za-z][\w:-]*)/u);
+    if (close) depth = Math.max(0, depth - 1);
+    else if (open && !VOID_TAGS.has(open[1].toLowerCase()) && !/\/\s*$/u.test(tag)) depth += 1;
+    cursor = tagEnd + 1;
   }
-  const header = {};
-  let index = 3;
-  for (; index < lines.length; index += 1) {
-    const match = lines[index].match(/^([A-Z0-9_]+): (.*)$/u);
-    if (!match) break;
-    header[match[1]] = match[2];
-  }
-  return { header, nextIndex: index };
+  return ranges;
 }
 
-function parseEntryBlock(lines, start) {
-  let cursor = start + 1;
-  const metadata = {};
-  while (cursor < lines.length && lines[cursor] !== FIELD_SEPARATOR) {
-    const match = lines[cursor].match(/^([^:]+): (.*)$/u);
-    if (!match) throw new SiteCopyError("SITE_COPY_TXT_METADATA_CHANGED", "entry metadataが不正です。", { near: metadata.ID ?? "UNKNOWN" });
-    metadata[match[1]] = match[2];
-    cursor += 1;
+function resolveHtmlField(source, field) {
+  const element = findElement(source, field.locator);
+  if (element.matches !== 1) return { matches: element.matches ?? 0 };
+  let range;
+  if (field.locator.mode === "DIRECT_TEXT") {
+    const ranges = directTextRanges(source, element);
+    range = ranges[(field.locator.textIndex ?? 1) - 1];
+  } else {
+    const inner = source.slice(element.innerStart, element.innerEnd);
+    if (/<[A-Za-z!/]/u.test(inner)) return { matches: 0 };
+    const leading = inner.match(/^\s*/u)?.[0].length ?? 0;
+    const trailing = inner.match(/\s*$/u)?.[0].length ?? 0;
+    range = { start: element.innerStart + leading, end: element.innerEnd - trailing };
   }
-  if (lines[cursor] !== FIELD_SEPARATOR || lines[cursor + 1] !== "【現在】") {
-    throw new SiteCopyError("SITE_COPY_TXT_METADATA_CHANGED", "【現在】区切りが不正です。", { near: metadata.ID ?? "UNKNOWN" });
-  }
-  cursor += 2;
-  const current = [];
-  while (cursor < lines.length && lines[cursor] !== FIELD_SEPARATOR) current.push(lines[cursor++]);
-  if (lines[cursor] !== FIELD_SEPARATOR || lines[cursor + 1] !== "【編集後】") {
-    throw new SiteCopyError("SITE_COPY_TXT_METADATA_CHANGED", "【編集後】区切りが不正です。", { near: metadata.ID ?? "UNKNOWN" });
-  }
-  cursor += 2;
-  const edited = [];
-  while (cursor < lines.length && lines[cursor] !== ENTRY_SEPARATOR) edited.push(lines[cursor++]);
-  if (lines[cursor] !== ENTRY_SEPARATOR) {
-    throw new SiteCopyError("SITE_COPY_TXT_METADATA_CHANGED", "entry終端が不正です。", { near: metadata.ID ?? "UNKNOWN" });
-  }
-  return { entry: { metadata, current: current.join("\n"), edited: edited.join("\n") }, nextIndex: cursor + 1 };
+  if (!range) return { matches: 0 };
+  return { matches: 1, value: normalizeNewlines(decodeHtml(source.slice(range.start, range.end))), rangeStart: range.start, rangeEnd: range.end, syntax: "HTML" };
 }
 
-export function parseEditedTxt(text) {
-  const normalized = normalizeNewlines(text);
-  const lines = normalized.endsWith("\n") ? normalized.slice(0, -1).split("\n") : normalized.split("\n");
-  const { header, nextIndex } = parseHeader(lines);
-  if (header.SCHEMA_VERSION !== String(SCHEMA_VERSION)) {
-    throw new SiteCopyError("SITE_COPY_TXT_SCHEMA_UNSUPPORTED", "TXT schemaに対応していません。", { schemaVersion: header.SCHEMA_VERSION ?? null });
+function decodeJsString(raw) {
+  let output = "";
+  for (let index = 0; index < raw.length; index += 1) {
+    if (raw[index] !== "\\") {
+      output += raw[index];
+      continue;
+    }
+    const escaped = raw[++index];
+    if (escaped === undefined) break;
+    const simple = { n: "\n", r: "\r", t: "\t", b: "\b", f: "\f", v: "\v", 0: "\0" };
+    if (Object.hasOwn(simple, escaped)) output += simple[escaped];
+    else if (escaped === "u" && raw[index + 1] === "{") {
+      const close = raw.indexOf("}", index + 2);
+      const code = close >= 0 ? raw.slice(index + 2, close) : "";
+      if (/^[0-9a-f]{1,6}$/iu.test(code)) {
+        output += String.fromCodePoint(Number.parseInt(code, 16));
+        index = close;
+      } else output += `\\${escaped}`;
+    } else if (escaped === "u" && /^[0-9a-f]{4}$/iu.test(raw.slice(index + 1, index + 5))) {
+      output += String.fromCharCode(Number.parseInt(raw.slice(index + 1, index + 5), 16));
+      index += 4;
+    } else if (escaped === "x" && /^[0-9a-f]{2}$/iu.test(raw.slice(index + 1, index + 3))) {
+      output += String.fromCharCode(Number.parseInt(raw.slice(index + 1, index + 3), 16));
+      index += 2;
+    } else output += escaped;
   }
-  const entries = [];
-  for (let cursor = nextIndex; cursor < lines.length;) {
-    if (lines[cursor] === "" || /^## /u.test(lines[cursor])) {
+  return output;
+}
+
+function previousSignificant(source, start) {
+  return source.slice(Math.max(0, start - 80), start).match(/\S(?=\s*$)/u)?.[0];
+}
+
+function looksLikeRegex(source, start) {
+  const previous = previousSignificant(source, start);
+  return previous == null || /[([{:;,=!?&|+*%^~<>-]/u.test(previous) || /(?:return|throw|case|typeof|instanceof)\s*$/u.test(source.slice(Math.max(0, start - 40), start));
+}
+
+function skipQuoted(source, start, quote) {
+  for (let index = start + 1; index < source.length; index += 1) {
+    if (source[index] === "\\") index += 1;
+    else if (source[index] === quote) return index + 1;
+  }
+  return source.length;
+}
+
+function skipRegex(source, start) {
+  let inClass = false;
+  for (let index = start + 1; index < source.length; index += 1) {
+    if (source[index] === "\\") index += 1;
+    else if (source[index] === "[") inClass = true;
+    else if (source[index] === "]") inClass = false;
+    else if (source[index] === "/" && !inClass) {
+      while (/[A-Za-z]/u.test(source[++index] ?? "")) {}
+      return index;
+    } else if (source[index] === "\n" || source[index] === "\r") return start + 1;
+  }
+  return source.length;
+}
+
+function normalizeAnchor(value) {
+  return value.replace(/\s+/gu, " ").trim();
+}
+
+function scanJsStrings(source) {
+  const candidates = [];
+  for (let cursor = 0, ordinal = 0; cursor < source.length;) {
+    if (source.startsWith("//", cursor)) {
+      const end = source.indexOf("\n", cursor + 2);
+      cursor = end < 0 ? source.length : end + 1;
+      continue;
+    }
+    if (source.startsWith("/*", cursor)) {
+      const end = source.indexOf("*/", cursor + 2);
+      cursor = end < 0 ? source.length : end + 2;
+      continue;
+    }
+    if (source[cursor] === "/" && looksLikeRegex(source, cursor)) {
+      cursor = skipRegex(source, cursor);
+      continue;
+    }
+    const quote = source[cursor];
+    if (quote !== "\"" && quote !== "'") {
       cursor += 1;
       continue;
     }
-    if (lines[cursor] !== ENTRY_SEPARATOR) {
-      throw new SiteCopyError("SITE_COPY_TXT_METADATA_CHANGED", "未知のTXT構造を検出しました。", { near: entries.at(-1)?.metadata.ID ?? "HEADER" });
+    const end = skipQuoted(source, cursor, quote);
+    const contentStart = cursor + 1;
+    const contentEnd = end - 1;
+    ordinal += 1;
+    const raw = source.slice(contentStart, contentEnd);
+    candidates.push({
+      ordinal,
+      quote,
+      raw,
+      value: normalizeNewlines(decodeJsString(raw)),
+      rangeStart: contentStart,
+      rangeEnd: contentEnd,
+      beforeAnchorSha256: sha256(normalizeAnchor(source.slice(Math.max(0, contentStart - 120), contentStart))),
+      afterAnchorSha256: sha256(normalizeAnchor(source.slice(contentEnd, Math.min(source.length, contentEnd + 120))))
+    });
+    cursor = end;
+  }
+  return candidates;
+}
+
+function resolveJsField(source, field, stable = false) {
+  const candidates = scanJsStrings(source);
+  const matches = stable
+    ? candidates.filter((candidate) => candidate.ordinal === field.locator.stringOrdinal)
+    : candidates.filter((candidate) => candidate.ordinal === field.locator.stringOrdinal && candidate.beforeAnchorSha256 === field.locator.beforeAnchorSha256 && candidate.afterAnchorSha256 === field.locator.afterAnchorSha256);
+  if (matches.length !== 1) return { matches: matches.length };
+  const candidate = matches[0];
+  return { matches: 1, value: candidate.value, rangeStart: candidate.rangeStart, rangeEnd: candidate.rangeEnd, syntax: "JS", quote: candidate.quote, raw: candidate.raw, candidate };
+}
+
+function resolveFieldFromSource(source, field, stable = false) {
+  return field.sourceType === "HTML_TEXT" ? resolveHtmlField(source, field) : resolveJsField(source, field, stable);
+}
+
+export function resolveField(rootDir, field, sourceCache = new Map(), stable = false) {
+  let source = sourceCache.get(field.sourcePath);
+  if (source === undefined) {
+    source = fs.readFileSync(path.join(rootDir, field.sourcePath), "utf8");
+    sourceCache.set(field.sourcePath, source);
+  }
+  const resolved = resolveFieldFromSource(source, field, stable);
+  if (resolved.matches !== 1) throw new SiteCopyError("SITE_COPY_GUIDE_BASELINE_MISMATCH", "UI文章の反映先を一意に解決できません。", { blockId: field.blockId, fieldKey: field.key, path: field.sourcePath, count: resolved.matches });
+  if (!stable && field.sourceValueSha256 && sha256(resolved.value) !== field.sourceValueSha256) {
+    throw new SiteCopyError("SITE_COPY_GUIDE_BASELINE_MISMATCH", "UI文章のsource baselineが一致しません。", { blockId: field.blockId, fieldKey: field.key, path: field.sourcePath });
+  }
+  return { source, ...resolved };
+}
+
+function encodeJs(value, resolved) {
+  const unicodeStyle = /\\u(?:\{|[0-9a-f]{4})/iu.test(resolved.raw);
+  let output = "";
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    if (character === "\\") output += "\\\\";
+    else if (character === resolved.quote) output += `\\${character}`;
+    else if (character === "\n") output += "\\n";
+    else if (character === "\r") output += "\\r";
+    else if (character === "\t") output += "\\t";
+    else if (unicodeStyle && codePoint > 0x7f) {
+      if (codePoint <= 0xffff) output += `\\u${codePoint.toString(16).padStart(4, "0")}`;
+      else {
+        const adjusted = codePoint - 0x10000;
+        output += `\\u${(0xd800 + (adjusted >> 10)).toString(16)}\\u${(0xdc00 + (adjusted & 0x3ff)).toString(16)}`;
+      }
+    } else output += character;
+  }
+  return output;
+}
+
+function encodeFieldValue(value, resolved) {
+  return resolved.syntax === "HTML" ? encodeHtml(value) : encodeJs(value, resolved);
+}
+
+function parseAttributes(tagSource) {
+  const attributes = {};
+  for (const match of tagSource.matchAll(/([^\s"'<>/=]+)\s*=\s*(["'])([\s\S]*?)\2/gu)) attributes[match[1].toLowerCase()] = decodeHtml(match[3]);
+  return attributes;
+}
+
+function parseHtmlFragment(fragment) {
+  const root = { tag: "#root", children: [] };
+  const stack = [root];
+  const pattern = /<!--[\s\S]*?-->|<[^>]+>|[^<]+/gu;
+  for (const match of fragment.matchAll(pattern)) {
+    const token = match[0];
+    if (token.startsWith("<!--")) continue;
+    if (!token.startsWith("<")) {
+      stack.at(-1).children.push({ tag: "#text", text: decodeHtml(token) });
+      continue;
     }
-    const parsed = parseEntryBlock(lines, cursor);
-    entries.push(parsed.entry);
-    cursor = parsed.nextIndex;
+    const close = token.match(/^<\s*\/\s*([A-Za-z][\w:-]*)/u);
+    if (close) {
+      const name = close[1].toLowerCase();
+      for (let index = stack.length - 1; index > 0; index -= 1) {
+        const node = stack.pop();
+        if (node.tag === name) break;
+      }
+      continue;
+    }
+    const open = token.match(/^<\s*([A-Za-z][\w:-]*)/u);
+    if (!open) continue;
+    const tag = open[1].toLowerCase();
+    const node = { tag, attributes: parseAttributes(token), children: [] };
+    stack.at(-1).children.push(node);
+    if (!VOID_TAGS.has(tag) && !/\/\s*>$/u.test(token)) stack.push(node);
   }
-  return { header, entries };
+  return root;
 }
 
-function tokenCounts(value) {
-  const counts = new Map();
-  for (const match of value.matchAll(/\{\{\/?[A-Z][A-Z0-9_]*:[A-Z][A-Z0-9_]*\}\}|\{\{\/?[A-Z][A-Z0-9_]*\}\}|\{[A-Z][A-Z0-9_]*\}/gu)) {
-    counts.set(match[0], (counts.get(match[0]) ?? 0) + 1);
-  }
-  return counts;
+function collapseInline(value) {
+  return value.replace(/[ \t\r\n]+/gu, " ").replace(/\s*\n\s*/gu, "\n").trim();
 }
 
-function assertProtectedTokens(entry, edited) {
-  const actual = tokenCounts(edited);
-  const expected = tokenCounts(entry.currentValue);
-  const keys = new Set([...expected.keys(), ...actual.keys()]);
-  if ([...keys].some((key) => expected.get(key) !== actual.get(key))) {
-    throw new SiteCopyError("SITE_COPY_TXT_PROTECTED_TOKEN_MISMATCH", "保護トークンが一致しません。", { id: entry.id });
-  }
-  const stack = [];
-  for (const match of edited.matchAll(/\{\{(\/)?([A-Z][A-Z0-9_]*(?::[A-Z][A-Z0-9_]*)?)\}\}/gu)) {
-    if (!match[1]) stack.push(match[2]);
-    else if (stack.pop() !== match[2]) throw new SiteCopyError("SITE_COPY_TXT_PROTECTED_TOKEN_MISMATCH", "保護ブロック構造が一致しません。", { id: entry.id });
-  }
-  if (stack.length > 0) throw new SiteCopyError("SITE_COPY_TXT_PROTECTED_TOKEN_MISMATCH", "保護ブロックが閉じていません。", { id: entry.id });
+function inlineMarkdown(node) {
+  if (node.tag === "#text") return node.text;
+  if (node.tag === "br") return "\n";
+  const inner = node.children.map(inlineMarkdown).join("");
+  if (node.tag !== "a") return inner;
+  const linkId = Object.entries(LINK_TARGETS).find(([, href]) => href === node.attributes.href)?.[0];
+  return linkId ? `[${collapseInline(inner)}](LINK:${linkId})` : collapseInline(inner);
 }
 
-export function validateEditedTxt(text, snapshot, expectedManifestSha256, options = {}) {
-  const parsed = parseEditedTxt(text);
-  if (parsed.header.CATALOG_ID !== snapshot.catalogId) throw new SiteCopyError("SITE_COPY_TXT_CATALOG_MISMATCH", "CATALOG_IDが一致しません。", {});
-  if (parsed.header.MANIFEST_SHA256 !== expectedManifestSha256) throw new SiteCopyError("SITE_COPY_TXT_MANIFEST_MISMATCH", "MANIFEST_SHA256が一致しません。", {});
-  if (parsed.header.BASE_COMMIT !== snapshot.baseCommit || parsed.header.EXPORTED_AT !== snapshot.exportedAt || parsed.header.ENTRY_COUNT !== String(snapshot.entries.length)) {
-    throw new SiteCopyError("SITE_COPY_TXT_INVALID_HEADER", "export metadataが一致しません。", {});
+function blockMarkdown(node, blocks) {
+  if (node.tag === "#text") return;
+  if (/^h[1-3]$/u.test(node.tag)) {
+    const level = Number(node.tag[1]);
+    const text = collapseInline(node.children.map(inlineMarkdown).join(""));
+    if (text) blocks.push(`${"#".repeat(level)} ${text}`);
+    return;
   }
+  if (node.tag === "p") {
+    const text = collapseInline(node.children.map(inlineMarkdown).join(""));
+    if (text) blocks.push(text);
+    return;
+  }
+  if (node.tag === "ul" || node.tag === "ol") {
+    const prefix = node.tag === "ul" ? "-" : "1.";
+    const lines = node.children.filter((child) => child.tag === "li").map((child) => `${prefix} ${collapseInline(child.children.map(inlineMarkdown).join(""))}`);
+    if (lines.length > 0) blocks.push(lines.join("\n"));
+    return;
+  }
+  if (node.tag === "nav") {
+    const lines = node.children.filter((child) => child.tag === "a").map((child) => `- ${collapseInline(inlineMarkdown(child))}`);
+    if (lines.length > 0) blocks.push(lines.join("\n"));
+    return;
+  }
+  if (node.tag === "a") {
+    const text = collapseInline(inlineMarkdown(node));
+    if (text) blocks.push(text);
+    return;
+  }
+  for (const child of node.children) blockMarkdown(child, blocks);
+}
+
+export function htmlToGuideMarkdown(fragment) {
+  const root = parseHtmlFragment(fragment);
+  const blocks = [];
+  for (const child of root.children) blockMarkdown(child, blocks);
+  return `${blocks.join("\n\n").trim()}\n`;
+}
+
+export function resolveGuideSection(rootDir, section, sourceCache = new Map()) {
+  let source = sourceCache.get(section.sourcePath);
+  if (source === undefined) {
+    source = fs.readFileSync(path.join(rootDir, section.sourcePath), "utf8");
+    sourceCache.set(section.sourcePath, source);
+  }
+  const element = findElement(source, { copySection: section.id });
+  if (element.matches !== 1) throw new SiteCopyError("SITE_COPY_GUIDE_BASELINE_MISMATCH", "guide sectionを一意に解決できません。", { sectionId: section.id, path: section.sourcePath, count: element.matches ?? 0 });
+  const markdown = htmlToGuideMarkdown(source.slice(element.innerStart, element.innerEnd));
+  if (section.sourceValueSha256 && sha256(markdown) !== section.sourceValueSha256) {
+    throw new SiteCopyError("SITE_COPY_GUIDE_BASELINE_MISMATCH", "guide sectionのsource baselineが一致しません。", { sectionId: section.id, path: section.sourcePath });
+  }
+  return { source, element, markdown };
+}
+
+function linkIds(markdown) {
+  return [...markdown.matchAll(/\[[^\]\n]+\]\(LINK:([A-Z][A-Z0-9_]*)\)/gu)].map((match) => match[1]);
+}
+
+function counts(values) {
+  const result = new Map();
+  for (const value of values) result.set(value, (result.get(value) ?? 0) + 1);
+  return result;
+}
+
+function sameCounts(left, right) {
+  const keys = new Set([...left.keys(), ...right.keys()]);
+  return [...keys].every((key) => left.get(key) === right.get(key));
+}
+
+function validateEditableText(value, detail, guide = false) {
+  if (FORBIDDEN_CODE.test(value) || /<|>/u.test(value)) throw new SiteCopyError("SITE_COPY_GUIDE_HTML_FORBIDDEN", "HTMLまたは実行コードは使用できません。", detail);
+  const withoutAllowedLinks = value.replace(/\[[^\]\n]+\]\(LINK:[A-Z][A-Z0-9_]*\)/gu, "");
+  if (FORBIDDEN_URL.test(withoutAllowedLinks)) throw new SiteCopyError("SITE_COPY_GUIDE_URL_FORBIDDEN", "任意URLは使用できません。", detail);
+  if (guide && /\]\(LINK:|\(LINK:|LINK:/u.test(withoutAllowedLinks)) throw new SiteCopyError("SITE_COPY_GUIDE_LINK_INVALID", "LINK記法が不正です。", detail);
+}
+
+function renderInline(value) {
+  let output = "";
+  let cursor = 0;
+  const pattern = /\[([^\]\n]+)\]\(LINK:([A-Z][A-Z0-9_]*)\)/gu;
+  for (const match of value.matchAll(pattern)) {
+    output += encodeHtml(value.slice(cursor, match.index));
+    const href = LINK_TARGETS[match[2]];
+    if (!href) throw new SiteCopyError("SITE_COPY_GUIDE_LINK_INVALID", "未知のLINK識別子です。", { linkId: match[2] });
+    output += `<a href="${encodeHtml(href)}">${encodeHtml(match[1])}</a>`;
+    cursor = match.index + match[0].length;
+  }
+  return output + encodeHtml(value.slice(cursor));
+}
+
+function parseGuideMarkdown(markdown, section) {
+  const lines = normalizeNewlines(markdown).trim().split("\n");
+  const blocks = [];
+  let cursor = 0;
+  while (cursor < lines.length) {
+    if (lines[cursor].trim() === "") {
+      cursor += 1;
+      continue;
+    }
+    const heading = lines[cursor].match(/^(#{1,3})\s+(.+)$/u);
+    if (heading) {
+      blocks.push({ type: "heading", level: heading[1].length, text: heading[2] });
+      cursor += 1;
+      continue;
+    }
+    if (/^-\s+/u.test(lines[cursor])) {
+      const items = [];
+      while (cursor < lines.length && /^-\s+/u.test(lines[cursor])) items.push(lines[cursor++].replace(/^-\s+/u, ""));
+      blocks.push({ type: "ul", items });
+      continue;
+    }
+    if (/^\d+\.\s+/u.test(lines[cursor])) {
+      const items = [];
+      while (cursor < lines.length && /^\d+\.\s+/u.test(lines[cursor])) items.push(lines[cursor++].replace(/^\d+\.\s+/u, ""));
+      blocks.push({ type: "ol", items });
+      continue;
+    }
+    const paragraph = [];
+    while (cursor < lines.length && lines[cursor].trim() !== "" && !/^(?:#{1,3}\s+|-\s+|\d+\.\s+)/u.test(lines[cursor])) paragraph.push(lines[cursor++].trim());
+    if (paragraph.length === 0) throw new SiteCopyError("SITE_COPY_GUIDE_PARSE_FAILED", "ガイド原稿を解析できません。", { sectionId: section.id });
+    blocks.push({ type: "paragraph", text: paragraph.join(" ") });
+  }
+  return blocks;
+}
+
+function renderGuideBlock(block, section, state, options = {}) {
+  if (block.type === "heading") {
+    const firstId = state.firstHeading && section.headingId ? section.headingId : null;
+    state.firstHeading = false;
+    const headingId = options.headingId ?? firstId;
+    const id = headingId ? ` id="${encodeHtml(headingId)}"` : "";
+    return `<h${block.level}${id}>${renderInline(block.text)}</h${block.level}>`;
+  }
+  if (block.type === "ul") return `<ul>${block.items.map((item) => `<li>${renderInline(item)}</li>`).join("")}</ul>`;
+  if (block.type === "ol") return `<ol>${block.items.map((item) => `<li>${renderInline(item)}</li>`).join("")}</ol>`;
+  const labelClass = state.beforeFirstHeading && options.label !== false ? " class=\"work-ticket-label\"" : "";
+  const standaloneLink = options.standaloneLink && /^\[[^\]\n]+\]\(LINK:[A-Z][A-Z0-9_]*\)$/u.test(block.text);
+  return standaloneLink ? renderInline(block.text) : `<p${labelClass}>${renderInline(block.text)}</p>`;
+}
+
+function renderGuideBlocks(blocks, section, state = { firstHeading: true, beforeFirstHeading: true }, options = {}) {
+  return blocks.map((block) => {
+    const rendered = renderGuideBlock(block, section, state, options);
+    if (block.type === "heading") state.beforeFirstHeading = false;
+    return rendered;
+  }).join("\n");
+}
+
+function splitHeadingGroups(blocks) {
+  const first = blocks.findIndex((block) => block.type === "heading" && block.level === 3);
+  if (first < 0) return { preamble: blocks, groups: [] };
+  const preamble = blocks.slice(0, first);
+  const groups = [];
+  for (const block of blocks.slice(first)) {
+    if (block.type === "heading" && block.level === 3) groups.push([block]);
+    else groups.at(-1).push(block);
+  }
+  return { preamble, groups };
+}
+
+export function guideMarkdownToHtml(markdown, section) {
+  const blocks = parseGuideMarkdown(markdown, section);
+  const state = { firstHeading: true, beforeFirstHeading: true };
+  if (section.id === "GUIDE_FEATURE_INDEX") {
+    const listIndex = blocks.findIndex((block) => block.type === "ul");
+    if (listIndex < 0 || blocks[listIndex].items.length !== INTERNAL_GUIDE_LINKS.length || blocks.slice(listIndex + 1).some((block) => block.type === "ul")) {
+      throw new SiteCopyError("SITE_COPY_GUIDE_PARSE_FAILED", "機能索引は5項目を維持してください。", { sectionId: section.id, count: listIndex < 0 ? 0 : blocks[listIndex].items.length });
+    }
+    const before = renderGuideBlocks(blocks.slice(0, listIndex), section, state);
+    const nav = `<nav class="guide-index" aria-label="各機能の概要">${blocks[listIndex].items.map((item, index) => `<a href="${INTERNAL_GUIDE_LINKS[index][0]}">${renderInline(item)}</a>`).join("")}</nav>`;
+    const after = renderGuideBlocks(blocks.slice(listIndex + 1), section, state);
+    return [before, nav, after].filter(Boolean).join("\n");
+  }
+  if (section.id === "GUIDE_QUICK_USE") {
+    const { preamble, groups } = splitHeadingGroups(blocks);
+    if (groups.length > 0) {
+      const before = renderGuideBlocks(preamble, section, state);
+      const articles = groups.map((group) => `<article class="quick-use-item">${renderGuideBlocks(group, section, state, { standaloneLink: true, label: false })}</article>`).join("\n");
+      return `${before}\n<div class="quick-use-grid">\n${articles}\n</div>`;
+    }
+  }
+  if (section.id === "GUIDE_MANAGEMENT") {
+    const { preamble, groups } = splitHeadingGroups(blocks);
+    if (groups.length > 0) {
+      const before = renderGuideBlocks(preamble, section, state);
+      let callout = null;
+      const lastGroup = groups.at(-1);
+      if (lastGroup.length > 2 && lastGroup.at(-1).type === "paragraph") callout = lastGroup.pop();
+      const articles = groups.map((group) => `<article class="guide-info-block">${renderGuideBlocks(group, section, state, { label: false })}</article>`).join("\n");
+      const trailing = callout ? `\n<p class="guide-callout">${renderInline(callout.text)}</p>` : "";
+      return `${before}\n<div class="guide-info-grid">\n${articles}\n</div>${trailing}`;
+    }
+  }
+  if (section.id === "GUIDE_SAFETY") {
+    const { preamble, groups } = splitHeadingGroups(blocks);
+    if (groups.length > 0) {
+      const before = renderGuideBlocks(preamble, section, state);
+      const existingIds = ["passwordSafetyTitle", "sourceInfoTitle", "postingProtectionTitle"];
+      const sections = groups.map((group, index) => {
+        const headingId = existingIds[index] ?? `guideSafetyTitle${index + 1}`;
+        const heading = renderGuideBlock(group[0], section, state, { headingId, label: false });
+        state.beforeFirstHeading = false;
+        const content = renderGuideBlocks(group.slice(1), section, state, { label: false });
+        return `<section aria-labelledby="${headingId}">${heading}${content ? `\n${content}` : ""}</section>`;
+      }).join("\n");
+      return `${before}\n<div class="guide-safety-list">\n${sections}\n</div>`;
+    }
+  }
+  return renderGuideBlocks(blocks, section, state);
+}
+
+function blockHash(fields) {
+  return sha256(fields.map((field) => `${field.key}\0${field.sourceValueSha256}`).join("\n"));
+}
+
+export function initializeManifest(rootDir, definition) {
+  const manifest = structuredClone(definition);
+  const cache = new Map();
+  for (const block of manifest.uiBlocks) {
+    for (const field of block.fields) {
+      field.blockId = block.id;
+      if (field.sourceType === "JS_LITERAL" && field.matchValue !== undefined) {
+        let source = cache.get(field.sourcePath);
+        if (source === undefined) {
+          source = fs.readFileSync(path.join(rootDir, field.sourcePath), "utf8");
+          cache.set(field.sourcePath, source);
+        }
+        const matches = scanJsStrings(source).filter((candidate) => candidate.value === field.matchValue);
+        const candidate = matches[(field.matchOccurrence ?? 1) - 1];
+        if (!candidate) throw new Error(`Cannot initialize ${block.id}.${field.key}`);
+        field.locator = { stringOrdinal: candidate.ordinal, beforeAnchorSha256: candidate.beforeAnchorSha256, afterAnchorSha256: candidate.afterAnchorSha256 };
+        delete field.matchValue;
+        delete field.matchOccurrence;
+      }
+      const resolved = resolveField(rootDir, field, cache, true);
+      field.sourceValueSha256 = sha256(resolved.value);
+    }
+    block.sourceValueSha256 = blockHash(block.fields);
+  }
+  for (const section of manifest.guideSections) {
+    const resolved = resolveGuideSection(rootDir, section, cache);
+    section.sourceValueSha256 = sha256(resolved.markdown);
+    section.allowedLinks = [...new Set(linkIds(resolved.markdown))];
+  }
+  return manifest;
+}
+
+export function loadManifest(filePath) {
+  const manifest = JSON.parse(readUtf8(filePath));
+  if (manifest.manifestVersion !== MANIFEST_VERSION || !Array.isArray(manifest.uiBlocks) || !Array.isArray(manifest.guideSections)) {
+    throw new SiteCopyError("SITE_COPY_GUIDE_PARSE_FAILED", "block manifest schemaに対応していません。", { manifestVersion: manifest.manifestVersion });
+  }
+  return manifest;
+}
+
+export function assertManifest(rootDir, manifest) {
+  const ids = new Set();
+  const cache = new Map();
+  for (const block of manifest.uiBlocks) {
+    if (ids.has(block.id)) throw new SiteCopyError("SITE_COPY_GUIDE_PARSE_FAILED", "block IDが重複しています。", { blockId: block.id });
+    ids.add(block.id);
+    for (const field of block.fields) {
+      field.blockId = block.id;
+      const resolved = resolveField(rootDir, field, cache);
+      if (sha256(resolved.value) !== field.sourceValueSha256) throw new SiteCopyError("SITE_COPY_GUIDE_BASELINE_MISMATCH", "UI文章hashが一致しません。", { blockId: block.id, fieldKey: field.key });
+    }
+    if (blockHash(block.fields) !== block.sourceValueSha256) throw new SiteCopyError("SITE_COPY_GUIDE_BASELINE_MISMATCH", "UI block hashが一致しません。", { blockId: block.id });
+  }
+  const guideIds = manifest.guideSections.map((section) => section.id);
+  if (guideIds.length !== GUIDE_SECTION_IDS.length || GUIDE_SECTION_IDS.some((id) => !guideIds.includes(id))) throw new SiteCopyError("SITE_COPY_GUIDE_SECTION_MISSING", "guide section定義が不足しています。", { count: guideIds.length });
+  for (const section of manifest.guideSections) resolveGuideSection(rootDir, section, cache);
+  return cache;
+}
+
+function buildUiTxt(snapshot) {
+  const lines = [UI_HEADER, `BASE_COMMIT: ${snapshot.baseCommit}`, `CATALOG_ID: ${snapshot.catalogId}`, `BLOCK_COUNT: ${snapshot.uiBlocks.length}`, ""];
+  for (const block of snapshot.uiBlocks) {
+    lines.push(`<!-- BLOCK: ${block.id} -->`);
+    for (const field of block.fields) lines.push(`[${field.label}]`, field.currentValue, `[/${field.label}]`, "");
+    lines.push(`<!-- END BLOCK: ${block.id} -->`, "");
+  }
+  return `${lines.join("\n").trimEnd()}\n`;
+}
+
+function buildGuideTxt(snapshot) {
+  const lines = [GUIDE_HEADER, `BASE_COMMIT: ${snapshot.baseCommit}`, `CATALOG_ID: ${snapshot.catalogId}`, ""];
+  for (const section of snapshot.guideSections) lines.push(`<!-- SECTION: ${section.id} -->`, "", section.currentMarkdown.trimEnd(), "", `<!-- END SECTION: ${section.id} -->`, "", "");
+  return `${lines.join("\n").trimEnd()}\n`;
+}
+
+export function buildExport(rootDir, manifest, exportedAt = new Date().toISOString()) {
+  const cache = assertManifest(rootDir, manifest);
+  const baseCommit = git(rootDir, ["rev-parse", "HEAD"]);
+  const uiBlocks = manifest.uiBlocks.map((block) => ({
+    ...block,
+    fields: block.fields.map((field) => ({ ...field, currentValue: resolveField(rootDir, field, cache).value }))
+  }));
+  const guideSections = manifest.guideSections.map((section) => ({ ...section, currentMarkdown: resolveGuideSection(rootDir, section, cache).markdown }));
+  const snapshot = { manifestVersion: MANIFEST_VERSION, catalogId: manifest.catalogId, baseCommit, exportedAt, uiBlocks, guideSections };
+  const snapshotText = canonicalJson(snapshot);
+  return { snapshot, snapshotText, snapshotSha256: sha256(snapshotText), uiTxt: buildUiTxt(snapshot), guideTxt: buildGuideTxt(snapshot) };
+}
+
+function parseHeader(lines, expected) {
+  if (lines[0] !== expected) throw new SiteCopyError("SITE_COPY_GUIDE_INVALID_HEADER", "TXT headerが不正です。", {});
+  const baseCommit = lines[1]?.match(/^BASE_COMMIT: ([0-9a-f]{40})$/u)?.[1];
+  const catalogId = lines[2]?.match(/^CATALOG_ID: ([0-9a-f-]+)$/iu)?.[1];
+  if (!baseCommit || !catalogId) throw new SiteCopyError("SITE_COPY_GUIDE_INVALID_HEADER", "TXT header metadataが不正です。", {});
+  return { baseCommit, catalogId };
+}
+
+export function parseUiTxt(text) {
+  const lines = normalizeNewlines(text).trimEnd().split("\n");
+  const header = parseHeader(lines, UI_HEADER);
+  header.blockCount = Number(lines[3]?.match(/^BLOCK_COUNT: (\d+)$/u)?.[1]);
+  if (!Number.isSafeInteger(header.blockCount)) throw new SiteCopyError("SITE_COPY_GUIDE_INVALID_HEADER", "UI TXTのBLOCK_COUNTが不正です。", {});
+  const blocks = [];
   const seen = new Set();
-  for (const item of parsed.entries) {
-    const id = item.metadata.ID;
-    if (seen.has(id)) throw new SiteCopyError("SITE_COPY_TXT_DUPLICATE_ID", "IDが重複しています。", { id });
+  let cursor = 4;
+  while (cursor < lines.length) {
+    if (lines[cursor] === "") { cursor += 1; continue; }
+    const start = lines[cursor].match(/^<!-- BLOCK: ([A-Z0-9_]+) -->$/u);
+    if (!start) throw new SiteCopyError("SITE_COPY_GUIDE_PARSE_FAILED", "UI block markerが不正です。", { near: blocks.at(-1)?.id ?? "HEADER" });
+    const id = start[1];
+    if (seen.has(id)) throw new SiteCopyError("SITE_COPY_GUIDE_SECTION_DUPLICATE", "UI blockが重複しています。", { blockId: id });
     seen.add(id);
+    cursor += 1;
+    const fields = [];
+    while (cursor < lines.length && lines[cursor] !== `<!-- END BLOCK: ${id} -->`) {
+      if (lines[cursor] === "") { cursor += 1; continue; }
+      const fieldStart = lines[cursor].match(/^\[([^\]\n]+)\]$/u);
+      if (!fieldStart || fieldStart[1].startsWith("/")) throw new SiteCopyError("SITE_COPY_GUIDE_PARSE_FAILED", "UI field markerが不正です。", { blockId: id });
+      const label = fieldStart[1];
+      cursor += 1;
+      const value = [];
+      while (cursor < lines.length && lines[cursor] !== `[/${label}]`) value.push(lines[cursor++]);
+      if (lines[cursor] !== `[/${label}]`) throw new SiteCopyError("SITE_COPY_GUIDE_PARSE_FAILED", "UI field終端がありません。", { blockId: id, label });
+      fields.push({ label, value: value.join("\n") });
+      cursor += 1;
+    }
+    if (lines[cursor] !== `<!-- END BLOCK: ${id} -->`) throw new SiteCopyError("SITE_COPY_GUIDE_SECTION_UNTERMINATED", "UI block終端がありません。", { blockId: id });
+    blocks.push({ id, fields });
+    cursor += 1;
   }
-  const expectedIds = new Set(snapshot.entries.map((entry) => entry.id));
-  const missing = [...expectedIds].filter((id) => !seen.has(id));
-  if (missing.length > 0) throw new SiteCopyError("SITE_COPY_TXT_ENTRY_MISSING", "entryが不足しています。", { ids: missing });
-  const unknown = [...seen].filter((id) => !expectedIds.has(id));
-  if (unknown.length > 0) throw new SiteCopyError("SITE_COPY_TXT_UNKNOWN_ENTRY", "未知のentryがあります。", { ids: unknown });
-  const byId = new Map(snapshot.entries.map((entry) => [entry.id, entry]));
-  const changes = [];
-  for (const item of parsed.entries) {
-    const entry = byId.get(item.metadata.ID);
-    const expectedMetadata = entryMetadata(entry);
-    if (Object.keys(expectedMetadata).length !== Object.keys(item.metadata).length || Object.entries(expectedMetadata).some(([key, value]) => item.metadata[key] !== value)) {
-      throw new SiteCopyError("SITE_COPY_TXT_METADATA_CHANGED", "entry metadataが変更されています。", { id: entry.id });
+  if (header.blockCount !== blocks.length) throw new SiteCopyError("SITE_COPY_GUIDE_INVALID_HEADER", "UI TXTのBLOCK_COUNTが一致しません。", { expectedCount: header.blockCount, actualCount: blocks.length });
+  return { header, blocks };
+}
+
+export function parseGuideTxt(text) {
+  const lines = normalizeNewlines(text).trimEnd().split("\n");
+  const header = parseHeader(lines, GUIDE_HEADER);
+  const sections = [];
+  const seen = new Set();
+  let cursor = 3;
+  while (cursor < lines.length) {
+    if (lines[cursor] === "") { cursor += 1; continue; }
+    const start = lines[cursor].match(/^<!-- SECTION: ([A-Z0-9_]+) -->$/u);
+    if (!start) throw new SiteCopyError("SITE_COPY_GUIDE_PARSE_FAILED", "SECTION markerが不正です。", { near: sections.at(-1)?.id ?? "HEADER" });
+    const id = start[1];
+    if (seen.has(id)) throw new SiteCopyError("SITE_COPY_GUIDE_SECTION_DUPLICATE", "SECTIONが重複しています。", { sectionId: id });
+    seen.add(id);
+    cursor += 1;
+    if (lines[cursor] === "") cursor += 1;
+    const content = [];
+    while (cursor < lines.length && lines[cursor] !== `<!-- END SECTION: ${id} -->`) content.push(lines[cursor++]);
+    if (lines[cursor] !== `<!-- END SECTION: ${id} -->`) throw new SiteCopyError("SITE_COPY_GUIDE_SECTION_UNTERMINATED", "END SECTIONがありません。", { sectionId: id });
+    sections.push({ id, markdown: `${content.join("\n").trim()}\n` });
+    cursor += 1;
+  }
+  return { header, sections };
+}
+
+function assertHeaders(parsed, snapshot) {
+  if (parsed.header.catalogId !== snapshot.catalogId) throw new SiteCopyError("SITE_COPY_GUIDE_CATALOG_MISMATCH", "CATALOG_IDが一致しません。", {});
+  if (parsed.header.baseCommit !== snapshot.baseCommit) throw new SiteCopyError("SITE_COPY_GUIDE_BASELINE_MISMATCH", "BASE_COMMITが一致しません。", {});
+}
+
+export function validateEditedCopies(uiText, guideText, snapshot, options = {}) {
+  const ui = parseUiTxt(uiText);
+  const guide = parseGuideTxt(guideText);
+  assertHeaders(ui, snapshot);
+  assertHeaders(guide, snapshot);
+  const uiExpected = new Map(snapshot.uiBlocks.map((block) => [block.id, block]));
+  if (ui.header.blockCount !== snapshot.uiBlocks.length) throw new SiteCopyError("SITE_COPY_GUIDE_INVALID_HEADER", "UI TXTのBLOCK_COUNTがsnapshotと一致しません。", { expectedCount: snapshot.uiBlocks.length, actualCount: ui.header.blockCount });
+  const uiIds = new Set(ui.blocks.map((block) => block.id));
+  const missingBlocks = [...uiExpected.keys()].filter((id) => !uiIds.has(id));
+  if (missingBlocks.length > 0) throw new SiteCopyError("SITE_COPY_GUIDE_SECTION_MISSING", "UI blockが不足しています。", { ids: missingBlocks });
+  const unknownBlocks = [...uiIds].filter((id) => !uiExpected.has(id));
+  if (unknownBlocks.length > 0) throw new SiteCopyError("SITE_COPY_GUIDE_SECTION_UNKNOWN", "未知のUI blockがあります。", { ids: unknownBlocks });
+  const uiChanges = [];
+  for (const editedBlock of ui.blocks) {
+    const expectedBlock = uiExpected.get(editedBlock.id);
+    if (editedBlock.fields.length !== expectedBlock.fields.length) throw new SiteCopyError("SITE_COPY_GUIDE_PARSE_FAILED", "UI field数が一致しません。", { blockId: editedBlock.id });
+    const fieldChanges = [];
+    for (let index = 0; index < expectedBlock.fields.length; index += 1) {
+      const expectedField = expectedBlock.fields[index];
+      const editedField = editedBlock.fields[index];
+      if (editedField.label !== expectedField.label) throw new SiteCopyError("SITE_COPY_GUIDE_PARSE_FAILED", "UI field名が変更されています。", { blockId: editedBlock.id, label: editedField.label });
+      if (!expectedField.allowEmpty && editedField.value.length === 0) throw new SiteCopyError("SITE_COPY_GUIDE_PARSE_FAILED", "UI文章を空欄にできません。", { blockId: editedBlock.id, fieldKey: expectedField.key });
+      validateEditableText(editedField.value, { blockId: editedBlock.id, fieldKey: expectedField.key });
+      if (editedField.value !== expectedField.currentValue) fieldChanges.push({ field: expectedField, before: expectedField.currentValue, after: editedField.value });
     }
-    if (item.current !== entry.currentValue || sha256(item.current) !== entry.sourceValueSha256) {
-      throw new SiteCopyError("SITE_COPY_TXT_METADATA_CHANGED", "【現在】欄が変更されています。", { id: entry.id });
+    if (fieldChanges.length > 0) uiChanges.push({ block: expectedBlock, fields: fieldChanges });
+  }
+  const guideExpected = new Map(snapshot.guideSections.map((section) => [section.id, section]));
+  const guideIds = new Set(guide.sections.map((section) => section.id));
+  const missing = GUIDE_SECTION_IDS.filter((id) => !guideIds.has(id));
+  if (missing.length > 0) throw new SiteCopyError("SITE_COPY_GUIDE_SECTION_MISSING", "guide SECTIONが不足しています。", { ids: missing });
+  const unknown = [...guideIds].filter((id) => !guideExpected.has(id));
+  if (unknown.length > 0) throw new SiteCopyError("SITE_COPY_GUIDE_SECTION_UNKNOWN", "未知のguide SECTIONがあります。", { ids: unknown });
+  const guideChanges = [];
+  for (const edited of guide.sections) {
+    const expected = guideExpected.get(edited.id);
+    validateEditableText(edited.markdown, { sectionId: edited.id }, true);
+    const ids = linkIds(edited.markdown);
+    if (ids.some((id) => !Object.hasOwn(LINK_TARGETS, id)) || !sameCounts(counts(ids), counts(linkIds(expected.currentMarkdown)))) {
+      throw new SiteCopyError("SITE_COPY_GUIDE_LINK_INVALID", "LINK識別子が変更されています。", { sectionId: edited.id });
     }
-    assertProtectedTokens(entry, item.edited);
-    if (!entry.allowEmpty && item.edited.length === 0) throw new SiteCopyError("SITE_COPY_TXT_EMPTY_NOT_ALLOWED", "空欄を許可していません。", { id: entry.id });
-    if (entry.maxLength != null && [...item.edited].length > entry.maxLength) throw new SiteCopyError("SITE_COPY_TXT_LENGTH_EXCEEDED", "最大文字数を超えています。", { id: entry.id, maxLength: entry.maxLength, actualLength: [...item.edited].length });
-    if (isSecretCandidate(item.edited)) throw new SiteCopyError("SITE_COPY_APPLY_UNSUPPORTED_CHANGE", "機密候補を含む編集は反映できません。", { id: entry.id });
-    if (item.edited !== item.current) {
-      changes.push({ entry, before: item.current, after: item.edited, beforeLength: [...item.current].length, afterLength: [...item.edited].length });
-    }
+    guideMarkdownToHtml(edited.markdown, expected);
+    if (edited.markdown !== expected.currentMarkdown) guideChanges.push({ section: expected, before: expected.currentMarkdown, after: edited.markdown });
   }
   if (options.rootDir) {
-    const sourceCache = new Map();
-    for (const entry of snapshot.entries) {
-      try {
-        resolveEntry(options.rootDir, entry, sourceCache);
-      } catch (error) {
-        if (error instanceof SiteCopyError) throw new SiteCopyError("SITE_COPY_SOURCE_BASELINE_MISMATCH", "source baselineが一致しません。", { id: entry.id, path: entry.sourcePath });
-        throw error;
-      }
-    }
+    const cache = new Map();
+    for (const block of snapshot.uiBlocks) for (const field of block.fields) resolveField(options.rootDir, field, cache);
+    for (const section of snapshot.guideSections) resolveGuideSection(options.rootDir, section, cache);
   }
   return {
-    code: "SITE_COPY_TXT_VALIDATION_COMPLETE",
-    entryCount: parsed.entries.length,
-    changeCount: changes.length,
-    pagesChangeCount: changes.filter((change) => change.entry.deploymentTarget === "PAGES").length,
-    workerChangeCount: changes.filter((change) => change.entry.deploymentTarget === "WORKER").length,
-    changedFiles: [...new Set(changes.map((change) => change.entry.sourcePath))],
-    changes
+    code: "SITE_COPY_GUIDE_DRY_RUN_COMPLETE",
+    uiBlockCount: ui.blocks.length,
+    guideSectionCount: guide.sections.length,
+    uiChangeCount: uiChanges.length,
+    uiFieldChangeCount: uiChanges.reduce((sum, block) => sum + block.fields.length, 0),
+    guideChangeCount: guideChanges.length,
+    changedFiles: [...new Set([...uiChanges.flatMap((change) => change.fields.map((field) => field.field.sourcePath)), ...guideChanges.map((change) => change.section.sourcePath)])],
+    uiChanges,
+    guideChanges
   };
 }
 
-function replaceTemplateTokens(value, bindings, transformStatic) {
-  const bindingByToken = new Map(bindings.map((binding) => [binding.token, binding.expression]));
-  const tokenPattern = new RegExp([...bindingByToken.keys()].sort((a, b) => b.length - a.length).map((token) => token.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")).join("|"), "gu");
-  let output = "";
-  let cursor = 0;
-  for (const match of value.matchAll(tokenPattern)) {
-    output += transformStatic(value.slice(cursor, match.index));
-    output += bindingByToken.get(match[0]);
-    cursor = match.index + match[0].length;
-  }
-  return output + transformStatic(value.slice(cursor));
+function indentHtml(html, indent) {
+  return html.split("\n").map((line) => `${indent}${line}`).join("\n");
 }
 
-function encodeCandidate(candidate, edited) {
-  const sourceNewlines = edited.replace(/\n/gu, candidate.sourceNewline ?? "\n");
-  if (candidate.syntax === "html-text") return encodeHtmlText(sourceNewlines);
-  if (candidate.syntax === "html-attribute") return encodeHtmlAttribute(sourceNewlines, candidate.quote);
-  if (candidate.syntax === "js-string" || candidate.syntax === "css-string") return encodeJsString(edited, candidate.quote);
-  if (candidate.syntax === "js-html-text") return encodeJsString(encodeHtmlText(edited), candidate.quote);
-  if (candidate.syntax === "js-html-attribute") return encodeJsString(encodeHtmlAttribute(edited, candidate.htmlQuote), candidate.quote);
-  if (candidate.syntax === "js-template") return replaceTemplateTokens(sourceNewlines, candidate.templateBindings, escapeTemplateStatic);
-  if (candidate.syntax === "template-html-text") return replaceTemplateTokens(sourceNewlines, candidate.templateBindings, (value) => escapeTemplateStatic(encodeHtmlText(value)));
-  if (candidate.syntax === "template-html-attribute") return replaceTemplateTokens(sourceNewlines, candidate.templateBindings, (value) => escapeTemplateStatic(encodeHtmlAttribute(value, candidate.quote)));
-  throw new SiteCopyError("SITE_COPY_APPLY_UNSUPPORTED_CHANGE", "未対応の文字列形式です。", { syntax: candidate.syntax });
-}
-
-export function planApply(rootDir, validation) {
+function planCopyApply(rootDir, validation) {
   const sourceCache = new Map();
-  const plannedByFile = new Map();
-  for (const change of validation.changes) {
-    let resolved;
-    try {
-      resolved = resolveEntry(rootDir, change.entry, sourceCache);
-    } catch (error) {
-      throw new SiteCopyError("SITE_COPY_APPLY_AMBIGUOUS_TARGET", "反映先を一意に解決できません。", { id: change.entry.id, path: change.entry.sourcePath });
-    }
-    const replacement = encodeCandidate(resolved.candidate, change.after);
-    const list = plannedByFile.get(change.entry.sourcePath) ?? [];
-    list.push({ id: change.entry.id, start: resolved.candidate.rangeStart, end: resolved.candidate.rangeEnd, replacement });
-    plannedByFile.set(change.entry.sourcePath, list);
-  }
-  for (const [sourcePath, replacements] of plannedByFile) {
-    replacements.sort((left, right) => left.start - right.start);
-    for (let index = 1; index < replacements.length; index += 1) {
-      if (replacements[index].start < replacements[index - 1].end) throw new SiteCopyError("SITE_COPY_APPLY_AMBIGUOUS_TARGET", "反映範囲が重複しています。", { path: sourcePath, count: 2 });
+  const replacements = new Map();
+  for (const blockChange of validation.uiChanges) {
+    for (const change of blockChange.fields) {
+      const resolved = resolveField(rootDir, change.field, sourceCache);
+      const list = replacements.get(change.field.sourcePath) ?? [];
+      list.push({ start: resolved.rangeStart, end: resolved.rangeEnd, value: encodeFieldValue(change.after, resolved), id: `${blockChange.block.id}.${change.field.key}` });
+      replacements.set(change.field.sourcePath, list);
     }
   }
-  return { sourceCache, plannedByFile };
-}
-
-export function applyChanges(rootDir, validation, options = {}) {
-  const { sourceCache, plannedByFile } = planApply(rootDir, validation);
-  const originals = new Map();
+  for (const change of validation.guideChanges) {
+    const resolved = resolveGuideSection(rootDir, change.section, sourceCache);
+    const lineStart = resolved.source.lastIndexOf("\n", resolved.element.innerStart - 1) + 1;
+    const openIndent = resolved.source.slice(lineStart, resolved.element.openStart).match(/^\s*/u)?.[0] ?? "";
+    const childIndent = `${openIndent}  `;
+    const html = guideMarkdownToHtml(change.after, change.section);
+    const value = `\n${indentHtml(html, childIndent)}\n${openIndent}`;
+    const list = replacements.get(change.section.sourcePath) ?? [];
+    list.push({ start: resolved.element.innerStart, end: resolved.element.innerEnd, value, id: change.section.id });
+    replacements.set(change.section.sourcePath, list);
+  }
   const outputs = new Map();
-  for (const [sourcePath, replacements] of plannedByFile) {
-    const source = sourceCache.get(sourcePath);
-    originals.set(sourcePath, source);
-    let output = source;
-    for (const replacement of [...replacements].sort((left, right) => right.start - left.start)) {
-      output = `${output.slice(0, replacement.start)}${replacement.replacement}${output.slice(replacement.end)}`;
-    }
+  for (const [sourcePath, items] of replacements) {
+    items.sort((left, right) => left.start - right.start);
+    for (let index = 1; index < items.length; index += 1) if (items[index].start < items[index - 1].end) throw new SiteCopyError("SITE_COPY_GUIDE_APPLY_FAILED", "反映範囲が重複しています。", { path: sourcePath, count: 2 });
+    let output = sourceCache.get(sourcePath);
+    for (const item of [...items].sort((left, right) => right.start - left.start)) output = `${output.slice(0, item.start)}${item.value}${output.slice(item.end)}`;
     outputs.set(sourcePath, output);
   }
-  let manifestOutput = null;
-  let manifestRelativePath = null;
-  if (options.manifestPath) {
-    const manifestPath = path.resolve(options.manifestPath);
-    const relativeManifestPath = path.relative(rootDir, manifestPath);
-    if (relativeManifestPath.startsWith("..") || path.isAbsolute(relativeManifestPath)) {
-      throw new SiteCopyError("SITE_COPY_APPLY_VALIDATION_FAILED", "manifestはrepository内である必要があります。", { path: "site-copy/site-copy-manifest.json" });
+  return { sourceCache, replacements, outputs };
+}
+
+export function applyEditedCopies(rootDir, manifestPath, validation, options = {}) {
+  const { sourceCache, outputs } = planCopyApply(rootDir, validation);
+  const manifest = loadManifest(manifestPath);
+  const uiChangesByKey = new Map(validation.uiChanges.flatMap((block) => block.fields.map((change) => [`${block.block.id}.${change.field.key}`, change])));
+  for (const block of manifest.uiBlocks) {
+    for (const field of block.fields) {
+      field.blockId = block.id;
+      if (!outputs.has(field.sourcePath)) continue;
+      const resolved = resolveFieldFromSource(outputs.get(field.sourcePath), field, true);
+      const change = uiChangesByKey.get(`${block.id}.${field.key}`);
+      const expected = change?.after;
+      if (resolved.matches !== 1 || (expected !== undefined && resolved.value !== expected)) throw new SiteCopyError("SITE_COPY_GUIDE_APPLY_FAILED", "反映後のUI locatorを更新できません。", { blockId: block.id, fieldKey: field.key, count: resolved.matches });
+      if (field.sourceType === "JS_LITERAL") field.locator = { stringOrdinal: resolved.candidate.ordinal, beforeAnchorSha256: resolved.candidate.beforeAnchorSha256, afterAnchorSha256: resolved.candidate.afterAnchorSha256 };
+      field.sourceValueSha256 = sha256(resolved.value);
     }
-    const manifest = loadManifest(manifestPath);
-    const manifestEntries = new Map(manifest.entries.map((entry) => [entry.id, entry]));
-    const changesById = new Map(validation.changes.map((change) => [change.entry.id, change]));
-    for (const change of validation.changes) {
-      const manifestEntry = manifestEntries.get(change.entry.id);
-      if (!manifestEntry || manifestEntry.sourceValueSha256 !== change.entry.sourceValueSha256) {
-        throw new SiteCopyError("SITE_COPY_APPLY_VALIDATION_FAILED", "repository manifestがsnapshotと一致しません。", { id: change.entry.id });
-      }
-    }
-    for (const manifestEntry of manifest.entries.filter((entry) => outputs.has(entry.sourcePath))) {
-      const updatedSource = outputs.get(manifestEntry.sourcePath);
-      const matches = scanSource(manifestEntry.sourcePath, updatedSource).filter((candidate) => candidateMatchesStableLocator(candidate, manifestEntry));
-      const change = changesById.get(manifestEntry.id);
-      const expectedValueSha256 = change ? sha256(change.after) : manifestEntry.sourceValueSha256;
-      if (matches.length !== 1 || sha256(matches[0].value) !== expectedValueSha256) {
-        throw new SiteCopyError("SITE_COPY_APPLY_AMBIGUOUS_TARGET", "反映後locatorを一意に更新できません。", { id: manifestEntry.id, path: manifestEntry.sourcePath, count: matches.length });
-      }
-      manifestEntry.locator = matches[0].locator;
-      manifestEntry.sourceValueSha256 = expectedValueSha256;
-    }
-    manifestOutput = canonicalJson(manifest);
-    manifestRelativePath = relativeManifestPath.replace(/\\/gu, "/");
-    originals.set(manifestRelativePath, fs.readFileSync(manifestPath, "utf8"));
-    outputs.set(manifestRelativePath, manifestOutput);
+    block.sourceValueSha256 = blockHash(block.fields);
   }
+  const guideChangesById = new Map(validation.guideChanges.map((change) => [change.section.id, change]));
+  for (const section of manifest.guideSections) {
+    if (!outputs.has(section.sourcePath)) continue;
+    const source = outputs.get(section.sourcePath);
+    const element = findElement(source, { copySection: section.id });
+    if (element.matches !== 1) throw new SiteCopyError("SITE_COPY_GUIDE_APPLY_FAILED", "反映後のguide sectionを一意に解決できません。", { sectionId: section.id, count: element.matches ?? 0 });
+    const markdown = htmlToGuideMarkdown(source.slice(element.innerStart, element.innerEnd));
+    const expected = guideChangesById.get(section.id)?.after;
+    if (expected !== undefined && markdown !== expected) throw new SiteCopyError("SITE_COPY_GUIDE_APPLY_FAILED", "反映後のguide sectionが編集内容と一致しません。", { sectionId: section.id });
+    section.sourceValueSha256 = sha256(markdown);
+  }
+  const manifestRelative = path.relative(rootDir, path.resolve(manifestPath)).replace(/\\/gu, "/");
+  if (manifestRelative.startsWith("..") || path.isAbsolute(manifestRelative)) throw new SiteCopyError("SITE_COPY_GUIDE_APPLY_FAILED", "manifestはrepository内である必要があります。", {});
+  outputs.set(manifestRelative, canonicalJson(manifest));
+  const backupDir = fs.mkdtempSync(path.join(os.tmpdir(), "bms-site-copy-backup-"));
+  const originals = new Map();
   const written = [];
   try {
+    for (const sourcePath of outputs.keys()) {
+      const absolute = path.join(rootDir, sourcePath);
+      const original = sourcePath === manifestRelative ? fs.readFileSync(absolute, "utf8") : sourceCache.get(sourcePath);
+      originals.set(sourcePath, original);
+      const backupPath = path.join(backupDir, sourcePath);
+      fs.mkdirSync(path.dirname(backupPath), { recursive: true });
+      fs.writeFileSync(backupPath, original, "utf8");
+    }
+    let writeCount = 0;
     for (const [sourcePath, output] of outputs) {
+      if (options.failAfterWrites != null && writeCount >= options.failAfterWrites) throw new Error("injected write failure");
       fs.writeFileSync(path.join(rootDir, sourcePath), output, "utf8");
       written.push(sourcePath);
+      writeCount += 1;
     }
   } catch (error) {
     for (const sourcePath of written) fs.writeFileSync(path.join(rootDir, sourcePath), originals.get(sourcePath), "utf8");
-    throw new SiteCopyError("SITE_COPY_APPLY_PARTIAL_FAILURE", "反映に失敗したため変更を復元しました。", { fileCount: written.length, errorType: error?.constructor?.name ?? "Error" });
+    throw new SiteCopyError("SITE_COPY_GUIDE_APPLY_FAILED", "反映に失敗したためbackupから復元しました。", { writtenCount: written.length, errorType: error?.constructor?.name ?? "Error" });
+  } finally {
+    fs.rmSync(backupDir, { recursive: true, force: true });
   }
-  return { code: "SITE_COPY_APPLY_COMPLETE", changedFiles: [...outputs.keys()], changeCount: validation.changeCount };
+  return { code: "SITE_COPY_GUIDE_APPLY_COMPLETE", changedFiles: [...outputs.keys()], uiBlockCount: validation.uiChangeCount, guideSectionCount: validation.guideChangeCount };
 }
 
-export function safeDiagnostic(value) {
-  const allowed = ["mode", "timestamp", "head", "manifestSha256", "catalogId", "entryCount", "changeCount", "pagesCount", "workerCount", "manualReviewCount", "paths", "ids", "hashes", "lengths", "code", "status", "tests"];
-  return Object.fromEntries(Object.entries(value).filter(([key]) => allowed.includes(key)));
+export function paragraphDiff(before, after) {
+  const split = (value) => value.trim().split(/\n\s*\n/gu).map((item) => item.trim()).filter(Boolean);
+  const beforeBlocks = split(before);
+  const afterBlocks = split(after);
+  return {
+    removed: beforeBlocks.filter((item) => !afterBlocks.includes(item)),
+    added: afterBlocks.filter((item) => !beforeBlocks.includes(item))
+  };
 }
 
-export function groupCounts(entries) {
-  return Object.fromEntries(GROUPS.map((group) => [group, entries.filter((entry) => entry.group === group && !entry.retired).length]));
+export function exportSummary(manifest, result) {
+  const guideCharacters = result.snapshot.guideSections.reduce((sum, section) => sum + [...section.currentMarkdown].length, 0);
+  const linkCount = result.snapshot.guideSections.reduce((sum, section) => sum + linkIds(section.currentMarkdown).length, 0);
+  return { catalogId: manifest.catalogId, uiBlockCount: manifest.uiBlocks.length, guideSectionCount: manifest.guideSections.length, guideCharacters, linkCount, manualReviewCount: manifest.manualReview?.length ?? 0 };
 }

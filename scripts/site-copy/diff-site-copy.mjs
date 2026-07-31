@@ -1,33 +1,22 @@
+import { paragraphDiff, SiteCopyError } from "./site-copy-core.mjs";
 import { runValidation, validationOptions } from "./validate-site-copy.mjs";
-import { SiteCopyError } from "./site-copy-core.mjs";
 
 try {
   const result = runValidation(validationOptions(process.argv.slice(2)));
-  const summary = {
+  process.stdout.write(`${JSON.stringify({
     code: result.code,
     mode: "dry-run",
-    changeCount: result.changeCount,
-    pagesChangeCount: result.pagesChangeCount,
-    workerChangeCount: result.workerChangeCount,
-    changedFileCount: result.changedFiles.length,
+    uiChangeCount: result.uiChangeCount,
+    guideChangeCount: result.guideChangeCount,
     changedFiles: result.changedFiles,
-    changes: result.changes.map((change) => ({
-      id: change.entry.id,
-      displayLocation: change.entry.displayLocation,
-      deploymentTarget: change.entry.deploymentTarget,
-      beforeLength: change.beforeLength,
-      afterLength: change.afterLength,
-      protectedTokens: "passed",
-      before: change.before,
-      after: change.after
+    uiBlocks: result.uiChanges.map((change) => ({
+      id: change.block.id,
+      fields: change.fields.map((field) => ({ label: field.field.label, beforeLength: [...field.before].length, afterLength: [...field.after].length }))
     })),
-    pagesRequirePush: result.pagesChangeCount > 0,
-    workerRequiresSafeDeploy: result.workerChangeCount > 0
-  };
-  process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
+    guideSections: result.guideChanges.map((change) => ({ id: change.section.id, paragraphs: paragraphDiff(change.before, change.after) }))
+  }, null, 2)}\n`);
 } catch (error) {
   const known = error instanceof SiteCopyError;
-  const code = known ? error.code : "SITE_COPY_APPLY_VALIDATION_FAILED";
-  process.stderr.write(`${JSON.stringify({ code, message: known ? error.message : "dry-runに失敗しました。", detail: known ? error.detail : { errorType: error?.constructor?.name ?? "Error" } })}\n`);
+  process.stderr.write(`${JSON.stringify({ code: known ? error.code : "SITE_COPY_GUIDE_PARSE_FAILED", message: known ? error.message : "dry-runに失敗しました。", detail: known ? error.detail : { errorType: error?.constructor?.name ?? "Error" } })}\n`);
   process.exitCode = 1;
 }
