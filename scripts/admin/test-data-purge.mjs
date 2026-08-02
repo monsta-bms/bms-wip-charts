@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { readdirSync, statSync } from "node:fs";
 import {
@@ -16,11 +16,13 @@ import {
   assertR2TargetUnchanged,
   assertSafeLogText,
   assertTargetUnchanged,
+  buildAllChartPurgeArtifacts,
   buildD1Batch,
   buildRestorePlanText,
   deleteExactR2Objects,
   encodeR2ObjectKey,
   safeErrorRecord,
+  summarizeVerifiedD1Changes,
   validateManifest
 } from "./test-data-purge-lib.mjs";
 
@@ -52,6 +54,7 @@ function fail(code, stage, detail = {}) {
 function parseArguments(argv) {
   const [mode, ...rest] = argv;
   const allowedModes = new Set([
+    "inventory-all",
     "inventory",
     "validate-manifest",
     "backup",
@@ -177,6 +180,21 @@ function parseConfig(text, manifest) {
 }
 
 async function loadContext(options) {
+  if (options.mode === "inventory-all") {
+    const bindingManifest = {
+      d1DatabaseName: "wip-bms-charts-db",
+      r2BucketName: "wip-bms-charts-files"
+    };
+    const config = parseConfig(await readFile(options.config, "utf8"), bindingManifest);
+    await mkdir(options.outputDir, { recursive: true });
+    return {
+      ...options,
+      manifest: null,
+      manifestPath: options.manifest,
+      candidatePath: resolve(dirname(options.manifest), "test-data-candidates.txt"),
+      config
+    };
+  }
   const manifest = await readJson(options.manifest);
   const candidatePath = resolve(dirname(options.manifest), "test-data-candidates.txt");
   const candidateBytes = await readFile(candidatePath);
@@ -210,7 +228,11 @@ async function cloudflareRequest(path, { token, method = "GET", body, raw = fals
   } catch {
     throw new Error("CLOUDFLARE_JSON_INVALID");
   }
-  if (!response.ok || payload?.success !== true) throw new Error("CLOUDFLARE_REQUEST_FAILED");
+  if (!response.ok) throw new Error(`CLOUDFLARE_HTTP_${response.status}`);
+  if (payload?.success !== true) {
+    const apiCode = payload?.errors?.find((entry) => Number.isInteger(entry?.code))?.code;
+    throw new Error(Number.isInteger(apiCode) ? `CLOUDFLARE_API_${apiCode}` : "CLOUDFLARE_REQUEST_FAILED");
+  }
   return payload;
 }
 
@@ -245,23 +267,36 @@ function relationSql(table, chartIds, versionIds, columns = "*") {
 async function collectSnapshot(context, { fullRows = false } = {}) {
   const { manifest } = context;
   const related = manifest.relatedRowIdsByTable;
+  const fullPurge = manifest.purgeScope === "all_chart_data";
   const adminTargets = [...new Set([
     ...manifest.chartIds,
     ...manifest.versionIds,
+    ...(fullPurge ? manifest.songIds : []),
     ...related.version_withdrawals,
     ...related.delete_requests
   ])];
   const select = fullRows ? "*" : "id";
+  const allOrExact = (table, column, ids, columns = select) => fullPurge
+    ? { sql: `SELECT ${columns} FROM ${table} ORDER BY ${column}`, params: [] }
+    : { sql: `SELECT ${columns} FROM ${table} WHERE ${column} IN (${placeholders(ids)}) ORDER BY ${column}`, params: ids };
   const entries = [
-    { name: "charts", sql: `SELECT ${select} FROM charts WHERE id IN (${placeholders(manifest.chartIds)}) ORDER BY id`, params: manifest.chartIds },
-    { name: "versions", sql: `SELECT ${fullRows ? "*" : "id,chart_id,parent_version_id,collapsed_by_version_id"} FROM versions WHERE chart_id IN (${placeholders(manifest.chartIds)}) OR id IN (${placeholders(manifest.versionIds)}) ORDER BY id`, params: [...manifest.chartIds, ...manifest.versionIds] },
-    { name: "songs", sql: `SELECT ${select} FROM songs WHERE id IN (${placeholders(manifest.songIds)}) ORDER BY id`, params: manifest.songIds },
-    { name: "version_withdrawals", ...relationSql("version_withdrawals", manifest.chartIds, manifest.versionIds, fullRows ? "*" : "id") },
-    { name: "delete_requests", ...relationSql("delete_requests", manifest.chartIds, manifest.versionIds, fullRows ? "*" : "id") },
-    { name: "post_logs", ...relationSql("post_logs", manifest.chartIds, manifest.versionIds, fullRows ? "*" : "id") },
-    { name: "version_source_metadata", sql: `SELECT ${fullRows ? "*" : "version_id"} FROM version_source_metadata WHERE version_id IN (${placeholders(manifest.versionIds)}) ORDER BY version_id`, params: manifest.versionIds },
-    { name: "admin_logs", sql: `SELECT ${select} FROM admin_logs WHERE target_id IN (${placeholders(adminTargets)}) ORDER BY id`, params: adminTargets },
-    { name: "external_references", sql: `SELECT id FROM versions WHERE chart_id NOT IN (${placeholders(manifest.chartIds)}) AND (parent_version_id IN (${placeholders(manifest.versionIds)}) OR collapsed_by_version_id IN (${placeholders(manifest.versionIds)})) ORDER BY id`, params: [...manifest.chartIds, ...manifest.versionIds, ...manifest.versionIds] },
+    { name: "charts", ...allOrExact("charts", "id", manifest.chartIds) },
+    { name: "versions", ...(fullPurge
+      ? { sql: `SELECT ${fullRows ? "*" : "id,chart_id,parent_version_id,collapsed_by_version_id"} FROM versions ORDER BY id`, params: [] }
+      : { sql: `SELECT ${fullRows ? "*" : "id,chart_id,parent_version_id,collapsed_by_version_id"} FROM versions WHERE chart_id IN (${placeholders(manifest.chartIds)}) OR id IN (${placeholders(manifest.versionIds)}) ORDER BY id`, params: [...manifest.chartIds, ...manifest.versionIds] }) },
+    { name: "songs", ...allOrExact("songs", "id", manifest.songIds) },
+    { name: "version_withdrawals", ...(fullPurge ? allOrExact("version_withdrawals", "id", related.version_withdrawals, fullRows ? "*" : "id") : relationSql("version_withdrawals", manifest.chartIds, manifest.versionIds, fullRows ? "*" : "id")) },
+    { name: "delete_requests", ...(fullPurge ? allOrExact("delete_requests", "id", related.delete_requests, fullRows ? "*" : "id") : relationSql("delete_requests", manifest.chartIds, manifest.versionIds, fullRows ? "*" : "id")) },
+    { name: "post_logs", ...(fullPurge
+      ? { sql: `SELECT ${fullRows ? "*" : "id"} FROM post_logs WHERE chart_id IN (SELECT id FROM charts) OR version_id IN (SELECT id FROM versions) ORDER BY id`, params: [] }
+      : relationSql("post_logs", manifest.chartIds, manifest.versionIds, fullRows ? "*" : "id")) },
+    { name: "version_source_metadata", ...allOrExact("version_source_metadata", "version_id", manifest.versionIds, fullRows ? "*" : "version_id") },
+    { name: "admin_logs", ...(fullPurge
+      ? { sql: `SELECT ${select} FROM admin_logs WHERE target_id IN (SELECT id FROM charts) OR target_id IN (SELECT id FROM versions) OR target_id IN (SELECT id FROM songs) OR target_id IN (SELECT id FROM version_withdrawals) OR target_id IN (SELECT id FROM delete_requests) ORDER BY id`, params: [] }
+      : { sql: `SELECT ${select} FROM admin_logs WHERE target_id IN (${placeholders(adminTargets)}) ORDER BY id`, params: adminTargets }) },
+    { name: "external_references", ...(fullPurge
+      ? { sql: "SELECT id FROM versions WHERE 0", params: [] }
+      : { sql: `SELECT id FROM versions WHERE chart_id NOT IN (${placeholders(manifest.chartIds)}) AND (parent_version_id IN (${placeholders(manifest.versionIds)}) OR collapsed_by_version_id IN (${placeholders(manifest.versionIds)})) ORDER BY id`, params: [...manifest.chartIds, ...manifest.versionIds, ...manifest.versionIds] }) },
     { name: "song_shares", sql: `SELECT s.id AS song_id,COUNT(c.id) AS chart_count FROM songs s LEFT JOIN charts c ON c.song_id=s.id WHERE s.id IN (${placeholders(manifest.songIds)}) GROUP BY s.id ORDER BY s.id`, params: manifest.songIds },
     { name: "keep_charts", sql: `SELECT COUNT(*) AS count FROM charts WHERE id IN (${placeholders(manifest.keepChartIds)})`, params: manifest.keepChartIds },
     { name: "keep_versions", sql: `SELECT COUNT(*) AS count FROM versions WHERE id IN (${placeholders(manifest.keepVersionIds)})`, params: manifest.keepVersionIds },
@@ -319,7 +354,26 @@ async function listR2Objects(context) {
   return objects;
 }
 
+async function collectAllChartInventoryRows(context) {
+  const entries = [
+    { name: "songs", sql: "SELECT id FROM songs ORDER BY id", params: [] },
+    { name: "charts", sql: "SELECT id,song_id FROM charts ORDER BY id", params: [] },
+    { name: "versions", sql: "SELECT id,chart_id,parent_version_id,collapsed_by_version_id,r2_key,progress_image_key FROM versions ORDER BY id", params: [] },
+    { name: "version_withdrawals", sql: "SELECT id,version_id,chart_id FROM version_withdrawals ORDER BY id", params: [] },
+    { name: "delete_requests", sql: "SELECT id,version_id,chart_id FROM delete_requests ORDER BY id", params: [] },
+    { name: "post_logs", sql: "SELECT id,song_id,chart_id,version_id FROM post_logs ORDER BY id", params: [] },
+    { name: "version_source_metadata", sql: "SELECT version_id FROM version_source_metadata ORDER BY version_id", params: [] },
+    { name: "admin_logs", sql: "SELECT id,target_type,target_id FROM admin_logs ORDER BY id", params: [] },
+    { name: "foreign_key_check", sql: "PRAGMA foreign_key_check", params: [] }
+  ];
+  const results = await queryD1(context, entries);
+  return Object.fromEntries(entries.map((entry, index) => [entry.name, results[index].results ?? []]));
+}
+
 function targetR2Objects(manifest, objects) {
+  if (manifest.purgeScope === "all_chart_data") {
+    return objects.filter((object) => object.key.startsWith("charts/"));
+  }
   return objects.filter((object) => manifest.chartIds.some(
     (chartId) => object.key.startsWith(`charts/${chartId}/`)
   ));
@@ -338,10 +392,24 @@ function getGitState() {
   const paths = statusLines.map((line) => line.slice(3).replaceAll("\\", "/")).sort();
   const expectedPaths = [...OPERATOR_PATHS].sort();
   const clean = statusLines.length === 0;
-  const operatorOnly = statusLines.length === expectedPaths.length
-    && statusLines.every((line) => line.startsWith("?? "))
-    && paths.every((path, index) => path === expectedPaths[index]);
+  const operatorOnly = statusLines.length > 0
+    && statusLines.every((line) => ["??", " M", "M ", "MM", "A ", "AM"].includes(line.slice(0, 2)))
+    && paths.every((path) => expectedPaths.includes(path))
+    && new Set(paths).size === paths.length;
   return { head, originMain, clean, operatorOnly };
+}
+
+function getDeploymentState(optionsConfig) {
+  const deployments = JSON.parse(runWrangler(["deployments", "list", "--config", optionsConfig, "--json"]));
+  const latest = [...deployments].sort((left, right) => String(right.created_on).localeCompare(String(left.created_on)))[0];
+  if (!latest || latest.versions?.length !== 1 || Number(latest.versions[0].percentage) !== 100) {
+    fail(PURGE_ERROR_CODES.targetChanged, "deployment", { reason: "traffic" });
+  }
+  return {
+    deploymentId: latest.id,
+    workerVersionId: latest.versions[0].version_id,
+    traffic: 100
+  };
 }
 
 function assertRemoteState(context) {
@@ -351,15 +419,12 @@ function assertRemoteState(context) {
     || git.originMain !== context.manifest.sourceCommit) {
     fail(PURGE_ERROR_CODES.targetChanged, "git", { reason: "remote_head" });
   }
-  const deployments = JSON.parse(runWrangler(["deployments", "list", "--config", context.optionsConfig, "--json"]));
-  const latest = [...deployments].sort((left, right) => String(right.created_on).localeCompare(String(left.created_on)))[0];
-  if (latest?.id !== context.manifest.deploymentId
-    || latest?.versions?.length !== 1
-    || latest.versions[0].version_id !== context.manifest.workerVersionId
-    || Number(latest.versions[0].percentage) !== 100) {
+  const deployment = getDeploymentState(context.optionsConfig);
+  if (deployment.deploymentId !== context.manifest.deploymentId
+    || deployment.workerVersionId !== context.manifest.workerVersionId) {
     fail(PURGE_ERROR_CODES.targetChanged, "deployment", { reason: "deployment_changed" });
   }
-  return { git, deploymentId: latest.id, workerVersionId: latest.versions[0].version_id, traffic: 100 };
+  return { git, ...deployment };
 }
 
 async function collectDryRunState(context) {
@@ -633,24 +698,54 @@ async function runDryRun(context, { writeResult = true, requireBackupResult = tr
 
 async function runApplyD1(context) {
   await requireBackup(context);
+  const storedDryRun = await readJson(join(context.outputDir, "dry-run-result.json"), PURGE_ERROR_CODES.d1Failed);
+  try {
+    const post = await collectSnapshot(context);
+    assertD1PostDeleteState(context, post, storedDryRun);
+    const summary = summarizeVerifiedD1Changes(context.manifest, { postStateVerified: true });
+    const reconciledResult = {
+      status: "d1_complete",
+      manifestId: context.manifest.manifestId,
+      startedAt: new Date().toISOString(),
+      d1ApplyRequestCount: 1,
+      d1ChangesByTable: summary.changesByTable,
+      d1TotalChanges: summary.totalChanges,
+      d1PostStateVerified: true,
+      d1ResultReconciled: true,
+      r2DeleteAttemptCount: 0,
+      r2DeletedCount: 0,
+      r2FailureCount: 0,
+      secretOperationCount: 0,
+      workerDeployCount: 0
+    };
+    await writeJson(join(context.outputDir, "purge-result.json"), reconciledResult);
+    await writeSafeLog(join(context.outputDir, "purge.log"), [
+      `manifest_id=${context.manifest.manifestId}`,
+      "d1_apply_requests=1",
+      `d1_total_changes=${reconciledResult.d1TotalChanges}`,
+      "d1_post_state=verified",
+      "d1_result=reconciled",
+      "r2_deleted=0",
+      "status=TEST_DATA_PURGE_D1_COMPLETE"
+    ]);
+    return reconciledResult;
+  } catch (error) {
+    if (!(error instanceof TestDataPurgeError) || error.code !== PURGE_ERROR_CODES.verifyFailed) throw error;
+  }
   const dryRun = await runDryRun(context, { writeResult: false, requireBackupResult: true });
-  const results = await queryD1(context, dryRun.batch, { allowWrite: true });
-  const changesByTable = Object.fromEntries(TABLES.map((table) => [table, 0]));
-  dryRun.batch.forEach((statement, index) => {
-    if (statement.kind !== "delete") return;
-    const changes = Number(results[index]?.meta?.changes ?? -1);
-    if (changes !== statement.expectedChanges) {
-      fail(PURGE_ERROR_CODES.d1Failed, "d1-apply", { table: statement.table, reason: "change_count" });
-    }
-    changesByTable[statement.table] += changes;
-  });
+  await queryD1(context, dryRun.batch, { allowWrite: true });
+  assertD1PostDeleteState(context, await collectSnapshot(context), dryRun.result);
+  const summary = summarizeVerifiedD1Changes(context.manifest, { postStateVerified: true });
+  const changesByTable = summary.changesByTable;
   const purgeResult = {
     status: "d1_complete",
     manifestId: context.manifest.manifestId,
     startedAt: new Date().toISOString(),
     d1ApplyRequestCount: 1,
     d1ChangesByTable: changesByTable,
-    d1TotalChanges: Object.values(changesByTable).reduce((a, b) => a + b, 0),
+    d1TotalChanges: summary.totalChanges,
+    d1PostStateVerified: true,
+    d1ResultReconciled: false,
     r2DeleteAttemptCount: 0,
     r2DeletedCount: 0,
     r2FailureCount: 0,
@@ -705,10 +800,25 @@ async function runApplyR2(context) {
   }
   const dryRun = await readJson(join(context.outputDir, "dry-run-result.json"), PURGE_ERROR_CODES.r2Failed);
   assertD1PostDeleteState(context, await collectSnapshot(context), dryRun);
+  const liveObjects = await listR2Objects(context);
+  const liveKeys = new Set(liveObjects.map((object) => object.key));
+  let keysToDelete = context.manifest.r2ExactObjectKeys.filter((key) => liveKeys.has(key));
+  const priorDeletedCount = context.manifest.r2ExactObjectKeys.length - keysToDelete.length;
+  if (purgeResult.status === "partial_r2_failure") {
+    const orphanPlan = await readJson(join(context.outputDir, "r2-orphan-plan.json"), PURGE_ERROR_CODES.r2Failed);
+    const plannedKeys = orphanPlan.items?.map((item) => item.key) ?? [];
+    if (new Set(plannedKeys).size !== plannedKeys.length
+      || plannedKeys.some((key) => !context.manifest.r2ExactObjectKeys.includes(key))) {
+      fail(PURGE_ERROR_CODES.r2Failed, "r2-apply", { reason: "orphan_plan" });
+    }
+  }
   const token = getApiToken();
   const bucket = encodeURIComponent(context.config.bucketName);
   const deleted = await deleteExactR2Objects({
-    keys: context.manifest.r2ExactObjectKeys,
+    keys: keysToDelete,
+    maxAttempts: 5,
+    retryDelayMs: 5_000,
+    shouldRetry: (code) => /^CLOUDFLARE_HTTP_(?:429|5\d\d)$/u.test(code),
     deleteObject: async (key) => {
       await cloudflareRequest(
         `/accounts/${ACCOUNT_ID}/r2/buckets/${bucket}/objects/${encodeR2ObjectKey(key)}`,
@@ -727,7 +837,7 @@ async function runApplyR2(context) {
   });
   purgeResult.r2ApplyRunCount = Number(purgeResult.r2ApplyRunCount ?? (purgeResult.status === "partial_r2_failure" ? 1 : 0)) + 1;
   purgeResult.r2DeleteAttemptCount = Number(purgeResult.r2DeleteAttemptCount ?? 0) + deleted.attemptCount;
-  purgeResult.r2DeletedCount = deleted.deleted.length;
+  purgeResult.r2DeletedCount = priorDeletedCount + deleted.deleted.length;
   purgeResult.r2FailureCount = deleted.failures.length;
   purgeResult.status = deleted.failures.length === 0 ? "complete" : "partial_r2_failure";
   purgeResult.completedAt = new Date().toISOString();
@@ -793,18 +903,49 @@ async function runVerify(context) {
     fail(PURGE_ERROR_CODES.verifyFailed, "public-api", { reason: "target_visible" });
   }
   let listPayload;
+  let versionListPayload;
   try {
     listPayload = JSON.parse(publicBodies["/api/charts"]);
+    versionListPayload = JSON.parse(publicBodies["/api/versions"]);
   } catch {
     fail(PURGE_ERROR_CODES.verifyFailed, "public-api", { reason: "list_json" });
   }
-  const candidateIds = new Set(context.manifest.candidateChartIds);
-  const normalChartId = listPayload?.charts
-    ?.map((entry) => entry?.chart?.id)
-    .find((id) => typeof id === "string" && !candidateIds.has(id));
-  if (!normalChartId) fail(PURGE_ERROR_CODES.verifyFailed, "public-api", { reason: "normal_probe_missing" });
-  const normalProbe = await fetchStatus(`${context.baseUrl}/api/charts/${encodeURIComponent(normalChartId)}`);
-  if (normalProbe.response.status !== 200) fail(PURGE_ERROR_CODES.verifyFailed, "public-api", { reason: "normal_probe" });
+  const fullPurge = context.manifest.purgeScope === "all_chart_data";
+  let normalControlChartStatus = null;
+  let difficultyTableCounts = null;
+  if (fullPurge) {
+    if (!Array.isArray(listPayload?.charts)
+      || listPayload.charts.length !== 0
+      || Number(listPayload?.pagination?.total ?? -1) !== 0
+      || !Array.isArray(versionListPayload?.items)
+      || versionListPayload.items.length !== 0
+      || Number(versionListPayload?.pagination?.total ?? -1) !== 0) {
+      fail(PURGE_ERROR_CODES.verifyFailed, "public-api", { reason: "not_empty" });
+    }
+    difficultyTableCounts = {};
+    for (const tableId of ["rc-star", "rc-double-star"]) {
+      const tableResult = await fetchStatus(`${context.baseUrl}/api/difficulty-tables/${tableId}/data.json?purgeVerification=${Date.now()}`);
+      let tablePayload;
+      try {
+        tablePayload = JSON.parse(tableResult.text);
+      } catch {
+        fail(PURGE_ERROR_CODES.verifyFailed, "public-api", { reason: "difficulty_json" });
+      }
+      if (tableResult.response.status !== 200 || !Array.isArray(tablePayload) || tablePayload.length !== 0) {
+        fail(PURGE_ERROR_CODES.verifyFailed, "public-api", { reason: "difficulty_not_empty" });
+      }
+      difficultyTableCounts[tableId] = 0;
+    }
+  } else {
+    const candidateIds = new Set(context.manifest.candidateChartIds);
+    const normalChartId = listPayload?.charts
+      ?.map((entry) => entry?.chart?.id)
+      .find((id) => typeof id === "string" && !candidateIds.has(id));
+    if (!normalChartId) fail(PURGE_ERROR_CODES.verifyFailed, "public-api", { reason: "normal_probe_missing" });
+    const normalProbe = await fetchStatus(`${context.baseUrl}/api/charts/${encodeURIComponent(normalChartId)}`);
+    if (normalProbe.response.status !== 200) fail(PURGE_ERROR_CODES.verifyFailed, "public-api", { reason: "normal_probe" });
+    normalControlChartStatus = normalProbe.response.status;
+  }
 
   const adminNoToken = await fetchStatus(`${context.baseUrl}/api/admin/delete-requests?status=pending&page=1&pageSize=1`);
   const adminDummy = await fetchStatus(`${context.baseUrl}/api/admin/delete-requests?status=pending&page=1&pageSize=1`, {
@@ -814,6 +955,7 @@ async function runVerify(context) {
     fail(PURGE_ERROR_CODES.verifyFailed, "admin-api", { reason: "unauthorized" });
   }
   let adminStatus = null;
+  const adminTotals = {};
   if (context.adminTokenFile) {
     const token = (await readFile(context.adminTokenFile, "utf8")).trim();
     if (!token) fail(PURGE_ERROR_CODES.verifyFailed, "admin-api", { reason: "token_empty" });
@@ -830,6 +972,17 @@ async function runVerify(context) {
         || [...context.manifest.chartIds, ...context.manifest.versionIds].some((id) => result.text.includes(id))) {
         fail(PURGE_ERROR_CODES.verifyFailed, "admin-api", { path });
       }
+      if (fullPurge) {
+        let payload;
+        try {
+          payload = JSON.parse(result.text);
+        } catch {
+          fail(PURGE_ERROR_CODES.verifyFailed, "admin-api", { reason: "json" });
+        }
+        const total = Number(payload?.pagination?.total ?? payload?.total ?? -1);
+        if (total !== 0) fail(PURGE_ERROR_CODES.verifyFailed, "admin-api", { reason: "not_empty" });
+        adminTotals[path] = total;
+      }
     }
   }
   const result = {
@@ -845,13 +998,17 @@ async function runVerify(context) {
     r2OutsideObjectCount: outside.length,
     publicStatuses,
     targetChartDetailStatus: 404,
-    normalControlChartStatus: normalProbe.response.status,
+    publicChartTotal: Number(listPayload?.pagination?.total ?? -1),
+    publicVersionTotal: Number(versionListPayload?.pagination?.total ?? -1),
+    difficultyTableCounts,
+    normalControlChartStatus,
     adminNoTokenStatus: adminNoToken.response.status,
     adminDummyStatus: adminDummy.response.status,
     adminTokenStatus: adminStatus,
+    adminTotals,
     secretOperationCount: 0,
     workerDeployCount: 0,
-    fixedStatusCode: "TEST_DATA_PURGE_VERIFY_COMPLETE"
+    fixedStatusCode: fullPurge ? "ALL_CHART_DATA_PURGE_COMPLETE" : "TEST_DATA_PURGE_VERIFY_COMPLETE"
   };
   await writeJson(join(context.outputDir, "verify-result.json"), result);
   await writeSafeLog(join(context.outputDir, "verify.log"), [
@@ -862,7 +1019,7 @@ async function runVerify(context) {
     "public_api=200",
     "target_chart_detail=404",
     `admin_token_status=${adminStatus ?? "not_checked"}`,
-    "status=TEST_DATA_PURGE_VERIFY_COMPLETE"
+    `status=${fullPurge ? "ALL_CHART_DATA_PURGE_COMPLETE" : "TEST_DATA_PURGE_VERIFY_COMPLETE"}`
   ]);
   return result;
 }
@@ -877,11 +1034,99 @@ async function runInventory(context) {
   };
 }
 
+async function runAllChartInventory(context) {
+  const git = getGitState();
+  const expectedSourceCommit = "25fd5331d768c9e8c1d8ef776a47378c4df7d82d";
+  if ((!git.clean && !git.operatorOnly)
+    || git.head !== expectedSourceCommit
+    || git.originMain !== expectedSourceCommit) {
+    fail(PURGE_ERROR_CODES.targetChanged, "git", { reason: "all_inventory_head" });
+  }
+  const deployment = getDeploymentState(context.optionsConfig);
+  if (!context.adminTokenFile) fail(PURGE_ERROR_CODES.dryRunFailed, "admin-auth", { reason: "token_file" });
+  const adminToken = (await readFile(context.adminTokenFile, "utf8")).trim();
+  if (!adminToken) fail(PURGE_ERROR_CODES.dryRunFailed, "admin-auth", { reason: "token_empty" });
+  const adminProbe = await fetchStatus(`${context.baseUrl}/api/admin/delete-requests?status=pending&page=1&pageSize=1`, {
+    headers: { Authorization: `Bearer ${adminToken}` }
+  });
+  if (adminProbe.response.status !== 200) {
+    fail(PURGE_ERROR_CODES.dryRunFailed, "admin-auth", { reason: "status" });
+  }
+  const [rows, objects] = await Promise.all([
+    collectAllChartInventoryRows(context),
+    listR2Objects(context)
+  ]);
+  const createdAt = new Date().toISOString();
+  const artifacts = buildAllChartPurgeArtifacts({
+    manifestId: `all-chart-data-purge-${randomUUID()}`,
+    createdAt,
+    sourceCommit: git.head,
+    workerVersionId: deployment.workerVersionId,
+    deploymentId: deployment.deploymentId,
+    d1DatabaseName: context.config.databaseName,
+    r2BucketName: context.config.bucketName,
+    rows,
+    r2Objects: objects
+  });
+  const candidateBytes = Buffer.from(artifacts.candidateText, "utf8");
+  if (!artifacts.alreadyEmpty) validateManifest(artifacts.manifest, { candidateBytes });
+  await writeJson(join(context.outputDir, "inventory.json"), artifacts.inventory);
+  await writeFile(context.candidatePath, candidateBytes);
+  await writeJson(context.manifestPath, artifacts.manifest);
+  const orphanCounts = Object.fromEntries(Object.entries(artifacts.inventory.orphanChecks).map(
+    ([name, items]) => [name, Array.isArray(items) ? items.length : 0]
+  ));
+  const result = {
+    status: artifacts.alreadyEmpty ? "already_empty" : "complete",
+    manifestId: artifacts.manifest.manifestId,
+    createdAt,
+    sourceCommit: git.head,
+    workerVersionId: deployment.workerVersionId,
+    deploymentId: deployment.deploymentId,
+    traffic: deployment.traffic,
+    counts: artifacts.inventory.counts,
+    orphanCounts,
+    adminStatus: adminProbe.response.status,
+    productionWriteCount: 0,
+    fixedStatusCode: artifacts.alreadyEmpty ? "ALL_CHART_DATA_ALREADY_EMPTY" : "ALL_CHART_DATA_INVENTORY_COMPLETE"
+  };
+  await writeJson(join(context.outputDir, "inventory-result.json"), result);
+  await writeSafeLog(join(context.outputDir, "inventory.log"), [
+    `manifest_id=${artifacts.manifest.manifestId}`,
+    `charts=${artifacts.inventory.counts.charts}`,
+    `versions=${artifacts.inventory.counts.versions}`,
+    `songs=${artifacts.inventory.counts.songs}`,
+    `r2_chart_files=${artifacts.inventory.counts.r2ChartFiles}`,
+    `r2_progress_images=${artifacts.inventory.counts.r2ProgressImages}`,
+    `r2_unrelated_objects=${artifacts.inventory.counts.r2UnrelatedObjects}`,
+    `foreign_key_violations=${orphanCounts.foreignKeyViolations}`,
+    "admin_status=200",
+    "production_writes=0",
+    `status=${result.fixedStatusCode}`
+  ]);
+  const acl = applyRestrictedAcl(context.outputDir);
+  if (!acl.ok) fail(PURGE_ERROR_CODES.backupFailed, "inventory-acl", { reason: "acl" });
+  if (orphanCounts.foreignKeyViolations !== 0) {
+    fail(PURGE_ERROR_CODES.targetChanged, "inventory", { reason: "foreign_key" });
+  }
+  return {
+    status: result.status,
+    manifestId: result.manifestId,
+    counts: result.counts,
+    orphanCounts: result.orphanCounts,
+    adminStatus: result.adminStatus,
+    aclOk: acl.ok,
+    productionWriteCount: 0,
+    fixedStatusCode: result.fixedStatusCode
+  };
+}
+
 async function run() {
   const options = parseArguments(process.argv.slice(2));
   const context = await loadContext(options);
   context.optionsConfig = options.config;
   context.configFile = options.config;
+  if (options.mode === "inventory-all") return runAllChartInventory(context);
   if (options.mode === "validate-manifest") return { manifestId: context.manifest.manifestId, status: "valid" };
   if (options.mode === "inventory") return runInventory(context);
   if (options.mode === "backup") {

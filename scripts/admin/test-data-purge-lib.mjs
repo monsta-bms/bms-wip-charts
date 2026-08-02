@@ -100,11 +100,15 @@ export function validateManifest(manifest, { candidateBytes } = {}) {
   const songIds = uniqueStrings(manifest.songIds, "songIds", ID_PATTERNS.songs);
   const keepChartIds = uniqueStrings(manifest.keepChartIds, "keepChartIds", ID_PATTERNS.charts);
   const keepVersionIds = uniqueStrings(manifest.keepVersionIds, "keepVersionIds", ID_PATTERNS.versions);
+  const fullPurge = manifest.purgeScope === "all_chart_data";
   if (chartIds.length === 0 || versionIds.length === 0) {
     fail(PURGE_ERROR_CODES.manifestInvalid, "manifest", { reason: "empty_target" });
   }
   disjoint(chartIds, keepChartIds, "chartIds");
   disjoint(versionIds, keepVersionIds, "versionIds");
+  if (fullPurge && (keepChartIds.length !== 0 || keepVersionIds.length !== 0)) {
+    fail(PURGE_ERROR_CODES.manifestInvalid, "manifest", { reason: "full_purge_keep_not_empty" });
+  }
 
   const related = manifest.relatedRowIdsByTable;
   const counts = manifest.expectedRowCountsByTable;
@@ -121,10 +125,10 @@ export function validateManifest(manifest, { candidateBytes } = {}) {
   const objectKeys = uniqueStrings(
     manifest.r2ExactObjectKeys,
     "r2ExactObjectKeys",
-    /^charts\/chart_[0-9a-f-]{36}\/[A-Za-z0-9._/-]+$/u
+    /^charts\/chart_[0-9a-f-]{36}\/.+$/u
   );
   if (objectKeys.some((key) => /[*?\[\]]/u.test(key)
-    || !chartIds.some((chartId) => key.startsWith(`charts/${chartId}/`)))) {
+    || (!fullPurge && !chartIds.some((chartId) => key.startsWith(`charts/${chartId}/`))))) {
     fail(PURGE_ERROR_CODES.manifestInvalid, "manifest", { reason: "r2_key_scope" });
   }
   if (!Number.isInteger(manifest.expectedObjectCount)
@@ -137,10 +141,189 @@ export function validateManifest(manifest, { candidateBytes } = {}) {
     || manifest.expectedProgressImageObjectCount !== progressObjects.length) {
     fail(PURGE_ERROR_CODES.manifestInvalid, "manifest", { reason: "object_kind_count" });
   }
-  if (manifest.guards?.exactIdsOnly !== true || manifest.guards?.wildcardDeleteAllowed !== false) {
+  if (manifest.guards?.exactIdsOnly !== true
+    || manifest.guards?.wildcardDeleteAllowed !== false
+    || (fullPurge && manifest.guards?.fullInventory !== true)) {
     fail(PURGE_ERROR_CODES.manifestInvalid, "manifest", { reason: "guards" });
   }
   return manifest;
+}
+
+function sortedUnique(values) {
+  return [...new Set(values.filter((value) => typeof value === "string" && value.length > 0))].sort();
+}
+
+export function buildAllChartPurgeArtifacts({
+  manifestId,
+  createdAt,
+  sourceCommit,
+  workerVersionId,
+  deploymentId,
+  d1DatabaseName,
+  r2BucketName,
+  rows,
+  r2Objects
+}) {
+  const chartIds = sortedUnique(rows.charts.map((row) => row.id));
+  const versionIds = sortedUnique(rows.versions.map((row) => row.id));
+  const songIds = sortedUnique(rows.songs.map((row) => row.id));
+  const withdrawalIds = sortedUnique(rows.version_withdrawals.map((row) => row.id));
+  const deleteRequestIds = sortedUnique(rows.delete_requests.map((row) => row.id));
+  const chartSet = new Set(chartIds);
+  const versionSet = new Set(versionIds);
+  const songSet = new Set(songIds);
+  const postLogIds = sortedUnique(rows.post_logs
+    .filter((row) => chartSet.has(row.chart_id) || versionSet.has(row.version_id))
+    .map((row) => row.id));
+  const sourceMetadataIds = sortedUnique(rows.version_source_metadata.map((row) => row.version_id));
+  const adminTargetIds = new Set([...chartIds, ...versionIds, ...songIds, ...withdrawalIds, ...deleteRequestIds]);
+  const adminLogIds = sortedUnique(rows.admin_logs
+    .filter((row) => adminTargetIds.has(row.target_id))
+    .map((row) => row.id));
+  const targetObjects = r2Objects.filter((object) => String(object.key).startsWith("charts/"));
+  const exactObjectKeys = sortedUnique(targetObjects.map((object) => object.key));
+  const referencedObjectKeys = sortedUnique(rows.versions.flatMap((row) => [row.r2_key, row.progress_image_key]));
+  const targetObjectSet = new Set(exactObjectKeys);
+  const referencedObjectSet = new Set(referencedObjectKeys);
+  const r2OrphanObjectKeys = exactObjectKeys.filter((key) => !referencedObjectSet.has(key));
+  const r2MissingReferencedKeys = referencedObjectKeys.filter((key) => !targetObjectSet.has(key));
+  const outsidePrefixCounts = Object.entries(r2Objects
+    .filter((object) => !String(object.key).startsWith("charts/"))
+    .reduce((counts, object) => {
+      const prefix = String(object.key).split("/")[0] || "(root)";
+      counts[prefix] = (counts[prefix] ?? 0) + 1;
+      return counts;
+    }, {}))
+    .map(([prefix, count]) => ({ prefix, count }))
+    .sort((left, right) => left.prefix.localeCompare(right.prefix));
+  const relatedRowIdsByTable = {
+    charts: chartIds,
+    versions: versionIds,
+    songs: songIds,
+    version_withdrawals: withdrawalIds,
+    delete_requests: deleteRequestIds,
+    post_logs: postLogIds,
+    version_source_metadata: sourceMetadataIds,
+    admin_logs: adminLogIds,
+    bans: []
+  };
+  const expectedRowCountsByTable = Object.fromEntries(
+    Object.entries(relatedRowIdsByTable).map(([table, ids]) => [table, ids.length])
+  );
+  const inventory = {
+    schemaVersion: 1,
+    manifestId,
+    createdAt,
+    sourceCommit,
+    workerVersionId,
+    deploymentId,
+    d1DatabaseName,
+    r2BucketName,
+    counts: {
+      charts: chartIds.length,
+      versions: versionIds.length,
+      songs: songIds.length,
+      versionWithdrawals: withdrawalIds.length,
+      deleteRequests: deleteRequestIds.length,
+      sourceMetadata: sourceMetadataIds.length,
+      targetPostLogs: postLogIds.length,
+      targetAdminLogs: adminLogIds.length,
+      r2ChartFiles: exactObjectKeys.filter((key) => !key.includes("/progress/")).length,
+      r2ProgressImages: exactObjectKeys.filter((key) => key.includes("/progress/")).length,
+      r2UnrelatedObjects: r2Objects.length - exactObjectKeys.length
+    },
+    ids: {
+      songIds,
+      chartIds,
+      versionIds,
+      withdrawalIds,
+      deleteRequestIds,
+      sourceMetadataIds,
+      postLogIds,
+      adminLogIds
+    },
+    versionRelationships: rows.versions.map((row) => ({
+      id: row.id,
+      chartId: row.chart_id,
+      parentVersionId: row.parent_version_id,
+      collapsedByVersionId: row.collapsed_by_version_id
+    })),
+    orphanChecks: {
+      chartsMissingSong: rows.charts.filter((row) => !songSet.has(row.song_id)).map((row) => row.id),
+      versionsMissingChart: rows.versions.filter((row) => !chartSet.has(row.chart_id)).map((row) => row.id),
+      versionsMissingParent: rows.versions.filter((row) => row.parent_version_id && !versionSet.has(row.parent_version_id)).map((row) => row.id),
+      versionsMissingCollapsedReference: rows.versions.filter((row) => row.collapsed_by_version_id && !versionSet.has(row.collapsed_by_version_id)).map((row) => row.id),
+      withdrawalsMissingTarget: rows.version_withdrawals.filter((row) => !chartSet.has(row.chart_id) || !versionSet.has(row.version_id)).map((row) => row.id),
+      deleteRequestsMissingTarget: rows.delete_requests.filter((row) => !chartSet.has(row.chart_id) || !versionSet.has(row.version_id)).map((row) => row.id),
+      sourceMetadataMissingVersion: rows.version_source_metadata.filter((row) => !versionSet.has(row.version_id)).map((row) => row.version_id),
+      r2OrphanObjectKeys,
+      r2MissingReferencedKeys,
+      foreignKeyViolations: rows.foreign_key_check
+    },
+    r2ExactObjects: targetObjects,
+    r2UnrelatedPrefixCounts: outsidePrefixCounts
+  };
+  const candidateText = [
+    "ALL_CHART_DATA_PURGE",
+    `manifest_id=${manifestId}`,
+    `source_commit=${sourceCommit}`,
+    `chart_count=${chartIds.length}`,
+    `version_count=${versionIds.length}`,
+    `song_count=${songIds.length}`,
+    `r2_object_count=${exactObjectKeys.length}`,
+    "[chart_ids]",
+    ...chartIds,
+    "[version_ids]",
+    ...versionIds,
+    "[song_ids]",
+    ...songIds,
+    "[r2_exact_object_keys]",
+    ...exactObjectKeys,
+    ""
+  ].join("\r\n");
+  const manifest = {
+    schemaVersion: 1,
+    manifestId,
+    createdAt,
+    sourceCommit,
+    workerVersionId,
+    deploymentId,
+    d1DatabaseName,
+    r2BucketName,
+    purgeScope: "all_chart_data",
+    approvalSource: "explicit_all_chart_data_request",
+    approvalState: "APPROVED",
+    approvedAt: createdAt,
+    approvedCandidateFileSha256: sha256Hex(Buffer.from(candidateText, "utf8")),
+    chartIds,
+    versionIds,
+    songIds,
+    withdrawalIds,
+    deleteRequestIds,
+    relatedRowIdsByTable,
+    r2ExactObjectKeys: exactObjectKeys,
+    r2ExactObjects: targetObjects,
+    expectedRowCountsByTable,
+    expectedObjectCount: exactObjectKeys.length,
+    expectedChartObjectCount: exactObjectKeys.filter((key) => !key.includes("/progress/")).length,
+    expectedProgressImageObjectCount: exactObjectKeys.filter((key) => key.includes("/progress/")).length,
+    keepChartIds: [],
+    keepVersionIds: [],
+    candidateChartIds: chartIds,
+    candidateVersionIds: versionIds,
+    candidateRelatedRows: relatedRowIdsByTable,
+    guards: {
+      exactIdsOnly: true,
+      wildcardDeleteAllowed: false,
+      fullInventory: true
+    }
+  };
+  return {
+    alreadyEmpty: chartIds.length === 0 || versionIds.length === 0,
+    inventory,
+    manifest,
+    candidateText
+  };
 }
 
 function placeholders(count) {
@@ -178,6 +361,15 @@ function exactGuard(table, column, ids, expected) {
     table,
     sql: `SELECT CASE WHEN (SELECT COUNT(*) FROM ${table} WHERE ${predicate}) = ${expected} THEN 1 ELSE json_extract('INVALID_TARGET','$.guard') END AS guard`,
     params: [...ids]
+  };
+}
+
+function totalGuard(table, expected) {
+  return {
+    kind: "guard",
+    table,
+    sql: `SELECT CASE WHEN (SELECT COUNT(*) FROM ${table}) = ${expected} THEN 1 ELSE json_extract('FULL_INVENTORY_CHANGED','$.guard') END AS guard`,
+    params: []
   };
 }
 
@@ -233,9 +425,11 @@ export function buildD1Batch(manifest, snapshot) {
   const versionIds = manifest.versionIds;
   const related = manifest.relatedRowIdsByTable;
   const counts = manifest.expectedRowCountsByTable;
+  const fullPurge = manifest.purgeScope === "all_chart_data";
   const adminTargets = [...new Set([
     ...chartIds,
     ...versionIds,
+    ...(fullPurge ? manifest.songIds : []),
     ...related.version_withdrawals,
     ...related.delete_requests
   ])];
@@ -244,23 +438,41 @@ export function buildD1Batch(manifest, snapshot) {
 
   statements.push(exactGuard("charts", "id", related.charts, counts.charts));
   const versionRelation = relationPredicate({ chart: "chart_id", version: "id" }, chartIds, versionIds);
-  statements.push(targetGuard("versions", versionRelation.sql, versionRelation.params, "id", related.versions, counts.versions));
+  statements.push(fullPurge
+    ? exactGuard("versions", "id", related.versions, counts.versions)
+    : targetGuard("versions", versionRelation.sql, versionRelation.params, "id", related.versions, counts.versions));
   const withdrawalRelation = relationPredicate({ chart: "chart_id", version: "version_id" }, chartIds, versionIds);
-  statements.push(targetGuard("version_withdrawals", withdrawalRelation.sql, withdrawalRelation.params, "id", related.version_withdrawals, counts.version_withdrawals));
+  statements.push(fullPurge
+    ? exactGuard("version_withdrawals", "id", related.version_withdrawals, counts.version_withdrawals)
+    : targetGuard("version_withdrawals", withdrawalRelation.sql, withdrawalRelation.params, "id", related.version_withdrawals, counts.version_withdrawals));
   const requestRelation = relationPredicate({ chart: "chart_id", version: "version_id" }, chartIds, versionIds);
-  statements.push(targetGuard("delete_requests", requestRelation.sql, requestRelation.params, "id", related.delete_requests, counts.delete_requests));
-  const postRelation = relationPredicate({ chart: "chart_id", version: "version_id" }, chartIds, versionIds);
+  statements.push(fullPurge
+    ? exactGuard("delete_requests", "id", related.delete_requests, counts.delete_requests)
+    : targetGuard("delete_requests", requestRelation.sql, requestRelation.params, "id", related.delete_requests, counts.delete_requests));
+  const postRelation = fullPurge
+    ? { sql: "(chart_id IN (SELECT id FROM charts) OR version_id IN (SELECT id FROM versions))", params: [] }
+    : relationPredicate({ chart: "chart_id", version: "version_id" }, chartIds, versionIds);
   statements.push(targetGuard("post_logs", postRelation.sql, postRelation.params, "id", related.post_logs, counts.post_logs));
   statements.push(exactGuard("version_source_metadata", "version_id", related.version_source_metadata, counts.version_source_metadata));
   statements.push(exactGuard("admin_logs", "id", related.admin_logs, counts.admin_logs));
   statements.push(exactGuard("songs", "id", related.songs, counts.songs));
-  statements.push({
+  if (fullPurge) {
+    for (const table of ["charts", "versions", "songs", "version_withdrawals", "delete_requests", "version_source_metadata"]) {
+      statements.push(totalGuard(table, counts[table]));
+    }
+  }
+  statements.push(fullPurge ? {
+    kind: "guard",
+    table: "versions",
+    sql: "SELECT 1 AS guard",
+    params: []
+  } : {
     kind: "guard",
     table: "versions",
     sql: `SELECT CASE WHEN (SELECT COUNT(*) FROM versions WHERE chart_id NOT IN (${placeholders(chartIds.length)}) AND (parent_version_id IN (${placeholders(versionIds.length)}) OR collapsed_by_version_id IN (${placeholders(versionIds.length)}))) = 0 THEN 1 ELSE json_extract('EXTERNAL_REFERENCE','$.guard') END AS guard`,
     params: [...chartIds, ...versionIds, ...versionIds]
   });
-  for (const songId of related.songs) {
+  for (const songId of fullPurge ? [] : related.songs) {
     statements.push({
       kind: "guard",
       table: "songs",
@@ -268,7 +480,14 @@ export function buildD1Batch(manifest, snapshot) {
       params: [songId, songId, ...related.charts]
     });
   }
-  statements.push({
+  statements.push(fullPurge ? targetGuard(
+    "admin_logs",
+    "target_id IN (SELECT id FROM charts) OR target_id IN (SELECT id FROM versions) OR target_id IN (SELECT id FROM songs) OR target_id IN (SELECT id FROM version_withdrawals) OR target_id IN (SELECT id FROM delete_requests)",
+    [],
+    "id",
+    related.admin_logs,
+    counts.admin_logs
+  ) : {
     kind: "guard",
     table: "admin_logs",
     sql: `SELECT CASE WHEN (SELECT COUNT(*) FROM admin_logs WHERE target_id IN (${placeholders(adminTargets.length)})) = ${counts.admin_logs} THEN 1 ELSE json_extract('ADMIN_LOG_TARGET_CHANGED','$.guard') END AS guard`,
@@ -311,6 +530,18 @@ export function buildD1Batch(manifest, snapshot) {
   return batch;
 }
 
+export function summarizeVerifiedD1Changes(manifest, { postStateVerified }) {
+  validateManifest(manifest);
+  if (postStateVerified !== true) {
+    fail(PURGE_ERROR_CODES.d1Failed, "d1-summary", { reason: "post_state_not_verified" });
+  }
+  const changesByTable = { ...manifest.expectedRowCountsByTable };
+  return {
+    changesByTable,
+    totalChanges: Object.values(changesByTable).reduce((total, count) => total + count, 0)
+  };
+}
+
 function sameSet(actual, expected) {
   const left = [...new Set(actual)].sort();
   const right = [...new Set(expected)].sort();
@@ -335,7 +566,8 @@ export function assertTargetUnchanged(manifest, snapshot) {
     }
   }
   if (Number(snapshot.externalReferenceCount ?? 0) !== 0
-    || snapshot.songChartCounts?.some((entry) => Number(entry.chart_count) !== 1)) {
+    || (manifest.purgeScope !== "all_chart_data"
+      && snapshot.songChartCounts?.some((entry) => Number(entry.chart_count) !== 1))) {
     fail(PURGE_ERROR_CODES.targetChanged, "target", { reason: "dependencies" });
   }
   if (snapshot.keepChartCount !== undefined
@@ -474,7 +706,10 @@ export async function deleteExactR2Objects({
   keys,
   deleteObject,
   objectExists,
-  maxAttempts = 3
+  maxAttempts = 3,
+  retryDelayMs = 0,
+  shouldRetry = () => true,
+  wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 }) {
   if (!Array.isArray(keys) || keys.some((key) => typeof key !== "string" || /[*?]/u.test(key))) {
     fail(PURGE_ERROR_CODES.manifestInvalid, "r2", { reason: "invalid_keys" });
@@ -505,6 +740,11 @@ export async function deleteExactR2Objects({
           }
         } catch {
           lastCode = "R2_VERIFY_FAILED";
+        }
+        if (!complete && attempt < maxAttempts && shouldRetry(lastCode) && retryDelayMs > 0) {
+          await wait(retryDelayMs * (2 ** (attempt - 1)));
+        } else if (!complete && !shouldRetry(lastCode)) {
+          break;
         }
       }
     }

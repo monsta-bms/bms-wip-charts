@@ -7,12 +7,14 @@ import {
   applySqlBatchLocally,
   assertSafeLogText,
   assertSqlSafety,
+  buildAllChartPurgeArtifacts,
   buildD1Batch,
   computeVersionDeleteOrder,
   deleteExactR2Objects,
   encodeR2ObjectKey,
   inspectLocalSnapshot,
   runGuardedLocalD1Apply,
+  summarizeVerifiedD1Changes,
   validateManifest
 } from "./admin/test-data-purge-lib.mjs";
 
@@ -80,6 +82,41 @@ function makeManifest(overrides = {}) {
   return manifest;
 }
 
+function makeFullManifest(overrides = {}) {
+  return makeManifest({
+    purgeScope: "all_chart_data",
+    chartIds: [ids.targetChart, ids.keepChart],
+    versionIds: [ids.rootVersion, ids.childVersion, ids.keepVersion],
+    songIds: [ids.targetSong, ids.keepSong],
+    keepChartIds: [],
+    keepVersionIds: [],
+    relatedRowIdsByTable: {
+      charts: [ids.targetChart, ids.keepChart],
+      versions: [ids.rootVersion, ids.childVersion, ids.keepVersion],
+      songs: [ids.targetSong, ids.keepSong],
+      version_withdrawals: [ids.withdrawal],
+      delete_requests: [ids.deleteRequest],
+      post_logs: [ids.postLog],
+      version_source_metadata: [ids.rootVersion, ids.childVersion],
+      admin_logs: [ids.adminLog],
+      bans: []
+    },
+    expectedRowCountsByTable: {
+      charts: 2,
+      versions: 3,
+      songs: 2,
+      version_withdrawals: 1,
+      delete_requests: 1,
+      post_logs: 1,
+      version_source_metadata: 2,
+      admin_logs: 1,
+      bans: 0
+    },
+    guards: { exactIdsOnly: true, wildcardDeleteAllowed: false, fullInventory: true },
+    ...overrides
+  });
+}
+
 function createDatabase({ sharedSong = false } = {}) {
   const database = new DatabaseSync(":memory:");
   database.exec(`
@@ -143,6 +180,87 @@ async function check(name, callback) {
 
 await check("approved exact-ID manifest is accepted", () => {
   assert.equal(validateManifest(makeManifest(), { candidateBytes }).manifestId.length > 0, true);
+});
+
+await check("all-chart inventory builds an approved exact manifest including orphan R2 keys", () => {
+  const orphanKey = "charts/chart_cccccccc-cccc-4ccc-8ccc-cccccccccccc/orphan/file.bms";
+  const artifacts = buildAllChartPurgeArtifacts({
+    manifestId: "all-chart-data-purge-11111111-1111-4111-8111-111111111111",
+    createdAt: "2026-08-02T00:00:00.000Z",
+    sourceCommit: "a".repeat(40),
+    workerVersionId: "worker-version",
+    deploymentId: "deployment",
+    d1DatabaseName: "wip-bms-charts-db",
+    r2BucketName: "wip-bms-charts-files",
+    rows: {
+      songs: [{ id: ids.targetSong }],
+      charts: [{ id: ids.targetChart, song_id: ids.targetSong }],
+      versions: [{ id: ids.rootVersion, chart_id: ids.targetChart, parent_version_id: null, collapsed_by_version_id: null, r2_key: `charts/${ids.targetChart}/file.bms`, progress_image_key: null }],
+      version_withdrawals: [],
+      delete_requests: [],
+      post_logs: [],
+      version_source_metadata: [{ version_id: ids.rootVersion }],
+      admin_logs: [],
+      foreign_key_check: []
+    },
+    r2Objects: [
+      { key: `charts/${ids.targetChart}/file.bms`, size: 10 },
+      { key: orphanKey, size: 20 },
+      { key: "system/keep.txt", size: 30 }
+    ]
+  });
+  assert.equal(artifacts.alreadyEmpty, false);
+  assert.deepEqual(artifacts.manifest.keepChartIds, []);
+  assert.deepEqual(artifacts.inventory.orphanChecks.r2OrphanObjectKeys, [orphanKey]);
+  assert.equal(artifacts.inventory.counts.r2UnrelatedObjects, 1);
+  validateManifest(artifacts.manifest, { candidateBytes: Buffer.from(artifacts.candidateText, "utf8") });
+});
+
+await check("all-chart manifest rejects any KEEP IDs", async () => {
+  await expectCode(
+    () => validateManifest(makeFullManifest({ keepChartIds: [ids.keepChart] })),
+    PURGE_ERROR_CODES.manifestInvalid
+  );
+});
+
+await check("all-chart transaction deletes every chart version and song while retaining bans", () => {
+  const database = createDatabase();
+  database.prepare("INSERT INTO bans (id) VALUES (?)").run("ban_11111111-1111-4111-8111-111111111111");
+  try {
+    runGuardedLocalD1Apply({ database, manifest: makeFullManifest(), backupReady: true });
+    for (const table of ["charts", "versions", "songs", "version_withdrawals", "delete_requests", "version_source_metadata"]) {
+      assert.equal(database.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count, 0);
+    }
+    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM bans").get().count, 1);
+  } finally {
+    database.close();
+  }
+});
+
+await check("all-chart transaction aborts when a new row appears after inventory", () => {
+  const database = createDatabase();
+  try {
+    const manifest = makeFullManifest();
+    const snapshot = inspectLocalSnapshot(database, manifest);
+    const batch = buildD1Batch(manifest, snapshot);
+    database.prepare("INSERT INTO songs (id,title) VALUES (?,?)").run("song_33333333-3333-4333-8333-333333333333", "late");
+    assert.throws(() => applySqlBatchLocally(database, batch));
+    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM charts").get().count, 2);
+    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM versions").get().count, 3);
+  } finally {
+    database.close();
+  }
+});
+
+await check("D1 success summary requires verified post-state instead of per-statement telemetry", async () => {
+  const manifest = makeFullManifest();
+  const summary = summarizeVerifiedD1Changes(manifest, { postStateVerified: true });
+  assert.deepEqual(summary.changesByTable, manifest.expectedRowCountsByTable);
+  assert.equal(summary.totalChanges, 13);
+  await expectCode(
+    () => summarizeVerifiedD1Changes(manifest, { postStateVerified: false }),
+    PURGE_ERROR_CODES.d1Failed
+  );
 });
 
 await check("whole chart and all dependent rows are deleted", () => {
@@ -297,12 +415,33 @@ await check("R2 partial failure returns exact orphan cleanup plan", async () => 
       if (key.endsWith("b.png")) throw new Error("R2_DELETE_FAILED");
       existing.delete(key);
     },
-    objectExists: async (key) => existing.has(key)
+    objectExists: async (key) => existing.has(key),
+    retryDelayMs: 1,
+    wait: async () => {}
   });
   assert.equal(result.deleted.length, 1);
   assert.equal(result.failures.length, 1);
   assert.equal(result.attemptCount, 3);
   assert.deepEqual(result.orphanPlan, [{ key: keys[1], action: "RETRY_EXACT_DELETE", code: "R2_DELETE_FAILED" }]);
+});
+
+await check("R2 non-retryable API failure stops after one exact-key attempt", async () => {
+  let attempts = 0;
+  const result = await deleteExactR2Objects({
+    keys: ["charts/chart_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/file.bms"],
+    maxAttempts: 5,
+    retryDelayMs: 1,
+    shouldRetry: (code) => /^CLOUDFLARE_HTTP_(?:429|5\d\d)$/u.test(code),
+    wait: async () => {},
+    deleteObject: async () => {
+      attempts += 1;
+      throw new Error("CLOUDFLARE_API_10000");
+    },
+    objectExists: async () => true
+  });
+  assert.equal(attempts, 1);
+  assert.equal(result.failures.length, 1);
+  assert.equal(result.failures[0].code, "CLOUDFLARE_API_10000");
 });
 
 await check("LIKE deletion is rejected", async () => {
