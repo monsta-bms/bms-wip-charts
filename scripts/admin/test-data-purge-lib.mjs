@@ -542,6 +542,26 @@ export function summarizeVerifiedD1Changes(manifest, { postStateVerified }) {
   };
 }
 
+export function assertPostDeleteBaselineCounts({
+  actualCounts,
+  baselineCounts,
+  deletedCounts,
+  allowPreservedTableGrowth = false
+}) {
+  const preservedTables = new Set(["post_logs", "admin_logs", "bans"]);
+  for (const table of Object.keys(baselineCounts)) {
+    const expected = Number(baselineCounts[table]) - Number(deletedCounts[table]);
+    const actual = Number(actualCounts[table]);
+    const valid = allowPreservedTableGrowth && preservedTables.has(table)
+      ? actual >= expected
+      : actual === expected;
+    if (!valid) {
+      fail(PURGE_ERROR_CODES.verifyFailed, "d1-verify", { table, reason: "outside_count" });
+    }
+  }
+  return true;
+}
+
 function sameSet(actual, expected) {
   const left = [...new Set(actual)].sort();
   const right = [...new Set(expected)].sort();

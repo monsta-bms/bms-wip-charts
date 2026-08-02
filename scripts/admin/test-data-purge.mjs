@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import {
   PURGE_ERROR_CODES,
   TestDataPurgeError,
+  assertPostDeleteBaselineCounts,
   assertR2TargetUnchanged,
   assertSafeLogText,
   assertTargetUnchanged,
@@ -763,7 +764,7 @@ async function runApplyD1(context) {
   return purgeResult;
 }
 
-function assertD1PostDeleteState(context, post, dryRun) {
+function assertD1PostDeleteState(context, post, dryRun, { allowPreservedTableGrowth = false } = {}) {
   const targetCounts = {
     charts: post.chartIds.length,
     versions: post.versionRows.length,
@@ -781,12 +782,12 @@ function assertD1PostDeleteState(context, post, dryRun) {
     || post.keepVersionCount !== context.manifest.keepVersionIds.length) {
     fail(PURGE_ERROR_CODES.verifyFailed, "d1-verify", { reason: "target_rows" });
   }
-  for (const table of TABLES) {
-    const expected = Number(dryRun.baselineCounts[table]) - Number(context.manifest.expectedRowCountsByTable[table]);
-    if (post.baselineCounts[table] !== expected) {
-      fail(PURGE_ERROR_CODES.verifyFailed, "d1-verify", { table, reason: "outside_count" });
-    }
-  }
+  assertPostDeleteBaselineCounts({
+    actualCounts: post.baselineCounts,
+    baselineCounts: dryRun.baselineCounts,
+    deletedCounts: context.manifest.expectedRowCountsByTable,
+    allowPreservedTableGrowth
+  });
   return targetCounts;
 }
 
@@ -870,7 +871,7 @@ async function runVerify(context) {
   const dryRun = await readJson(join(context.outputDir, "dry-run-result.json"), PURGE_ERROR_CODES.verifyFailed);
   if (purge.status !== "complete") fail(PURGE_ERROR_CODES.verifyFailed, "verify", { reason: "purge_incomplete" });
   const post = await collectSnapshot(context);
-  const targetCounts = assertD1PostDeleteState(context, post, dryRun);
+  const targetCounts = assertD1PostDeleteState(context, post, dryRun, { allowPreservedTableGrowth: true });
   const objects = await listR2Objects(context);
   const target = targetR2Objects(context.manifest, objects);
   const outside = objects.map((object) => object.key).filter((key) => !context.manifest.r2ExactObjectKeys.includes(key));

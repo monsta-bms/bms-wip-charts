@@ -5,6 +5,7 @@ import {
   PURGE_ERROR_CODES,
   TestDataPurgeError,
   applySqlBatchLocally,
+  assertPostDeleteBaselineCounts,
   assertSafeLogText,
   assertSqlSafety,
   buildAllChartPurgeArtifacts,
@@ -260,6 +261,35 @@ await check("D1 success summary requires verified post-state instead of per-stat
   await expectCode(
     () => summarizeVerifiedD1Changes(manifest, { postStateVerified: false }),
     PURGE_ERROR_CODES.d1Failed
+  );
+});
+
+await check("post-purge verification allows preserved security log growth but not loss or chart growth", async () => {
+  const baselineCounts = { charts: 2, post_logs: 5, admin_logs: 8, bans: 1 };
+  const deletedCounts = { charts: 2, post_logs: 3, admin_logs: 2, bans: 0 };
+  assert.equal(assertPostDeleteBaselineCounts({
+    actualCounts: { charts: 0, post_logs: 3, admin_logs: 7, bans: 2 },
+    baselineCounts,
+    deletedCounts,
+    allowPreservedTableGrowth: true
+  }), true);
+  await expectCode(
+    () => assertPostDeleteBaselineCounts({
+      actualCounts: { charts: 1, post_logs: 3, admin_logs: 7, bans: 2 },
+      baselineCounts,
+      deletedCounts,
+      allowPreservedTableGrowth: true
+    }),
+    PURGE_ERROR_CODES.verifyFailed
+  );
+  await expectCode(
+    () => assertPostDeleteBaselineCounts({
+      actualCounts: { charts: 0, post_logs: 1, admin_logs: 7, bans: 2 },
+      baselineCounts,
+      deletedCounts,
+      allowPreservedTableGrowth: true
+    }),
+    PURGE_ERROR_CODES.verifyFailed
   );
 });
 
