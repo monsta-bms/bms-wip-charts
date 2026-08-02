@@ -11,6 +11,7 @@ import {
   GUIDE_SECTION_IDS,
   initializeManifest,
   loadManifest,
+  parseChangelogTxt,
   parseGuideTxt,
   parseUiTxt,
   SiteCopyError,
@@ -45,11 +46,19 @@ function guideHtml() {
 `;
 }
 
+function changelogHtml() {
+  return `<!doctype html><html lang="ja"><body><main>
+  <article class="changelog-entry" data-copy-entry="CHANGELOG_20260802"><p class="changelog-date"><time datetime="2026-08-02">2026/08/02</time></p><div><h2>正式公開</h2><ul><li>サイトを正式公開しました。</li><li>公開前に内容を確認しました。</li></ul></div></article>
+  <article class="changelog-entry" data-copy-entry="CHANGELOG_20260731"><p class="changelog-date"><time datetime="2026-07-31">2026/07/31</time></p><div><h2>文章編集</h2><ul><li>案内文を編集しやすくしました。</li></ul></div></article>
+</main></body></html>\n`;
+}
+
 function createFixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "bms-site-copy-block-test-"));
   write(root, "docs/index.html", `<!doctype html><html lang="ja"><body><h1 data-copy-key="home-title">BMS差分共有サイト</h1><p data-copy-key="home-description">差分を投稿できます。</p></body></html>\n`);
   write(root, "docs/app.js", `const loadingMessage = "読み込み中…";\n`);
   write(root, "docs/guide.html", guideHtml());
+  write(root, "docs/changelog.html", changelogHtml());
   execFileSync("git", ["init", "--initial-branch=main"], { cwd: root, windowsHide: true, stdio: "ignore" });
   execFileSync("git", ["config", "user.name", "Site Copy Test"], { cwd: root, windowsHide: true });
   execFileSync("git", ["config", "user.email", "site-copy@example.invalid"], { cwd: root, windowsHide: true });
@@ -83,6 +92,12 @@ function createFixture() {
         GUIDE_MANAGEMENT: "management",
         GUIDE_SAFETY: "safety"
       }[id] ?? null
+    })),
+    changelogEntries: ["CHANGELOG_20260802", "CHANGELOG_20260731"].map((id) => ({
+      id,
+      sourcePath: "docs/changelog.html",
+      deploymentTarget: "PAGES",
+      allowEmpty: false
     })),
     manualReview: []
   };
@@ -124,22 +139,34 @@ function removeGuideSection(text, sectionId) {
   return `${text.slice(0, start)}${text.slice(end)}`;
 }
 
+function editChangelogEntry(text, entryId, markdown) {
+  const startMarker = `<!-- ENTRY: ${entryId} -->`;
+  const endMarker = `<!-- END ENTRY: ${entryId} -->`;
+  const markerStart = text.indexOf(startMarker);
+  const contentStart = text.indexOf("\n", markerStart) + 1;
+  const contentEnd = text.indexOf(endMarker, contentStart);
+  assert.ok(markerStart >= 0 && contentEnd >= contentStart);
+  return `${text.slice(0, contentStart)}\n${markdown.trim()}\n\n${text.slice(contentEnd)}`;
+}
+
 function expectCode(code, callback) {
   assert.throws(callback, (error) => error instanceof SiteCopyError && error.code === code);
 }
 
-function validate(fixture, uiText = fixture.exported.uiTxt, guideText = fixture.exported.guideTxt, rootDir = fixture.root) {
-  return validateEditedCopies(uiText, guideText, fixture.exported.snapshot, { rootDir });
+function validate(fixture, uiText = fixture.exported.uiTxt, guideText = fixture.exported.guideTxt, rootDir = fixture.root, changelogText = fixture.exported.changelogTxt) {
+  return validateEditedCopies(uiText, guideText, fixture.exported.snapshot, { rootDir, changelogText });
 }
 
-test("two practical edit files export without locator or hash metadata", () => {
+test("three practical edit files export without locator or hash metadata", () => {
   const fixture = createFixture();
   try {
     assert.match(fixture.exported.uiTxt, /^# BMS-WIP UI COPY EDIT v1/mu);
     assert.match(fixture.exported.guideTxt, /^# BMS-WIP GUIDE EDIT v1/mu);
-    assert.doesNotMatch(`${fixture.exported.uiTxt}${fixture.exported.guideTxt}`, /locator|SHA256|sourcePath|deploymentTarget/iu);
+    assert.match(fixture.exported.changelogTxt, /^# BMS-WIP CHANGELOG EDIT v1/mu);
+    assert.doesNotMatch(`${fixture.exported.uiTxt}${fixture.exported.guideTxt}${fixture.exported.changelogTxt}`, /locator|SHA256|sourcePath|deploymentTarget/iu);
     assert.equal(parseUiTxt(fixture.exported.uiTxt).blocks.length, 1);
     assert.equal(parseGuideTxt(fixture.exported.guideTxt).sections.length, 8);
+    assert.equal(parseChangelogTxt(fixture.exported.changelogTxt).entries.length, 2);
   } finally { removeFixture(fixture); }
 });
 
@@ -149,6 +176,46 @@ test("unmodified round trip has zero changes", () => {
     const result = validate(fixture);
     assert.equal(result.uiChangeCount, 0);
     assert.equal(result.guideChangeCount, 0);
+    assert.equal(result.changelogChangeCount, 0);
+  } finally { removeFixture(fixture); }
+});
+
+test("whole changelog entry can be edited", () => {
+  const fixture = createFixture();
+  try {
+    const markdown = "## 2026/08/02\n\n### 正式公開を開始しました\n\n- サイトを正式公開しました。\n- 現在、公開終了の予定はありません。";
+    const result = validate(fixture, fixture.exported.uiTxt, fixture.exported.guideTxt, fixture.root, editChangelogEntry(fixture.exported.changelogTxt, "CHANGELOG_20260802", markdown));
+    assert.equal(result.changelogChangeCount, 1);
+    assert.equal(result.changelogChanges[0].after, `${markdown}\n`);
+  } finally { removeFixture(fixture); }
+});
+
+test("changelog bullet items can be added and deleted", () => {
+  const fixture = createFixture();
+  try {
+    const before = fixture.exported.snapshot.changelogEntries[0].currentMarkdown;
+    const added = editChangelogEntry(fixture.exported.changelogTxt, "CHANGELOG_20260802", `${before.trim()}\n- 追加項目です。`);
+    assert.equal(validate(fixture, fixture.exported.uiTxt, fixture.exported.guideTxt, fixture.root, added).changelogChangeCount, 1);
+    const deleted = editChangelogEntry(fixture.exported.changelogTxt, "CHANGELOG_20260802", before.replace("\n- 公開前に内容を確認しました。", ""));
+    assert.equal(validate(fixture, fixture.exported.uiTxt, fixture.exported.guideTxt, fixture.root, deleted).changelogChangeCount, 1);
+  } finally { removeFixture(fixture); }
+});
+
+test("changelog ENTRY marker changes are rejected", () => {
+  const fixture = createFixture();
+  try {
+    const edited = fixture.exported.changelogTxt.replaceAll("CHANGELOG_20260802", "CHANGELOG_20260803");
+    expectCode("SITE_COPY_GUIDE_SECTION_MISSING", () => validate(fixture, fixture.exported.uiTxt, fixture.exported.guideTxt, fixture.root, edited));
+  } finally { removeFixture(fixture); }
+});
+
+test("HTML and arbitrary URLs in changelog entries are rejected", () => {
+  const fixture = createFixture();
+  try {
+    const html = editChangelogEntry(fixture.exported.changelogTxt, "CHANGELOG_20260802", "## 2026/08/02\n\n### 正式公開\n\n<script>alert(1)</script>");
+    expectCode("SITE_COPY_GUIDE_HTML_FORBIDDEN", () => validate(fixture, fixture.exported.uiTxt, fixture.exported.guideTxt, fixture.root, html));
+    const url = editChangelogEntry(fixture.exported.changelogTxt, "CHANGELOG_20260802", "## 2026/08/02\n\n### 正式公開\n\nhttps://example.invalid を参照します。");
+    expectCode("SITE_COPY_GUIDE_URL_FORBIDDEN", () => validate(fixture, fixture.exported.uiTxt, fixture.exported.guideTxt, fixture.root, url));
   } finally { removeFixture(fixture); }
 });
 
@@ -289,6 +356,15 @@ test("source baseline mismatch is rejected", () => {
   } finally { removeFixture(fixture); }
 });
 
+test("changelog source baseline mismatch is rejected", () => {
+  const fixture = createFixture();
+  try {
+    const filePath = path.join(fixture.root, "docs", "changelog.html");
+    fs.writeFileSync(filePath, fs.readFileSync(filePath, "utf8").replace("サイトを正式公開しました。", "別の文章です。"), "utf8");
+    expectCode("SITE_COPY_GUIDE_BASELINE_MISMATCH", () => validate(fixture));
+  } finally { removeFixture(fixture); }
+});
+
 test("LF CRLF and UTF-8 BOM inputs are accepted", () => {
   const fixture = createFixture();
   try {
@@ -310,6 +386,25 @@ test("apply updates UI and guide then refreshes manifest baselines", () => {
     assert.match(fs.readFileSync(path.join(fixture.root, "docs", "index.html"), "utf8"), /新しい見出し/u);
     assert.match(fs.readFileSync(path.join(fixture.root, "docs", "guide.html"), "utf8"), /新しい利用ガイド/u);
     assert.doesNotThrow(() => assertManifest(fixture.root, loadManifest(fixture.manifestPath)));
+  } finally { removeFixture(fixture); }
+});
+
+test("apply updates only the selected changelog entry and refreshes its baseline", () => {
+  const fixture = createFixture();
+  try {
+    const beforeOther = fixture.exported.snapshot.changelogEntries[1].currentMarkdown;
+    const markdown = "## 2026/08/02\n\n### 正式公開を開始しました\n\n- サイトを正式公開しました。\n- 現在、公開終了の予定はありません。";
+    const edited = editChangelogEntry(fixture.exported.changelogTxt, "CHANGELOG_20260802", markdown);
+    const result = validate(fixture, fixture.exported.uiTxt, fixture.exported.guideTxt, fixture.root, edited);
+    const applied = applyEditedCopies(fixture.root, fixture.manifestPath, result);
+    assert.equal(applied.changelogEntryCount, 1);
+    const html = fs.readFileSync(path.join(fixture.root, "docs", "changelog.html"), "utf8");
+    assert.match(html, /正式公開を開始しました/u);
+    assert.match(html, /data-copy-entry="CHANGELOG_20260731"/u);
+    const refreshed = loadManifest(fixture.manifestPath);
+    assert.doesNotThrow(() => assertManifest(fixture.root, refreshed));
+    const exported = buildExport(fixture.root, refreshed);
+    assert.equal(exported.snapshot.changelogEntries[1].currentMarkdown, beforeOther);
   } finally { removeFixture(fixture); }
 });
 
@@ -349,16 +444,18 @@ test("write failure rolls every file back and removes temporary backup", () => {
   } finally { removeFixture(fixture); }
 });
 
-test("repository manifest resolves 15 UI blocks, 85 fields, and 8 guide sections", () => {
+test("repository manifest resolves UI, guide, and changelog definitions", () => {
   const root = path.resolve(import.meta.dirname, "..");
   const manifest = loadManifest(path.join(root, "site-copy", "site-copy-manifest.json"));
   assert.equal(manifest.uiBlocks.length, 15);
   assert.equal(manifest.uiBlocks.reduce((sum, block) => sum + block.fields.length, 0), 85);
   assert.equal(manifest.guideSections.length, 8);
+  assert.ok(Array.isArray(manifest.changelogEntries));
   assert.equal(manifest.manualReview.length, 0);
   assert.ok(manifest.uiBlocks.flatMap((block) => block.fields).every((field) => field.deploymentTarget === "PAGES"));
   assert.doesNotThrow(() => assertManifest(root, manifest));
   const exported = buildExport(root, manifest, "2026-07-31T00:00:00.000Z");
+  assert.equal(parseChangelogTxt(exported.changelogTxt).entries.length, manifest.changelogEntries.length);
   assert.equal((exported.guideTxt.match(/\(LINK:[A-Z][A-Z0-9_]*\)/gu) ?? []).length, 7);
   for (const id of ["POST_FORM", "LIST", "RC_STAR", "RC_DOUBLE_STAR"]) assert.match(exported.guideTxt, new RegExp(`LINK:${id}`, "u"));
 });

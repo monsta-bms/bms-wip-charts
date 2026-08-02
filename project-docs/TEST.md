@@ -2,9 +2,9 @@
 
 ## SITE-COPY-EDITOR-01
 
-- `node scripts/test-site-copy-editor.mjs`で2ファイルexport、無編集round trip、UIブロック編集、ガイド章全体編集、段落と箇条書きの追加／削除、小見出し変更、固定LINK、SECTION不足／未知／重複／未終了、HTML／任意URL拒否、source baseline、LF／CRLF／BOM、正常apply、途中失敗rollbackと一時backup削除を検査する。
-- 実manifestはUI 15ブロック／85欄、ガイド8章、manual review 0件、対象がすべてPAGESであることを確認する。`docs/guide.html`の8個の`data-copy-section`と公開HTMLのIDは重複を許可しない。
-- `node scripts/site-copy/validate-site-copy.mjs --ui <UI TXT> --guide <GUIDE TXT> --snapshot <snapshot>`は固定error codeで破損を拒否し、無編集exportではUI／ガイド変更0件と`SITE_COPY_GUIDE_DRY_RUN_COMPLETE`を返すこと。`diff-site-copy.mjs`はUI欄の変更前後文字数とガイドの追加／削除段落だけを表示すること。
+- `node scripts/test-site-copy-editor.mjs`で3ファイルexport、無編集round trip、UIブロック編集、ガイド章全体編集、更新履歴ENTRY全体編集、段落と箇条書きの追加／削除、ENTRY marker固定、小見出し変更、固定LINK、SECTION／ENTRY不足・未知・重複・未終了、HTML／任意URL拒否、source baseline、LF／CRLF／BOM、正常apply、途中失敗rollbackと一時backup削除を検査する。
+- 実manifestはUI 15ブロック／85欄、ガイド8章、更新履歴ENTRY群、manual review 0件、対象がすべてPAGESであることを確認する。`docs/guide.html`の8個の`data-copy-section`、`docs/changelog.html`の`data-copy-entry`、公開HTMLのIDは重複を許可しない。
+- `node scripts/site-copy/validate-site-copy.mjs --ui <UI TXT> --guide <GUIDE TXT> --changelog <CHANGELOG TXT> --snapshot <snapshot>`は固定error codeで破損を拒否し、無編集exportではUI／ガイド／更新履歴変更0件と`SITE_COPY_GUIDE_DRY_RUN_COMPLETE`を返すこと。`diff-site-copy.mjs`はUI欄、ガイド章、更新履歴ENTRYの追加／削除段落だけを表示すること。
 - `node scripts/site-copy/apply-site-copy.mjs`は既定でファイルを書き換えず、`--apply`指定時もclean worktree、source baseline、一意locator、固定LINK、反映後のHTML→編集形式往復一致を必須とする。複数fileを全置換前に計画し、途中失敗時は書込み済みfileを復元すること。
 - 初回export前にrepository hygiene、canonical D1 schema、全site-copy scriptの`node --check`、HTML ID、主要Pages static／browser回帰、Worker typecheck、`git diff --check`を実行する。TXT、snapshot、export log／resultはrepository外へ置き、一時fixtureは終了時に削除する。本番deploy、D1／R2／Secret操作、production write、pushは行わない。
 

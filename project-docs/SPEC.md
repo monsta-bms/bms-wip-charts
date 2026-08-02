@@ -2,11 +2,12 @@
 
 ## SITE-COPY-EDITOR-01 v1.1 ブロック文章編集ワークフロー
 
-- 公開Pagesの利用者向けUI文言とガイド本文はソースコードを正データとし、`site-copy/site-copy-manifest.json`で論理ブロック、構造locator、現在値SHA-256を管理する。manifestと診断ログに編集後本文を保存せず、Worker、API error、ARIA、placeholder、内部識別子は対象外とする。
-- 利用者が編集するのはrepository外の`BMS差分共有サイト_UI文章編集.txt`と`BMS差分共有サイト_ガイド全文編集.txt`だけとする。UI文言は15個の論理ブロック内の名称付き欄、ガイドは`GUIDE_INTRO`、`GUIDE_QUICK_USE`、`GUIDE_FEATURE_INDEX`、`GUIDE_POSTING`、`GUIDE_PROGRESS`、`GUIDE_DIFFICULTY`、`GUIDE_MANAGEMENT`、`GUIDE_SAFETY`の8章を章単位で編集する。
+- 公開Pagesの利用者向けUI文言、ガイド本文、更新履歴はソースコードを正データとし、`site-copy/site-copy-manifest.json`で論理ブロック、構造locator、現在値SHA-256を管理する。manifestと診断ログに編集後本文を保存せず、Worker、API error、ARIA、placeholder、内部識別子は対象外とする。
+- 利用者が編集するのはrepository外の`BMS差分共有サイト_UI文章編集.txt`、`BMS差分共有サイト_ガイド全文編集.txt`、`BMS差分共有サイト_更新履歴編集.txt`だけとする。UI文言は15個の論理ブロック内の名称付き欄、ガイドは`GUIDE_INTRO`、`GUIDE_QUICK_USE`、`GUIDE_FEATURE_INDEX`、`GUIDE_POSTING`、`GUIDE_PROGRESS`、`GUIDE_DIFFICULTY`、`GUIDE_MANAGEMENT`、`GUIDE_SAFETY`の8章、更新履歴は1日または1節目を1個の`ENTRY`として編集する。
 - ガイド編集形式は見出しレベル1～3、段落、箇条書き、番号付きリストを許可する。リンク先は`POST_FORM`、`LIST`、`RC_STAR`、`RC_DOUBLE_STAR`の固定`LINK`識別子だけを使用でき、識別子の追加・削除・変更、任意URL、HTML、実行コードは拒否する。機能索引の内部アンカー5件は固定構造として維持する。
-- `docs/guide.html`の各章は一意な`data-copy-section`で特定する。UIのHTML文言は`id`または`data-copy-key`、JavaScript文言は文字列ordinalと前後anchor hashで特定し、反映前後に一意性とsource baselineを再検査する。行番号やファイル全文の一致だけには依存しない。
-- `scripts/site-copy/export-site-copy.mjs`はmain、clean worktree、origin/mainとの同期条件、root `wrangler.jsonc`不存在を確認して2つのTXTとsnapshotをrepository外へ生成する。`validate-site-copy.mjs`は両TXTとbaselineを検査し、`diff-site-copy.mjs`はUI欄とガイド段落の変更概要だけをdry-run表示する。
+- `docs/guide.html`の各章は一意な`data-copy-section`、`docs/changelog.html`の各節目は一意な`data-copy-entry`で特定する。UIのHTML文言は`id`または`data-copy-key`、JavaScript文言は文字列ordinalと前後anchor hashで特定し、反映前後に一意性とsource baselineを再検査する。行番号やファイル全文の一致だけには依存しない。
+- 更新履歴TXTは`## YYYY/MM/DD`、`### 見出し`、段落／箇条書き／番号付きリストを許可し、ENTRY ID、HTML、実行コード、任意URL、未来日付を拒否する。反映時は指定ENTRYの本文だけを置換し、日付表示と`datetime`を一致させる。
+- `scripts/site-copy/export-site-copy.mjs`はmain、clean worktree、origin/mainとの同期条件、root `wrangler.jsonc`不存在を確認して3つのTXTとsnapshotをrepository外へ生成する。`validate-site-copy.mjs`は3つのTXTとbaselineを検査し、`diff-site-copy.mjs`はUI欄、ガイド章、更新履歴ENTRYの変更概要だけをdry-run表示する。
 - `apply-site-copy.mjs`は既定でdry-runとし、明示的な`--apply`がある場合だけ全変更を事前計画して書き込む。途中失敗時は一時backupから全ファイルを復元し、backupを削除する。TXT取込み、dry-run、applyのいずれもpush、Pages／Worker deploy、D1／R2／Secret操作、production writeを自動実行しない。
 
 ## POST-FORM-TREE-12 ファイル欄整列・要約・版ツリー接続

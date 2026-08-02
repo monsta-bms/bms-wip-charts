@@ -3,6 +3,7 @@ import path from "node:path";
 import {
   assertExportRepository,
   buildExport,
+  CHANGELOG_FILENAME,
   exportSummary,
   GUIDE_FILENAME,
   loadManifest,
@@ -33,11 +34,13 @@ try {
   fs.mkdirSync(catalogDir, { recursive: true });
   const uiPath = path.join(options.outputDir, UI_FILENAME);
   const guidePath = path.join(options.outputDir, GUIDE_FILENAME);
+  const changelogPath = path.join(options.outputDir, CHANGELOG_FILENAME);
   const snapshotPath = path.join(catalogDir, "site-copy-manifest.snapshot.json");
   const logPath = path.join(catalogDir, "site-copy-export.log");
   const resultPath = path.join(catalogDir, "site-copy-export-result.json");
   fs.writeFileSync(uiPath, result.uiTxt, "utf8");
   fs.writeFileSync(guidePath, result.guideTxt, "utf8");
+  fs.writeFileSync(changelogPath, result.changelogTxt, "utf8");
   fs.writeFileSync(snapshotPath, result.snapshotText, "utf8");
   const diagnostic = {
     mode: "export",
@@ -45,13 +48,13 @@ try {
     head: repo.head,
     snapshotSha256: result.snapshotSha256,
     ...summary,
-    paths: [uiPath, guidePath, snapshotPath],
+    paths: [uiPath, guidePath, changelogPath, snapshotPath],
     code: "SITE_COPY_EXPORT_COMPLETE",
     status: "passed"
   };
   fs.writeFileSync(logPath, `${Object.entries(diagnostic).map(([key, value]) => `${key}=${JSON.stringify(value)}`).join("\n")}\n`, "utf8");
   fs.writeFileSync(resultPath, `${JSON.stringify(diagnostic, null, 2)}\n`, "utf8");
-  process.stdout.write(`${JSON.stringify({ ...diagnostic, uiPath, guidePath, snapshotPath, logPath, resultPath }, null, 2)}\n`);
+  process.stdout.write(`${JSON.stringify({ ...diagnostic, uiPath, guidePath, changelogPath, snapshotPath, logPath, resultPath }, null, 2)}\n`);
 } catch (error) {
   const known = error instanceof SiteCopyError;
   process.stderr.write(`${JSON.stringify({ code: known ? error.code : "SITE_COPY_EXPORT_REPO_INVALID", message: known ? error.message : "export処理に失敗しました。", detail: known ? error.detail : { errorType: error?.constructor?.name ?? "Error" } })}\n`);

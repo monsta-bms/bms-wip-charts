@@ -8,12 +8,14 @@ try {
     mode: "dry-run",
     uiChangeCount: result.uiChangeCount,
     guideChangeCount: result.guideChangeCount,
+    changelogChangeCount: result.changelogChangeCount,
     changedFiles: result.changedFiles,
     uiBlocks: result.uiChanges.map((change) => ({
       id: change.block.id,
       fields: change.fields.map((field) => ({ label: field.field.label, beforeLength: [...field.before].length, afterLength: [...field.after].length }))
     })),
-    guideSections: result.guideChanges.map((change) => ({ id: change.section.id, paragraphs: paragraphDiff(change.before, change.after) }))
+    guideSections: result.guideChanges.map((change) => ({ id: change.section.id, paragraphs: paragraphDiff(change.before, change.after) })),
+    changelogEntries: result.changelogChanges.map((change) => ({ id: change.entry.id, paragraphs: paragraphDiff(change.before, change.after) }))
   }, null, 2)}\n`);
 } catch (error) {
   const known = error instanceof SiteCopyError;

@@ -7,8 +7,10 @@ import { execFileSync } from "node:child_process";
 export const MANIFEST_VERSION = 2;
 export const UI_FILENAME = "BMS差分共有サイト_UI文章編集.txt";
 export const GUIDE_FILENAME = "BMS差分共有サイト_ガイド全文編集.txt";
+export const CHANGELOG_FILENAME = "BMS差分共有サイト_更新履歴編集.txt";
 export const UI_HEADER = "# BMS-WIP UI COPY EDIT v1";
 export const GUIDE_HEADER = "# BMS-WIP GUIDE EDIT v1";
+export const CHANGELOG_HEADER = "# BMS-WIP CHANGELOG EDIT v1";
 export const GUIDE_SECTION_IDS = Object.freeze([
   "GUIDE_INTRO",
   "GUIDE_QUICK_USE",
@@ -125,8 +127,14 @@ function escapeRegex(value) {
 }
 
 function findElement(source, locator) {
-  const attributeName = locator.elementId ? "id" : locator.copySection ? "data-copy-section" : "data-copy-key";
-  const attributeValue = locator.elementId ?? locator.copySection ?? locator.copyKey;
+  const attributeName = locator.elementId
+    ? "id"
+    : locator.copySection
+      ? "data-copy-section"
+      : locator.copyEntry
+        ? "data-copy-entry"
+        : "data-copy-key";
+  const attributeValue = locator.elementId ?? locator.copySection ?? locator.copyEntry ?? locator.copyKey;
   const pattern = new RegExp(`<([A-Za-z][\\w:-]*)\\b[^>]*\\b${escapeRegex(attributeName)}\\s*=\\s*(["'])${escapeRegex(attributeValue)}\\2[^>]*>`, "giu");
   const matches = [...source.matchAll(pattern)];
   if (matches.length !== 1) return { matches: matches.length };
@@ -464,6 +472,56 @@ export function resolveGuideSection(rootDir, section, sourceCache = new Map()) {
   return { source, element, markdown };
 }
 
+function descendantNodes(node, tagName, output = []) {
+  if (node.tag === tagName) output.push(node);
+  for (const child of node.children ?? []) descendantNodes(child, tagName, output);
+  return output;
+}
+
+function nodeText(node) {
+  if (node.tag === "#text") return node.text;
+  return (node.children ?? []).map(nodeText).join("");
+}
+
+export function htmlToChangelogMarkdown(fragment, entry) {
+  const root = parseHtmlFragment(fragment);
+  const times = descendantNodes(root, "time");
+  const titles = descendantNodes(root, "h2");
+  const content = root.children.find((node) => node.tag === "div");
+  if (times.length !== 1 || titles.length !== 1 || !content) {
+    throw new SiteCopyError("SITE_COPY_GUIDE_BASELINE_MISMATCH", "更新履歴entryの構造が不正です。", { entryId: entry.id });
+  }
+  const displayDate = collapseInline(nodeText(times[0]));
+  const datetime = times[0].attributes.datetime;
+  if (!/^\d{4}\/\d{2}\/\d{2}$/u.test(displayDate) || datetime !== displayDate.replaceAll("/", "-")) {
+    throw new SiteCopyError("SITE_COPY_GUIDE_BASELINE_MISMATCH", "更新履歴entryの日付が不正です。", { entryId: entry.id });
+  }
+  const title = collapseInline(titles[0].children.map(inlineMarkdown).join(""));
+  const blocks = [];
+  for (const child of content.children) {
+    if (child === titles[0]) continue;
+    blockMarkdown(child, blocks);
+  }
+  return `## ${displayDate}\n\n### ${title}\n\n${blocks.join("\n\n").trim()}\n`;
+}
+
+export function resolveChangelogEntry(rootDir, entry, sourceCache = new Map()) {
+  let source = sourceCache.get(entry.sourcePath);
+  if (source === undefined) {
+    source = fs.readFileSync(path.join(rootDir, entry.sourcePath), "utf8");
+    sourceCache.set(entry.sourcePath, source);
+  }
+  const element = findElement(source, { copyEntry: entry.id });
+  if (element.matches !== 1) {
+    throw new SiteCopyError("SITE_COPY_GUIDE_BASELINE_MISMATCH", "更新履歴entryを一意に解決できません。", { entryId: entry.id, path: entry.sourcePath, count: element.matches ?? 0 });
+  }
+  const markdown = htmlToChangelogMarkdown(source.slice(element.innerStart, element.innerEnd), entry);
+  if (entry.sourceValueSha256 && sha256(markdown) !== entry.sourceValueSha256) {
+    throw new SiteCopyError("SITE_COPY_GUIDE_BASELINE_MISMATCH", "更新履歴entryのsource baselineが一致しません。", { entryId: entry.id, path: entry.sourcePath });
+  }
+  return { source, element, markdown };
+}
+
 function linkIds(markdown) {
   return [...markdown.matchAll(/\[[^\]\n]+\]\(LINK:([A-Z][A-Z0-9_]*)\)/gu)].map((match) => match[1]);
 }
@@ -621,6 +679,35 @@ export function guideMarkdownToHtml(markdown, section) {
   return renderGuideBlocks(blocks, section, state);
 }
 
+function parseChangelogMarkdown(markdown, entry) {
+  const blocks = parseGuideMarkdown(markdown, entry);
+  const dateHeading = blocks[0];
+  const titleHeading = blocks[1];
+  if (dateHeading?.type !== "heading" || dateHeading.level !== 2 || !/^\d{4}\/\d{2}\/\d{2}$/u.test(dateHeading.text)
+    || titleHeading?.type !== "heading" || titleHeading.level !== 3 || blocks.length < 3
+    || blocks.slice(2).some((block) => block.type === "heading")) {
+    throw new SiteCopyError("SITE_COPY_GUIDE_PARSE_FAILED", "更新履歴entryは日付、見出し、本文の順で記述してください。", { entryId: entry.id });
+  }
+  const isoDate = dateHeading.text.replaceAll("/", "-");
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const parsedDate = new Date(Date.UTC(year, month - 1, day));
+  if (parsedDate.getUTCFullYear() !== year || parsedDate.getUTCMonth() + 1 !== month || parsedDate.getUTCDate() !== day
+    || isoDate > new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date())) {
+    throw new SiteCopyError("SITE_COPY_GUIDE_PARSE_FAILED", "更新履歴entryの日付が不正です。", { entryId: entry.id });
+  }
+  return { displayDate: dateHeading.text, isoDate, title: titleHeading.text, content: blocks.slice(2) };
+}
+
+export function changelogMarkdownToHtml(markdown, entry) {
+  const parsed = parseChangelogMarkdown(markdown, entry);
+  const body = parsed.content.map((block) => {
+    if (block.type === "ul") return `<ul>${block.items.map((item) => `<li>${renderInline(item)}</li>`).join("")}</ul>`;
+    if (block.type === "ol") return `<ol>${block.items.map((item) => `<li>${renderInline(item)}</li>`).join("")}</ol>`;
+    return `<p>${renderInline(block.text)}</p>`;
+  }).join("\n");
+  return `<p class="changelog-date"><time datetime="${parsed.isoDate}">${parsed.displayDate}</time></p>\n<div>\n  <h2>${renderInline(parsed.title)}</h2>\n${indentHtml(body, "  ")}\n</div>`;
+}
+
 function blockHash(fields) {
   return sha256(fields.map((field) => `${field.key}\0${field.sourceValueSha256}`).join("\n"));
 }
@@ -654,13 +741,22 @@ export function initializeManifest(rootDir, definition) {
     section.sourceValueSha256 = sha256(resolved.markdown);
     section.allowedLinks = [...new Set(linkIds(resolved.markdown))];
   }
+  for (const entry of manifest.changelogEntries ?? []) {
+    const resolved = resolveChangelogEntry(rootDir, entry, cache);
+    entry.sourceValueSha256 = sha256(resolved.markdown);
+  }
   return manifest;
 }
 
 export function loadManifest(filePath) {
   const manifest = JSON.parse(readUtf8(filePath));
-  if (manifest.manifestVersion !== MANIFEST_VERSION || !Array.isArray(manifest.uiBlocks) || !Array.isArray(manifest.guideSections)) {
+  if (manifest.manifestVersion !== MANIFEST_VERSION || !Array.isArray(manifest.uiBlocks)
+    || !Array.isArray(manifest.guideSections)) {
     throw new SiteCopyError("SITE_COPY_GUIDE_PARSE_FAILED", "block manifest schemaに対応していません。", { manifestVersion: manifest.manifestVersion });
+  }
+  manifest.changelogEntries ??= [];
+  if (!Array.isArray(manifest.changelogEntries)) {
+    throw new SiteCopyError("SITE_COPY_GUIDE_PARSE_FAILED", "更新履歴entry定義が不正です。", {});
   }
   return manifest;
 }
@@ -681,6 +777,14 @@ export function assertManifest(rootDir, manifest) {
   const guideIds = manifest.guideSections.map((section) => section.id);
   if (guideIds.length !== GUIDE_SECTION_IDS.length || GUIDE_SECTION_IDS.some((id) => !guideIds.includes(id))) throw new SiteCopyError("SITE_COPY_GUIDE_SECTION_MISSING", "guide section定義が不足しています。", { count: guideIds.length });
   for (const section of manifest.guideSections) resolveGuideSection(rootDir, section, cache);
+  const changelogIds = new Set();
+  for (const entry of manifest.changelogEntries) {
+    if (!/^CHANGELOG_\d{8}(?:_[A-Z0-9_]+)?$/u.test(entry.id) || changelogIds.has(entry.id)) {
+      throw new SiteCopyError("SITE_COPY_GUIDE_PARSE_FAILED", "更新履歴entry IDが不正または重複しています。", { entryId: entry.id });
+    }
+    changelogIds.add(entry.id);
+    resolveChangelogEntry(rootDir, entry, cache);
+  }
   return cache;
 }
 
@@ -700,6 +804,12 @@ function buildGuideTxt(snapshot) {
   return `${lines.join("\n").trimEnd()}\n`;
 }
 
+function buildChangelogTxt(snapshot) {
+  const lines = [CHANGELOG_HEADER, `BASE_COMMIT: ${snapshot.baseCommit}`, `CATALOG_ID: ${snapshot.catalogId}`, ""];
+  for (const entry of snapshot.changelogEntries) lines.push(`<!-- ENTRY: ${entry.id} -->`, "", entry.currentMarkdown.trimEnd(), "", `<!-- END ENTRY: ${entry.id} -->`, "", "");
+  return `${lines.join("\n").trimEnd()}\n`;
+}
+
 export function buildExport(rootDir, manifest, exportedAt = new Date().toISOString()) {
   const cache = assertManifest(rootDir, manifest);
   const baseCommit = git(rootDir, ["rev-parse", "HEAD"]);
@@ -708,9 +818,10 @@ export function buildExport(rootDir, manifest, exportedAt = new Date().toISOStri
     fields: block.fields.map((field) => ({ ...field, currentValue: resolveField(rootDir, field, cache).value }))
   }));
   const guideSections = manifest.guideSections.map((section) => ({ ...section, currentMarkdown: resolveGuideSection(rootDir, section, cache).markdown }));
-  const snapshot = { manifestVersion: MANIFEST_VERSION, catalogId: manifest.catalogId, baseCommit, exportedAt, uiBlocks, guideSections };
+  const changelogEntries = manifest.changelogEntries.map((entry) => ({ ...entry, currentMarkdown: resolveChangelogEntry(rootDir, entry, cache).markdown }));
+  const snapshot = { manifestVersion: MANIFEST_VERSION, catalogId: manifest.catalogId, baseCommit, exportedAt, uiBlocks, guideSections, changelogEntries };
   const snapshotText = canonicalJson(snapshot);
-  return { snapshot, snapshotText, snapshotSha256: sha256(snapshotText), uiTxt: buildUiTxt(snapshot), guideTxt: buildGuideTxt(snapshot) };
+  return { snapshot, snapshotText, snapshotSha256: sha256(snapshotText), uiTxt: buildUiTxt(snapshot), guideTxt: buildGuideTxt(snapshot), changelogTxt: buildChangelogTxt(snapshot) };
 }
 
 function parseHeader(lines, expected) {
@@ -782,6 +893,30 @@ export function parseGuideTxt(text) {
   return { header, sections };
 }
 
+export function parseChangelogTxt(text) {
+  const lines = normalizeNewlines(text).trimEnd().split("\n");
+  const header = parseHeader(lines, CHANGELOG_HEADER);
+  const entries = [];
+  const seen = new Set();
+  let cursor = 3;
+  while (cursor < lines.length) {
+    if (lines[cursor] === "") { cursor += 1; continue; }
+    const start = lines[cursor].match(/^<!-- ENTRY: (CHANGELOG_\d{8}(?:_[A-Z0-9_]+)?) -->$/u);
+    if (!start) throw new SiteCopyError("SITE_COPY_GUIDE_PARSE_FAILED", "ENTRY markerが不正です。", { near: entries.at(-1)?.id ?? "HEADER" });
+    const id = start[1];
+    if (seen.has(id)) throw new SiteCopyError("SITE_COPY_GUIDE_SECTION_DUPLICATE", "ENTRYが重複しています。", { entryId: id });
+    seen.add(id);
+    cursor += 1;
+    if (lines[cursor] === "") cursor += 1;
+    const content = [];
+    while (cursor < lines.length && lines[cursor] !== `<!-- END ENTRY: ${id} -->`) content.push(lines[cursor++]);
+    if (lines[cursor] !== `<!-- END ENTRY: ${id} -->`) throw new SiteCopyError("SITE_COPY_GUIDE_SECTION_UNTERMINATED", "END ENTRYがありません。", { entryId: id });
+    entries.push({ id, markdown: `${content.join("\n").trim()}\n` });
+    cursor += 1;
+  }
+  return { header, entries };
+}
+
 function assertHeaders(parsed, snapshot) {
   if (parsed.header.catalogId !== snapshot.catalogId) throw new SiteCopyError("SITE_COPY_GUIDE_CATALOG_MISMATCH", "CATALOG_IDが一致しません。", {});
   if (parsed.header.baseCommit !== snapshot.baseCommit) throw new SiteCopyError("SITE_COPY_GUIDE_BASELINE_MISMATCH", "BASE_COMMITが一致しません。", {});
@@ -790,8 +925,10 @@ function assertHeaders(parsed, snapshot) {
 export function validateEditedCopies(uiText, guideText, snapshot, options = {}) {
   const ui = parseUiTxt(uiText);
   const guide = parseGuideTxt(guideText);
+  const changelog = parseChangelogTxt(options.changelogText ?? "");
   assertHeaders(ui, snapshot);
   assertHeaders(guide, snapshot);
+  assertHeaders(changelog, snapshot);
   const uiExpected = new Map(snapshot.uiBlocks.map((block) => [block.id, block]));
   if (ui.header.blockCount !== snapshot.uiBlocks.length) throw new SiteCopyError("SITE_COPY_GUIDE_INVALID_HEADER", "UI TXTのBLOCK_COUNTがsnapshotと一致しません。", { expectedCount: snapshot.uiBlocks.length, actualCount: ui.header.blockCount });
   const uiIds = new Set(ui.blocks.map((block) => block.id));
@@ -831,10 +968,24 @@ export function validateEditedCopies(uiText, guideText, snapshot, options = {}) 
     guideMarkdownToHtml(edited.markdown, expected);
     if (edited.markdown !== expected.currentMarkdown) guideChanges.push({ section: expected, before: expected.currentMarkdown, after: edited.markdown });
   }
+  const changelogExpected = new Map(snapshot.changelogEntries.map((entry) => [entry.id, entry]));
+  const changelogIds = new Set(changelog.entries.map((entry) => entry.id));
+  const missingEntries = [...changelogExpected.keys()].filter((id) => !changelogIds.has(id));
+  if (missingEntries.length > 0) throw new SiteCopyError("SITE_COPY_GUIDE_SECTION_MISSING", "更新履歴ENTRYが不足しています。", { ids: missingEntries });
+  const unknownEntries = [...changelogIds].filter((id) => !changelogExpected.has(id));
+  if (unknownEntries.length > 0) throw new SiteCopyError("SITE_COPY_GUIDE_SECTION_UNKNOWN", "未知の更新履歴ENTRYがあります。", { ids: unknownEntries });
+  const changelogChanges = [];
+  for (const edited of changelog.entries) {
+    const expected = changelogExpected.get(edited.id);
+    validateEditableText(edited.markdown, { entryId: edited.id }, true);
+    changelogMarkdownToHtml(edited.markdown, expected);
+    if (edited.markdown !== expected.currentMarkdown) changelogChanges.push({ entry: expected, before: expected.currentMarkdown, after: edited.markdown });
+  }
   if (options.rootDir) {
     const cache = new Map();
     for (const block of snapshot.uiBlocks) for (const field of block.fields) resolveField(options.rootDir, field, cache);
     for (const section of snapshot.guideSections) resolveGuideSection(options.rootDir, section, cache);
+    for (const entry of snapshot.changelogEntries) resolveChangelogEntry(options.rootDir, entry, cache);
   }
   return {
     code: "SITE_COPY_GUIDE_DRY_RUN_COMPLETE",
@@ -843,9 +994,12 @@ export function validateEditedCopies(uiText, guideText, snapshot, options = {}) 
     uiChangeCount: uiChanges.length,
     uiFieldChangeCount: uiChanges.reduce((sum, block) => sum + block.fields.length, 0),
     guideChangeCount: guideChanges.length,
-    changedFiles: [...new Set([...uiChanges.flatMap((change) => change.fields.map((field) => field.field.sourcePath)), ...guideChanges.map((change) => change.section.sourcePath)])],
+    changelogEntryCount: changelog.entries.length,
+    changelogChangeCount: changelogChanges.length,
+    changedFiles: [...new Set([...uiChanges.flatMap((change) => change.fields.map((field) => field.field.sourcePath)), ...guideChanges.map((change) => change.section.sourcePath), ...changelogChanges.map((change) => change.entry.sourcePath)])],
     uiChanges,
-    guideChanges
+    guideChanges,
+    changelogChanges
   };
 }
 
@@ -874,6 +1028,17 @@ function planCopyApply(rootDir, validation) {
     const list = replacements.get(change.section.sourcePath) ?? [];
     list.push({ start: resolved.element.innerStart, end: resolved.element.innerEnd, value, id: change.section.id });
     replacements.set(change.section.sourcePath, list);
+  }
+  for (const change of validation.changelogChanges) {
+    const resolved = resolveChangelogEntry(rootDir, change.entry, sourceCache);
+    const lineStart = resolved.source.lastIndexOf("\n", resolved.element.innerStart - 1) + 1;
+    const openIndent = resolved.source.slice(lineStart, resolved.element.openStart).match(/^\s*/u)?.[0] ?? "";
+    const childIndent = `${openIndent}  `;
+    const html = changelogMarkdownToHtml(change.after, change.entry);
+    const value = `\n${indentHtml(html, childIndent)}\n${openIndent}`;
+    const list = replacements.get(change.entry.sourcePath) ?? [];
+    list.push({ start: resolved.element.innerStart, end: resolved.element.innerEnd, value, id: change.entry.id });
+    replacements.set(change.entry.sourcePath, list);
   }
   const outputs = new Map();
   for (const [sourcePath, items] of replacements) {
@@ -914,6 +1079,17 @@ export function applyEditedCopies(rootDir, manifestPath, validation, options = {
     if (expected !== undefined && markdown !== expected) throw new SiteCopyError("SITE_COPY_GUIDE_APPLY_FAILED", "反映後のguide sectionが編集内容と一致しません。", { sectionId: section.id });
     section.sourceValueSha256 = sha256(markdown);
   }
+  const changelogChangesById = new Map(validation.changelogChanges.map((change) => [change.entry.id, change]));
+  for (const entry of manifest.changelogEntries) {
+    if (!outputs.has(entry.sourcePath)) continue;
+    const source = outputs.get(entry.sourcePath);
+    const element = findElement(source, { copyEntry: entry.id });
+    if (element.matches !== 1) throw new SiteCopyError("SITE_COPY_GUIDE_APPLY_FAILED", "反映後の更新履歴entryを一意に解決できません。", { entryId: entry.id, count: element.matches ?? 0 });
+    const markdown = htmlToChangelogMarkdown(source.slice(element.innerStart, element.innerEnd), entry);
+    const expected = changelogChangesById.get(entry.id)?.after;
+    if (expected !== undefined && markdown !== expected) throw new SiteCopyError("SITE_COPY_GUIDE_APPLY_FAILED", "反映後の更新履歴entryが編集内容と一致しません。", { entryId: entry.id });
+    entry.sourceValueSha256 = sha256(markdown);
+  }
   const manifestRelative = path.relative(rootDir, path.resolve(manifestPath)).replace(/\\/gu, "/");
   if (manifestRelative.startsWith("..") || path.isAbsolute(manifestRelative)) throw new SiteCopyError("SITE_COPY_GUIDE_APPLY_FAILED", "manifestはrepository内である必要があります。", {});
   outputs.set(manifestRelative, canonicalJson(manifest));
@@ -942,7 +1118,7 @@ export function applyEditedCopies(rootDir, manifestPath, validation, options = {
   } finally {
     fs.rmSync(backupDir, { recursive: true, force: true });
   }
-  return { code: "SITE_COPY_GUIDE_APPLY_COMPLETE", changedFiles: [...outputs.keys()], uiBlockCount: validation.uiChangeCount, guideSectionCount: validation.guideChangeCount };
+  return { code: "SITE_COPY_GUIDE_APPLY_COMPLETE", changedFiles: [...outputs.keys()], uiBlockCount: validation.uiChangeCount, guideSectionCount: validation.guideChangeCount, changelogEntryCount: validation.changelogChangeCount };
 }
 
 export function paragraphDiff(before, after) {
@@ -958,5 +1134,6 @@ export function paragraphDiff(before, after) {
 export function exportSummary(manifest, result) {
   const guideCharacters = result.snapshot.guideSections.reduce((sum, section) => sum + [...section.currentMarkdown].length, 0);
   const linkCount = result.snapshot.guideSections.reduce((sum, section) => sum + linkIds(section.currentMarkdown).length, 0);
-  return { catalogId: manifest.catalogId, uiBlockCount: manifest.uiBlocks.length, guideSectionCount: manifest.guideSections.length, guideCharacters, linkCount, manualReviewCount: manifest.manualReview?.length ?? 0 };
+  const changelogCharacters = result.snapshot.changelogEntries.reduce((sum, entry) => sum + [...entry.currentMarkdown].length, 0);
+  return { catalogId: manifest.catalogId, uiBlockCount: manifest.uiBlocks.length, guideSectionCount: manifest.guideSections.length, changelogEntryCount: manifest.changelogEntries.length, guideCharacters, changelogCharacters, linkCount, manualReviewCount: manifest.manualReview?.length ?? 0 };
 }

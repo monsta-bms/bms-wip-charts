@@ -19,7 +19,7 @@ try {
   if (status !== "") throw new SiteCopyError("SITE_COPY_GUIDE_APPLY_FAILED", "worktreeがcleanではありません。", {});
   const validation = runValidation(options);
   if (!apply) {
-    process.stdout.write(`${JSON.stringify({ code: validation.code, mode: "dry-run", uiChangeCount: validation.uiChangeCount, guideChangeCount: validation.guideChangeCount, changedFiles: validation.changedFiles }, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify({ code: validation.code, mode: "dry-run", uiChangeCount: validation.uiChangeCount, guideChangeCount: validation.guideChangeCount, changelogChangeCount: validation.changelogChangeCount, changedFiles: validation.changedFiles }, null, 2)}\n`);
   } else {
     process.stdout.write(`${JSON.stringify(applyEditedCopies(options.rootDir, manifestPath, validation), null, 2)}\n`);
   }
