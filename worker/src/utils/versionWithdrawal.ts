@@ -176,20 +176,25 @@ export function lifecycleProjectionSql(versionAlias = "versions"): string {
     ORDER BY lifecycle.requested_at DESC, lifecycle.id DESC
     LIMIT 1
   )`;
-
-  return `
-    ${latest("status")} AS lifecycle_withdrawal_status,
-    ${latest("request_mode")} AS lifecycle_request_mode,
-    COALESCE(
+  const publicRequestMetadata = (expression: string) => `CASE
+      WHEN ${latest("status")} IN ('pending', 'processing', 'tombstoned', 'deleted') THEN ${expression}
+      ELSE NULL
+    END`;
+  const handlingMode = `COALESCE(
       ${latest("handling_mode")},
       CASE
         WHEN ${latest("request_mode")} = 'immediate' THEN 'immediate_delete'
         WHEN ${latest("request_mode")} = 'deferred' THEN 'grace_auto_delete'
         ELSE NULL
       END
-    ) AS lifecycle_handling_mode,
-    ${latest("requested_at")} AS lifecycle_requested_at,
-    ${latest("scheduled_at")} AS lifecycle_scheduled_at,
+    )`;
+
+  return `
+    ${latest("status")} AS lifecycle_withdrawal_status,
+    ${publicRequestMetadata(latest("request_mode"))} AS lifecycle_request_mode,
+    ${publicRequestMetadata(handlingMode)} AS lifecycle_handling_mode,
+    ${publicRequestMetadata(latest("requested_at"))} AS lifecycle_requested_at,
+    ${publicRequestMetadata(latest("scheduled_at"))} AS lifecycle_scheduled_at,
     CASE
       WHEN ${latest("status")} = 'pending'
         AND (

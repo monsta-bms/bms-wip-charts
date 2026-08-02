@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import wrangler from "wrangler";
 import { runManualWithdrawalRecovery } from "./reject-manual-withdrawals.mjs";
 
+const require = createRequire(import.meta.url);
+const { buildVersionUiModel } = require("../../docs/version-ui-model.js");
 const { createTestHarness, unstable_splitSqlQuery: splitSqlQuery } = wrangler;
 
 const workerRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -919,6 +922,106 @@ try {
     assert.equal(canceled.status, "canceled");
     assert.equal(canceled.withdrawal_download_blocked, 0);
     assert.equal(canceled.download_blocked, 1);
+  });
+
+  await check("canceled manual review restores active actions across every public version route", async () => {
+    await resetIsolation();
+    const base = await createVersion();
+    const child = await createVersion({
+      songId: base.songId,
+      chartId: base.chartId,
+      parentVersionId: base.versionId,
+      versionNumber: 2
+    });
+    const baseWithdrawal = await createWithdrawal(base, {
+      handlingMode: "manual_review",
+      scheduledAt: FUTURE_SQL,
+      reason: "取消後の公開操作を確認する隔離テスト理由です。"
+    });
+    const childWithdrawal = await createWithdrawal(child, { handlingMode: "immediate_delete" });
+    const childDeletion = await finalizerModule.finalizeVersionWithdrawal(
+      env,
+      childWithdrawal.withdrawalId,
+      { now: NOW, expectedHandlingMode: "immediate_delete" }
+    );
+    assert.equal(childDeletion.outcome, "deleted");
+
+    const publicEnv = {
+      ...env,
+      PASSWORD_HASH_SECRET: TEST_SECRET,
+      ABUSE_HASH_SECRET: TEST_SECRET,
+      WITHDRAWAL_IDEMPOTENCY_SECRET: TEST_SECRET,
+      ADMIN_TOKEN: TEST_ADMIN_TOKEN
+    };
+    const cancelResponse = await indexModule.default.fetch(
+      new Request(`http://localhost/api/versions/${base.versionId}/withdrawal/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: TEST_PASSWORD })
+      }),
+      publicEnv
+    );
+    assert.equal(cancelResponse.status, 200);
+    const cancelBody = await cancelResponse.json();
+    assert.equal(cancelBody.lifecycleStatus, "active");
+
+    const retainedHistory = await first(`
+      SELECT status, request_mode, handling_mode
+      FROM version_withdrawals
+      WHERE id = ?
+    `, baseWithdrawal.withdrawalId);
+    assert.deepEqual(retainedHistory, {
+      status: "canceled",
+      request_mode: "deferred",
+      handling_mode: "manual_review"
+    });
+    assert.equal((await first(
+      "SELECT COUNT(*) AS count FROM versions WHERE id = ?",
+      child.versionId
+    )).count, 0);
+
+    const [chartListResponse, chartDetailResponse, versionListResponse] = await Promise.all([
+      indexModule.default.fetch(new Request("http://localhost/api/charts"), publicEnv),
+      indexModule.default.fetch(new Request(`http://localhost/api/charts/${base.chartId}`), publicEnv),
+      indexModule.default.fetch(new Request("http://localhost/api/versions"), publicEnv)
+    ]);
+    assert.deepEqual(
+      [chartListResponse.status, chartDetailResponse.status, versionListResponse.status],
+      [200, 200, 200]
+    );
+    const chartListBody = await chartListResponse.json();
+    const chartDetailBody = await chartDetailResponse.json();
+    const versionListBody = await versionListResponse.json();
+    const routeVersions = [
+      ["chart-list", chartListBody.charts?.[0]?.versions?.find((version) => version.id === base.versionId)],
+      ["chart-detail", chartDetailBody.charts?.[0]?.versions?.find((version) => version.id === base.versionId)],
+      ["version-list", versionListBody.items?.find((version) => version.versionId === base.versionId)]
+    ];
+
+    for (const [route, version] of routeVersions) {
+      assert.ok(version, route);
+      assert.equal(version.lifecycleStatus, "active", route);
+      assert.equal(version.requestMode, null, route);
+      assert.equal(version.handlingMode, null, route);
+      assert.equal(version.withdrawalRequestedAt, null, route);
+      assert.equal(version.scheduledAt, null, route);
+      assert.equal(version.canCancelWithdrawal, false, route);
+
+      const reloadModel = buildVersionUiModel(version, {
+        workerBaseUrl: "http://localhost",
+        hasProgressMap: true
+      });
+      const inPlaceModel = buildVersionUiModel(version, {
+        workerBaseUrl: "http://localhost",
+        hasProgressMap: true
+      });
+      for (const model of [reloadModel, inPlaceModel]) {
+        assert.equal(model.lifecycle.consistent, true, route);
+        assert.equal(model.actionReason, "available", route);
+        assert.equal(model.management.visible, true, route);
+        assert.equal(model.append.available, true, route);
+      }
+    }
   });
 
   await check("version 2 idempotency is stable and legacy management passwords are explicitly expired", async () => {

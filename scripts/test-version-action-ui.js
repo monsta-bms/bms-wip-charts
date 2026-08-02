@@ -224,6 +224,26 @@ check("management legacy datasets remain compatible", () => {
 });
 check("management creation installs no listener", () => assert.doesNotThrow(() => createManagementControl(model(), managementOptions())));
 
+check("canceled lifecycle normalization restores actions on reload and in-place rerender", () => {
+  const staleModel = model({ handlingMode: "manual_review" });
+  assert.equal(staleModel.lifecycle.consistent, false);
+  assert.equal(createAppendControl(staleModel, domOptions()), null);
+  assert.equal(createManagementControl(staleModel, managementOptions()), null);
+
+  const normalizedModel = model({ handlingMode: null });
+  const reloadAppend = createAppendControl(normalizedModel, domOptions());
+  const reloadManagement = createManagementControl(normalizedModel, managementOptions());
+  assert.equal(reloadAppend.tagName, "BUTTON");
+  assert.equal(reloadManagement.tagName, "BUTTON");
+
+  const appendParent = new FakeParent();
+  const managementParent = new FakeParent();
+  replaceControlIfChanged(null, createAppendControl(normalizedModel, domOptions()), { parent: appendParent });
+  replaceControlIfChanged(null, createManagementControl(normalizedModel, managementOptions()), { parent: managementParent });
+  assert.equal(appendParent.children.length, 1);
+  assert.equal(managementParent.children.length, 1);
+});
+
 check("active lifecycle has no indicator", () => assert.equal(createLifecycleIndicator(model(), domOptions()), null));
 check("grace lifecycle badge remains stable", () => {
   const indicator = createLifecycleIndicator(model({ lifecycleStatus: "withdrawal_pending", handlingMode: "grace_auto_delete" }), domOptions());
