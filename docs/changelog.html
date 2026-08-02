@@ -18,76 +18,216 @@
       <main class="content-page">
         <header class="content-page-header">
           <h1>更新履歴</h1>
-          <p class="content-page-lead">利用者向けの主な追加・変更を、新しい順に掲載しています。</p>
+          <p class="content-page-lead">このページでは、利用者向けの主な追加・変更を掲載しています。細かな内部調整や試験だけの変更は省略しています。</p>
         </header>
 
         <section class="content-section" aria-label="更新履歴一覧">
-          <article class="changelog-entry">
+          <article class="changelog-entry" data-copy-entry="CHANGELOG_20260802">
+            <p class="changelog-date"><time datetime="2026-08-02">2026/08/02</time></p>
+            <div>
+              <h2>正式公開を開始しました</h2>
+              <ul>
+                <li>BMS差分共有サイトを正式公開しました。</li>
+                <li>現在、公開終了の予定はありません。</li>
+                <li>正式公開前に投稿データを初期化しました。</li>
+                <li>ガイドと主要な説明文を見直し、取り下げ申請の取消後に操作欄が消える不具合を修正しました。</li>
+                <li>投稿、追記、一覧、難易度表の動作を公開前に確認しました。</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="changelog-entry" data-copy-entry="CHANGELOG_20260731">
+            <p class="changelog-date"><time datetime="2026-07-31">2026/07/31</time></p>
+            <div>
+              <h2>サイト文章を編集しやすくしました</h2>
+              <ul>
+                <li>画面内の案内文とガイドを、まとまりごとに確認・編集できるようにしました。</li>
+                <li>文章だけを安全に反映できる確認手順を整えました。</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="changelog-entry" data-copy-entry="CHANGELOG_20260730">
+            <p class="changelog-date"><time datetime="2026-07-30">2026/07/30</time></p>
+            <div>
+              <h2>公開前の安全性と安定性を確認しました</h2>
+              <ul>
+                <li>投稿管理と安全対策を見直しました。</li>
+                <li>一覧と詳細で操作表示が一致するよう改善しました。</li>
+                <li>公開作業前の検査と最終確認を強化しました。</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="changelog-entry" data-copy-entry="CHANGELOG_20260726">
+            <p class="changelog-date"><time datetime="2026-07-26">2026/07/26</time></p>
+            <div>
+              <h2>一覧と詳細の操作表示を整えました</h2>
+              <ul>
+                <li>版の状態、リンク、操作ボタンを一覧と詳細で共通の表示にしました。</li>
+                <li>一覧の再描画を安定させ、表示の重複やずれを減らしました。</li>
+                <li>モバイルで状態表示が切れないようにし、各テーマの見え方も揃えました。</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="changelog-entry" data-copy-entry="CHANGELOG_20260724">
+            <p class="changelog-date"><time datetime="2026-07-24">2026/07/24</time></p>
+            <div>
+              <h2>難易度表の情報と表示を拡充しました</h2>
+              <ul>
+                <li>RC★・RC★★の難易度表をサイト上で見やすく確認できるようにしました。</li>
+                <li>差分名、作者、状態、関連リンクなど、譜面を探すための情報を増やしました。</li>
+                <li>区分ごとのまとまりと画面幅に応じた表示を調整しました。</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="changelog-entry" data-copy-entry="CHANGELOG_20260723">
+            <p class="changelog-date"><time datetime="2026-07-23">2026/07/23</time></p>
+            <div>
+              <h2>取り下げと譜面情報の扱いを拡充しました</h2>
+              <ul>
+                <li>取り下げを自動処理する場合と、管理者が確認する場合の流れを整えました。</li>
+                <li>処理が途中になった取り下げを確認し、必要に応じて復帰できるようにしました。</li>
+                <li>BMSから曲名などの候補を取り出し、投稿フォームへ反映できるようにしました。</li>
+                <li>曲や差分の参照先と、投稿元の譜面情報を版ごとに保持できるようにしました。</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="changelog-entry" data-copy-entry="CHANGELOG_20260720">
+            <p class="changelog-date"><time datetime="2026-07-20">2026/07/20</time></p>
+            <div>
+              <h2>投稿フォームと追記受付を見直しました</h2>
+              <ul>
+                <li>投稿フォームを整理し、ファイル選択から送信までの状態を分かりやすくしました。</li>
+                <li>版ごとに差分名を設定できるようにしました。</li>
+                <li>完成状態とは別に、追記を受け付けるかどうかを選べるようにしました。</li>
+                <li>表示テーマを選択し、ブラウザ内へ保存できるようにしました。</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="changelog-entry" data-copy-entry="CHANGELOG_20260718">
+            <p class="changelog-date"><time datetime="2026-07-18">2026/07/18</time></p>
+            <div>
+              <h2>投稿一覧を探しやすくしました</h2>
+              <ul>
+                <li>曲名、作者、状態、期間を組み合わせた検索に対応しました。</li>
+                <li>新着順と更新順、ページ送り、追加読み込みを利用できるようにしました。</li>
+                <li>曲と版へ直接開けるリンクを追加しました。</li>
+                <li>最近の投稿、相対時刻、コメントを一覧で確認できるようにしました。</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="changelog-entry" data-copy-entry="CHANGELOG_20260716">
+            <p class="changelog-date"><time datetime="2026-07-16">2026/07/16</time></p>
+            <div>
+              <h2>共通ナビゲーションと初回案内を追加しました</h2>
+              <ul>
+                <li>各ページを移動しやすい共通ナビゲーションを追加しました。</li>
+                <li>初めて利用する人向けの案内と公開文章を見直しました。</li>
+                <li>投稿フォームの入口をコンパクトにし、必要なときに開けるようにしました。</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="changelog-entry" data-copy-entry="CHANGELOG_20260714">
             <p class="changelog-date"><time datetime="2026-07-14">2026/07/14</time></p>
             <div>
-              <h2>投稿フォームの譜面ミニビュー</h2>
+              <h2>7key譜面のミニビューを追加しました</h2>
               <ul>
-                <li>ファイル選択後、進捗ブロックから投稿前の譜面配置を確認できるようにしました。</li>
-                <li>ブロック移動時のプレビュー位置と表示の安定性を改善しました。</li>
+                <li>7key SP譜面のノーツ配置を一覧や詳細で確認できるようにしました。</li>
+                <li>BPM変化、小節番号、ロングノーツの表示を改善しました。</li>
+                <li>投稿前にも選択したBMSのミニビューを確認できるようにしました。</li>
               </ul>
             </div>
           </article>
 
-          <article class="changelog-entry">
-            <p class="changelog-date"><time datetime="2026-07-13">2026/07/13</time></p>
-            <div>
-              <h2>譜面ミニビューの表示改善</h2>
-              <ul>
-                <li>BPM変化、小節番号、ノーツ表示を見直しました。</li>
-                <li>ブロックを切り替えても表示領域が動きにくいよう調整しました。</li>
-              </ul>
-            </div>
-          </article>
-
-          <article class="changelog-entry">
+          <article class="changelog-entry" data-copy-entry="CHANGELOG_20260712">
             <p class="changelog-date"><time datetime="2026-07-12">2026/07/12</time></p>
             <div>
-              <h2>投稿・閲覧機能の拡充</h2>
+              <h2>投稿と閲覧の安全性を高めました</h2>
               <ul>
-                <li>7key SP譜面のミニビューを追加しました。</li>
-                <li>曲名・アーティスト・差分名・作者の検索と追加読み込みに対応しました。</li>
-                <li>ZIP安全検査、ZIP内BMS解析、進捗編集に対応しました。</li>
-                <li>RC★・RC★★難易度表と任意の原曲配布URLを追加しました。</li>
-                <li>投稿保護へCloudflare Turnstileを導入しました。</li>
+                <li>ZIP内のBMSを安全に確認し、譜面解析と進捗編集に利用できるようにしました。</li>
+                <li>投稿時のBot対策と連続投稿対策を追加しました。</li>
+                <li>RC★・RC★★向けの難易度表データを公開しました。</li>
+                <li>必要に応じて原曲や配布元のURLを投稿できるようにしました。</li>
               </ul>
             </div>
           </article>
 
-          <article class="changelog-entry">
+          <article class="changelog-entry" data-copy-entry="CHANGELOG_20260711">
             <p class="changelog-date"><time datetime="2026-07-11">2026/07/11</time></p>
             <div>
-              <h2>投稿管理と保護</h2>
+              <h2>投稿管理と取り下げを追加しました</h2>
               <ul>
-                <li>管理パスワードによる取り下げと削除申請を追加しました。</li>
-                <li>投稿・追記の短時間レート制限と管理者BAN機能を追加しました。</li>
-                <li>削除申請の管理と、非表示ファイルの安全な整理機能を追加しました。</li>
+                <li>管理パスワードを使って、版の取り下げや削除申請を行えるようにしました。</li>
+                <li>投稿後24時間の扱いと、追記がある場合の保護を追加しました。</li>
+                <li>管理者による申請確認、投稿制限、不要ファイルの整理に対応しました。</li>
               </ul>
             </div>
           </article>
 
-          <article class="changelog-entry">
+          <article class="changelog-entry" data-copy-entry="CHANGELOG_20260710">
             <p class="changelog-date"><time datetime="2026-07-10">2026/07/10</time></p>
             <div>
-              <h2>お気に入り</h2>
+              <h2>分岐ツリーとお気に入りを追加しました</h2>
               <ul>
-                <li>版ごとのお気に入りと、お気に入りのみを表示する機能を追加しました。</li>
-                <li>お気に入りは利用中のブラウザ内に保存されます。</li>
+                <li>追記版の親子関係を、つながった分岐ツリーで確認できるようにしました。</li>
+                <li>完成までの中間履歴を折りたたみ、版の流れを追いやすくしました。</li>
+                <li>版ごとのお気に入りと、お気に入りだけを表示する機能を追加しました。</li>
               </ul>
             </div>
           </article>
 
-          <article class="changelog-entry">
-            <p class="changelog-date"><time datetime="2026-07-09">2026/07/09</time></p>
+          <article class="changelog-entry" data-copy-entry="CHANGELOG_20260708">
+            <p class="changelog-date"><time datetime="2026-07-08">2026/07/08</time></p>
             <div>
-              <h2>分岐ツリー表示</h2>
+              <h2>進捗マップと一覧サムネイルを追加しました</h2>
               <ul>
-                <li>追記版の親子関係を連続したツリー線で確認できるようにしました。</li>
-                <li>中間履歴の折りたたみと省略表示を改善しました。</li>
+                <li>譜面全体の密度を見ながら、制作済み・確認中などの範囲を塗れるようにしました。</li>
+                <li>進捗マップを投稿と追記へ保存できるようにしました。</li>
+                <li>進捗画像を一覧のサムネイルとして表示し、版ごとの状態を比べやすくしました。</li>
+                <li>曲の終了位置に合わせて進捗範囲を表示するよう改善しました。</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="changelog-entry" data-copy-entry="CHANGELOG_20260704">
+            <p class="changelog-date"><time datetime="2026-07-04">2026/07/04</time></p>
+            <div>
+              <h2>追記と版の分岐に対応しました</h2>
+              <ul>
+                <li>公開されている版を元に、続きを追記投稿できるようにしました。</li>
+                <li>BASE版と追記版の関係を保存し、複数の分岐を扱えるようにしました。</li>
+                <li>追記時にも進捗情報を引き継いで編集できるようにしました。</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="changelog-entry" data-copy-entry="CHANGELOG_20260702">
+            <p class="changelog-date"><time datetime="2026-07-02">2026/07/02</time></p>
+            <div>
+              <h2>投稿フォームとBMS解析を整えました</h2>
+              <ul>
+                <li>難易度を選択しやすい投稿フォームへ変更しました。</li>
+                <li>入力内容に問題がある場所を分かりやすく案内するようにしました。</li>
+                <li>BMSの小節、ノーツ、BPMを解析し、進捗表示へ利用できるようにしました。</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="changelog-entry" data-copy-entry="CHANGELOG_20260630">
+            <p class="changelog-date"><time datetime="2026-06-30">2026/06/30</time></p>
+            <div>
+              <h2>サイトの基盤を作りました</h2>
+              <ul>
+                <li>BMS差分を投稿し、公開中の譜面を一覧で確認できるサイトを作りました。</li>
+                <li>投稿したBMSファイルを保存し、公開ページからダウンロードできるようにしました。</li>
+                <li>投稿画面と公開データをつなぎ、基本的な閲覧と投稿の流れを整えました。</li>
               </ul>
             </div>
           </article>

@@ -1,7 +1,7 @@
 {
   "manifestVersion": 2,
   "catalogId": "e04b3a2c-7c84-4e61-9c9f-17b722c3ac89",
-  "baseCommit": "b0f39372d3891119f548e5d2c329487a21fbcd0f",
+  "baseCommit": "8bd6b23955c9b161a893f3ee8e0bdda30a6827fd",
   "uiBlocks": [
     {
       "id": "COMMON_NAVIGATION",
@@ -1443,6 +1443,127 @@
       "headingId": "safetyTitle",
       "sourceValueSha256": "28dde30f57e4c24273a44a5bc421f2175fe8a26bdf1d7b3f63da904e9edaadca",
       "allowedLinks": []
+    }
+  ],
+  "changelogEntries": [
+    {
+      "id": "CHANGELOG_20260802",
+      "sourcePath": "docs/changelog.html",
+      "deploymentTarget": "PAGES",
+      "allowEmpty": false,
+      "sourceValueSha256": "0a07e962003489c56c78bdb3310ae9129108e3a710b78e520c441fce0ce726a6"
+    },
+    {
+      "id": "CHANGELOG_20260731",
+      "sourcePath": "docs/changelog.html",
+      "deploymentTarget": "PAGES",
+      "allowEmpty": false,
+      "sourceValueSha256": "befeae6a9ef148f304c3f1019398c31189f6024a3eaefe9c6dbb90806f7859f7"
+    },
+    {
+      "id": "CHANGELOG_20260730",
+      "sourcePath": "docs/changelog.html",
+      "deploymentTarget": "PAGES",
+      "allowEmpty": false,
+      "sourceValueSha256": "2a9ef43a15e2b253a5bbd80841807fdb6e19685cb0d95ab5324132f0199652cd"
+    },
+    {
+      "id": "CHANGELOG_20260726",
+      "sourcePath": "docs/changelog.html",
+      "deploymentTarget": "PAGES",
+      "allowEmpty": false,
+      "sourceValueSha256": "d2317338c559b7c52c0fb1123f9ca948ef5313a792239f4982c6f10e0a663235"
+    },
+    {
+      "id": "CHANGELOG_20260724",
+      "sourcePath": "docs/changelog.html",
+      "deploymentTarget": "PAGES",
+      "allowEmpty": false,
+      "sourceValueSha256": "189c357956fe1f2943f398ce10b195145b2b262b776e0a992cd5b8ad9dcb2111"
+    },
+    {
+      "id": "CHANGELOG_20260723",
+      "sourcePath": "docs/changelog.html",
+      "deploymentTarget": "PAGES",
+      "allowEmpty": false,
+      "sourceValueSha256": "cc2b8326eee88e663962ebc835a11484cb6681b9dc3be86b0141ddb0545a4c4d"
+    },
+    {
+      "id": "CHANGELOG_20260720",
+      "sourcePath": "docs/changelog.html",
+      "deploymentTarget": "PAGES",
+      "allowEmpty": false,
+      "sourceValueSha256": "22e818e8dd66c2cd8b93ed6486f581f97f7eeaaa9314c651cee74663b37b1b61"
+    },
+    {
+      "id": "CHANGELOG_20260718",
+      "sourcePath": "docs/changelog.html",
+      "deploymentTarget": "PAGES",
+      "allowEmpty": false,
+      "sourceValueSha256": "24f26e42a0472cdcf51daef203221815c1875ee292623a04a64e63b27381c20a"
+    },
+    {
+      "id": "CHANGELOG_20260716",
+      "sourcePath": "docs/changelog.html",
+      "deploymentTarget": "PAGES",
+      "allowEmpty": false,
+      "sourceValueSha256": "e44249c77e9dff464065fef9534ab769245ee3eea73665e00a548bc9cc0bfcd3"
+    },
+    {
+      "id": "CHANGELOG_20260714",
+      "sourcePath": "docs/changelog.html",
+      "deploymentTarget": "PAGES",
+      "allowEmpty": false,
+      "sourceValueSha256": "9606feb2c48ffeda189fad4e21164023b8a2c70703cd3bb6985030b5954093aa"
+    },
+    {
+      "id": "CHANGELOG_20260712",
+      "sourcePath": "docs/changelog.html",
+      "deploymentTarget": "PAGES",
+      "allowEmpty": false,
+      "sourceValueSha256": "11cec2e307821360cd7a0204fdf4b6336e822701941cf84c0a7ef8615b4d4c7e"
+    },
+    {
+      "id": "CHANGELOG_20260711",
+      "sourcePath": "docs/changelog.html",
+      "deploymentTarget": "PAGES",
+      "allowEmpty": false,
+      "sourceValueSha256": "66e6b7d010a6215e8743a8ae090d64302e1c579d4aff0ab0b10a774949eea016"
+    },
+    {
+      "id": "CHANGELOG_20260710",
+      "sourcePath": "docs/changelog.html",
+      "deploymentTarget": "PAGES",
+      "allowEmpty": false,
+      "sourceValueSha256": "0778efbc1604140d1e8c92897ab422268d52412ec44f6afe533068f357a37bea"
+    },
+    {
+      "id": "CHANGELOG_20260708",
+      "sourcePath": "docs/changelog.html",
+      "deploymentTarget": "PAGES",
+      "allowEmpty": false,
+      "sourceValueSha256": "55d9f17f4d59181026d8ed3dc82b3e800e0ab3c761d838f0aac23376f287f357"
+    },
+    {
+      "id": "CHANGELOG_20260704",
+      "sourcePath": "docs/changelog.html",
+      "deploymentTarget": "PAGES",
+      "allowEmpty": false,
+      "sourceValueSha256": "4e496975de1e1d6a2d3930972cb7f9aaff1a0e2aff8411920ef67d472e9522b8"
+    },
+    {
+      "id": "CHANGELOG_20260702",
+      "sourcePath": "docs/changelog.html",
+      "deploymentTarget": "PAGES",
+      "allowEmpty": false,
+      "sourceValueSha256": "ceab0dae258fb3634a77db68f6b6ce5cd3290fc933c309dd545d9aeb89e64273"
+    },
+    {
+      "id": "CHANGELOG_20260630",
+      "sourcePath": "docs/changelog.html",
+      "deploymentTarget": "PAGES",
+      "allowEmpty": false,
+      "sourceValueSha256": "a73b60dabb0964eeb943e69364b9b8293b42e32bd567b29da769a756301894b9"
     }
   ],
   "manualReview": []
