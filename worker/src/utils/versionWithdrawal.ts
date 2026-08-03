@@ -117,6 +117,8 @@ export function sanitizePublicVersion<T extends Record<string, unknown>>(
     collapsedAt: null,
     collapsedByVersionId: null,
     comment: "",
+    commentCount: 0,
+    latestComment: null,
     difficulty: null,
     level: null,
     title: "",

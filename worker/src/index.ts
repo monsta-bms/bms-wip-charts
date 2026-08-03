@@ -10,6 +10,7 @@ import { handleFileRoute } from "./routes/files";
 import { handleVersionLifecycleRoute } from "./routes/versionLifecycle";
 import { handleVersionWithdrawalRoute } from "./routes/versionWithdrawal";
 import { handlePublicVersionListRoute } from "./routes/versionList";
+import { handleVersionCommentsRoute } from "./routes/versionComments";
 import { runScheduledR2Cleanup } from "./routes/r2Cleanup";
 import {
   observeDueVersionWithdrawals,
@@ -172,6 +173,24 @@ async function routeRequest(request: Request, env: Env): Promise<Response> {
 
   if (path === "/api/versions/query") {
     return handlePublicVersionListRoute(request, env, true);
+  }
+
+  const versionCommentsMatch = path.match(/^\/api\/versions\/([^/]+)\/comments$/);
+  if (versionCommentsMatch) {
+    let versionId: string;
+    try {
+      versionId = decodeURIComponent(versionCommentsMatch[1]);
+    } catch {
+      return apiError(
+        request,
+        env,
+        400,
+        "VERSION_COMMENT_INVALID_REQUEST",
+        "差分IDが不正です。",
+        "versionId contains invalid URL encoding."
+      );
+    }
+    return handleVersionCommentsRoute(request, env, versionId);
   }
 
   const withdrawalCancelMatch = path.match(/^\/api\/versions\/([^/]+)\/withdrawal\/cancel$/);

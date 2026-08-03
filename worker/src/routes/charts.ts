@@ -76,6 +76,9 @@ type VersionRow = LifecycleProjection & {
   measure_notes_json: string | null;
   progress_map_json: string | null;
   comment: string;
+  comment_count: number;
+  latest_comment_body: string | null;
+  latest_comment_created_at: string | null;
   difficulty: string | null;
   level: string | null;
   title: string;
@@ -476,6 +479,13 @@ function buildVersion(row: VersionRow) {
     collapsedAt: row.collapsed_at,
     collapsedByVersionId: row.collapsed_by_version_id,
     comment: row.comment,
+    commentCount: Number(row.comment_count ?? 0),
+    latestComment: row.latest_comment_body === null || row.latest_comment_created_at === null
+      ? null
+      : {
+          body: row.latest_comment_body,
+          createdAt: row.latest_comment_created_at
+        },
     difficulty: row.difficulty,
     level: row.level,
     title: row.title,
@@ -804,6 +814,28 @@ async function selectVisibleVersionRows(
       versions.measure_notes_json AS measure_notes_json,
       versions.progress_map_json AS progress_map_json,
       versions.comment AS comment,
+      (
+        SELECT COUNT(*)
+        FROM version_comments AS public_comments
+        WHERE public_comments.version_id = versions.id
+          AND public_comments.is_hidden = 0
+      ) AS comment_count,
+      (
+        SELECT latest_comment.body
+        FROM version_comments AS latest_comment
+        WHERE latest_comment.version_id = versions.id
+          AND latest_comment.is_hidden = 0
+        ORDER BY latest_comment.created_at DESC, latest_comment.id DESC
+        LIMIT 1
+      ) AS latest_comment_body,
+      (
+        SELECT latest_comment.created_at
+        FROM version_comments AS latest_comment
+        WHERE latest_comment.version_id = versions.id
+          AND latest_comment.is_hidden = 0
+        ORDER BY latest_comment.created_at DESC, latest_comment.id DESC
+        LIMIT 1
+      ) AS latest_comment_created_at,
       versions.difficulty AS difficulty,
       versions.level AS level,
       versions.title AS title,

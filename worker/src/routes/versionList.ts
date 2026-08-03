@@ -49,6 +49,9 @@ type VersionListRow = LifecycleProjection & {
   level: string | null;
   author: string;
   comment: string | null;
+  comment_count: number;
+  latest_comment_body: string | null;
+  latest_comment_created_at: string | null;
   progress: number;
   completed_at: string | null;
   is_rejected: number;
@@ -459,7 +462,15 @@ function mapVersionRow(row: VersionListRow) {
     chartName: row.chart_name,
     difficulty: row.difficulty || row.level || null,
     author: row.author,
+    authorComment: row.comment ?? "",
     ...comment,
+    commentCount: Number(row.comment_count ?? 0),
+    latestComment: row.latest_comment_body === null || row.latest_comment_created_at === null
+      ? null
+      : {
+          body: row.latest_comment_body,
+          createdAt: row.latest_comment_created_at
+        },
     progress: row.progress,
     completed: row.completed_at !== null && row.is_rejected !== 1,
     completedAt: row.completed_at,
@@ -518,6 +529,28 @@ async function selectVersionList(env: Env, params: VersionListParams): Promise<{
       versions.level AS level,
       versions.author AS author,
       versions.comment AS comment,
+      (
+        SELECT COUNT(*)
+        FROM version_comments AS public_comments
+        WHERE public_comments.version_id = versions.id
+          AND public_comments.is_hidden = 0
+      ) AS comment_count,
+      (
+        SELECT latest_comment.body
+        FROM version_comments AS latest_comment
+        WHERE latest_comment.version_id = versions.id
+          AND latest_comment.is_hidden = 0
+        ORDER BY latest_comment.created_at DESC, latest_comment.id DESC
+        LIMIT 1
+      ) AS latest_comment_body,
+      (
+        SELECT latest_comment.created_at
+        FROM version_comments AS latest_comment
+        WHERE latest_comment.version_id = versions.id
+          AND latest_comment.is_hidden = 0
+        ORDER BY latest_comment.created_at DESC, latest_comment.id DESC
+        LIMIT 1
+      ) AS latest_comment_created_at,
       versions.progress AS progress,
       versions.completed_at AS completed_at,
       versions.is_rejected AS is_rejected,
