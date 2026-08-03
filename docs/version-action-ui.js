@@ -153,6 +153,46 @@
     return markCreated(button);
   }
 
+  function createCommentControl(model, rawOptions = {}) {
+    const options = getOptions(rawOptions);
+    const targetDocument = getDocument(options);
+    const versionId = typeof model?.versionId === "string" ? model.versionId : "";
+    if (!targetDocument || model?.comments?.available !== true || !versionId) {
+      return null;
+    }
+
+    const count = Number.isSafeInteger(model.comments.count) && model.comments.count >= 0
+      ? model.comments.count
+      : 0;
+    const versionLabel = typeof options.versionLabel === "string" && options.versionLabel
+      ? options.versionLabel
+      : "版";
+    const button = targetDocument.createElement("button");
+    button.className = "secondary version-comment-button";
+    button.type = "button";
+    button.dataset.versionId = versionId;
+    button.dataset.commentCount = String(count);
+    button.dataset.songTitle = typeof options.songTitle === "string" ? options.songTitle : "";
+    button.dataset.chartName = typeof options.chartName === "string" ? options.chartName : "";
+    button.dataset.versionLabel = versionLabel;
+    button.dataset.author = typeof options.author === "string" ? options.author : "";
+    button.dataset.authorComment = typeof options.authorComment === "string" ? options.authorComment : "";
+    if (model.comments.latest) {
+      button.dataset.latestComment = model.comments.latest.body;
+      button.dataset.latestCommentCreatedAt = model.comments.latest.createdAt;
+    }
+    button.setAttribute("aria-label", `${versionLabel} のコメント ${count}件を開く`);
+    const label = targetDocument.createElement("span");
+    label.className = "version-comment-button-label";
+    label.textContent = "コメント";
+    const countElement = targetDocument.createElement("span");
+    countElement.className = "version-comment-count";
+    countElement.textContent = String(count);
+    countElement.setAttribute("aria-hidden", "true");
+    button.append(label, countElement);
+    return markCreated(button);
+  }
+
   function createLifecycleIndicator(model, rawOptions = {}) {
     const options = getOptions(rawOptions);
     const targetDocument = getDocument(options);
@@ -235,6 +275,7 @@
   return Object.freeze({
     createAppendControl,
     createManagementControl,
+    createCommentControl,
     createLifecycleIndicator,
     replaceControlIfChanged
   });

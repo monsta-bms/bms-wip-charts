@@ -241,7 +241,7 @@
     minmax(110px, 0.65fr)
     minmax(160px, 0.9fr)
     64px
-    92px;
+    150px;
   column-gap: 12px;
   align-items: center;
 }
@@ -440,8 +440,7 @@
   color: #66757e;
   font-size: 0.82rem;
   line-height: 1.45;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .compact-progress {
@@ -722,10 +721,8 @@
   }
 
   .compact-version-row.has-comment .compact-comment {
-    display: -webkit-box;
+    display: block;
     overflow: hidden;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
   }
 
   .compact-progress {

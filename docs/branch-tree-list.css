@@ -465,13 +465,9 @@
 }
 
 .comment-cell .meta-value {
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  display: -webkit-box;
   line-height: 1.35;
-  max-height: 2.7em;
   min-height: 1.35em;
-  overflow: hidden;
+  min-width: 0;
   word-break: break-word;
 }
 

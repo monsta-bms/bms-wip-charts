@@ -1246,3 +1246,12 @@ RC★★変換:
 - `version_withdrawals`はidempotencyとrequester fingerprintに別々のversion列を持つ。version 1のterminal行は監査用に保持するが、新しい冪等性照合はversion 2だけを対象とする。version 1の`pending`または`processing`が1件でも存在する間はcutoverを禁止し、既存lifecycle処理で安全な状態へ解消する。
 - `delete_requests`のfingerprintもversion管理する。旧行はversion 1として保持し、新規行だけversion 2で記録する。公開レスポンスへhash値、Secret値、fingerprintを追加しない。
 - cutover preflightはローカル`node_modules/wrangler/package.json`の`bin`を解決し、`process.execPath`からWrangler JavaScriptを引数配列・`shell=false`・timeout付きで実行する。Migration 0010前でもwithdrawalのpending/processing件数は常にCOUNTし、remote Secret名はproductionの`secret list --format json`だけから取得する。candidateの必須Secretは`wrangler.toml`の`secrets.required`、`versions upload`、`versions view --json`、preview runtimeで別途検証し、latest-version secret listへ依存しない。
+
+## VERSION-COMMENT-PROGRESS-01 公開版コメントと進捗ヒント
+
+- 公開中の各versionは投稿者コメント全文、公開コメント件数、最新公開コメントを表示できる。投稿者コメントは改行と長い連続文字を保持し、3行を超える場合だけ「全文を見る」から共通dialogを開く。公開コメントの最新previewは2行までとし、本文は常にplain textとして扱う。
+- 共通dialogは曲名、差分名、版、作者、投稿者コメント、公開コメントを表示する。公開コメントは古い順、20件単位で読み込み、500 Unicode code point以内の本文を二重送信なしで投稿する。成功時は再読込せず一覧、件数、最新previewを更新する。
+- `version_comments`はversion、本文、作成日時、version 2のIP／UA fingerprint、非表示状態だけを保持する。公開APIへfingerprint、hash version、非表示理由を返さない。versionの完全削除時は対応コメントも削除し、非表示コメントは件数、最新、一覧のすべてから除外する。
+- 公開コメント投稿は公開可否を書込み直前にも確認し、既存の`ABUSE_HASH_SECRET`によるfingerprint、active BAN、10分／1時間の短時間制限を適用する。設定不足やDB失敗はfail closedとし、本文、IP／UA、hash、Secretをログへ出さない。
+- `/api/charts`、chart detail、`/api/versions`は既存SQL内で`commentCount`と`latestComment`を集約し、画面からversion単位の追加HTTP requestを行わない。旧Worker payloadで集約値がない場合は件数0、最新なしとして後方互換表示する。
+- 初回投稿と追記投稿の進捗マップは、解析済み・編集可能・今回の塗りが0件の場合だけ中央へ「ここをドラッグ」を表示する。1件以上の塗り、drag中、没譜面、完成版固定、解析中、解析失敗、map利用不可では非表示とし、全消去で0件へ戻ると再表示する。hintは`pointer-events:none`で座標判定へ影響しない。

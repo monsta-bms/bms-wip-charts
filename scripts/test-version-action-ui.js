@@ -6,6 +6,7 @@ const path = require("node:path");
 const {
   createAppendControl,
   createManagementControl,
+  createCommentControl,
   createLifecycleIndicator,
   replaceControlIfChanged
 } = require("../docs/version-action-ui.js");
@@ -40,6 +41,7 @@ class FakeElement {
     this.attributes = new Map();
     this._textContent = "";
     this.parentNode = null;
+    this.children = [];
     this.dataset = new Proxy({}, {
       set: (_target, name, value) => {
         this.setAttribute(datasetAttribute(name), value);
@@ -52,7 +54,7 @@ class FakeElement {
   set className(value) { this.setAttribute("class", value); }
   get className() { return this.getAttribute("class") || ""; }
   set textContent(value) { this._textContent = String(value); }
-  get textContent() { return this._textContent; }
+  get textContent() { return `${this._textContent}${this.children.map((child) => child.textContent).join("")}`; }
   set type(value) { this.setAttribute("type", value); }
   get type() { return this.getAttribute("type") || ""; }
   set title(value) { this.setAttribute("title", value); }
@@ -67,6 +69,12 @@ class FakeElement {
   getAttribute(name) { return this.attributes.get(String(name)) ?? null; }
   removeAttribute(name) { this.attributes.delete(String(name)); }
   addEventListener() { throw new Error("individual listeners must not be used by VersionActionUi"); }
+  append(...elements) {
+    elements.forEach((element) => {
+      element.parentNode = this;
+      this.children.push(element);
+    });
+  }
   remove() {
     this.removeCount = (this.removeCount || 0) + 1;
     if (this.parentNode) {
@@ -155,6 +163,62 @@ function managementOptions(overrides = {}) {
     ...overrides
   });
 }
+
+check("public comment control is available even when the count is zero", () => {
+  const control = createCommentControl(model({ commentCount: 0 }), domOptions({
+    versionLabel: "BASE",
+    songTitle: "Song",
+    chartName: "Chart",
+    author: "Author",
+    authorComment: "Author comment"
+  }));
+  assert.ok(control);
+  assert.equal(control.className, "secondary version-comment-button");
+  assert.equal(control.dataset.commentCount, "0");
+  assert.equal(control.textContent, "コメント0");
+  assert.equal(control.getAttribute("aria-label"), "BASE のコメント 0件を開く");
+});
+
+check("comment control carries only public display context", () => {
+  const control = createCommentControl(model({
+    commentCount: 2,
+    latestComment: { body: "latest", createdAt: "2026-08-03 00:00:00" }
+  }), domOptions({
+    versionLabel: "1-2",
+    songTitle: "Song",
+    chartName: "Chart",
+    author: "Author",
+    authorComment: "Full author comment"
+  }));
+  assert.deepEqual({
+    versionId: control.dataset.versionId,
+    songTitle: control.dataset.songTitle,
+    chartName: control.dataset.chartName,
+    versionLabel: control.dataset.versionLabel,
+    author: control.dataset.author,
+    authorComment: control.dataset.authorComment,
+    latestComment: control.dataset.latestComment,
+    latestCommentCreatedAt: control.dataset.latestCommentCreatedAt
+  }, {
+    versionId: "version_01",
+    songTitle: "Song",
+    chartName: "Chart",
+    versionLabel: "1-2",
+    author: "Author",
+    authorComment: "Full author comment",
+    latestComment: "latest",
+    latestCommentCreatedAt: "2026-08-03 00:00:00"
+  });
+  assert.doesNotMatch(control.outerHTML, /hash|token|password/i);
+});
+
+check("redacted version has no comment control", () => {
+  assert.equal(createCommentControl(model({
+    publicDataRedacted: true,
+    lifecycleStatus: "processing",
+    canShowActions: false
+  }), domOptions()), null);
+});
 
 check("available append is a button", () => assert.equal(createAppendControl(model(), domOptions()).tagName, "BUTTON"));
 check("available append text remains 追記投稿", () => assert.equal(createAppendControl(model(), domOptions()).textContent, "追記投稿"));
@@ -452,8 +516,15 @@ check("eight-version fixture builds one model and expected Action nodes per vers
       chartId: "chart_01",
       versionLabel: version.id
     });
-    actionNodeCount += Number(Boolean(append)) + Number(Boolean(management));
-    htmlBytes += Buffer.byteLength(`${append?.outerHTML || ""}${management?.outerHTML || ""}`, "utf8");
+    const comments = createCommentControl(uiModel, {
+      document: targetDocument,
+      songTitle: "Song",
+      chartName: "Chart",
+      versionLabel: version.id,
+      author: "Author"
+    });
+    actionNodeCount += Number(Boolean(append)) + Number(Boolean(management)) + Number(Boolean(comments));
+    htmlBytes += Buffer.byteLength(`${append?.outerHTML || ""}${comments?.outerHTML || ""}${management?.outerHTML || ""}`, "utf8");
     const duplicate = createAppendControl(uiModel, { document: targetDocument, chartId: "chart_01" });
     replaceControlIfChanged(append, duplicate);
     replacementCount += append.replaceCount || 0;
@@ -468,10 +539,10 @@ check("eight-version fixture builds one model and expected Action nodes per vers
     htmlBytes
   };
   assert.equal(modelBuildCount, 8);
-  assert.equal(actionNodeCount, 16);
+  assert.equal(actionNodeCount, 24);
   assert.equal(replacementCount, 0);
 });
 
-assert.ok(passed >= 51, `expected at least 51 checks, got ${passed}`);
+assert.ok(passed >= 54, `expected at least 54 checks, got ${passed}`);
 console.log(`version action ui tests: ${passed} checks passed`);
 console.log(`version action ui performance fixture: ${JSON.stringify(performanceMetrics)}`);

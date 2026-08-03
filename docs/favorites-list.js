@@ -276,9 +276,10 @@
       ".append-version-button",
       ".append-policy-disabled-button",
       ".append-disabled-intermediate",
-      "button.secondary:not(.intermediate-toggle-button):not(.version-management-button)"
+      "button.secondary:not(.intermediate-toggle-button):not(.version-management-button):not(.version-comment-button)"
     ].join(", "));
     const managementButton = actions?.querySelector(".version-management-button") || null;
+    const commentButton = actions?.querySelector(`.version-comment-button`) || null;
     const actionUi = window.BmsVersionActionUi;
     if (!actions
       || typeof actionUi?.createAppendControl !== "function"
@@ -288,7 +289,7 @@
     actionUi.replaceControlIfChanged(
       appendButton,
       actionUi.createAppendControl(uiModel, { chartId }),
-      { parent: actions, before: managementButton }
+      { parent: actions, before: commentButton || managementButton }
     );
   }
 

@@ -35,6 +35,7 @@ const progressMapStatus = document.querySelector("#progressMapStatus");
 const progressMapGraphWrap = document.querySelector("#progressMapGraphWrap");
 const progressMapCanvas = document.querySelector("#progressMapCanvas");
 const progressMapBlocks = document.querySelector("#progressMapBlocks");
+const progressMapDragHint = document.querySelector(`#progressMapDragHint`);
 const progressMapLabels = document.querySelector("#progressMapLabels");
 const progressMapSummary = document.querySelector("#progressMapSummary");
 const progressMapTooltip = document.querySelector("#progressMapTooltip");
@@ -1279,6 +1280,7 @@ function setProgressMapMessage(message, state = "empty") {
   progressMapSummary.hidden = true;
   progressMapBlocks.innerHTML = "";
   progressMapBlocks.style.removeProperty("grid-template-columns");
+  if (progressMapDragHint) progressMapDragHint.hidden = true;
   renderProgressMeasureLabels([]);
   hideProgressMapFloatingInfo();
   updateCompleteButtonState();
@@ -1392,6 +1394,21 @@ function updateProgressBlockClasses() {
     block.setAttribute("aria-pressed", painted ? "true" : "false");
     block.disabled = locked;
   });
+  updateProgressMapDragHint();
+}
+
+function updateProgressMapDragHint() {
+  if (!progressMapDragHint) return;
+  progressMapDragHint.hidden = window.BmsProgressMapDragHint?.isVisible?.({
+    editable: true,
+    mapAvailable: Boolean(progressMapState.analysis) && !progressMapGraphWrap.hidden,
+    analysisComplete: Boolean(progressMapState.analysis),
+    paintedCount: progressMapState.paintedBlockIndexes.size,
+    isDragging: progressMapState.isDragging,
+    isRejected: isRejectedInput.checked,
+    isCompletionLocked: progressMapState.layerKind === `completion_fill`,
+    hasFailure: false
+  }) !== true;
 }
 
 function updateProgressFromMap({ updateBlocks = true } = {}) {
@@ -1587,6 +1604,7 @@ function startProgressDrag(blockIndex, event) {
   progressMapState.dragCurrentIndex = blockIndex;
   progressMapState.dragMode = wasPainted ? "erase" : "paint";
   progressMapState.originalPaintedBlockIndexes = new Set(progressMapState.paintedBlockIndexes);
+  updateProgressMapDragHint();
   hideProgressMapFloatingInfo();
   progressMapBlocks.setPointerCapture?.(event.pointerId);
   applyProgressDragRange(blockIndex);
@@ -1603,6 +1621,7 @@ function finishProgressDrag({ restoreOriginal = false } = {}) {
   progressMapState.dragCurrentIndex = null;
   progressMapState.dragMode = null;
   progressMapState.originalPaintedBlockIndexes = null;
+  updateProgressMapDragHint();
 }
 
 function paintAllProgressBlocks(kind = "completion_fill") {

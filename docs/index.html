@@ -6,9 +6,9 @@
     <script src="./theme-init.js?v=site-theme-14"></script>
     <meta name="turnstile-sitekey" content="0x4AAAAAAD0OJhR8c4dKkDrk">
     <title>リサイクルセンター</title>
-    <link rel="stylesheet" href="./style.css?v=append-policy-15-final">
+    <link rel="stylesheet" href="./style.css?v=version-comment-progress-01">
     <link rel="stylesheet" href="./site-header.css?v=recycle-ux-02a">
-    <link rel="stylesheet" href="./branch-tree-list.css?v=append-disabled-theme-r4b2c-01">
+    <link rel="stylesheet" href="./branch-tree-list.css?v=version-comment-progress-01">
     <link rel="stylesheet" href="./list-ui-refresh.css?v=css-cleanup-r4b2a-01">
     <link rel="stylesheet" href="./chart-miniview.css?v=post-form-miniview-01">
     <link rel="stylesheet" href="./tree-progress-polish.css?v=tree-shape-fix-01">
@@ -16,8 +16,9 @@
     <link rel="stylesheet" href="./post-form-ui.css?v=chart-metadata-extract-01">
     <link rel="stylesheet" href="./chart-detail-link.css?v=detail-theme-r4b2e-01">
     <link rel="stylesheet" href="./theme.css?v=progress-style-r4b2f-01">
-    <link rel="stylesheet" href="./favorites-list.css?v=favorite-theme-r4b2d-01">
+    <link rel="stylesheet" href="./favorites-list.css?v=version-comment-progress-01">
     <link rel="stylesheet" href="./progress-thumbnail-list.css?v=progress-style-r4b2f-01">
+    <link rel="stylesheet" href="./version-comment-ui.css?v=version-comment-progress-01">
   </head>
   <body id="top">
     <div class="page-shell">
@@ -270,7 +271,10 @@
                           hidden
                         ></button>
                       </div>
-                      <div class="progress-block-layer" id="progressMapBlocks" role="group" aria-label="作成済みにする標準化ブロック"></div>
+                      <div class="progress-block-interaction">
+                        <div class="progress-block-layer" id="progressMapBlocks" role="group" aria-label="作成済みにする標準化ブロック"></div>
+                        <span class="progress-map-drag-hint" id="progressMapDragHint" aria-hidden="true" hidden>ここをドラッグ</span>
+                      </div>
                       <div class="progress-block-label-layer" id="progressMapLabels" aria-hidden="true" hidden></div>
                     </div>
                     <p class="form-miniview-status" id="formMiniViewStatus" role="status" aria-live="polite" hidden></p>
@@ -500,20 +504,22 @@
     <script src="./post-form-preferences.js?v=post-form-ux-11"></script>
     <script src="./post-form-error-ui.js?v=phase-9c-post-errors"></script>
     <script src="./chart-metadata-extract.js?v=chart-metadata-extract-01"></script>
-    <script src="./version-ui-model.js?v=chart-render-pipeline-r4a-01"></script>
+    <script src="./version-ui-model.js?v=version-comment-progress-01"></script>
     <script src="./version-link-ui.js?v=chart-render-pipeline-r4a-01"></script>
-    <script src="./version-action-ui.js?v=chart-render-pipeline-r4a-01"></script>
+    <script src="./version-action-ui.js?v=version-comment-progress-01"></script>
+    <script src="./version-comment-ui.js?v=version-comment-progress-01"></script>
+    <script src="./progress-map-drag-hint.js?v=version-comment-progress-01"></script>
     <script src="./chart-render-pipeline.js?v=chart-render-pipeline-r4a-01"></script>
-    <script src="./app.js?v=chart-render-cleanup-r4b1-01"></script>
+    <script src="./app.js?v=version-comment-progress-01"></script>
     <script src="./progress-song-end-analysis.js?v=chart-miniview-position-01"></script>
     <script src="./progress-thumbnail-list.js?v=progress-style-r4b2f-01"></script>
     <script src="./chart-miniview.js?v=post-form-miniview-01"></script>
-    <script src="./branch-append-ui.js?v=chart-render-pipeline-r4a-01"></script>
+    <script src="./branch-append-ui.js?v=version-comment-progress-01"></script>
     <script src="./progress-image-preview.js?v=post-form-ux-09a"></script>
     <script src="./progress-image-formdata.js?v=ui-tree-overlay-01"></script>
-    <script src="./branch-tree-list.js?v=chart-render-pipeline-r4a-01"></script>
+    <script src="./branch-tree-list.js?v=version-comment-progress-01"></script>
     <script src="./tree-progress-polish.js?v=post-form-tree-12"></script>
-    <script src="./favorites-list.js?v=favorite-theme-r4b2d-01"></script>
+    <script src="./favorites-list.js?v=version-comment-progress-01"></script>
     <script src="./version-management-ui.js?v=withdrawal-lifecycle-16r"></script>
     <script src="./post-form-ui.js?v=phase-9c-post-errors"></script>
     <script src="./chart-detail-link.js?v=chart-render-pipeline-r4a-01"></script>

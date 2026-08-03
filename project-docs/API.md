@@ -1558,3 +1558,17 @@ Phase A時点ではsource metadata、解析状態、内部error codeを上記res
 - 管理者の投稿ログ一覧は`fingerprintHashVersion`を返し、version 1ログからIP hash BANを作成できない。BAN一覧は`banHashVersion`と`legacyKeyInvalidated`を返す。file SHA-256 BANの`banHashVersion`はNULLであり、security Secretのkey version対象外である。
 - 取り下げ冪等性検索は`idempotency_hash_version=2`を必須とする。version 1のterminal audit rowと同じhash文字列が存在しても、新しいrequestの重複判定へ使用しない。
 - security hash設定不足は既存のJSON error形式`code`、`message`、`detail`で返す。Secret値、入力password、idempotency key、完全なfingerprintはresponseやlogへ含めない。
+
+## Version comments
+
+### GET `/api/versions/:versionId/comments`
+
+公開中のversionに対する非表示でないコメントを古い順で返す。queryは`page`（既定1）と`pageSize`（既定20、最大100）。responseは`versionId`、`items: [{ id, body, createdAt }]`、`page`、`pageSize`、`total`で、`Cache-Control: no-store`を付ける。対象なしは404 `VERSION_COMMENT_VERSION_NOT_FOUND`、非公開・処理中は409 `VERSION_COMMENT_VERSION_UNAVAILABLE`。
+
+### POST `/api/versions/:versionId/comments`
+
+JSON object `{ "body": "..." }`を受け付ける。trim後1～500 Unicode code point、改行とtab以外の制御文字なしを必須とし、HTMLらしい文字列もplain textとして保存・返却する。公開可否、version 2 fingerprint、active BAN、短時間rate limitを検証して条件付きINSERTし、成功時はHTTP 201で`{ ok, comment: { id, body, createdAt }, total }`を返す。
+
+固定codeは`VERSION_COMMENT_INVALID_REQUEST`、`VERSION_COMMENT_BODY_REQUIRED`、`VERSION_COMMENT_BODY_TOO_LONG`、`VERSION_COMMENT_VERSION_NOT_FOUND`、`VERSION_COMMENT_VERSION_UNAVAILABLE`、`VERSION_COMMENT_RATE_LIMITED`、`VERSION_COMMENT_POSTING_BLOCKED`、`VERSION_COMMENT_DB_FAILED`。すべて既存の`code`、`message`、`detail`形式で返し、IP／UA、fingerprint、Secret、内部moderation fieldを含めない。
+
+`GET /api/charts`、`GET /api/charts/:chartId`、`GET /api/versions`の公開versionには`commentCount`と`latestComment: { body, createdAt } | null`を追加する。`GET /api/versions`には投稿者コメント全文の`authorComment`も追加し、既存の`commentPreview`と`hasComment`を維持する。

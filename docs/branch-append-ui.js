@@ -37,6 +37,7 @@
   const progressMapGraphWrap = document.querySelector("#progressMapGraphWrap");
   const progressMapCanvas = document.querySelector("#progressMapCanvas");
   const progressMapBlocks = document.querySelector("#progressMapBlocks");
+  const progressMapDragHint = document.querySelector(`#progressMapDragHint`);
   const progressMapLabels = document.querySelector("#progressMapLabels");
   const progressMapSummary = document.querySelector("#progressMapSummary");
   const progressMapTooltip = document.querySelector("#progressMapTooltip");
@@ -680,6 +681,21 @@
         progress: calculateProgress()
       }
     });
+    updateAppendDragHint();
+  }
+
+  function updateAppendDragHint() {
+    if (!progressMapDragHint) return;
+    progressMapDragHint.hidden = window.BmsProgressMapDragHint?.isVisible?.({
+      editable: appendState.active,
+      mapAvailable: appendState.blocks.length > 0 && !progressMapGraphWrap.hidden,
+      analysisComplete: appendState.blocks.length > 0,
+      paintedCount: appendState.currentPainted.size,
+      isDragging: appendState.isDragging,
+      isRejected: Boolean(isRejectedInput?.checked),
+      isCompletionLocked: appendState.layerKind === `completion_fill`,
+      hasFailure: appendState.fileGridMismatch
+    }) !== true;
   }
 
   function restoreCompletionSnapshot() {
@@ -753,6 +769,7 @@
     appendState.dragAnchorIndex = blockIndex;
     appendState.dragMode = currentPainted ? "erase" : "paint";
     appendState.originalCurrentPainted = new Set(appendState.currentPainted);
+    updateAppendDragHint();
     hideAppendFloatingInfo();
     progressMapBlocks.setPointerCapture?.(event.pointerId);
     applyAppendDragRange(blockIndex);
@@ -769,6 +786,7 @@
     appendState.dragAnchorIndex = null;
     appendState.dragMode = null;
     appendState.originalCurrentPainted = null;
+    updateAppendDragHint();
     if (appendState.currentPainted.size > 0 && !appendState.fileGridMismatch) {
       window.BmsPostErrorUi?.clearField?.("progressMap");
     }

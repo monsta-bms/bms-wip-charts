@@ -140,13 +140,13 @@ check("render lifecycle events remain", () => {
 });
 
 check("modified scripts keep their order and reviewed cache keys", () => {
-  const appIndex = indexHtml.indexOf("./app.js?v=chart-render-cleanup-r4b1-01");
+  const appIndex = indexHtml.indexOf("./app.js?v=version-comment-progress-01");
   const progressIndex = indexHtml.indexOf("./progress-thumbnail-list.js?v=progress-style-r4b2f-01");
   const pipelineIndex = indexHtml.indexOf("./chart-render-pipeline.js?v=chart-render-pipeline-r4a-01");
-  const branchAppendIndex = indexHtml.indexOf("./branch-append-ui.js?v=chart-render-pipeline-r4a-01");
+  const branchAppendIndex = indexHtml.indexOf("./branch-append-ui.js?v=version-comment-progress-01");
   assert.ok(pipelineIndex >= 0 && pipelineIndex < appIndex);
   assert.ok(appIndex < progressIndex && progressIndex < branchAppendIndex);
-  assert.ok(indexHtml.includes("./favorites-list.js?v=favorite-theme-r4b2d-01"));
+  assert.ok(indexHtml.includes("./favorites-list.js?v=version-comment-progress-01"));
 });
 
 assert.ok(passed >= 20, `expected at least 20 checks, got ${passed}`);

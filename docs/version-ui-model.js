@@ -335,6 +335,30 @@
       available: actionState.available,
       reason: actionState.available ? "available" : actionState.reason
     });
+    const rawCommentCount = source.commentCount ?? source.comment_count;
+    const parsedCommentCount = rawCommentCount === undefined || rawCommentCount === null
+      ? 0
+      : Number(rawCommentCount);
+    const commentCount = Number.isSafeInteger(parsedCommentCount) && parsedCommentCount >= 0
+      ? parsedCommentCount
+      : 0;
+    const rawLatestComment = source.latestComment ?? source.latest_comment;
+    const latestComment = rawLatestComment
+      && typeof rawLatestComment === "object"
+      && typeof rawLatestComment.body === "string"
+      && rawLatestComment.body.trim()
+      && typeof (rawLatestComment.createdAt ?? rawLatestComment.created_at) === "string"
+      ? freezeRecord({
+          body: rawLatestComment.body,
+          createdAt: rawLatestComment.createdAt ?? rawLatestComment.created_at
+        })
+      : null;
+    const comments = freezeRecord({
+      available: actionState.available,
+      count: commentCount,
+      latest: latestComment,
+      reason: actionState.available ? "available" : actionState.reason
+    });
 
     return freezeRecord({
       versionId: versionId.value,
@@ -345,7 +369,8 @@
       append,
       lifecycle,
       management,
-      favorite
+      favorite,
+      comments
     });
   }
 

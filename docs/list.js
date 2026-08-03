@@ -419,6 +419,16 @@
         unavailableAriaLabel: `${fullTitle} / ${versionChartName} / ${versionLabel} はダウンロードできません`
       }))
       : "") || `<span class="compact-link-control compact-download-disabled" aria-label="${escapeHtml(`${fullTitle} / ${versionChartName} / ${versionLabel} はダウンロードできません`)}">DL不可</span>`;
+    const actionUi = window.BmsVersionActionUi;
+    const commentControl = typeof actionUi?.createCommentControl === `function`
+      ? actionUi.createCommentControl(uiModel, {
+          songTitle: fullTitle,
+          chartName: versionChartName,
+          versionLabel,
+          author,
+          authorComment: String(item.authorComment || item.author_comment || item.commentPreview || ``)
+        })?.outerHTML || ``
+      : "";
     const detailUrl = new URL("./index.html", document.baseURI);
     detailUrl.searchParams.set("chartId", String(item.chartId || ""));
     detailUrl.searchParams.set("versionId", String(item.versionId || ""));
@@ -448,9 +458,9 @@
         </div>
         <div class="compact-difficulty"><span class="compact-field-label">難易度</span><span>${escapeHtml(difficulty)}</span></div>
         <div class="compact-author"><span class="compact-field-label">作者</span><span title="${escapeHtml(author)}">${escapeHtml(author)}</span></div>
-        <div class="compact-comment"${hasComment ? "" : " aria-hidden=\"true\""}></div>
+        <div class="compact-comment"></div>
         <div class="compact-progress"><span class="compact-field-label">進捗</span><span>${escapeHtml(progress)}%</span></div>
-        <div class="compact-links"><span class="compact-field-label">リンク</span>${originControl}${downloadControl}</div>
+        <div class="compact-links"><span class="compact-field-label">リンク</span>${originControl}${downloadControl}${commentControl}</div>
       </article>
     `;
   }
@@ -460,13 +470,25 @@
     rows.forEach((row, index) => {
       const comment = row.querySelector(".compact-comment");
       const item = state.items[index];
-      if (!comment || !item || item.hasComment !== true) {
+      if (!comment || !item) {
         return;
       }
-      const preview = String(item.commentPreview || "");
-      comment.textContent = preview;
-      comment.title = preview;
-      comment.setAttribute("aria-label", `コメント: ${preview}`);
+      const fullComment = item.hasComment === true
+        ? String(item.authorComment || item.author_comment || item.commentPreview || "")
+        : ``;
+      const commentUi = window.BmsVersionCommentUi;
+      if (typeof commentUi?.mountAuthorComment === "function") {
+        commentUi.mountAuthorComment(comment, fullComment, {
+          versionId: String(item.versionId || ""),
+          songTitle: String(item.title || `曲名不明`),
+          chartName: String(item.chartName || `差分名不明`),
+          versionLabel: String(item.versionLabel || `版不明`),
+          author: String(item.author || `未入力`),
+          latestComment: item.latestComment || item.latest_comment || null
+        });
+      } else {
+        comment.textContent = fullComment || `—`;
+      }
     });
   }
 

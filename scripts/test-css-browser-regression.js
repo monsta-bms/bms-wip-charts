@@ -63,6 +63,8 @@ function createVersion(id, overrides = {}) {
     progress: 50,
     comment: "CSS回帰監査用コメント",
     createdAt: "2026-07-25T01:00:00.000Z",
+    commentCount: 0,
+    latestComment: null,
     isRejected: false,
     hidden: false,
     publicDataRedacted: false,
@@ -87,7 +89,14 @@ function createVersion(id, overrides = {}) {
 }
 
 const versions = [
-  createVersion("version-active"),
+  createVersion("version-active", {
+    comment: "Author line 1\nAuthor line 2\nAuthor line 3\nAuthor line 4 with an-extremely-long-unbroken-word-for-browser-overflow-regression",
+    commentCount: 2,
+    latestComment: {
+      body: "Existing latest public comment",
+      createdAt: "2026-07-25T02:30:00.000Z"
+    }
+  }),
   createVersion("version-append-off", { allowAppend: false, appendAvailable: false, progress: 62 }),
   createVersion("version-download-blocked", {
     downloadBlocked: true,
@@ -198,6 +207,7 @@ const compactItems = [
     chartName: "監査用差分",
     versionLabel: "BASE",
     hasComment: true,
+    authorComment: versions[0].comment,
     commentPreview: "コンパクト一覧回帰確認",
     chartUpdatedAt: "2026-07-25T02:00:00.000Z",
     isNew: true,
@@ -220,6 +230,14 @@ const compactItems = [
   }
 ];
 
+const commentFixture = {
+  postRequests: 0,
+  items: [
+    { id: "comment-fixture-1", body: "First public comment", createdAt: "2026-07-25T02:00:00.000Z" },
+    { id: "comment-fixture-2", body: "Existing latest public comment", createdAt: "2026-07-25T02:30:00.000Z" }
+  ]
+};
+
 function json(response, status, body) {
   response.statusCode = status;
   response.setHeader("Access-Control-Allow-Origin", "*");
@@ -233,11 +251,53 @@ function createApiServer() {
   return http.createServer((request, response) => {
     if (request.method === "OPTIONS") {
       response.statusCode = 204;
+      response.setHeader("Access-Control-Allow-Origin", "*");
+      response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+      response.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
       response.end();
       return;
     }
     if (request.method === "GET" && request.url === "/api/charts/chart-audit") {
       json(response, 200, { serverTime: "2026-07-25T03:00:00.000Z", charts: [chartEntry] });
+      return;
+    }
+    if (request.method === "GET" && request.url.startsWith("/api/versions/version-active/comments?")) {
+      const url = new URL(request.url, `http://localhost:${apiPort}`);
+      const page = Number(url.searchParams.get("page")) || 1;
+      const pageSize = Number(url.searchParams.get("pageSize")) || 20;
+      const offset = (page - 1) * pageSize;
+      json(response, 200, {
+        versionId: "version-active",
+        items: commentFixture.items.slice(offset, offset + pageSize),
+        page,
+        pageSize,
+        total: commentFixture.items.length
+      });
+      return;
+    }
+    if (request.method === "POST" && request.url === "/api/versions/version-active/comments") {
+      let source = "";
+      request.setEncoding("utf8");
+      request.on("data", (chunk) => { source += chunk; });
+      request.on("end", () => {
+        commentFixture.postRequests += 1;
+        const payload = JSON.parse(source);
+        const comment = {
+          id: `comment-fixture-${commentFixture.items.length + 1}`,
+          body: String(payload.body || ""),
+          createdAt: "2026-07-25T03:00:00.000Z"
+        };
+        commentFixture.items.push(comment);
+        versions[0].commentCount = commentFixture.items.length;
+        versions[0].latestComment = { body: comment.body, createdAt: comment.createdAt };
+        compactItems[0].commentCount = commentFixture.items.length;
+        compactItems[0].latestComment = { body: comment.body, createdAt: comment.createdAt };
+        setTimeout(() => json(response, 201, {
+          ok: true,
+          comment,
+          total: commentFixture.items.length
+        }), 120);
+      });
       return;
     }
     if (request.method === "GET" && request.url.startsWith(`/api/progress-images/${imageFixtureVersion.id}`)) {
@@ -1220,6 +1280,250 @@ async function captureDetailPresentation(cdp, sessionId) {
     statusIdle, statusError, statusSuccess,
     targets, targetFocus, switchState, selection
   };
+}
+
+async function captureProgressDragHintInteractions(cdp, sessionId) {
+  const helperStates = await evaluate(cdp, sessionId, `(() => {
+    const visible = window.BmsProgressMapDragHint.isVisible;
+    const base = {
+      editable: true,
+      mapAvailable: true,
+      analysisComplete: true,
+      paintedCount: 0,
+      isDragging: false,
+      isRejected: false,
+      isCompletionLocked: false,
+      hasFailure: false
+    };
+    return {
+      initial: visible(base),
+      painted: visible({ ...base, paintedCount: 1 }),
+      dragging: visible({ ...base, isDragging: true }),
+      rejected: visible({ ...base, isRejected: true }),
+      completion: visible({ ...base, isCompletionLocked: true }),
+      analyzing: visible({ ...base, analysisComplete: false }),
+      failed: visible({ ...base, hasFailure: true }),
+      cleared: visible({ ...base, paintedCount: 0 })
+    };
+  })()`);
+  assert.deepEqual(helperStates, {
+    initial: true,
+    painted: false,
+    dragging: false,
+    rejected: false,
+    completion: false,
+    analyzing: false,
+    failed: false,
+    cleared: true
+  });
+
+  const matrix = [];
+  for (const theme of themes) {
+    await setTheme(cdp, sessionId, theme);
+    for (const width of widths) {
+      await cdp.send("Emulation.setDeviceMetricsOverride", {
+        width,
+        height: 900,
+        deviceScaleFactor: 1,
+        mobile: false
+      }, sessionId);
+      const entry = await evaluate(cdp, sessionId, `(() => {
+        const hint = document.querySelector("#progressMapDragHint");
+        const host = hint.closest(".progress-block-interaction");
+        hint.hidden = false;
+        const style = getComputedStyle(hint);
+        const rect = hint.getBoundingClientRect();
+        const hostRect = host.getBoundingClientRect();
+        const result = {
+          text: hint.textContent.trim(),
+          hintCount: document.querySelectorAll("#progressMapDragHint").length,
+          pointerEvents: style.pointerEvents,
+          display: style.display,
+          withinHost: rect.left >= hostRect.left - 1 && rect.right <= hostRect.right + 1
+            && rect.top >= hostRect.top - 1 && rect.bottom <= hostRect.bottom + 1,
+          horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+        };
+        hint.hidden = true;
+        return result;
+      })()`);
+      assert.equal(entry.text, "ここをドラッグ");
+      assert.equal(entry.hintCount, 1);
+      assert.equal(entry.pointerEvents, "none");
+      assert.equal(entry.display, "flex");
+      assert.equal(entry.withinHost, true);
+      assert.equal(entry.horizontalOverflow, false);
+      matrix.push({ theme, width, ...entry });
+    }
+  }
+  return { helperStates, matrix };
+}
+
+async function captureVersionCommentInteractions(cdp, sessionId) {
+  await setTheme(cdp, sessionId, "default");
+  await cdp.send("Emulation.setDeviceMetricsOverride", {
+    width: 390,
+    height: 900,
+    deviceScaleFactor: 1,
+    mobile: false
+  }, sessionId);
+  const sourceSelector = '.version-row[data-version-id="version-active"] .version-comment-button';
+  const expectedAuthorComment = versions[0].comment;
+  const initial = await evaluate(cdp, sessionId, `(() => {
+    const source = document.querySelector(${JSON.stringify(sourceSelector)});
+    const authorText = document.querySelector('.version-row[data-version-id="version-active"] .author-comment-preview-text');
+    const fullButton = document.querySelector('.version-row[data-version-id="version-active"] .author-comment-full-button');
+    return {
+      count: source?.querySelector(".version-comment-count")?.textContent,
+      authorText: authorText?.textContent,
+      authorClipped: authorText ? authorText.scrollHeight > authorText.clientHeight + 1 : false,
+      fullButtonVisible: Boolean(fullButton && !fullButton.hidden),
+      horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+    };
+  })()`);
+  assert.equal(initial.count, "2");
+  assert.equal(initial.authorText, expectedAuthorComment);
+  assert.equal(initial.authorClipped, true);
+  assert.equal(initial.fullButtonVisible, true);
+  assert.equal(initial.horizontalOverflow, false);
+
+  await evaluate(cdp, sessionId, `document.querySelector(${JSON.stringify(sourceSelector)}).click()`);
+  await waitFor(cdp, sessionId, `document.querySelector("#versionCommentDialog")?.open
+    && document.querySelectorAll("#versionCommentDialog .version-comment-item").length === 2`, "version comment dialog");
+  const opened = await evaluate(cdp, sessionId, `(() => {
+    const dialog = document.querySelector("#versionCommentDialog");
+    const rect = dialog.getBoundingClientRect();
+    return {
+      role: dialog.getAttribute("role"),
+      ariaLabelledby: dialog.getAttribute("aria-labelledby"),
+      activeClass: document.activeElement?.className || "",
+      bodyLocked: document.body.classList.contains("version-comment-dialog-open"),
+      authorText: dialog.querySelector("[data-comment-author-body]").textContent,
+      total: dialog.querySelector("[data-comment-total]").textContent,
+      itemBodies: [...dialog.querySelectorAll(".version-comment-item-body")].map((item) => item.textContent),
+      withinViewport: rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight,
+      horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+    };
+  })()`);
+  assert.equal(opened.role, "dialog");
+  assert.equal(opened.ariaLabelledby, "versionCommentDialogTitle");
+  assert.match(opened.activeClass, /version-comment-dialog-close/);
+  assert.equal(opened.bodyLocked, true);
+  assert.equal(opened.authorText, expectedAuthorComment);
+  assert.equal(opened.total, "2");
+  assert.deepEqual(opened.itemBodies, ["First public comment", "Existing latest public comment"]);
+  assert.equal(opened.withinViewport, true);
+  assert.equal(opened.horizontalOverflow, false);
+
+  const focusTrap = await evaluate(cdp, sessionId, `(() => {
+    const close = document.querySelector("#versionCommentDialog [data-version-comment-close]");
+    close.focus();
+    close.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }));
+    return document.activeElement?.tagName || "";
+  })()`);
+  assert.equal(focusTrap, "TEXTAREA");
+
+  const inputLimits = await evaluate(cdp, sessionId, `(() => {
+    const textarea = document.querySelector("#versionCommentBody");
+    const submit = document.querySelector("#versionCommentDialog [data-comment-submit]");
+    textarea.value = "   \\n\\t";
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    const whitespaceDisabled = submit.disabled;
+    textarea.value = "x".repeat(501);
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    return {
+      whitespaceDisabled,
+      codePoints: Array.from(textarea.value).length,
+      counter: document.querySelector("#versionCommentDialog [data-comment-counter]").textContent,
+      submitEnabledAtLimit: !submit.disabled
+    };
+  })()`);
+  assert.equal(inputLimits.whitespaceDisabled, true);
+  assert.equal(inputLimits.codePoints, 500);
+  assert.equal(inputLimits.counter, "500 / 500");
+  assert.equal(inputLimits.submitEnabledAtLimit, true);
+
+  const submitStart = await evaluate(cdp, sessionId, `(() => {
+    const textarea = document.querySelector("#versionCommentBody");
+    const submit = document.querySelector("#versionCommentDialog [data-comment-submit]");
+    textarea.value = "Fresh public comment\\nsecond line";
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    const disabledBeforeClick = submit.disabled;
+    submit.click();
+    submit.click();
+    return {
+      disabledBeforeClick,
+      disabledAfterClick: submit.disabled,
+      counter: document.querySelector("#versionCommentDialog [data-comment-counter]").textContent
+    };
+  })()`);
+  assert.equal(submitStart.disabledBeforeClick, false);
+  assert.equal(submitStart.disabledAfterClick, true);
+  assert.equal(submitStart.counter, "32 / 500");
+  await waitFor(cdp, sessionId, `Number(document.querySelector("#versionCommentDialog [data-comment-total]")?.textContent) >= 3
+    && document.querySelectorAll("#versionCommentDialog .version-comment-item").length >= 3
+    && document.querySelector("#versionCommentBody")?.value === ""`, "version comment post");
+  assert.equal(commentFixture.postRequests, 1);
+  const afterPost = await evaluate(cdp, sessionId, `(() => ({
+    dialogCount: document.querySelector("#versionCommentDialog [data-comment-total]").textContent,
+    actionCount: document.querySelector(${JSON.stringify(sourceSelector)}).querySelector(".version-comment-count").textContent,
+    latest: document.querySelector('.version-row[data-version-id="version-active"] .version-comment-latest-text').textContent,
+    itemBodies: [...document.querySelectorAll("#versionCommentDialog .version-comment-item-body")].map((item) => item.textContent)
+  }))()`);
+  assert.equal(afterPost.dialogCount, "3");
+  assert.equal(afterPost.actionCount, "3");
+  assert.equal(afterPost.latest, "Fresh public comment\nsecond line");
+  assert.equal(afterPost.itemBodies.at(-1), "Fresh public comment\nsecond line");
+
+  await evaluate(cdp, sessionId, `document.querySelector("#versionCommentDialog [data-version-comment-close]").click()`);
+  await waitFor(cdp, sessionId, `!document.querySelector("#versionCommentDialog")?.open`, "comment dialog close");
+  const closeFocusReturned = await evaluate(cdp, sessionId, `document.activeElement === document.querySelector(${JSON.stringify(sourceSelector)})`);
+  assert.equal(closeFocusReturned, true);
+
+  await evaluate(cdp, sessionId, `document.querySelector(${JSON.stringify(sourceSelector)}).click()`);
+  await waitFor(cdp, sessionId, `document.querySelector("#versionCommentDialog")?.open`, "comment dialog reopen for Escape");
+  await cdp.send("Input.dispatchKeyEvent", {
+    type: "rawKeyDown",
+    key: "Escape",
+    code: "Escape",
+    windowsVirtualKeyCode: 27,
+    nativeVirtualKeyCode: 27
+  }, sessionId);
+  await cdp.send("Input.dispatchKeyEvent", {
+    type: "keyUp",
+    key: "Escape",
+    code: "Escape",
+    windowsVirtualKeyCode: 27,
+    nativeVirtualKeyCode: 27
+  }, sessionId);
+  await waitFor(cdp, sessionId, `!document.querySelector("#versionCommentDialog")?.open`, "comment dialog Escape");
+
+  await evaluate(cdp, sessionId, `document.querySelector(${JSON.stringify(sourceSelector)}).click()`);
+  await waitFor(cdp, sessionId, `document.querySelector("#versionCommentDialog")?.open`, "comment dialog reopen for backdrop");
+  await evaluate(cdp, sessionId, `document.querySelector("#versionCommentDialog")
+    .dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }))`);
+  await waitFor(cdp, sessionId, `!document.querySelector("#versionCommentDialog")?.open`, "comment dialog backdrop");
+
+  const inPlaceResult = await evaluate(cdp, sessionId, `window.BmsChartDetail.refreshAfterManagement({
+    chartId: "chart-audit",
+    outcome: "updated"
+  })`);
+  assert.equal(inPlaceResult, true);
+  await waitFor(cdp, sessionId, `document.querySelector(${JSON.stringify(sourceSelector)})?.querySelector(".version-comment-count")?.textContent === "3"`, "in-place comment rerender");
+  const inPlaceCount = await evaluate(cdp, sessionId, `document.querySelector(${JSON.stringify(sourceSelector)}).querySelector(".version-comment-count").textContent`);
+
+  await cdp.send("Page.reload", { ignoreCache: true }, sessionId);
+  await waitFor(cdp, sessionId, `document.querySelector(${JSON.stringify(sourceSelector)})?.querySelector(".version-comment-count")?.textContent === "3"`, "reloaded comment summary");
+  const reloadState = await evaluate(cdp, sessionId, `(() => ({
+    count: document.querySelector(${JSON.stringify(sourceSelector)}).querySelector(".version-comment-count").textContent,
+    authorText: document.querySelector('.version-row[data-version-id="version-active"] .author-comment-preview-text').textContent,
+    horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+  }))()`);
+  assert.equal(inPlaceCount, "3");
+  assert.equal(reloadState.count, "3");
+  assert.equal(reloadState.authorText, expectedAuthorComment);
+  assert.equal(reloadState.horizontalOverflow, false);
+
+  return { initial, opened, inputLimits, afterPost, closeFocusReturned, inPlaceCount, reloadState };
 }
 
 async function captureDetailRerenderRegression(cdp, sessionId) {
@@ -2360,6 +2664,8 @@ async function run() {
     await installControlFixtures(cdp, sessionId);
     const detailNavigationMs = Number(process.hrtime.bigint() - navigationStart) / 1e6;
     const detail = await captureMatrix(cdp, sessionId, "detail");
+    const progressDragHint = await captureProgressDragHintInteractions(cdp, sessionId);
+    const versionComments = await captureVersionCommentInteractions(cdp, sessionId);
     const detailRerender = await captureDetailRerenderRegression(cdp, sessionId);
 
     const compactNavigationStart = process.hrtime.bigint();
@@ -2372,6 +2678,8 @@ async function run() {
       format: "bms-css-r4b2a-v1",
       fixture: { chartCount: 1, versionCount: versions.length, compactCount: compactItems.length },
       detail: detail.matrix,
+      progressDragHint,
+      versionComments,
       detailRerender,
       compact: compact.matrix
     };
@@ -2401,7 +2709,7 @@ async function run() {
         max: Number(Math.max(...values).toFixed(1))
       };
     };
-    console.log("css browser regression: 9 detail + 9 compact theme/width conditions passed");
+    console.log("css browser regression: 9 detail + 9 compact theme/width conditions and version comment interactions passed");
     console.log(JSON.stringify({
       detailNavigationMs: Number(detailNavigationMs.toFixed(1)),
       compactNavigationMs: Number(compactNavigationMs.toFixed(1)),

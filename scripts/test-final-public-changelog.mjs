@@ -9,7 +9,7 @@ const articles = [...html.matchAll(/<article\b[^>]*\bdata-copy-entry="([A-Z0-9_]
   .map((match) => ({ id: match[1], html: match[2] }));
 const manifestEntries = manifest.changelogEntries ?? [];
 
-assert.equal(articles.length, 17, "公開changelogは17 entryであること");
+assert.equal(articles.length, 18, "公開changelogは18 entryであること");
 assert.equal(manifestEntries.length, articles.length, "manifest entry数が一致すること");
 assert.equal(new Set(articles.map((entry) => entry.id)).size, articles.length, "ENTRY IDが重複しないこと");
 assert.deepEqual(manifestEntries.map((entry) => entry.id), articles.map((entry) => entry.id), "manifestとHTMLのENTRY順が一致すること");
@@ -27,7 +27,7 @@ const todayJst = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo", year
 assert.ok(dates.every((date) => date <= todayJst), "未来日付がないこと");
 
 const publicText = html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ");
-for (const term of ["投稿", "追記", "進捗マップ", "ミニビュー", "投稿一覧", "検索", "期間", "ページ送り", "お気に入り", "難易度表", "投稿管理", "取り下げ", "削除申請", "安全", "テーマ", "ガイド", "文章", "不具合", "初期化"]) {
+for (const term of ["投稿", "追記", "進捗マップ", "ミニビュー", "投稿一覧", "検索", "期間", "ページ送り", "お気に入り", "難易度表", "投稿管理", "取り下げ", "削除申請", "安全", "テーマ", "ガイド", "文章", "不具合", "初期化", "投稿者コメント", "版へコメント", "ここをドラッグ"]) {
   assert.ok(publicText.includes(term), `主要機能「${term}」が更新履歴に含まれること`);
 }
 for (const forbidden of [
@@ -47,7 +47,7 @@ for (const internal of [
   ["Worker", " version", " ID"].join("")
 ]) assert.equal(publicText.includes(internal), false, `内部情報「${internal}」が公開文にないこと`);
 
-const launch = articles[0].html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ");
+const launch = articles.find((entry) => entry.id === "CHANGELOG_20260802")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
 for (const phrase of ["正式公開を開始しました", "公開終了の予定はありません", "投稿データを初期化", "ガイド", "操作欄が消える不具合", "投稿、追記、一覧、難易度表"]) {
   assert.ok(launch.includes(phrase), `正式公開entryに「${phrase}」が含まれること`);
 }

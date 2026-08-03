@@ -558,6 +558,35 @@ button.progress-complete-button {
   touch-action: none;
 }
 
+.progress-block-interaction {
+  min-width: 0;
+  position: relative;
+}
+
+.progress-map-drag-hint {
+  align-items: center;
+  background: color-mix(in srgb, var(--surface, #ffffff) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary, #256f5d) 34%, transparent);
+  border-radius: 999px;
+  color: var(--primary-dark, #145d47);
+  display: inline-flex;
+  font-size: 0.76rem;
+  font-weight: 900;
+  left: 50%;
+  line-height: 1;
+  padding: 6px 10px;
+  pointer-events: none;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  z-index: 4;
+}
+
+.progress-map-drag-hint[hidden] {
+  display: none;
+}
+
 button.progress-map-block {
   background: #ffffff;
   border: 0;

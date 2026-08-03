@@ -57,7 +57,7 @@ assert.match(listJs, /compact-song-title compact-detail-link/);
 assert.match(listJs, /BmsVersionLinkUi/);
 assert.match(versionLinkUi, /compact-link-control compact-origin-link/);
 assert.match(versionLinkUi, /compact-link-control compact-download-disabled/);
-assert.match(listCss, /92px;/);
+assert.match(listCss, /150px;/);
 assert.match(listCss, /"links links"/);
 assert.match(themeCss, /\.download-blocked-control\s*\{[\s\S]*var\(--disabled-bg\)[\s\S]*var\(--disabled-text\)/);
 

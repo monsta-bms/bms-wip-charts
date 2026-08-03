@@ -46,7 +46,8 @@ function allReasons(uiModel) {
     uiModel.download.reason,
     uiModel.append.reason,
     uiModel.management.reason,
-    uiModel.favorite.reason
+    uiModel.favorite.reason,
+    uiModel.comments.reason
   ];
 }
 
@@ -111,6 +112,42 @@ check("normal active version exposes actions", () => {
   assert.equal(result.canShowActions, true);
   assert.equal(result.management.visible, true);
   assert.equal(result.favorite.available, true);
+  assert.equal(result.comments.available, true);
+});
+check("missing comment summary remains backward-compatible", () => {
+  const result = model();
+  assert.equal(result.comments.count, 0);
+  assert.equal(result.comments.latest, null);
+});
+check("comment count and latest comment are normalized", () => {
+  const result = model({
+    commentCount: 3,
+    latestComment: { body: "latest comment", createdAt: "2026-08-03 00:00:00" }
+  });
+  assert.deepEqual(result.comments, {
+    available: true,
+    count: 3,
+    latest: { body: "latest comment", createdAt: "2026-08-03 00:00:00" },
+    reason: "available"
+  });
+});
+check("snake-case comment summary aliases are supported", () => {
+  const result = model({
+    comment_count: 1,
+    latest_comment: { body: "alias", created_at: "2026-08-03 00:00:01" }
+  });
+  assert.equal(result.comments.count, 1);
+  assert.deepEqual(result.comments.latest, { body: "alias", createdAt: "2026-08-03 00:00:01" });
+});
+check("invalid comment summary fails to safe empty values", () => {
+  const result = model({ commentCount: -1, latestComment: { body: "", createdAt: 1 } });
+  assert.equal(result.comments.count, 0);
+  assert.equal(result.comments.latest, null);
+});
+check("redacted version does not expose public comment action", () => {
+  const result = model({ publicDataRedacted: true, commentCount: 9 });
+  assert.equal(result.comments.available, false);
+  assert.equal(result.comments.reason, "redacted");
 });
 check("contradictory active handling mode fails closed", () => {
   assert.equal(model({ handlingMode: "manual_review" }).actionReason, "inconsistent_data");
@@ -365,5 +402,5 @@ check("eight-version fixture builds exactly one model per version", () => {
   assert.equal(results.every((item) => item.canShowActions), true);
 });
 
-assert.ok(passed >= 58, `expected at least 58 checks, got ${passed}`);
+assert.ok(passed >= 63, `expected at least 63 checks, got ${passed}`);
 console.log(`version ui model tests: ${passed} checks passed`);

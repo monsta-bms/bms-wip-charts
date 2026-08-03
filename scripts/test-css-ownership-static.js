@@ -29,6 +29,7 @@ const sources = {
   favoriteCss: read("docs/favorites-list.css"),
   progressThumbnail: read("docs/progress-thumbnail-list.js"),
   progressCss: read("docs/progress-thumbnail-list.css"),
+  commentCss: read("docs/version-comment-ui.css"),
   index: read("docs/index.html"),
   listHtml: read("docs/list.html"),
   spec: read("project-docs/SPEC.md"),
@@ -168,13 +169,14 @@ check("index stylesheet order remains stable", () => {
     "chart-detail-link.css",
     "theme.css",
     "favorites-list.css",
-    "progress-thumbnail-list.css"
+    "progress-thumbnail-list.css",
+    "version-comment-ui.css"
   ]);
   const themeIndex = sources.index.indexOf("./theme.css?v=progress-style-r4b2f-01");
-  const favoriteCssIndex = sources.index.indexOf("./favorites-list.css?v=favorite-theme-r4b2d-01");
+  const favoriteCssIndex = sources.index.indexOf("./favorites-list.css?v=version-comment-progress-01");
   const progressCssIndex = sources.index.indexOf("./progress-thumbnail-list.css?v=progress-style-r4b2f-01");
   const progressScriptIndex = sources.index.indexOf("./progress-thumbnail-list.js?v=progress-style-r4b2f-01");
-  const favoriteScriptIndex = sources.index.indexOf("./favorites-list.js?v=favorite-theme-r4b2d-01");
+  const favoriteScriptIndex = sources.index.indexOf("./favorites-list.js?v=version-comment-progress-01");
   assert.ok(themeIndex >= 0 && themeIndex < favoriteCssIndex);
   assert.ok(favoriteCssIndex < progressCssIndex);
   assert.ok(progressCssIndex < sources.index.indexOf("</head>"));
@@ -182,24 +184,25 @@ check("index stylesheet order remains stable", () => {
   assert.ok(favoriteCssIndex < favoriteScriptIndex);
 });
 
-check("compact-list stylesheet order remains stable", () => {
-  assert.deepEqual(stylesheetNames(sources.listHtml), ["style.css", "site-header.css", "list.css", "theme.css"]);
+check("compact-list stylesheet order includes the static comment component", () => {
+  assert.deepEqual(stylesheetNames(sources.listHtml), ["style.css", "site-header.css", "list.css", "theme.css", "version-comment-ui.css"]);
 });
 
-check("only the R4B2f progress assets use the new cache key", () => {
-  assert.match(sources.index, /\.\/branch-tree-list\.css\?v=append-disabled-theme-r4b2c-01/);
+check("changed comment and progress assets use the release cache key", () => {
+  assert.match(sources.index, /\.\/branch-tree-list\.css\?v=version-comment-progress-01/);
   assert.match(sources.index, /\.\/chart-detail-link\.css\?v=detail-theme-r4b2e-01/);
   assert.equal((sources.index.match(/detail-theme-r4b2e-01/g) || []).length, 1);
   assert.match(sources.index, /\.\/theme\.css\?v=progress-style-r4b2f-01/);
   assert.match(sources.index, /\.\/progress-thumbnail-list\.css\?v=progress-style-r4b2f-01/);
   assert.match(sources.index, /\.\/progress-thumbnail-list\.js\?v=progress-style-r4b2f-01/);
   assert.equal((sources.index.match(/progress-style-r4b2f-01/g) || []).length, 3);
-  assert.match(sources.index, /\.\/favorites-list\.css\?v=favorite-theme-r4b2d-01/);
-  assert.match(sources.index, /\.\/favorites-list\.js\?v=favorite-theme-r4b2d-01/);
-  assert.equal((sources.index.match(/favorite-theme-r4b2d-01/g) || []).length, 2);
+  assert.match(sources.index, /\.\/favorites-list\.css\?v=version-comment-progress-01/);
+  assert.match(sources.index, /\.\/favorites-list\.js\?v=version-comment-progress-01/);
   assert.match(sources.index, /\.\/list-ui-refresh\.css\?v=css-cleanup-r4b2a-01/);
   assert.equal((sources.index.match(/css-cleanup-r4b2a-01/g) || []).length, 1);
   assert.doesNotMatch(sources.listHtml, /progress-style-r4b2f-01|detail-theme-r4b2e-01|favorite-theme-r4b2d-01|css-cleanup-r4b2a-01/);
+  assert.equal((sources.index.match(/version-comment-progress-01/g) || []).length, 12);
+  assert.equal((sources.listHtml.match(/version-comment-progress-01/g) || []).length, 7);
 });
 
 check("favorite and progress runtime styles are completely removed", () => {
@@ -210,8 +213,8 @@ check("favorite and progress runtime styles are completely removed", () => {
 
 check("protected CSS hashes remain stable", () => {
   const expected = new Map([
-    [sources.style, "2cb373b2344a61706e314fcca197939c0a03c864ef93c8e87fcec638b38bd49e"],
-    [sources.list, "68f757317cf1b75819a2cbb3589e1563f2e87a7eaffe10cd103c46335e1b3f23"],
+    [sources.style, "c48375e56b16c4e6eabcc2e9a0c4376646918af74a363f3ff9242f4ca17e4783"],
+    [sources.list, "ca812204509a3ce3a1778c1a8c5e295b1d0182dbaa0d54246f91a0857a093961"],
     [sources.treePolish, "e0d1cf234c249070294491982088d34812c602e92ccdca7377011d7292e9f4ad"],
     [sources.chartMiniview, "e92980af2dde81ce2051a9216d744d62ee9fbed18e8423f6461296f65791d49c"],
     [sources.management, "d0b09e7e107d9dcaf5830f243761357462e27765bf3d24bfa78aad0a1b81bcb7"]
@@ -219,8 +222,8 @@ check("protected CSS hashes remain stable", () => {
   expected.forEach((hash, source) => assert.equal(sha256(source), hash));
 });
 
-check("pre-R4B2d CSS files remain at their reviewed hashes", () => {
-  assert.equal(sha256(sources.branch), "a88fd0f3003d06540675d8aec54899af4d624d22a3ea7f4f10bf71c87b0add2b");
+check("branch CSS includes the reviewed comment-cell adjustment", () => {
+  assert.equal(sha256(sources.branch), "ed19601843f967502a35490617f9f1f31b4f53ae774856ca1bcaca26556f17ea");
 });
 
 check("list-ui-refresh has the reviewed R4B2a hash", () => {
@@ -243,9 +246,20 @@ check("action and thumbnail gap values remain stable", () => {
   assert.equal(rulesFor(sources.treePolish, ".progress-thumbnail-graph")[0].declarations.gap, "14px");
 });
 
+check("version comment component owns its dialog and preview styles", () => {
+  for (const selector of [
+    ".version-comment-dialog",
+    ".author-comment-preview",
+    ".version-comment-latest-preview",
+    ".version-comment-button"
+  ]) assert.ok(rulesFor(sources.commentCss, selector).length >= 1, selector);
+  assert.match(sources.commentCss, /var\(--surface/);
+  assert.match(sources.commentCss, /var\(--text/);
+});
+
 check("fixed color counts isolate detail colors in theme tokens", () => {
   const expected = new Map([
-    ["style", 65], ["branch", 73], ["refresh", 21], ["treePolish", 17],
+    ["style", 68], ["branch", 73], ["refresh", 21], ["treePolish", 17],
     ["chartMiniview", 40], ["management", 17], ["chartDetail", 4], ["theme", 252],
     ["favorites", 0], ["favoriteCss", 0], ["progressThumbnail", 4], ["progressCss", 0]
   ]);
@@ -544,10 +558,10 @@ check("R4B2b does not use clipping or visual workarounds", () => {
   assert.doesNotMatch(mobileSource, /font-size\s*:|position\s*:\s*absolute|transform\s*:|margin-left\s*:\s*-|overflow\s*:\s*hidden|text-overflow\s*:|white-space\s*:\s*normal/);
 });
 
-check("R4B2f changes only the reviewed progress JavaScript CSS deletion", () => {
-  assert.equal(productionJsFiles.length, 30);
+check("reviewed production JavaScript set includes static comment and progress helpers", () => {
+  assert.equal(productionJsFiles.length, 32);
   assert.equal(sha256(sources.progressThumbnail), "e2dbcee8975d7b95341875d1c4962fd2904a81873fd4cf7dbdbe757004a58bb6");
-  assert.equal(sha256(productionJsAggregate), "0e99767d749210f416ec18c9ac4c70a12a2a9cdb705100a19817085dd8f32ed7");
+  assert.equal(sha256(productionJsAggregate), "8e07c7947d51e01d9e40d2209cfaf28a5c40529414bdf210301477ab6a89ae68");
 });
 
 check("all known CSS issues are documented as resolved", () => {

@@ -64,6 +64,10 @@
     ).trim();
   }
 
+  function getSongTitle(entry = {}) {
+    return String(entry?.song?.title || entry?.title || "曲名不明").trim();
+  }
+
   function getMiniViewInfo(version) {
     const miniView = version?.miniView;
     if (!miniView || miniView.available !== true || miniView.mode !== "7key-sp" || !miniView.url) {
@@ -724,20 +728,23 @@
       ".append-version-button",
       ".append-policy-disabled-button",
       ".append-disabled-intermediate",
-      "button.secondary:not(.intermediate-toggle-button):not(.version-management-button)"
+      "button.secondary:not(.intermediate-toggle-button):not(.version-management-button):not(.version-comment-button)"
     ].join(", ")) || null;
   }
 
-  function reconcileActionControls(row, version, uiModel, chartId, displayVersionLabel) {
+  function reconcileActionControls(row, version, uiModel, entry, displayVersionLabel) {
     const actions = row.querySelector(".version-actions");
     if (!actions) {
       return;
     }
 
     const actionUi = window.BmsVersionActionUi;
+    const chartId = getChartId(entry);
     const existingAppend = findAppendControl(actions);
+    const existingComment = actions.querySelector(".version-comment-button");
     const existingManagement = actions.querySelector(".version-management-button");
     const canBuildActions = typeof actionUi?.createAppendControl === "function"
+      && typeof actionUi?.createCommentControl === "function"
       && typeof actionUi?.createManagementControl === "function"
       && typeof actionUi?.replaceControlIfChanged === "function";
     if (!canBuildActions) {
@@ -749,14 +756,26 @@
       fallback.textContent = "追記不可";
       if (existingAppend?.outerHTML !== fallback.outerHTML) {
         if (existingAppend) existingAppend.replaceWith(fallback);
-        else actions.insertBefore(fallback, existingManagement || null);
+        else actions.insertBefore(fallback, existingComment || existingManagement || null);
       }
+      existingComment?.remove();
       existingManagement?.remove();
       return;
     }
 
     const desiredAppend = actionUi.createAppendControl(uiModel, { chartId });
     actionUi.replaceControlIfChanged(existingAppend, desiredAppend, {
+      parent: actions,
+      before: existingComment || existingManagement || null
+    });
+    const desiredComment = actionUi.createCommentControl(uiModel, {
+      songTitle: getSongTitle(entry),
+      chartName: getVersionChartName(version, entry),
+      versionLabel: displayVersionLabel,
+      author: String(version?.author || "未入力"),
+      authorComment: String(version?.comment || "")
+    });
+    actionUi.replaceControlIfChanged(existingComment, desiredComment, {
       parent: actions,
       before: existingManagement || null
     });
@@ -813,7 +832,7 @@
     `;
   }
 
-  function applyColumnClasses(row, version) {
+  function applyColumnClasses(row, version, context = {}) {
     ensureGroupGutter(row);
     const tag = row.querySelector(":scope > .version-tag");
     const actions = row.querySelector(":scope > .version-actions");
@@ -838,8 +857,19 @@
     const commentValue = commentCell?.querySelector(".meta-value");
     if (commentValue) {
       const comment = cleanVersionComment(version?.comment ?? "");
-      commentValue.textContent = comment;
-      commentValue.title = comment;
+      const commentUi = window.BmsVersionCommentUi;
+      if (typeof commentUi?.mountAuthorComment === "function") {
+        commentUi.mountAuthorComment(commentValue, comment, {
+          versionId: getVersionId(version),
+          songTitle: getSongTitle(context.entry),
+          chartName: getVersionChartName(version, context.entry),
+          versionLabel: context.versionLabel,
+          author: String(version?.author || "未入力"),
+          latestComment: version?.latestComment || version?.latest_comment || null
+        });
+      } else {
+        commentValue.textContent = comment;
+      }
     }
   }
 
@@ -871,7 +901,7 @@
     const progressBlock = [...row.querySelectorAll(".meta-block")]
       .find((block) => block.querySelector(".progress-pill"));
 
-    applyColumnClasses(row, version);
+    applyColumnClasses(row, version, { entry: options.entry, versionLabel: displayVersionLabel });
     clearGroupGutterControl(row);
 
     row.classList.add("version-tree-row");
@@ -985,7 +1015,7 @@
     }
 
     enhanceLinkControls(actions, uiModel, displayVersionLabel);
-    reconcileActionControls(row, version, uiModel, getChartId(options.entry), displayVersionLabel);
+    reconcileActionControls(row, version, uiModel, options.entry, displayVersionLabel);
   }
 
   function createVersionListHeader() {

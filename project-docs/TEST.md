@@ -1642,6 +1642,14 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - preflightは`SECURITY_HASH_CUTOVER_READY`、`SECURITY_HASH_CUTOVER_BLOCKED_ACTIVE_WITHDRAWALS`、`SECURITY_HASH_CUTOVER_SCHEMA_NOT_READY`、`SECURITY_HASH_CUTOVER_LEGACY_SECRET_REFERENCE`のいずれかを最終行へ出す。legacy pending／processing、schema不足、required secret名不足、productionの旧Secret参照をそれぞれblockingとする。
 - 回帰では投稿・追記metadata、difficulty view model／HTML、version list、withdrawal active、canonical、repository hygiene、Worker typecheck、Wrangler dry-run、`git diff --check`を実行する。Secret値、hash本文、D1 row本文をtest outputへ出さない。
 
+## VERSION-COMMENT-PROGRESS-01 回帰
+
+- `node worker/scripts/test-version-comments.mjs`でMigration 0011、0／1／複数件、古い順pagination、投稿、空白、500／501 code point、plain-text HTML、制御文字、missing／hidden／processing、active BAN、rate limit、設定不足fail closed、hash非公開、3公開payloadの件数／最新、SQL内集約、version削除時cascadeを隔離D1で確認する。
+- `node scripts/test-version-ui-model.js`と`node scripts/test-version-action-ui.js`で集約値なしの後方互換、件数0を含むcomment button、最新comment、redacted拒否、表示context、共通controlの再利用を確認する。
+- `node scripts/test-version-comment-progress.js`で投稿者コメント3行、公開preview 2行、改行・長い単語、shared dialog、focus trap／Escape／背景close／focus return、500文字、二重送信防止、成功時即時更新、固定error code、runtime style 0件を静的に確認する。初回／追記のhintは0件表示、1件以上・drag・没・完成・解析中／失敗／利用不可で非表示、全消去で再表示、`pointer-events:none`を確認する。
+- browser回帰はindex／list／detail／changelogを390／760／1366px、white／default／darkで確認する。comment button、投稿者コメント、modal、長文、action列、progress hintの横overflow／clip／重なり0件、Console error／warning 0件、runtime style 0件を必須とする。load-more、favorite-only、detail再描画、reload後もcomment actionを維持する。
+- canonical schema、repository hygiene、CSS ownership、JavaScript構文、HTML重複ID、link、Worker typecheck、`deploy:check`、独立Wrangler dry-run、`git diff --check`を実行する。本番確認で作る試験コメントは安全な削除経路がない限り0件とする。
+
 ## RELEASE-FINAL-QA-2026-07-30
 
 - 実行日時: 2026-07-30T21:25:25+09:00。開始HEADは`d88a8a4d330d81c6e3e95aa6794bdc2d5e5338f2`、開始時の`origin/main`は`2fd0ef37dd57d20125195e10198ac563fdc1110c`で、remote 0／local 1 commitの期待履歴とclean worktreeを確認した。
