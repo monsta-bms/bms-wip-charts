@@ -108,6 +108,7 @@ const progressMapState = {
   analysis: null,
   paintedBlockIndexes: new Set(),
   savedPaintedBlockIndexes: null,
+  savedProgressValue: null,
   layerKind: "initial",
   isDragging: false,
   dragAnchorIndex: null,
@@ -295,8 +296,8 @@ function updatePostStateUi({ progress = Number(progressInput?.value) } = {}) {
     setPostStateBadge(rejectedStateBadge, "操作可能", "configurable");
     if (rejectedStateDescription) {
       rejectedStateDescription.textContent = state.isRejected
-        ? "没譜面として投稿します。進捗度は100%として扱われます。"
-        : "制作途中の通常版として投稿します。";
+        ? "完成済みの没譜面として投稿します。進捗度は100%として扱われます。"
+        : "完成済みの没譜面として投稿します。";
     }
   }
 
@@ -1261,6 +1262,7 @@ function setProgressMapMessage(message, state = "empty") {
   progressMapState.analysis = null;
   progressMapState.paintedBlockIndexes = new Set();
   progressMapState.savedPaintedBlockIndexes = null;
+  progressMapState.savedProgressValue = null;
   progressMapState.layerKind = "initial";
   progressMapState.isDragging = false;
   progressMapState.dragAnchorIndex = null;
@@ -1543,7 +1545,8 @@ function renderProgressMap() {
 function initializeProgressMap(analysis) {
   progressMapState.analysis = analysis;
   progressMapState.paintedBlockIndexes = new Set();
-  progressMapState.savedPaintedBlockIndexes = null;
+  progressMapState.savedPaintedBlockIndexes = isRejectedInput.checked ? new Set() : null;
+  progressMapState.savedProgressValue = isRejectedInput.checked ? "0" : null;
   progressMapState.layerKind = isRejectedInput.checked ? "rejected_auto_fill" : "initial";
   progressMapState.isDragging = false;
   progressMapState.dragAnchorIndex = null;
@@ -1885,6 +1888,9 @@ function validateRequiredFields() {
 
 function applyRejectedProgressState() {
   if (isRejectedInput.checked) {
+    if (progressMapState.savedProgressValue === null) {
+      progressMapState.savedProgressValue = progressInput.value;
+    }
     progressInput.value = "100";
     progressInput.readOnly = true;
     progressInput.classList.add("readonly-input");
@@ -1896,6 +1902,15 @@ function applyRejectedProgressState() {
   progressInput.readOnly = false;
   progressInput.classList.remove("readonly-input");
   progressInput.removeAttribute("aria-readonly");
+  if (progressMapState.savedProgressValue !== null) {
+    const restoredProgress = Number(progressMapState.savedProgressValue);
+    progressInput.value = Number.isInteger(restoredProgress) && restoredProgress >= 0 && restoredProgress <= 99
+      ? String(restoredProgress)
+      : "0";
+    progressMapState.savedProgressValue = null;
+  } else if (Number(progressInput.value) === 100 && !progressMapState.analysis) {
+    progressInput.value = "0";
+  }
 }
 
 async function readJsonResponse(response) {
@@ -2438,7 +2453,7 @@ async function submitChart() {
     resetDifficultySelector();
     resetProgressMap();
     window.BmsFormMiniView?.clear();
-    progressInput.value = "100";
+    progressInput.value = "0";
     applyRejectedProgressState();
     window.BmsTurnstile?.reset();
     window.BmsPostFormUi?.markClean?.();
@@ -2546,7 +2561,7 @@ progressInput.addEventListener("input", () => {
 
 isRejectedInput.addEventListener("change", () => {
   if (isRejectedInput.checked && !postStateUi.initialRejectedChoiceInitialized) {
-    postStateUi.initialRejectedChoice = false;
+    postStateUi.initialRejectedChoice = true;
     postStateUi.initialRejectedChoiceInitialized = true;
   }
   applyRejectedProgressState();

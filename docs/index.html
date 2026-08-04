@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="./chart-miniview.css?v=post-form-miniview-01">
     <link rel="stylesheet" href="./tree-progress-polish.css?v=tree-shape-fix-01">
     <link rel="stylesheet" href="./version-management-ui.css?v=withdrawal-lifecycle-16r">
-    <link rel="stylesheet" href="./post-form-ui.css?v=chart-metadata-extract-01">
+    <link rel="stylesheet" href="./post-form-ui.css?v=submission-status-admin-correction-01">
     <link rel="stylesheet" href="./chart-detail-link.css?v=detail-theme-r4b2e-01">
     <link rel="stylesheet" href="./theme.css?v=progress-style-r4b2f-01">
     <link rel="stylesheet" href="./favorites-list.css?v=version-comment-progress-01">
@@ -289,7 +289,7 @@
                     <label class="field progress-value-field">
                       <span class="field-label">進捗度 <span class="required-mark">*</span></span>
                       <span class="progress-value-control">
-                        <input id="progress" name="progress" type="number" min="0" max="100" step="1" value="100" required>
+                        <input id="progress" name="progress" type="number" min="0" max="100" step="1" value="0" required>
                         <span class="progress-unit" aria-hidden="true">%</span>
                       </span>
                       <span class="field-help">0～100。没譜面は100固定です。</span>
@@ -300,30 +300,38 @@
                 <div class="progress-policy-controls post-state-panel" aria-labelledby="postStatePanelTitle">
                   <h4 class="post-state-title" id="postStatePanelTitle">投稿状態</h4>
 
-                  <div class="progress-policy-item post-state-row completion-state-row" id="completionStateControl">
-                    <span class="progress-policy-heading post-state-name">完成版</span>
+                  <div class="progress-policy-item post-state-row submission-state-row incomplete-state-row" id="incompleteStateControl" data-selected="true">
+                    <label class="submission-state-choice" for="submissionStateIncomplete">
+                      <input id="submissionStateIncomplete" name="submissionState" type="radio" value="incomplete" checked>
+                      <span>制作途中</span>
+                    </label>
+                    <p class="post-state-description" id="incompleteStateDescription">制作途中の譜面として投稿します。</p>
+                    <span class="post-state-badge" id="incompleteStateBadge" data-state="configurable">操作可能</span>
+                  </div>
+
+                  <div class="progress-policy-item post-state-row submission-state-row completion-state-row" id="completionStateControl">
+                    <label class="submission-state-choice" for="submissionStateCompleted">
+                      <input id="submissionStateCompleted" name="submissionState" type="radio" value="completed" disabled aria-disabled="true">
+                      <span>完成版</span>
+                    </label>
                     <div class="post-state-control">
                       <button class="secondary progress-complete-button" id="completeProgressButton" type="button" disabled aria-disabled="true" aria-pressed="false">完成版にする</button>
+                      <p class="post-state-description" id="completionStateDescription" aria-live="polite">初回投稿では完成版にできません。</p>
                     </div>
                     <div class="post-state-message">
                       <span class="post-state-badge" id="completionStateBadge">利用不可</span>
-                      <p class="post-state-description" id="completionStateDescription" aria-live="polite">初回投稿では完成版にできません。</p>
                       <p class="post-state-description completion-edit-notice" id="completionEditNotice" hidden>完成版指定中は進捗範囲を編集できません。編集する場合は完成版を解除してください。</p>
                     </div>
                   </div>
 
-                  <div class="progress-policy-item post-state-row rejected-field" id="rejectedProgressControl">
-                    <span class="progress-policy-heading post-state-name">没譜面</span>
-                    <label class="form-check post-state-control">
-                      <input id="isRejected" name="isRejected" type="checkbox" value="true">
-                      <span class="form-check-body">
-                        <span class="form-check-label">没譜面</span>
-                      </span>
+                  <div class="progress-policy-item post-state-row submission-state-row rejected-field" id="rejectedProgressControl">
+                    <label class="submission-state-choice" for="submissionStateRejected">
+                      <input id="submissionStateRejected" name="submissionState" type="radio" value="rejected_completed">
+                      <span>完成済み没譜面</span>
                     </label>
-                    <div class="post-state-message">
-                      <span class="post-state-badge" id="rejectedStateBadge">操作可能</span>
-                      <p class="post-state-description" id="rejectedStateDescription" aria-live="polite">制作途中の通常版として投稿します。</p>
-                    </div>
+                    <p class="post-state-description" id="rejectedStateDescription" aria-live="polite">完成済みの没譜面として投稿します。</p>
+                    <span class="post-state-badge" id="rejectedStateBadge">操作可能</span>
+                    <input id="isRejected" name="isRejected" type="hidden" value="false">
                   </div>
 
                   <div class="progress-policy-item post-state-row append-policy-field" id="allowAppendControl">
@@ -510,7 +518,8 @@
     <script src="./version-comment-ui.js?v=version-comment-progress-01"></script>
     <script src="./progress-map-drag-hint.js?v=version-comment-progress-01"></script>
     <script src="./chart-render-pipeline.js?v=chart-render-pipeline-r4a-01"></script>
-    <script src="./app.js?v=version-comment-progress-01"></script>
+    <script src="./app.js?v=submission-status-admin-correction-01"></script>
+    <script src="./submission-status-ui.js?v=submission-status-admin-correction-01"></script>
     <script src="./progress-song-end-analysis.js?v=chart-miniview-position-01"></script>
     <script src="./progress-thumbnail-list.js?v=progress-style-r4b2f-01"></script>
     <script src="./chart-miniview.js?v=post-form-miniview-01"></script>
