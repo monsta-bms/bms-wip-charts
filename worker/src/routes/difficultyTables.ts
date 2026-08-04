@@ -341,7 +341,10 @@ async function selectEligibleRows(env: Env): Promise<DifficultyTableRow[]> {
     LEFT JOIN version_source_metadata
       ON version_source_metadata.version_id = versions.id
     WHERE versions.progress = 100
-      AND versions.completed_at IS NOT NULL
+      AND (
+        versions.completed_at IS NOT NULL
+        OR COALESCE(versions.is_rejected, 0) = 1
+      )
       AND COALESCE(versions.is_hidden, 0) = 0
       AND COALESCE(charts.is_hidden, 0) = 0
       AND COALESCE(versions.download_blocked, 0) = 0
@@ -350,12 +353,11 @@ async function selectEligibleRows(env: Env): Promise<DifficultyTableRow[]> {
       AND versions.withdrawn_at IS NULL
       AND versions.delete_requested_at IS NULL
       AND ${difficultyTableWithdrawalExclusionSql("versions")}
-      AND COALESCE(versions.is_rejected, 0) = 0
       AND COALESCE(versions.collapsed_by_completion, 0) = 0
       AND versions.md5 IS NOT NULL
       AND length(versions.md5) = 32
     ORDER BY
-      datetime(versions.completed_at) DESC,
+      datetime(COALESCE(versions.completed_at, versions.created_at)) DESC,
       datetime(versions.created_at) DESC,
       versions.id DESC
   `).all<DifficultyTableRow>();

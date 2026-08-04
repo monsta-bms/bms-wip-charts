@@ -272,13 +272,16 @@ async function requestData(tableId, requestEnv = env) {
   return { response, data: await response.json() };
 }
 
-async function legacySelected(tableId) {
+async function expectedSelected(tableId) {
   const result = await env.DB.prepare(`
     SELECT versions.id, versions.md5, versions.difficulty
     FROM versions
     INNER JOIN charts ON charts.id = versions.chart_id
     WHERE versions.progress = 100
-      AND versions.completed_at IS NOT NULL
+      AND (
+        versions.completed_at IS NOT NULL
+        OR COALESCE(versions.is_rejected, 0) = 1
+      )
       AND COALESCE(versions.is_hidden, 0) = 0
       AND COALESCE(charts.is_hidden, 0) = 0
       AND COALESCE(versions.download_blocked, 0) = 0
@@ -291,11 +294,11 @@ async function legacySelected(tableId) {
         WHERE difficulty_withdrawals.version_id = versions.id
           AND difficulty_withdrawals.status IN ('pending', 'processing', 'tombstoned', 'deleted')
       )
-      AND COALESCE(versions.is_rejected, 0) = 0
       AND COALESCE(versions.collapsed_by_completion, 0) = 0
       AND versions.md5 IS NOT NULL
       AND length(versions.md5) = 32
-    ORDER BY datetime(versions.completed_at) DESC, datetime(versions.created_at) DESC, versions.id DESC
+    ORDER BY datetime(COALESCE(versions.completed_at, versions.created_at)) DESC,
+      datetime(versions.created_at) DESC, versions.id DESC
   `).all();
   const seen = new Set();
   const selected = [];
@@ -576,8 +579,26 @@ async function seedIntegrationFixtures() {
     sourceArtist: "Source Artist"
   });
 
+  const rejectedStar = await insertVersion({
+    rejected: true,
+    completedAt: null,
+    difficulty: "★6",
+    title: "Published Rejected Star",
+    md5: "78000000000000000000000000000007",
+    createdAt: "2026-07-24 13:10:00"
+  });
+  const rejectedDouble = await insertVersion({
+    rejected: true,
+    completedAt: null,
+    difficulty: "★★3",
+    title: "Published Rejected Double Star",
+    md5: "82000000000000000000000000000008",
+    createdAt: "2026-07-24 13:05:00"
+  });
+
   const excluded = [];
   excluded.push(await insertVersion({ progress: 99, md5: "70000000000000000000000000000007" }));
+  excluded.push(await insertVersion({ completedAt: null, md5: "69000000000000000000000000000006" }));
   excluded.push(await insertVersion({ hidden: true, md5: "71000000000000000000000000000007" }));
   excluded.push(await insertVersion({ chartHidden: true, md5: "72000000000000000000000000000007" }));
   excluded.push(await insertVersion({ downloadBlocked: true, md5: "73000000000000000000000000000007" }));
@@ -585,7 +606,7 @@ async function seedIntegrationFixtures() {
   excluded.push(await insertVersion({ fileDeletedAt: "2026-07-24 09:00:00", md5: "75000000000000000000000000000007" }));
   excluded.push(await insertVersion({ withdrawnAt: "2026-07-24 09:00:00", md5: "76000000000000000000000000000007" }));
   excluded.push(await insertVersion({ deleteRequestedAt: "2026-07-24 09:00:00", md5: "77000000000000000000000000000007" }));
-  excluded.push(await insertVersion({ rejected: true, md5: "78000000000000000000000000000007" }));
+  excluded.push(await insertVersion({ rejected: true, completedAt: null, hidden: true, md5: "83000000000000000000000000000008" }));
   excluded.push(await insertVersion({ collapsed: true, md5: "79000000000000000000000000000007" }));
   excluded.push(await insertVersion({ md5: "not-hex-but-length-is-32-xxxxxxxx", difficulty: "★1" }));
   excluded.push(await insertVersion({ md5: "short", difficulty: "★1" }));
@@ -602,7 +623,17 @@ async function seedIntegrationFixtures() {
   `).bind(withdrawalExcluded.id, withdrawalExcluded.chart.chartId).run();
   excluded.push(withdrawalExcluded);
 
-  return { featured, duplicateNew, doubleStar, unavailable, failed, partial, excluded };
+  return {
+    featured,
+    duplicateNew,
+    doubleStar,
+    unavailable,
+    failed,
+    partial,
+    rejectedStar,
+    rejectedDouble,
+    excluded
+  };
 }
 
 async function testAuthorHistorySql() {
@@ -689,18 +720,27 @@ async function testRouteIntegration(fixtures) {
   const responseText = JSON.stringify(starData);
   const doubleData = (await requestData("rc-double-star")).data;
 
-  await check("Phase C selection MD5 sets, RC counts, duplicate exclusion, and ordering match legacy selection", async () => {
-    const legacyStar = await legacySelected("rc-star");
-    const legacyDouble = await legacySelected("rc-double-star");
-    assert.deepEqual(starData.map((item) => item.md5), legacyStar);
-    assert.deepEqual(doubleData.map((item) => item.md5), legacyDouble);
-    assert.equal(starData.length, legacyStar.length);
-    assert.equal(doubleData.length, legacyDouble.length);
+  await check("selection MD5 sets, RC counts, duplicate exclusion, and ordering match the current eligibility rule", async () => {
+    const expectedStar = await expectedSelected("rc-star");
+    const expectedDouble = await expectedSelected("rc-double-star");
+    assert.deepEqual(starData.map((item) => item.md5), expectedStar);
+    assert.deepEqual(doubleData.map((item) => item.md5), expectedDouble);
+    assert.equal(starData.length, expectedStar.length);
+    assert.equal(doubleData.length, expectedDouble.length);
     assert.equal(starData.filter((item) => item.md5 === fixtures.duplicateNew.md5).length, 1);
     assert.ok(!doubleData.some((item) => item.md5 === fixtures.duplicateNew.md5));
   });
 
-  await check("withdrawal, hidden, collapsed, download-blocked, rejected, deleted, and invalid MD5 rows remain excluded", () => {
+  await check("public rejected rows without completed_at are listed in both tables", () => {
+    const rejectedStar = starData.find((item) => item.md5 === fixtures.rejectedStar.md5);
+    const rejectedDouble = doubleData.find((item) => item.md5 === fixtures.rejectedDouble.md5);
+    assert.ok(rejectedStar);
+    assert.ok(rejectedDouble);
+    assert.equal(rejectedStar.bms_wip_completed_at, null);
+    assert.equal(rejectedDouble.bms_wip_completed_at, null);
+  });
+
+  await check("withdrawal, hidden, collapsed, download-blocked, incomplete, deleted, and invalid MD5 rows remain excluded", () => {
     const published = new Set([...starData, ...doubleData].map((item) => item.md5));
     for (const row of fixtures.excluded) {
       if (row.md5) assert.ok(!published.has(String(row.md5).toLowerCase()));

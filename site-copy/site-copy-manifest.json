@@ -1420,7 +1420,7 @@
       "deploymentTarget": "PAGES",
       "allowEmpty": false,
       "headingId": "difficultyTitle",
-      "sourceValueSha256": "534de3f428802cc4b480cdd59b02da73fe0183fdaafa07039ed8cd09fe77a34f",
+      "sourceValueSha256": "b95ae40e6ccc3892b7a0b2501745e7bd89d38f9982cae622577202292c26642f",
       "allowedLinks": [
         "RC_STAR",
         "RC_DOUBLE_STAR"

@@ -327,7 +327,16 @@ async function seedFixtures() {
     md5: "40000000000000000000000000000004",
     updatedAt: "2026-07-24 08:00:00"
   });
-  return { featured, fallback, malicious, doubleStar };
+  const rejected = await insertVersion({
+    id: "html_rejected",
+    difficulty: "★★2",
+    title: "Published Rejected Chart",
+    md5: "50000000000000000000000000000005",
+    completedAt: null,
+    updatedAt: "2026-07-24 08:30:00"
+  });
+  await env.DB.prepare("UPDATE versions SET is_rejected = 1 WHERE id = ?").bind(rejected.id).run();
+  return { featured, fallback, malicious, doubleStar, rejected };
 }
 
 function instrumentEnvironment(baseEnv) {
@@ -771,6 +780,9 @@ async function runTests(fixtures) {
     } finally {
       console.error = originalConsoleError;
     }
+  });
+  await check("public rejected chart without completed_at is rendered in RC double-star HTML", () => {
+    assert.match(doubleBody, /Published Rejected Chart/u);
   });
 
   const generationMetrics = [];

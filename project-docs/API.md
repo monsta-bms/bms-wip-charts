@@ -1282,6 +1282,8 @@ header例:
 
 dataは譜面objectの配列を返す。対象なしはHTTP 200の`[]`。
 
+掲載対象は、公開中かつダウンロード可能で有効な32桁MD5を持つ`progress=100`のversionのうち、`completed_at`がある完成版、または`is_rejected=1`の没譜面とする。完成指定のない通常版は掲載しない。没譜面は`completed_at`を変更せず、`bms_wip_completed_at: null`のまま掲載する。同一MD5の優先順では、完成版の`completed_at`または没譜面の`created_at`を掲載基準日時として使用する。
+
 ```json
 [
   {

@@ -988,9 +988,10 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 空でない未認識表記、小数、範囲外表記がRC★`他`になること。
 - 空またはNULLのdifficultyは掲載されないこと。
 - `bms_wip_original_difficulty`へ正規化後の元difficultyが残ること。
-- `progress<100`、version/chart非公開、DL不可、R2削除済み、取り消し、削除申請中、没譜面、中間履歴を除外すること。
+- 公開中かつDL可能な没譜面は`completed_at=NULL`のままRC★／RC★★へ掲載され、`bms_wip_completed_at`もNULLを維持すること。
+- `progress<100`、完成指定のない通常版、version/chart非公開、DL不可、R2削除済み、取り消し、削除申請中、中間履歴を除外すること。非公開またはDL不可の没譜面も除外すること。
 - 32桁16進MD5がないversionを除外すること。
-- 同一MD5はcompleted_at、created_at、version IDの降順で1件だけ掲載され、異なるMD5の完成分岐は掲載されること。
+- 同一MD5は掲載基準日時（完成版はcompleted_at、没譜面はcreated_at）、created_at、version IDの降順で1件だけ掲載され、異なるMD5の完成分岐と没譜面は掲載されること。
 - ZIP投稿では内部BMSのMD5を使い、外側ZIP SHA-256を譜面hashとして出力しないこと。
 - `url_diff`が現在のWorkerを起点とする絶対file API URLであること。
 - `origin_url`がある採用versionだけ、正規化済み原曲配布URLが`url`としてdataに出力されること。
@@ -1472,7 +1473,7 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 
 ### 専用隔離テスト
 
-- `node worker/scripts/test-difficulty-table-html.mjs`で77 checkを実行する。RC★/RC★★のGET、HEAD、OPTIONS、POST、不正ID、3 themeと不正theme、bmstable meta、header/dataリンク、60秒cache、ETag/304、Content-Length、nosniffを確認する。
+- `node worker/scripts/test-difficulty-table-html.mjs`で78 check以上を実行する。RC★/RC★★のGET、HEAD、OPTIONS、POST、不正ID、3 themeと不正theme、bmstable meta、header/dataリンク、60秒cache、ETag/304、Content-Length、nosniff、`completed_at`を持たない公開没譜面の表示を確認する。
 - タイトル、説明、総件数、JST最終更新、theme query、theme UI不在、themeを保持するRC切替、level order、0件level省略、level別件数、7列、空状態、unavailable fallbackを確認する。曲名BMS-IR、lowercase MD5、無効MD5、外部属性、曲origin、originなし、不正protocol、Worker DL、R2非公開、3リンクの役割分離とaccessible nameを確認する。
 - 元難易度の`元:`常時表示、コメント有無のdetails、accessible name付き`💬` native summary、改行、HTML文字列、長文、絵文字、引用符を確認する。title/artist/author/comment/chart nameの悪性文字列を本文・属性へ入れ、script要素・inline event属性・aria/title注入が生成されないことを確認する。
 - HTML閲覧前後でheader/data JSON本文をbyte比較し、`postComment`が公開JSONへ増えないこと、同一入力のHTML/ETagが安定することを確認する。D1失敗は503 HTML・no-store・内部detailなし・固定code/table IDだけのlog、HEAD bodyなしとする。

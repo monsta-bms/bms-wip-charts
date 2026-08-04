@@ -849,9 +849,9 @@ ZIP投稿は、外側の5MiB制限とSHA-256 BAN・重複判定を通過した�
 - メタデータ解析失敗はフォーム値へfallbackする。BMS解析失敗はprogressMapなしならwarning、progressMapありなら検証不能として拒否する。標準ブロックはWorker/Pagesとも最大5000件とする。
 - R2には外側ZIPだけを保存し、内部譜面名・内部ファイルは永続保存しない。既存ZIPの自動再解析は行わない。
 
-## DIFFICULTY-TABLE-01 完成差分フィード
+## DIFFICULTY-TABLE-01 完成差分・没譜面フィード
 
-完成差分は一般的なBMS難易度表形式で、次の2表へ統合して公開する。
+完成差分と没譜面は一般的なBMS難易度表形式で、次の2表へ統合して公開する。
 
 - `rc-star`: 表示名`リサイクルセンター RC★`、symbol `RC★`、level order `0`～`20`、`他`
 - `rc-double-star`: 表示名`リサイクルセンター RC★★`、symbol `RC★★`、level order `1`～`7`
@@ -878,13 +878,13 @@ RC★★変換:
 - `st10`～`st12`: `6`
 - `st13`以上: `7`
 
-掲載対象は`progress=100`、version/chart公開中、`download_blocked=0`、`file_deleted_at/withdrawn_at/delete_requested_at IS NULL`、`is_rejected=0`、`collapsed_by_completion=0`、有効な32桁MD5ありをすべて満たすversionとする。BANは既存versionの掲載条件にしない。
+掲載対象は`progress=100`で、`completed_at IS NOT NULL`または`is_rejected=1`のどちらかを満たし、version/chart公開中、`download_blocked=0`、`file_deleted_at/withdrawn_at/delete_requested_at IS NULL`、`collapsed_by_completion=0`、有効な32桁MD5ありをすべて満たすversionとする。完成指定のない通常版は、進捗が100になっていても掲載しない。公開中の没譜面は`completed_at`を補完・更新せず、NULLのまま掲載する。BANは既存versionの掲載条件にしない。
 
-同一MD5は、`completed_at`、`created_at`、version IDの降順で最初の1件だけを採用する。この重複排除は2表への分類前に行い、同一MD5が両方へ載らないようにする。異なるMD5の完成分岐はそれぞれ掲載してよい。
+同一MD5は、掲載基準日時（完成版は`completed_at`、没譜面は`created_at`）、`created_at`、version IDの降順で最初の1件だけを採用する。この重複排除は2表への分類前に行い、同一MD5が両方へ載らないようにする。異なるMD5の完成分岐と没譜面はそれぞれ掲載してよい。
 
 標準項目は`md5`, `level`, `title`, `artist`, `url_diff`, `name_diff`とする。採用versionに有効な`origin_url`がある場合だけ、原曲配布URLを`url`として追加する。`org_md5`は出力しない。`url_diff`は既存file APIの絶対URLとし、ZIPでは内部BMSのMD5を使い、外側ZIPのSHA-256を譜面hashとして出力しない。
 
-元difficulty、採用version自身の差分名、数字パス版ラベル、作者、完成日時、subtitle、subartistは`bms_wip_`名前空間の独自項目として保持する。差分名がNULLの既存versionだけ起点差分名へfallbackする。本フィードは投稿者の自己申告難易度をRC★/RC★★へ統合した完成差分フィードであり、公式な難易度認定ではない。
+元difficulty、採用version自身の差分名、数字パス版ラベル、作者、完成日時、subtitle、subartistは`bms_wip_`名前空間の独自項目として保持する。没譜面の`bms_wip_completed_at`はNULLを維持する。差分名がNULLの既存versionだけ起点差分名へfallbackする。本フィードは投稿者の自己申告難易度をRC★/RC★★へ統合した完成差分・没譜面フィードであり、公式な難易度認定ではない。
 
 公開難易度表ルートのGET/HEAD/OPTIONSだけは`Access-Control-Allow-Origin: *`とし、投稿・管理APIのOrigin制限は変更しない。headerは約1時間、dataと人間向けHTMLは約60秒キャッシュし、ETag再検証に対応する。古いdataが残っていてもDL可否は既存file APIが現在のD1/R2状態で再判定する。
 
