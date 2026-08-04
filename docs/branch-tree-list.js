@@ -450,7 +450,8 @@
   }
 
   function isCollapsedByCompletion(version) {
-    return version?.collapsedByCompletion === true || version?.collapsed_by_completion === true;
+    const collapsed = version?.collapsedByCompletion === true || version?.collapsed_by_completion === true;
+    return collapsed && getCollapsedReason(version) !== completedCollapseReason;
   }
 
   function getCollapsedByVersionId(version) {
@@ -510,12 +511,8 @@
     return Number.isFinite(progress) ? progress : 0;
   }
 
-  function isSupersededIntermediateNode(node) {
-    const version = node.version;
-    return getDownloadBlockReason(version) === completedCollapseReason &&
-      getProgress(version) < 100 &&
-      Boolean(isCollapsedByCompletion(version) || getCollapsedReason(version) === completedCollapseReason) &&
-      !isHiddenVersion(version);
+  function isSupersededIntermediateNode() {
+    return false;
   }
 
   function inferCompletedDescendantId(node, treeNodes) {

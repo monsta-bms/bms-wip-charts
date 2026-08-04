@@ -50,14 +50,16 @@ const [
   uploadAnalysisModule,
   sourceMetadataModule,
   versionListModule,
-  difficultyTablesModule
+  difficultyTablesModule,
+  filesModule
 ] = await Promise.all([
   importBundled("src/routes/charts.ts"),
   importBundled("src/routes/chartVersions.ts"),
   importBundled("src/utils/bmsUploadAnalysis.ts"),
   importBundled("src/utils/versionSourceMetadata.ts"),
   importBundled("src/routes/versionList.ts"),
-  importBundled("src/routes/difficultyTables.ts")
+  importBundled("src/routes/difficultyTables.ts"),
+  importBundled("src/routes/files.ts")
 ]);
 
 async function check(name, action) {
@@ -584,6 +586,8 @@ async function seedAppendParent(bytes, options = {}) {
   const songId = `append_song_${suffix}`;
   const chartId = `append_chart_${suffix}`;
   const versionId = `append_parent_${suffix}`;
+  const fileId = `append_parent_file_${suffix}`;
+  const r2Key = `append/parent-${suffix}.bms`;
   const sourceTitle = options.sourceTitle ?? `Parent Source ${suffix}`;
   const displaySubtitle = `Parent Display Subtitle ${suffix}`;
   const displaySubartist = `Parent Display Subartist ${suffix}`;
@@ -619,9 +623,9 @@ async function seedAppendParent(bytes, options = {}) {
     JSON.stringify(parentMap),
     displaySubtitle,
     displaySubartist,
-    `append_parent_file_${suffix}`,
+    fileId,
     `append_parent_sha_${suffix}`,
-    `append/parent-${suffix}.bms`,
+    r2Key,
     passwordHash,
     options.allowAppend === false ? 0 : 1
   ).run();
@@ -631,7 +635,7 @@ async function seedAppendParent(bytes, options = {}) {
       encoding, status, error_code
     ) VALUES (?, ?, 'Parent Source Subtitle', 'Parent Source Artist', 'Parent Source Subartist', 'utf-8', 'succeeded', NULL)
   `).bind(versionId, sourceTitle).run();
-  return { songId, chartId, versionId, analyzed, parentMap, displaySubtitle, displaySubartist };
+  return { songId, chartId, versionId, fileId, r2Key, analyzed, parentMap, displaySubtitle, displaySubartist };
 }
 
 function makeAppendRequest(parent, bytes, options = {}) {
@@ -761,6 +765,82 @@ async function testAppendSubmissions() {
     const metadata = await metadataFor(body.versionId);
     assert.equal(metadata.source_subtitle, "Completion Raw Subtitle");
     assert.equal(metadata.status, "succeeded");
+
+    const parentAfterCompletion = await first(`
+      SELECT download_blocked, download_block_reason, collapsed_by_completion, collapsed_reason
+      FROM versions
+      WHERE id = ?
+    `, parent.versionId);
+    assert.deepEqual(parentAfterCompletion, {
+      download_blocked: 0,
+      download_block_reason: null,
+      collapsed_by_completion: 0,
+      collapsed_reason: null
+    });
+
+    await env.DB.prepare(`
+      UPDATE versions
+      SET download_blocked = 1,
+          download_block_reason = 'superseded_by_completed_descendant',
+          download_blocked_at = CURRENT_TIMESTAMP,
+          collapsed_by_completion = 1,
+          collapsed_reason = 'superseded_by_completed_descendant',
+          collapsed_at = CURRENT_TIMESTAMP,
+          collapsed_by_version_id = ?
+      WHERE id = ?
+    `).bind(body.versionId, parent.versionId).run();
+    await env.FILES.put(parent.r2Key, new Uint8Array([0x31]));
+
+    const chartListResponse = await chartsModule.handleChartsRoute(
+      new Request("http://localhost/api/charts?pageSize=200"),
+      env
+    );
+    const chartListBody = await chartListResponse.json();
+    const listParent = chartListBody.charts
+      .flatMap((entry) => entry.versions)
+      .find((version) => version.id === parent.versionId);
+    assert.equal(listParent.downloadBlocked, false);
+    assert.equal(listParent.downloadBlockReason, null);
+    assert.equal(listParent.collapsedByCompletion, false);
+    assert.match(listParent.file.downloadUrl, /^\/api\/files\//u);
+
+    const chartDetailResponse = await chartsModule.handleChartDetailRoute(
+      new Request(`http://localhost/api/charts/${parent.chartId}`),
+      env,
+      parent.chartId
+    );
+    const chartDetailBody = await chartDetailResponse.json();
+    const detailParent = chartDetailBody.charts[0].versions.find((version) => version.id === parent.versionId);
+    assert.equal(detailParent.downloadBlocked, false);
+    assert.equal(detailParent.collapsedByCompletion, false);
+
+    const versionListResponse = await versionListModule.handlePublicVersionListRoute(
+      new Request("http://localhost/api/versions?pageSize=100"),
+      env,
+      false
+    );
+    const versionListBody = await versionListResponse.json();
+    const standaloneParent = versionListBody.items.find((version) => version.versionId === parent.versionId);
+    assert.equal(standaloneParent.downloadBlocked, false);
+    assert.match(standaloneParent.file.downloadUrl, /^\/api\/files\//u);
+
+    const downloadResponse = await filesModule.handleFileRoute(
+      new Request(`http://localhost/api/files/${parent.fileId}`),
+      env,
+      parent.fileId
+    );
+    assert.equal(downloadResponse.status, 200);
+
+    const siblingBytes = Buffer.concat([
+      completionBytes,
+      Buffer.from(`\r\n#COMMENT sibling-${++sequence}`, "utf8")
+    ]);
+    const siblingResponse = await chartVersionsModule.handleChartVersionsRoute(
+      makeAppendRequest(parent, siblingBytes, { progressMap: completionMap }),
+      env,
+      parent.chartId
+    );
+    assert.equal(siblingResponse.status, 201, await siblingResponse.text());
   });
 
   await check("append-disabled parent rejects before creating version or metadata", async () => {
@@ -862,9 +942,11 @@ async function testWarningInsertAndPublicRegression() {
       INSERT INTO versions (
         id, chart_id, version_number, branch_path, chart_name, normalized_chart_name,
         author, progress, difficulty, level, title, artist, md5,
-        file_id, file_name, file_size, file_sha256, r2_key, password_hash, completed_at
+        file_id, file_name, file_size, file_sha256, r2_key, password_hash, completed_at,
+        download_blocked, download_block_reason, collapsed_by_completion, collapsed_reason
       ) VALUES (?, ?, 1, ?, 'Snapshot Chart', 'snapshot chart', 'Snapshot Author', 100,
-        '★1', '1', 'Difficulty Snapshot', 'Snapshot Artist', ?, ?, 'snapshot.bms', 1, ?, ?, 'hash', CURRENT_TIMESTAMP)
+        '★1', '1', 'Difficulty Snapshot', 'Snapshot Artist', ?, ?, 'snapshot.bms', 1, ?, ?, 'hash', CURRENT_TIMESTAMP,
+        1, 'superseded_by_completed_descendant', 1, 'superseded_by_completed_descendant')
     `).bind(
       versionId,
       chartId,

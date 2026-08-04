@@ -8,6 +8,7 @@ import {
   resolvePublicLifecycleStatus,
   WithdrawalDbStatus
 } from "../utils/versionWithdrawal";
+import { isEffectiveCompletionCollapse, isEffectiveDownloadBlock } from "../utils/versionAccess";
 import {
   classifyWithdrawalHandling,
   requestModeForHandling,
@@ -52,8 +53,10 @@ type ManagedVersionRow = {
   file_deleted_at: string | null;
   allow_append: number;
   collapsed_by_completion: number;
+  collapsed_reason: string | null;
   progress_map_json: string | null;
   download_blocked: number;
+  download_block_reason: string | null;
   withdrawal_download_blocked: number;
   created_at: string;
 };
@@ -238,8 +241,10 @@ async function selectManagedVersion(env: Env, versionId: string): Promise<Manage
       versions.file_deleted_at,
       versions.allow_append,
       versions.collapsed_by_completion,
+      versions.collapsed_reason,
       versions.progress_map_json,
       versions.download_blocked,
+      versions.download_block_reason,
       versions.withdrawal_download_blocked,
       versions.created_at
     FROM versions
@@ -396,12 +401,12 @@ async function buildLifecycleView(env: Env, version: ManagedVersionRow): Promise
     canRequestWithdrawal,
     canCancelWithdrawal: withdrawal?.can_cancel === 1 && lifecycleStatus === "withdrawal_pending",
     downloadAvailable: publicVersion
-      && version.download_blocked === 0
+      && !isEffectiveDownloadBlock(version.download_blocked, version.download_block_reason)
       && version.withdrawal_download_blocked === 0
       && !blocksAccess,
     appendAvailable: publicVersion
       && version.allow_append === 1
-      && version.collapsed_by_completion === 0
+      && !isEffectiveCompletionCollapse(version.collapsed_by_completion, version.collapsed_reason)
       && hasUsableProgressMap(version.progress_map_json)
       && !blocksAccess
   };

@@ -231,10 +231,13 @@ check("append disabled policy class remains stable", () => assert.equal(createAp
 check("append disabled policy keeps aria description", () => assert.equal(createAppendControl(model({ allowAppend: false }), domOptions()).getAttribute("aria-describedby"), "append-policy-description-version_01"));
 check("legacy append text remains 旧形式", () => assert.equal(createAppendControl(model({}, { hasProgressMap: false }), domOptions()).textContent, "旧形式"));
 check("legacy append is disabled", () => assert.equal(createAppendControl(model({}, { hasProgressMap: false }), domOptions()).disabled, true));
-check("superseded append text remains 追記不可", () => assert.equal(createAppendControl(model({}, { isSupersededIntermediate: true }), domOptions()).textContent, "追記不可"));
-check("superseded append class remains stable", () => assert.equal(createAppendControl(model({}, { isSupersededIntermediate: true }), domOptions()).className, "secondary append-disabled-intermediate"));
-check("superseded append title remains stable", () => assert.equal(createAppendControl(model({}, { isSupersededIntermediate: true }), domOptions()).title, "完成版に置き換え済みの中間履歴のため追記できません"));
-check("collapsed append is superseded", () => assert.equal(createAppendControl(model({ collapsedByCompletion: true }), domOptions()).className, "secondary append-disabled-intermediate"));
+check("completed-child option does not disable append", () => assert.equal(createAppendControl(model({}, { isSupersededIntermediate: true }), domOptions()).textContent, "追記投稿"));
+check("completed-child option keeps available append class", () => assert.equal(createAppendControl(model({}, { isSupersededIntermediate: true }), domOptions()).className, "secondary append-version-button"));
+check("completed-child option keeps append enabled", () => assert.equal(createAppendControl(model({}, { isSupersededIntermediate: true }), domOptions()).disabled, false));
+check("legacy completion collapse keeps append available", () => assert.equal(createAppendControl(model({
+  collapsedByCompletion: true,
+  collapsedReason: "superseded_by_completed_descendant"
+}), domOptions()).className, "secondary append-version-button"));
 check("processing append is hidden", () => assert.equal(createAppendControl(model({ lifecycleStatus: "processing" }), domOptions()), null));
 check("tombstoned append is hidden", () => assert.equal(createAppendControl(model({ lifecycleStatus: "tombstoned" }), domOptions()), null));
 check("unknown append is hidden", () => assert.equal(createAppendControl(model({ lifecycleStatus: "unexpected" }), domOptions()), null));

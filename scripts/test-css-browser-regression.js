@@ -1725,6 +1725,9 @@ function captureExpression(pageKind) {
       imageWraps: ".progress-thumbnail-image-wrap"
     }) : JSON.stringify({
       compactRows: ".compact-version-row",
+      compactLinks: ".compact-links",
+      compactComments: ".compact-comment",
+      commentPreviews: ".compact-comment .author-comment-preview",
       originLinks: ".compact-origin-link",
       downloads: ".compact-download-link, .compact-download-disabled"
     })};
@@ -2466,8 +2469,20 @@ function assertPageInvariants(snapshot, consoleMessages) {
   }
   for (const entry of snapshot.compact.matrix) {
     assert.equal(entry.counts.compactRows, compactItems.length);
+    assert.equal(entry.counts.compactLinks, compactItems.length);
+    assert.equal(entry.counts.compactComments, compactItems.length);
+    assert.equal(entry.counts.commentPreviews, 1);
     assert.equal(entry.counts.originLinks, compactItems.length);
     assert.equal(entry.counts.downloads, compactItems.length);
+    for (const row of entry.elements.compactRows) {
+      assert.ok(row.scrollWidth <= row.clientWidth + 1, `compact row overflows at ${entry.requestedTheme} ${entry.requestedWidth}px`);
+    }
+    for (const links of entry.elements.compactLinks) {
+      assert.ok(links.scrollWidth <= links.clientWidth + 1, `compact link actions overflow at ${entry.requestedTheme} ${entry.requestedWidth}px`);
+    }
+    for (const preview of entry.elements.commentPreviews) {
+      assert.ok(preview.parentClip.left <= 1 && preview.parentClip.right <= 1, `compact comment preview escapes its column at ${entry.requestedTheme} ${entry.requestedWidth}px`);
+    }
   }
   const errors = consoleMessages.filter((message) => message.type === "error" || message.type === "exception");
   const warnings = consoleMessages.filter((message) => message.type === "warning");

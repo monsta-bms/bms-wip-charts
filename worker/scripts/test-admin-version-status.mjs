@@ -323,6 +323,17 @@ try {
     progress: 75,
     progressMapJson: progressMap(75)
   });
+  await env.DB.prepare(`
+    UPDATE versions
+    SET download_blocked = 1,
+        download_block_reason = 'superseded_by_completed_descendant',
+        download_blocked_at = CURRENT_TIMESTAMP,
+        collapsed_by_completion = 1,
+        collapsed_reason = 'superseded_by_completed_descendant',
+        collapsed_at = CURRENT_TIMESTAMP,
+        collapsed_by_version_id = ?
+    WHERE id = ?
+  `).bind(child, root).run();
 
   await check("descendantを完成版へ修正できる", async () => {
     const before = await getRow(child);
@@ -346,11 +357,12 @@ try {
     assert.equal(map.layers.at(-1).kind, "completion_fill");
     assert.deepEqual(map.layers.at(-1).ranges, [[0, 3]]);
   });
-  await check("完成descendantでancestorをcollapseする", async () => {
+  await check("完成descendantがあってもancestorの旧自動制限を解除する", async () => {
     const after = await getRow(root);
-    assert.equal(after.collapsed_by_completion, 1);
-    assert.equal(after.collapsed_by_version_id, child);
-    assert.equal(after.download_block_reason, "superseded_by_completed_descendant");
+    assert.equal(after.collapsed_by_completion, 0);
+    assert.equal(after.collapsed_by_version_id, null);
+    assert.equal(after.download_blocked, 0);
+    assert.equal(after.download_block_reason, null);
   });
   await check("admin logへ修正内容と理由を保存する", async () => {
     const log = await env.DB.prepare("SELECT * FROM admin_logs WHERE target_id = ? ORDER BY rowid DESC LIMIT 1").bind(child).first();
@@ -378,7 +390,7 @@ try {
     assert.equal(after.download_blocked, 0);
     assert.equal(after.download_block_reason, null);
   });
-  await check("別の完成descendantがあればcollapseを維持する", async () => {
+  await check("別の完成descendantがあっても旧自動制限を再適用しない", async () => {
     const other = await createVersion(correctionChart.chartId, {
       parentVersionId: root,
       branchPath: "root/2",
@@ -386,11 +398,24 @@ try {
       completedAt: "2026-08-04 01:00:00",
       mapKind: "completion_fill"
     });
+    await env.DB.prepare(`
+      UPDATE versions
+      SET download_blocked = 1,
+          download_block_reason = 'superseded_by_completed_descendant',
+          download_blocked_at = CURRENT_TIMESTAMP,
+          collapsed_by_completion = 1,
+          collapsed_reason = 'superseded_by_completed_descendant',
+          collapsed_at = CURRENT_TIMESTAMP,
+          collapsed_by_version_id = ?
+      WHERE id = ?
+    `).bind(other, root).run();
     const current = await getRow(child);
     assert.equal((await patch(child, current.updated_at, { progress: 50 })).status, 200);
     const ancestor = await getRow(root);
-    assert.equal(ancestor.collapsed_by_completion, 1);
-    assert.equal(ancestor.collapsed_by_version_id, other);
+    assert.equal(ancestor.collapsed_by_completion, 0);
+    assert.equal(ancestor.collapsed_by_version_id, null);
+    assert.equal(ancestor.download_blocked, 0);
+    assert.equal(ancestor.download_block_reason, null);
   });
   await check("完成済み没譜面は通常completion collapseを起こさない", async () => {
     const before = await getRow(child);

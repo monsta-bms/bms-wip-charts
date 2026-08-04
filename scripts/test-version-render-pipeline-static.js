@@ -55,7 +55,7 @@ const listSources = listScripts.map((item) => item.src);
 
 check("model, link, action, pipeline, and app load in contract order", () => {
   const ordered = [
-    "./version-ui-model.js?v=version-comment-progress-01",
+    "./version-ui-model.js?v=completed-parent-access-01",
     "./version-link-ui.js?v=chart-render-pipeline-r4a-01",
     "./version-action-ui.js?v=version-comment-progress-01",
     "./chart-render-pipeline.js?v=chart-render-pipeline-r4a-01",
@@ -65,17 +65,17 @@ check("model, link, action, pipeline, and app load in contract order", () => {
   assert.deepEqual(ordered, [...ordered].sort((left, right) => left - right));
 });
 check("version model loads before compact list", () => {
-  const modelIndex = listSources.indexOf("./version-ui-model.js?v=version-comment-progress-01");
+  const modelIndex = listSources.indexOf("./version-ui-model.js?v=completed-parent-access-01");
   const linkIndex = listSources.indexOf("./version-link-ui.js?v=version-link-ui-r2-01");
   const actionIndex = listSources.indexOf("./version-action-ui.js?v=version-comment-progress-01");
   const commentIndex = listSources.indexOf("./version-comment-ui.js?v=version-comment-progress-01");
   assert.equal(linkIndex, modelIndex + 1);
   assert.equal(actionIndex, linkIndex + 1);
   assert.equal(commentIndex, actionIndex + 1);
-  assert.ok(commentIndex < listSources.indexOf("./list.js?v=version-comment-progress-01"));
+  assert.ok(commentIndex < listSources.indexOf("./list.js?v=public-list-finished-01"));
 });
 check("model, link UI, and Action UI precede every index renderer consumer", () => {
-  const modelIndex = indexSources.indexOf("./version-ui-model.js?v=version-comment-progress-01");
+  const modelIndex = indexSources.indexOf("./version-ui-model.js?v=completed-parent-access-01");
   const linkIndex = indexSources.indexOf("./version-link-ui.js?v=chart-render-pipeline-r4a-01");
   const actionIndex = indexSources.indexOf("./version-action-ui.js?v=version-comment-progress-01");
   const consumers = [
@@ -83,8 +83,8 @@ check("model, link UI, and Action UI precede every index renderer consumer", () 
     "./app.js?v=submission-status-admin-correction-01",
     "./progress-thumbnail-list.js?v=progress-style-r4b2f-01",
     "./branch-append-ui.js?v=version-comment-progress-01",
-    "./branch-tree-list.js?v=version-comment-progress-01",
-    "./favorites-list.js?v=version-comment-progress-01",
+    "./branch-tree-list.js?v=completed-parent-access-01",
+    "./favorites-list.js?v=completed-parent-access-01",
     "./version-management-ui.js?v=withdrawal-lifecycle-16r",
     "./chart-detail-link.js?v=chart-render-pipeline-r4a-01"
   ];
@@ -313,11 +313,20 @@ check("changed scripts use their reviewed release cache keys", () => {
   unchangedR4aScripts.forEach((name) => {
     assert.ok(indexSources.includes(`./${name}?v=chart-render-pipeline-r4a-01`), `${name} cache key mismatch`);
   });
-  ["version-ui-model.js", "version-action-ui.js", "version-comment-ui.js", "progress-map-drag-hint.js", "branch-append-ui.js", "branch-tree-list.js", "favorites-list.js"].forEach((name) => {
+  ["version-action-ui.js", "version-comment-ui.js", "progress-map-drag-hint.js", "branch-append-ui.js"].forEach((name) => {
     assert.ok(indexSources.includes(`./${name}?v=version-comment-progress-01`), `${name} cache key mismatch`);
   });
+  ["version-ui-model.js", "branch-tree-list.js", "favorites-list.js"].forEach((name) => {
+    assert.ok(indexSources.includes(`./${name}?v=completed-parent-access-01`), `${name} cache key mismatch`);
+  });
   ["version-ui-model.js", "version-link-ui.js", "version-action-ui.js", "version-comment-ui.js", "list.js"].forEach((name) => {
-    const cacheKey = name === "version-link-ui.js" ? "version-link-ui-r2-01" : "version-comment-progress-01";
+    const cacheKey = name === "version-link-ui.js"
+      ? "version-link-ui-r2-01"
+      : name === "version-ui-model.js"
+        ? "completed-parent-access-01"
+        : name === "list.js"
+          ? "public-list-finished-01"
+          : "version-comment-progress-01";
     assert.ok(listSources.includes(`./${name}?v=${cacheKey}`), `${name} compact cache key mismatch`);
   });
 });
@@ -326,7 +335,7 @@ check("CSS files match the reviewed R4B2f state", () => {
     ["docs/style.css", "c48375e56b16c4e6eabcc2e9a0c4376646918af74a363f3ff9242f4ca17e4783"],
     ["docs/branch-tree-list.css", "ed19601843f967502a35490617f9f1f31b4f53ae774856ca1bcaca26556f17ea"],
     ["docs/list-ui-refresh.css", "f630206e0a7ce75150b2305414ff85c6657244bfa0d58965594e29fb372b1d81"],
-    ["docs/list.css", "ca812204509a3ce3a1778c1a8c5e295b1d0182dbaa0d54246f91a0857a093961"],
+    ["docs/list.css", "1dd737426df587d011b61b0feffdfee732df4156ebb516fd5caa97407a818138"],
     ["docs/theme.css", "5b91d40156a17f9fbce1f6c46ec2f279bf6cf92713f2f7732cf3bd5a1d6a401b"],
     ["docs/chart-detail-link.css", "c45722a66d547ecb51825e67dc3e65cc31413f7820a5d34db8b45eb23dbe0882"],
     ["docs/favorites-list.css", "f9498bc2128e06da0a1de3a41e19949a3ee8afebfc46f266600026288d20cf7b"],

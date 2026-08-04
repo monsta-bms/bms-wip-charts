@@ -64,7 +64,6 @@ type ParentVersionRow = {
   origin_url: string | null;
   is_hidden: number;
   is_rejected: number;
-  collapsed_by_completion: number;
   file_deleted_at: string | null;
   allow_append: number;
   lifecycle_status: WithdrawalDbStatus | null;
@@ -510,7 +509,6 @@ async function selectParentVersion(env: Env, parentVersionId: string): Promise<P
       origin_url,
       is_hidden,
       is_rejected,
-      collapsed_by_completion,
       file_deleted_at,
       allow_append,
       (
@@ -615,18 +613,6 @@ async function validateChartAndParent(
         code: "PARENT_VERSION_NOT_FOUND",
         message: "追記元のバージョンが見つかりません。",
         detail: `parentVersionId is hidden or its chart file was deleted: ${parentVersionId}`
-      })
-    };
-  }
-
-  if (parent.collapsed_by_completion === 1) {
-    return {
-      ok: false,
-      response: await failAppendVersion(request, env, context, {
-        status: 404,
-        code: "PARENT_VERSION_NOT_FOUND",
-        message: "追記元のバージョンが見つかりません。",
-        detail: `parentVersionId was superseded by a completed descendant: ${parentVersionId}`
       })
     };
   }
@@ -1011,7 +997,6 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
           WHERE parent.id = ?
             AND parent.chart_id = ?
             AND COALESCE(parent.is_hidden, 0) = 0
-            AND COALESCE(parent.collapsed_by_completion, 0) = 0
             AND parent.file_deleted_at IS NULL
             AND parent.progress_map_json IS NOT NULL
             AND json_valid(parent.progress_map_json) = 1
@@ -1075,28 +1060,6 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
           AND EXISTS (SELECT 1 FROM versions WHERE id = ?)
       `).bind(chartId, versionId)
     ];
-
-    if (completionRequested) {
-      statements.push(env.DB.prepare(`
-        UPDATE versions
-        SET
-          download_blocked = 1,
-          download_block_reason = 'superseded_by_completed_descendant',
-          download_blocked_at = COALESCE(download_blocked_at, CURRENT_TIMESTAMP),
-          collapsed_by_completion = 1,
-          collapsed_reason = 'superseded_by_completed_descendant',
-          collapsed_at = COALESCE(collapsed_at, CURRENT_TIMESTAMP),
-          collapsed_by_version_id = ?,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE chart_id = ?
-          AND is_hidden = 0
-          AND ${appendLifecycleAllowedSql("versions")}
-          AND progress BETWEEN 1 AND 99
-          AND branch_path <> ?
-          AND ? LIKE branch_path || '/%'
-          AND EXISTS (SELECT 1 FROM versions WHERE id = ?)
-      `).bind(versionId, chartId, branchPath, branchPath, versionId));
-    }
 
     statements.push(env.DB.prepare(`
       INSERT INTO post_logs (

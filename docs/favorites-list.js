@@ -181,15 +181,20 @@
   function normalizeFavoriteContextVersion(version) {
     const copy = { ...version };
     if (getDownloadBlockReason(copy) === completedCollapseReason) {
+      copy.downloadBlocked = false;
+      copy.download_blocked = false;
+      copy.downloadBlockReason = null;
+      copy.download_block_reason = null;
+      copy.downloadBlockedAt = null;
+      copy.download_blocked_at = null;
       copy.collapsedByCompletion = false;
       copy.collapsed_by_completion = false;
-      copy.collapsedReason = "";
-      copy.collapsed_reason = "";
-      copy.collapsedByVersionId = "";
-      copy.collapsed_by_version_id = "";
-      copy.downloadBlockReason = "favorite_filter_context";
-      copy.download_block_reason = "favorite_filter_context";
-      copy.favoriteFilterIntermediate = true;
+      copy.collapsedReason = null;
+      copy.collapsed_reason = null;
+      copy.collapsedAt = null;
+      copy.collapsed_at = null;
+      copy.collapsedByVersionId = null;
+      copy.collapsed_by_version_id = null;
     }
     return copy;
   }

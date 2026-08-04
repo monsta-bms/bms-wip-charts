@@ -15,6 +15,7 @@ import {
   selectVersionAuthorHistory
 } from "../utils/versionAuthorHistory";
 import { difficultyTableWithdrawalExclusionSql } from "../utils/versionWithdrawal";
+import { COMPLETED_DESCENDANT_SUPERSESSION_REASON } from "../utils/versionAccess";
 
 const TABLE_PATH_PREFIX = "/difficulty-tables/";
 const API_PATH_PREFIX = "/api/difficulty-tables/";
@@ -347,13 +348,19 @@ async function selectEligibleRows(env: Env): Promise<DifficultyTableRow[]> {
       )
       AND COALESCE(versions.is_hidden, 0) = 0
       AND COALESCE(charts.is_hidden, 0) = 0
-      AND COALESCE(versions.download_blocked, 0) = 0
+      AND (
+        COALESCE(versions.download_blocked, 0) = 0
+        OR versions.download_block_reason = '${COMPLETED_DESCENDANT_SUPERSESSION_REASON}'
+      )
       AND COALESCE(versions.withdrawal_download_blocked, 0) = 0
       AND versions.file_deleted_at IS NULL
       AND versions.withdrawn_at IS NULL
       AND versions.delete_requested_at IS NULL
       AND ${difficultyTableWithdrawalExclusionSql("versions")}
-      AND COALESCE(versions.collapsed_by_completion, 0) = 0
+      AND (
+        COALESCE(versions.collapsed_by_completion, 0) = 0
+        OR versions.collapsed_reason = '${COMPLETED_DESCENDANT_SUPERSESSION_REASON}'
+      )
       AND versions.md5 IS NOT NULL
       AND length(versions.md5) = 32
     ORDER BY

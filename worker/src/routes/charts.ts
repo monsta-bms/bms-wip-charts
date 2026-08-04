@@ -20,6 +20,11 @@ import {
   resolvePublicLifecycleStatus,
   sanitizePublicVersion
 } from "../utils/versionWithdrawal";
+import {
+  isCompletedDescendantSupersession,
+  isEffectiveCompletionCollapse,
+  isEffectiveDownloadBlock
+} from "../utils/versionAccess";
 import { buildZipInspectionLogDetail, inspectZipUpload } from "../utils/zipValidation";
 import { findActiveFileBan } from "./bans";
 
@@ -433,7 +438,9 @@ function projectMeasureNotes(value: string | null, versionId: string): {
 function buildVersion(row: VersionRow) {
   const lifecycleStatus = resolvePublicLifecycleStatus(row);
   const lifecycleBlocksAccess = lifecycleStatus === "processing" || lifecycleStatus === "tombstoned";
-  const downloadBlocked = toBoolean(row.download_blocked)
+  const completionSupersessionDownload = isCompletedDescendantSupersession(row.download_block_reason);
+  const completionSupersessionCollapse = isCompletedDescendantSupersession(row.collapsed_reason);
+  const downloadBlocked = isEffectiveDownloadBlock(row.download_blocked, row.download_block_reason)
     || toBoolean(row.withdrawal_download_blocked)
     || lifecycleBlocksAccess;
   const measureNotesProjection = projectMeasureNotes(row.measure_notes_json, row.version_id);
@@ -472,12 +479,12 @@ function buildVersion(row: VersionRow) {
     hiddenReason: row.hidden_reason,
     hiddenAt: row.hidden_at,
     downloadBlocked,
-    downloadBlockReason: row.download_block_reason,
-    downloadBlockedAt: row.download_blocked_at,
-    collapsedByCompletion: toBoolean(row.collapsed_by_completion),
-    collapsedReason: row.collapsed_reason,
-    collapsedAt: row.collapsed_at,
-    collapsedByVersionId: row.collapsed_by_version_id,
+    downloadBlockReason: completionSupersessionDownload ? null : row.download_block_reason,
+    downloadBlockedAt: completionSupersessionDownload ? null : row.download_blocked_at,
+    collapsedByCompletion: isEffectiveCompletionCollapse(row.collapsed_by_completion, row.collapsed_reason),
+    collapsedReason: completionSupersessionCollapse ? null : row.collapsed_reason,
+    collapsedAt: completionSupersessionCollapse ? null : row.collapsed_at,
+    collapsedByVersionId: completionSupersessionCollapse ? null : row.collapsed_by_version_id,
     comment: row.comment,
     commentCount: Number(row.comment_count ?? 0),
     latestComment: row.latest_comment_body === null || row.latest_comment_created_at === null

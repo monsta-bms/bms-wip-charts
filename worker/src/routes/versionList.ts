@@ -6,6 +6,7 @@ import {
   publicWithdrawalExclusionSql,
   resolvePublicLifecycleStatus
 } from "../utils/versionWithdrawal";
+import { isEffectiveDownloadBlock } from "../utils/versionAccess";
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
@@ -15,7 +16,7 @@ const MAX_VERSION_ID_LENGTH = 160;
 const MAX_COMMENT_PREVIEW_CODE_POINTS = 80;
 
 type VersionListSort = "new" | "updated";
-type VersionListStatus = "all" | "incomplete" | "complete" | "rejected";
+type VersionListStatus = "all" | "incomplete" | "complete" | "rejected" | "finished";
 
 type VersionListParams = {
   q: string;
@@ -96,7 +97,6 @@ type VersionListBody = {
 const PUBLIC_VERSION_CONDITIONS = [
   "charts.is_hidden = 0",
   "versions.is_hidden = 0",
-  "COALESCE(versions.collapsed_by_completion, 0) = 0",
   publicWithdrawalExclusionSql("versions")
 ];
 
@@ -228,8 +228,8 @@ function parseCommonParams(
   }
 
   const status = String(values.status ?? "all").trim() || "all";
-  if (!["all", "incomplete", "complete", "rejected"].includes(status)) {
-    return invalidParam("status must be all, incomplete, complete, or rejected.", favoriteQuery);
+  if (!["all", "incomplete", "complete", "rejected", "finished"].includes(status)) {
+    return invalidParam("status must be all, incomplete, complete, rejected, or finished.", favoriteQuery);
   }
 
   const dateFrom = parseDateOnly(values.dateFrom, "dateFrom");
@@ -356,6 +356,8 @@ function buildVersionFilter(params: VersionListParams): { sql: string; bindings:
     conditions.push("versions.completed_at IS NOT NULL", "versions.is_rejected = 0");
   } else if (params.status === "rejected") {
     conditions.push("versions.is_rejected = 1");
+  } else if (params.status === "finished") {
+    conditions.push("(versions.completed_at IS NOT NULL OR versions.is_rejected = 1)");
   }
 
   const dateColumn = params.sort === "updated" ? "charts.updated_at" : "versions.created_at";
@@ -441,7 +443,7 @@ function mapVersionRow(row: VersionListRow) {
   const comment = buildCommentPreview(row.comment);
   const lifecycleStatus = resolvePublicLifecycleStatus(row);
   const lifecycleBlocksAccess = lifecycleStatus === "processing" || lifecycleStatus === "tombstoned";
-  const downloadBlocked = row.download_blocked === 1
+  const downloadBlocked = isEffectiveDownloadBlock(row.download_blocked, row.download_block_reason)
     || row.withdrawal_download_blocked === 1
     || lifecycleBlocksAccess;
   return {

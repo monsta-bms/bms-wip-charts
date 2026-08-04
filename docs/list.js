@@ -10,7 +10,7 @@
   const MAX_QUERY_LENGTH = 100;
   const MAX_FAVORITES = 200;
   const validSorts = new Set(["new", "updated"]);
-  const validStatuses = new Set(["all", "incomplete", "complete", "rejected"]);
+  const validStatuses = new Set(["all", "incomplete", "complete", "rejected", "finished"]);
 
   const searchForm = document.getElementById("compactSearchForm");
   const searchInput = document.getElementById("compactSearchInput");

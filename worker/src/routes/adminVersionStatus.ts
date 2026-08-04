@@ -9,6 +9,7 @@ import {
   lifecycleProjectionSql,
   resolvePublicLifecycleStatus
 } from "../utils/versionWithdrawal";
+import { COMPLETED_DESCENDANT_SUPERSESSION_REASON } from "../utils/versionAccess";
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
@@ -420,81 +421,52 @@ function conflictResponse(request: Request, env: Env): Response {
   );
 }
 
-function completedDescendantEligibility(alias: string): string {
-  return `${alias}.is_rejected = 0
-    AND ${alias}.completed_at IS NOT NULL
-    AND ${alias}.progress = 100
-    AND ${alias}.is_hidden = 0
-    AND ${alias}.file_deleted_at IS NULL
-    AND ${alias}.withdrawn_at IS NULL
-    AND ${alias}.delete_requested_at IS NULL
-    AND NOT EXISTS (
-      SELECT 1 FROM version_withdrawals AS lifecycle
-      WHERE lifecycle.version_id = ${alias}.id
-        AND lifecycle.status IN ('pending', 'processing', 'tombstoned', 'deleted')
-    )`;
-}
-
 function buildReconciliationStatement(
   env: Env,
   chartId: string,
   targetVersionId: string,
   updatedAt: string
 ): D1PreparedStatement {
-  const eligible = completedDescendantEligibility("completed_descendant");
-  const hasCompletedDescendant = `candidate.is_hidden = 0
-    AND candidate.file_deleted_at IS NULL
-    AND candidate.progress BETWEEN 1 AND 99
-    AND candidate.is_rejected = 0
-    AND EXISTS (
-      SELECT 1 FROM versions AS completed_descendant
-      WHERE completed_descendant.chart_id = candidate.chart_id
-        AND completed_descendant.id <> candidate.id
-        AND completed_descendant.branch_path LIKE candidate.branch_path || '/%'
-        AND ${eligible}
-    )`;
-  const completedDescendantId = `(
-    SELECT completed_descendant.id FROM versions AS completed_descendant
-    WHERE completed_descendant.chart_id = candidate.chart_id
-      AND completed_descendant.id <> candidate.id
-      AND completed_descendant.branch_path LIKE candidate.branch_path || '/%'
-      AND ${eligible}
-    ORDER BY length(completed_descendant.branch_path), completed_descendant.completed_at DESC, completed_descendant.id
-    LIMIT 1
-  )`;
-
   return env.DB.prepare(`
     UPDATE versions AS candidate
     SET
-      collapsed_by_completion = CASE WHEN ${hasCompletedDescendant} THEN 1 ELSE 0 END,
-      collapsed_reason = CASE WHEN ${hasCompletedDescendant}
-        THEN 'superseded_by_completed_descendant' ELSE NULL END,
-      collapsed_at = CASE WHEN ${hasCompletedDescendant}
-        THEN COALESCE(candidate.collapsed_at, ?) ELSE NULL END,
-      collapsed_by_version_id = CASE WHEN ${hasCompletedDescendant}
-        THEN ${completedDescendantId} ELSE NULL END,
+      collapsed_by_completion = CASE
+        WHEN candidate.collapsed_reason = '${COMPLETED_DESCENDANT_SUPERSESSION_REASON}' THEN 0
+        ELSE candidate.collapsed_by_completion
+      END,
+      collapsed_reason = CASE
+        WHEN candidate.collapsed_reason = '${COMPLETED_DESCENDANT_SUPERSESSION_REASON}' THEN NULL
+        ELSE candidate.collapsed_reason
+      END,
+      collapsed_at = CASE
+        WHEN candidate.collapsed_reason = '${COMPLETED_DESCENDANT_SUPERSESSION_REASON}' THEN NULL
+        ELSE candidate.collapsed_at
+      END,
+      collapsed_by_version_id = CASE
+        WHEN candidate.collapsed_reason = '${COMPLETED_DESCENDANT_SUPERSESSION_REASON}' THEN NULL
+        ELSE candidate.collapsed_by_version_id
+      END,
       download_blocked = CASE
-        WHEN ${hasCompletedDescendant} THEN 1
-        WHEN candidate.download_block_reason = 'superseded_by_completed_descendant' THEN 0
+        WHEN candidate.download_block_reason = '${COMPLETED_DESCENDANT_SUPERSESSION_REASON}' THEN 0
         ELSE candidate.download_blocked
       END,
       download_block_reason = CASE
-        WHEN ${hasCompletedDescendant} THEN 'superseded_by_completed_descendant'
-        WHEN candidate.download_block_reason = 'superseded_by_completed_descendant' THEN NULL
+        WHEN candidate.download_block_reason = '${COMPLETED_DESCENDANT_SUPERSESSION_REASON}' THEN NULL
         ELSE candidate.download_block_reason
       END,
       download_blocked_at = CASE
-        WHEN ${hasCompletedDescendant} THEN COALESCE(candidate.download_blocked_at, ?)
-        WHEN candidate.download_block_reason = 'superseded_by_completed_descendant' THEN NULL
+        WHEN candidate.download_block_reason = '${COMPLETED_DESCENDANT_SUPERSESSION_REASON}' THEN NULL
         ELSE candidate.download_blocked_at
       END,
       updated_at = CASE
         WHEN candidate.id = ? THEN candidate.updated_at
-        ELSE ?
+        WHEN candidate.collapsed_reason = '${COMPLETED_DESCENDANT_SUPERSESSION_REASON}'
+          OR candidate.download_block_reason = '${COMPLETED_DESCENDANT_SUPERSESSION_REASON}' THEN ?
+        ELSE candidate.updated_at
       END
     WHERE candidate.chart_id = ?
       AND EXISTS (SELECT 1 FROM versions AS target WHERE target.id = ? AND target.updated_at = ?)
-  `).bind(updatedAt, updatedAt, targetVersionId, updatedAt, chartId, targetVersionId, updatedAt);
+  `).bind(targetVersionId, updatedAt, chartId, targetVersionId, updatedAt);
 }
 
 export async function updateAdminVersionStatus(

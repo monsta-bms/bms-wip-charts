@@ -146,7 +146,7 @@ PROG-01の `0003_progress_graph_fields.sql` は、既存の `versions` テーブ
 - BMS解析結果: `play_notes`, `first_note_measure`, `last_note_measure`, `target_measure_count`, `measure_notes_json`
 - 進捗塗り情報: `progress_map_json`
 - 進捗画像metadata: `progress_image_key`, `progress_image_mime`, `progress_image_size`, `progress_image_sha256`, `progress_image_created_at`
-- 完成後折り畳み状態: `collapsed_by_completion`, `collapsed_reason`, `collapsed_at`, `collapsed_by_version_id`
+- 旧完成後折り畳み状態: `collapsed_by_completion`, `collapsed_reason`, `collapsed_at`, `collapsed_by_version_id`（履歴互換のためカラムは維持するが、新規の完成追記では設定しない）
 
 ### Wranglerで適用する場合
 

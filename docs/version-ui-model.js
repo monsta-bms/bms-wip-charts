@@ -227,6 +227,12 @@
     let actionState = resolveActionState(source, versionId, lifecycle);
 
     const downloadBlocked = readBooleanAliases(source, ["downloadBlocked", "download_blocked"], { required: true });
+    const downloadBlockReason = readStringAliases(source, ["downloadBlockReason", "download_block_reason"], {
+      nullAsMissing: true
+    });
+    const completionDerivedDownloadBlock = downloadBlockReason.valid
+      && downloadBlockReason.value === COMPLETED_COLLAPSE_REASON;
+    const effectiveDownloadBlocked = downloadBlocked.value && !completionDerivedDownloadBlock;
     const withdrawalDownloadBlocked = readBooleanAliases(source, [
       "withdrawalDownloadBlocked",
       "withdrawal_download_blocked"
@@ -241,7 +247,7 @@
 
     const contradictoryAvailability = (explicitDownloadAvailable.present
         && explicitDownloadAvailable.value
-        && ((!downloadBlocked.valid || downloadBlocked.value) || withdrawalDownloadBlocked.value))
+        && ((!downloadBlocked.valid || effectiveDownloadBlocked) || withdrawalDownloadBlocked.value))
       || (explicitAppendAvailable.present
         && explicitAppendAvailable.value
         && (!allowAppend.valid || !allowAppend.value))
@@ -275,7 +281,7 @@
     let downloadReason = "available";
     if (!actionState.available) downloadReason = actionState.reason;
     else if (!downloadBlocked.valid) downloadReason = "download_state_unknown";
-    else if (downloadBlocked.value || withdrawalDownloadBlocked.value
+    else if (effectiveDownloadBlocked || withdrawalDownloadBlocked.value
       || (explicitDownloadAvailable.present && !explicitDownloadAvailable.value)) {
       downloadReason = "download_blocked";
     } else if (rawDownloadUrl === null || rawDownloadUrl === undefined || rawDownloadUrl === "") {
@@ -291,10 +297,9 @@
 
     const collapsed = readBooleanAliases(source, ["collapsedByCompletion", "collapsed_by_completion"]);
     const collapsedReason = readStringAliases(source, ["collapsedReason", "collapsed_reason"], { nullAsMissing: true });
-    const supersededIntermediate = options.isSupersededIntermediate === true
-      || source.favoriteFilterIntermediate === true
-      || (collapsed.valid && collapsed.value)
-      || (collapsedReason.valid && collapsedReason.value === COMPLETED_COLLAPSE_REASON);
+    const completionDerivedCollapse = collapsedReason.valid
+      && collapsedReason.value === COMPLETED_COLLAPSE_REASON;
+    const effectiveCollapsed = collapsed.valid && collapsed.value && !completionDerivedCollapse;
     let appendReason = "available";
     let appendLabel = "追記投稿";
     if (!actionState.available) {
@@ -303,8 +308,8 @@
     } else if (!collapsed.valid || !collapsedReason.valid) {
       appendReason = "inconsistent_data";
       appendLabel = "追記不可";
-    } else if (supersededIntermediate) {
-      appendReason = "superseded_intermediate";
+    } else if (effectiveCollapsed) {
+      appendReason = "inconsistent_data";
       appendLabel = "追記不可";
     } else if (!allowAppend.valid) {
       appendReason = "invalid_allow_append";

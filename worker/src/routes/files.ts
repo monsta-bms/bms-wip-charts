@@ -1,4 +1,5 @@
 import { apiError, Env, errorDetail, fileResponse, methodNotAllowed } from "../utils/response";
+import { isEffectiveDownloadBlock } from "../utils/versionAccess";
 
 type FileRow = {
   version_id: string;
@@ -199,7 +200,7 @@ export async function handleFileRoute(request: Request, env: Env, fileId: string
     );
   }
 
-  if (toBoolean(fileRow.download_blocked)) {
+  if (isEffectiveDownloadBlock(fileRow.download_blocked, fileRow.download_block_reason)) {
     return apiError(
       request,
       env,

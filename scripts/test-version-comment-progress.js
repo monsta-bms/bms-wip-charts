@@ -69,6 +69,8 @@ const commentUi = read("docs/version-comment-ui.js");
 const commentCss = read("docs/version-comment-ui.css");
 const tree = read("docs/branch-tree-list.js");
 const compact = read("docs/list.js");
+const compactHtml = read("docs/list.html");
+const compactCss = read("docs/list.css");
 const workerRoute = read("worker/src/routes/versionComments.ts");
 
 check("initial and append forms share one hint element and decision helper", () => {
@@ -120,6 +122,14 @@ check("tree and compact rerenders remount the same author-comment component", ()
   assert.match(compact, /commentUi\.mountAuthorComment/);
   assert.match(tree, /createCommentControl/);
   assert.match(compact, /createCommentControl/);
+});
+check("compact list exposes the combined completed and rejected filter", () => {
+  assert.match(compactHtml, /name="compactStatus" value="finished"[^>]*><span data-copy-key="list-status-finished">完成＆没譜面<\/span>/u);
+  assert.match(compact, /validStatuses = new Set\(\["all", "incomplete", "complete", "rejected", "finished"\]\)/u);
+});
+check("compact list reserves enough desktop width for comment actions", () => {
+  assert.match(compactCss, /grid-template-columns:[\s\S]*?64px\s+180px;/u);
+  assert.match(commentCss, /\.author-comment-preview,[\s\S]*?max-width:\s*100%[\s\S]*?min-width:\s*0[\s\S]*?width:\s*100%/u);
 });
 check("comment API maps every required fixed error code", () => {
   for (const code of [

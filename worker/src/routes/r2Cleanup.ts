@@ -1,4 +1,8 @@
 import { apiError, Env, errorDetail, methodNotAllowed, ok } from "../utils/response";
+import {
+  COMPLETED_DESCENDANT_SUPERSESSION_REASON,
+  isCompletedDescendantSupersession
+} from "../utils/versionAccess";
 
 export const MIN_CLEANUP_AGE_DAYS = 30;
 export const SCHEDULED_CLEANUP_LIMIT = 20;
@@ -31,6 +35,7 @@ type CleanupTargetRow = {
   chart_id: string;
   is_hidden: number;
   download_blocked: number;
+  download_block_reason: string | null;
   hidden_reason: string | null;
   hidden_at: string | null;
   file_deleted_at: string | null;
@@ -193,6 +198,7 @@ function cleanupEligibilitySql(alias: string): string {
   return `
     ${prefix}is_hidden = 1
     AND ${prefix}download_blocked = 1
+    AND COALESCE(${prefix}download_block_reason, '') <> '${COMPLETED_DESCENDANT_SUPERSESSION_REASON}'
     AND ${prefix}file_deleted_at IS NULL
     AND ${prefix}hidden_at IS NOT NULL
     AND ${prefix}hidden_at <= datetime('now', '-' || ? || ' days')
@@ -328,6 +334,7 @@ async function selectCleanupTarget(
       chart_id,
       is_hidden,
       download_blocked,
+      download_block_reason,
       hidden_reason,
       hidden_at,
       file_deleted_at,
@@ -351,6 +358,7 @@ async function selectCleanupTarget(
 function isCleanupEligible(row: CleanupTargetRow): boolean {
   return Number(row.is_hidden) === 1
     && Number(row.download_blocked) === 1
+    && !isCompletedDescendantSupersession(row.download_block_reason)
     && row.hidden_at !== null
     && Number(row.retention_elapsed) === 1
     && CLEANUP_HIDDEN_REASONS.includes(

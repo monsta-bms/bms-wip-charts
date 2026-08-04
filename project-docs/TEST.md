@@ -3,7 +3,7 @@
 ## SITE-COPY-EDITOR-01
 
 - `node scripts/test-site-copy-editor.mjs`で3ファイルexport、無編集round trip、UIブロック編集、ガイド章全体編集、更新履歴ENTRY全体編集、段落と箇条書きの追加／削除、ENTRY marker固定、小見出し変更、固定LINK、SECTION／ENTRY不足・未知・重複・未終了、HTML／任意URL拒否、source baseline、LF／CRLF／BOM、正常apply、途中失敗rollbackと一時backup削除を検査する。
-- 実manifestはUI 15ブロック／85欄、ガイド8章、更新履歴ENTRY群、manual review 0件、対象がすべてPAGESであることを確認する。`docs/guide.html`の8個の`data-copy-section`、`docs/changelog.html`の`data-copy-entry`、公開HTMLのIDは重複を許可しない。
+- 実manifestはUI 15ブロック／86欄、ガイド8章、更新履歴ENTRY群、manual review 0件、対象がすべてPAGESであることを確認する。`docs/guide.html`の8個の`data-copy-section`、`docs/changelog.html`の`data-copy-entry`、公開HTMLのIDは重複を許可しない。
 - `node scripts/site-copy/validate-site-copy.mjs --ui <UI TXT> --guide <GUIDE TXT> --changelog <CHANGELOG TXT> --snapshot <snapshot>`は固定error codeで破損を拒否し、無編集exportではUI／ガイド／更新履歴変更0件と`SITE_COPY_GUIDE_DRY_RUN_COMPLETE`を返すこと。`diff-site-copy.mjs`はUI欄、ガイド章、更新履歴ENTRYの追加／削除段落だけを表示すること。
 - `node scripts/site-copy/apply-site-copy.mjs`は既定でファイルを書き換えず、`--apply`指定時もclean worktree、source baseline、一意locator、固定LINK、反映後のHTML→編集形式往復一致を必須とする。複数fileを全置換前に計画し、途中失敗時は書込み済みfileを復元すること。
 - 初回export前にrepository hygiene、canonical D1 schema、全site-copy scriptの`node --check`、HTML ID、主要Pages static／browser回帰、Worker typecheck、`git diff --check`を実行する。TXT、snapshot、export log／resultはrepository外へ置き、一時fixtureは終了時に削除する。本番deploy、D1／R2／Secret操作、production write、pushは行わない。
@@ -255,7 +255,7 @@ https://monsta-bms.github.io/bms-wip-charts/
 - 空検索、該当なし、初回取得失敗、追加取得失敗が区別して表示されること。
 - 追加取得失敗時に既存一覧が消えず、再試行できること。
 - 初回一覧取得が複数の表示拡張から重複実行されないこと。
-- 検索・追加取得後も数字パス版ラベル、ツリー、祖先関係、中間履歴折り畳みが維持されること。
+- 検索・追加取得後も数字パス版ラベル、ツリー、祖先関係が維持され、子が完成した親versionが通常表示されること。
 - 検索・追加取得後も進捗サムネイル、DL、追記投稿、管理操作が動作すること。
 - 投稿・追記・管理操作後の一覧再取得が現在の検索条件で動作すること。
 - お気に入り★と、取得済み検索結果内のお気に入りのみ表示が動作すること。
@@ -267,9 +267,10 @@ https://monsta-bms.github.io/bms-wip-charts/
 version単位の独立投稿一覧APIとフィルターを確認する:
 
 - `GET /api/versions`が公開versionを1件1itemで返し、`pageSize=20`でversion単位にページングすること。
-- `charts.is_hidden=1`, `versions.is_hidden=1`, `collapsed_by_completion=1`のversionが返らないこと。
+- `charts.is_hidden=1`, `versions.is_hidden=1`のversionが返らないこと。旧`superseded_by_completed_descendant`の`collapsed_by_completion=1`は返り、DL・追記可能として扱われること。
 - 取り下げ、削除申請中、DL停止の公開versionは返り、状態フラグが正しいこと。
-- `status=incomplete`が`progress<100`かつ非没、`complete`が`progress=100`かつ非没、`rejected`が没譜面だけを返すこと。
+- `status=incomplete`が`progress<100`かつ非没、`complete`が完成かつ非没、`rejected`が没譜面だけ、`finished`が完成と没譜面の和集合をGET／お気に入りPOSTの両方で返すこと。
+- white／default／dark × 390／760／1366pxで、投稿者コメントpreviewがコメント列を越えず、「曲」「DL」「コメント」と件数がリンク列からはみ出さないこと。
 - `sort=new`が`versions.created_at DESC, versions.id DESC`、`sort=updated`が`charts.updated_at DESC, versions.created_at DESC, versions.id DESC`であること。
 - 曲名、サブタイトル、アーティスト、サブアーティスト、差分名、そのversion作者を検索できること。
 - 日本語検索と、`%`, `_`, `\\`を通常文字として扱う検索が動作すること。
@@ -316,7 +317,7 @@ version単位の独立投稿一覧APIとフィルターを確認する:
 
 - `GET /api/charts/:chartId`が公開chartを1件だけ、`GET /api/charts`と同じchart/version形式で返すこと。
 - 詳細APIが公開中のBASE、子版、深い分岐、完成版、没譜面、取り下げ、DL停止、削除申請中を状態つきで返すこと。
-- `collapsed_by_completion=1`の中間履歴を返し、`versions.is_hidden=1`は返さないこと。
+- 子が完成した親versionも返し、旧`superseded_by_completed_descendant`のDL・折り畳み状態はfalse/nullへ正規化し、`versions.is_hidden=1`は返さないこと。
 - 非存在chartと`charts.is_hidden=1`が同じHTTP 404 `CHART_NOT_FOUND`になること。
 - 空ID、不正文字、160文字超過、不正URL encodingがHTTP 400 `INVALID_CHART_ID`になること。
 - GET以外がHTTP 405となり、`/api/charts/:chartId/versions`など既存routeを詳細routeが奪わないこと。
@@ -434,7 +435,7 @@ pending削除申請の管理MVPを確認する:
 - 却下後に`delete_requests.status='rejected'`, `handled_at`, `handled_by`, `admin_note`が設定されること。
 - 却下後、別のpending申請がなければ`versions.delete_requested_at`が解除されること。
 - `download_block_reason='delete_requested'`の場合だけDL制限が解除されること。
-- `withdrawn`, `superseded_by_completed_descendant`, `admin_blocked`, `admin_hidden`など他理由のDL制限が解除されないこと。
+- `withdrawn`, `admin_blocked`, `admin_hidden`など他理由の有効なDL制限が解除されないこと。旧`superseded_by_completed_descendant`は公開上のDL制限として扱わないこと。
 - `is_hidden=true`のversionを却下しても公開状態へ戻らないこと。
 - 同じ申請を二重処理すると`DELETE_REQUEST_ALREADY_HANDLED`になること。
 - 承認、却下、直接子による拒否、競合、失敗が`admin_logs`へ記録されること。
@@ -1675,3 +1676,13 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - site-copyはmanifest baseline、31件のeditor suite、export後のUI・ガイド・更新履歴TXT round-trip差分0を確認する。
 - 全体回帰としてrepository hygiene、canonical schema、CSS ownership、JavaScript構文、HTML重複ID、リンク、Worker typecheck、deploy:check、Wrangler dry-run、`git diff --check`を実行する。
 - 本番QAのPATCHはfake version IDの404とinvalid payloadの400だけを確認し、既存production versionを変更しない。
+
+## COMPLETED-CHILD-PARENT-ACCESS-01 回帰
+
+- 完成追記のD1 batchが親・祖先へ`superseded_by_completed_descendant`のDL制限や折り畳みを新規設定しないことを確認する。
+- 旧理由がD1に残る親versionを`GET /api/charts`、`GET /api/charts/:chartId`、`GET /api/versions`が公開し、`downloadBlocked=false`、`collapsedByCompletion=false`、file URLありとして返すことを確認する。
+- 同じ旧状態の親に対するfile APIがHTTP 200、lifecycle APIが`downloadAvailable=true`かつ`appendAvailable=true`となり、完成した子が存在しても親から別の子を追記できることを確認する。検査中に旧D1履歴を更新しない。
+- `allow_append=0`、管理者DLブロック、取り下げ、削除、非表示、ファイル削除は従来どおり拒否し、旧completion理由だけを無効化する。管理版状態補正は旧理由だけを解除し、別の完成descendantが存在しても再適用せず、`admin_blocked`を保持する。
+- RC★／RC★★は旧completion理由だけで完成版を除外しない。R2 cleanup候補は旧completion理由を対象にしない。
+- 隔離結果はVersion UI Model 74件、Action UI 77件、version source metadata統合22件、version withdrawal active 24件、admin version status 28件、difficulty view model 21件、version list 4件、描画static 41件、CSS ownership 38件が成功した。
+- repository hygiene 17件、canonical schema 42件、Worker typecheck、Wrangler dry-run、JavaScript構文、HTML重複ID、`git diff --check`が成功すること。本番deploy、D1/R2/Secret操作、production write、commit、pushはこのローカル実装工程では行わない。

@@ -849,6 +849,70 @@ try {
     assert.equal((await first("SELECT COUNT(*) AS count FROM songs WHERE id = ?", parent.songId)).count, 1);
   });
 
+  await check("legacy completion supersession keeps parent lifecycle, append, and download available", async () => {
+    await resetIsolation();
+    const progressMapJson = JSON.stringify({
+      schemaVersion: 2,
+      blockMode: "standardized_measure",
+      firstMeasure: 0,
+      lastMeasure: 3,
+      targetBlockCount: 4,
+      blocks: Array.from({ length: 4 }, (_, index) => ({
+        index,
+        startMeasure: index,
+        endMeasure: index,
+        startPosition: index,
+        endPosition: index + 1,
+        startTimeSec: index,
+        endTimeSec: index + 1,
+        playNotes: 1
+      })),
+      layers: [{
+        versionId: "legacy-completion-parent",
+        color: "#1f7a5c",
+        kind: "initial",
+        ranges: [[0, 1]]
+      }],
+      progress: 50
+    });
+    const parent = await createVersion({ progress: 50, progressMapJson });
+    await env.DB.prepare(`
+      UPDATE versions
+      SET download_blocked = 1,
+          download_block_reason = 'superseded_by_completed_descendant',
+          download_blocked_at = CURRENT_TIMESTAMP,
+          collapsed_by_completion = 1,
+          collapsed_reason = 'superseded_by_completed_descendant',
+          collapsed_at = CURRENT_TIMESTAMP,
+          collapsed_by_version_id = 'legacy-completed-child'
+      WHERE id = ?
+    `).bind(parent.versionId).run();
+
+    const lifecycleResponse = await indexModule.default.fetch(
+      new Request(`http://localhost/api/versions/${parent.versionId}/lifecycle`),
+      env
+    );
+    assert.equal(lifecycleResponse.status, 200);
+    const lifecycle = await lifecycleResponse.json();
+    assert.equal(lifecycle.lifecycleStatus, "active");
+    assert.equal(lifecycle.downloadAvailable, true);
+    assert.equal(lifecycle.appendAvailable, true);
+
+    const fileResponse = await indexModule.default.fetch(
+      new Request(`http://localhost/api/files/${parent.fileId}`),
+      env
+    );
+    assert.equal(fileResponse.status, 200);
+    const stored = await first(`
+      SELECT download_blocked, download_block_reason, collapsed_by_completion, collapsed_reason
+      FROM versions WHERE id = ?
+    `, parent.versionId);
+    assert.equal(stored.download_blocked, 1);
+    assert.equal(stored.download_block_reason, "superseded_by_completed_descendant");
+    assert.equal(stored.collapsed_by_completion, 1);
+    assert.equal(stored.collapsed_reason, "superseded_by_completed_descendant");
+  });
+
   await check("pending/manual public, download, RC, admin, lifecycle, and cancellation regressions", async () => {
     await resetIsolation();
     const manual = await createVersion({ progress: 100 });

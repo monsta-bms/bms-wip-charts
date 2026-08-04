@@ -172,10 +172,10 @@ APIエラーは必ず以下のJSON形式で返す。
 | `progress_image_size` | 進捗画像のbyte size。 |
 | `progress_image_sha256` | 進捗画像PNGのSHA256。 |
 | `progress_image_created_at` | 進捗画像を保存した日時。 |
-| `collapsed_by_completion` | 完成到達後に通常一覧で折り畳むか。 |
-| `collapsed_reason` | 折り畳み理由。 |
-| `collapsed_at` | 折り畳みにした日時。 |
-| `collapsed_by_version_id` | 折り畳み原因になった完成version ID。 |
+| `collapsed_by_completion` | 旧仕様の完成由来折り畳み値。新規の完成追記では設定せず、旧`superseded_by_completed_descendant`は公開上無効化する。 |
+| `collapsed_reason` | 旧仕様を含む折り畳み理由。 |
+| `collapsed_at` | 旧仕様を含む折り畳み日時。 |
+| `collapsed_by_version_id` | 旧仕様で折り畳み原因になった完成version ID。 |
 | `origin_url` | 原曲配布URLのversion単位snapshot。任意、NULL許可、最大2048文字。 |
 | `chart_name` | そのversionの差分名snapshot。NULL時は`charts.chart_name`へfallbackする。 |
 | `normalized_chart_name` | version差分名のNFKC・小文字化済み検索値。NULL時は`charts.normalized_chart_name`へfallbackする。 |
@@ -326,7 +326,7 @@ versionレスポンスには以下を含める。
 
 - `charts.is_hidden = 0`
 - `versions.is_hidden = 0`
-- 詳細ツリーの復元に必要な`collapsed_by_completion = 1`の中間履歴も`versions`へ含める。
+- 子が完成した親versionも`versions`へ含める。旧`superseded_by_completed_descendant`のDL・折り畳み状態はfalse/nullへ正規化する。
 - 取り下げ、削除申請中、DL停止、没譜面は、公開状態である限り状態つきで返す。
 
 存在しないchartと非公開chartは、情報を区別せずHTTP 404 `CHART_NOT_FOUND`を返す。IDが空、不正文字を含む、160文字を超える、またはURL encodingが不正な場合はHTTP 400 `INVALID_CHART_ID`とする。GET以外はHTTP 405 `METHOD_NOT_ALLOWED`とする。
@@ -341,7 +341,7 @@ versionレスポンスには以下を含める。
 
 - `charts.is_hidden = 0`
 - `versions.is_hidden = 0`
-- `COALESCE(versions.collapsed_by_completion, 0) = 0`
+- 子の完成による旧`collapsed_by_completion`は除外条件にしない。
 
 `withdrawn`, `deleteRequested`, `downloadBlocked` は、`is_hidden=0` である限り状態つきで返す。
 
@@ -351,7 +351,7 @@ versionレスポンスには以下を含める。
 | --- | ---: | --- |
 | `q` | 空 | 最大100文字。曲名、サブタイトル、アーティスト、サブアーティスト、差分名、そのversionの作者を部分一致検索する。`%`, `_`, `\\` は文字として扱う。 |
 | `sort` | `new` | `new`: version投稿日時順。`updated`: chart更新日時、version投稿日時順。 |
-| `status` | `all` | `all`, `incomplete`, `complete`, `rejected`。 |
+| `status` | `all` | `all`, `incomplete`, `complete`, `rejected`, `finished`。`finished`は完成版と没譜面をまとめて返す。 |
 | `dateFrom` | 空 | `YYYY-MM-DD`。指定日のJST 00:00以降を対象にする。片側指定可。 |
 | `dateTo` | 空 | `YYYY-MM-DD`。指定日の翌JST 00:00未満を対象にする。片側指定可。 |
 | `page` | `1` | 1始まりのversionページ番号。 |
@@ -364,6 +364,7 @@ versionレスポンスには以下を含める。
 - `incomplete`: `completed_at IS NULL AND is_rejected = 0`
 - `complete`: `completed_at IS NOT NULL AND is_rejected = 0`
 - `rejected`: `is_rejected = 1`
+- `finished`: `completed_at IS NOT NULL OR is_rejected = 1`
 
 レスポンス例:
 
@@ -526,7 +527,7 @@ request:
 - 許可拡張子、サイズ上限、R2保存、SHA256/MD5計算、単体BMS解析は初回投稿と同じ方針を使う。
 - `progressMap` は必須。progressは送信値を信用せず、全layerのunionからWorker側で再計算する。
 - `progressImage` が送られた場合、初回投稿と同じR2 key規則で保存する。
-- 親versionは公開中、指定chart所属、`collapsed_by_completion=0`、`file_deleted_at IS NULL`、利用可能なprogressMapあり、`allow_append=1`を必須とする。`is_rejected=1`だけでは拒否しない。
+- 親versionは公開中、指定chart所属、`file_deleted_at IS NULL`、利用可能なprogressMapあり、`allow_append=1`を必須とする。子孫の完成状態と旧`collapsed_by_completion`は拒否理由にせず、`is_rejected=1`だけでも拒否しない。
 - 公開中の取り下げ、削除申請、通常DL停止は、それだけを理由に追記拒否しない。
 - 追記投稿の `isRejected=true` は `FOLLOWUP_REJECTED_NOT_ALLOWED` で拒否する。
 - 未完成の子versionは `allowAppend=true` 固定とし、falseは `APPEND_POLICY_LOCKED_FOR_INCOMPLETE` で拒否する。明示的な完成版だけtrue/falseを選択できる。項目がない旧Pagesではtrueとして扱う。

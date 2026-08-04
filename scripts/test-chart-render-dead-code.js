@@ -146,7 +146,7 @@ check("modified scripts keep their order and reviewed cache keys", () => {
   const branchAppendIndex = indexHtml.indexOf("./branch-append-ui.js?v=version-comment-progress-01");
   assert.ok(pipelineIndex >= 0 && pipelineIndex < appIndex);
   assert.ok(appIndex < progressIndex && progressIndex < branchAppendIndex);
-  assert.ok(indexHtml.includes("./favorites-list.js?v=version-comment-progress-01"));
+  assert.ok(indexHtml.includes("./favorites-list.js?v=completed-parent-access-01"));
 });
 
 assert.ok(passed >= 20, `expected at least 20 checks, got ${passed}`);

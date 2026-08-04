@@ -481,7 +481,7 @@ MVPではサムネイルクリックによる拡大表示は実装しない。�
 - `parent_version_id`: 親version。rootだけNULL、それ以外は必須。
 - `version_number`: 整数。APIの `displayVersion` 生成や内部管理に使う。
 - `branch_label`: 同じ親からの分岐識別子。
-- `branch_path`: ツリー表示、ページング、祖先DL制御、並び順に使う内部パス。
+- `branch_path`: ツリー表示、ページング、並び順に使う内部パス。
 
 追記投稿では以下で分岐を生成する。
 
@@ -489,21 +489,11 @@ MVPではサムネイルクリックによる拡大表示は実装しない。�
 - 同じ親を持つ既存子version数を数え、0件目を `a`、1件目を `b`、以降 `c`...`z`、`aa`... とする。
 - `branch_path = parent.branch_path + '/' + branch_label` とする。
 
-## progress=100到達時の親version DL制御
+## 完成した子versionと親versionの利用可否
 
-追記投稿で新versionのprogressが100になった場合、完成version自体はDL可能にする。
+追記投稿で子versionのprogressが100になっても、親versionの公開、DL、追記受付は自動では変更しない。親versionは別の分岐を作れる追記元として残し、親自身に設定された `allow_append=0`、管理者ブロック、取り下げ、削除、非表示、ファイル削除などの制限だけを適用する。
 
-同一分岐上の祖先のうち `progress BETWEEN 1 AND 99` の途中versionのみ、以下を設定する。
-
-- `download_blocked=1`
-- `download_block_reason='superseded_by_completed_descendant'`
-- `download_blocked_at=CURRENT_TIMESTAMP`
-- `collapsed_by_completion=1`
-- `collapsed_reason='superseded_by_completed_descendant'`
-- `collapsed_at=CURRENT_TIMESTAMP`
-- `collapsed_by_version_id=<new version id>`
-
-この処理ではD1行やR2ファイルは物理削除しない。DL不可から30日経過したR2譜面ファイル削除は、将来のCron Triggerで実行する。進捗画像は譜面ファイル削除後も残す。
+新規の完成追記では、祖先へ `download_block_reason='superseded_by_completed_descendant'` や `collapsed_reason='superseded_by_completed_descendant'` を書き込まない。過去にこの理由が保存された行はD1履歴を保持したまま、公開一覧・詳細・独立version一覧・lifecycle・file API・難易度表でDL制限および折り畳みとして扱わない。管理者が版状態を補正した場合は、同じchart内のこの旧理由だけを解除し、`admin_blocked`、`delete_requested`、`withdrawn`など他理由の制限は変更しない。
 
 ## 投稿一覧
 
@@ -557,13 +547,13 @@ MVPではサムネイルクリックによる拡大表示は実装しない。�
 
 `list.html` は大量の公開版を簡潔に確認するページとし、トップの詳細カード一覧とは別のversion単位APIを使用する。
 
-- `GET /api/versions` は公開versionを1件ずつ返す。`charts.is_hidden=0`, `versions.is_hidden=0`, `collapsed_by_completion=0`を共通条件とする。
-- 一覧の通常行は日付、タイトル、難易度、作者、コメント、進捗、リンクの7列とする。曲名の下に `[対象version自身の差分名] / 数字パス版ラベル` を表示する。タイトルを主列、進捗を64px固定列として扱う。
+- `GET /api/versions` は公開versionを1件ずつ返す。`charts.is_hidden=0`, `versions.is_hidden=0`を共通条件とし、子が完成した親versionも返す。
+- 一覧の通常行は日付、タイトル、難易度、作者、コメント、進捗、リンクの7列とする。曲名の下に `[対象version自身の差分名] / 数字パス版ラベル` を表示する。タイトルを主列、進捗を64px固定列、リンクを180px固定列として扱い、「曲」「DL」「コメント」と件数を行内へ収める。
 - コメントは`versions.comment`をtrimし、連続空白を1個へ畳んだ80 Unicode code pointまでの`commentPreview`だけを返す。80文字超過時だけ`…`を付け、全文・HTML・リンク化は一覧で扱わない。
-- `withdrawn`, `deleteRequested`, `downloadBlocked` は公開状態なら小さい状態ラベルを表示する。管理非表示versionと完成版に置き換えられた中間履歴は表示しない。
+- `withdrawn`, `deleteRequested`, `downloadBlocked` は公開状態なら小さい状態ラベルを表示する。管理非表示versionは表示しない。子が完成した親versionは通常の公開versionとして表示する。
 - 検索対象は曲名、サブタイトル、アーティスト、サブアーティスト、対象version自身の差分名、そのversionの作者とする。
 - 並び順は `new`（version投稿日時順）と `updated`（chart更新日時を優先し、その中でversion投稿日時順）を提供する。
-- 状態は `all`, `incomplete`, `complete`, `rejected` を提供する。未完成・完成は非没譜面だけを対象とする。
+- 状態は `all`, `incomplete`, `complete`, `rejected`, `finished` を提供する。未完成・完成は非没譜面だけを対象とし、`finished`は完成版と没譜面の和集合を返す。画面では「完成＆没譜面」と表示する。
 - 状態と並び順はネイティブradioのフィルターパネルで選択し、変更時に即再取得する。
 - 期間は`dateFrom`, `dateTo`の片側または両側指定とし、適用操作まで一覧へ反映しない。`sort=new`ではversion投稿日時、`sort=updated`ではchart更新日時を固定JST（UTC+9）の開始含む・翌日開始未満で絞る。
 - 今日・今週・今月・今年のショートカットはAPIの`serverTime`をJSTへ変換して算出し、端末時計や端末timezoneを基準にしない。
@@ -575,8 +565,8 @@ MVPではサムネイルクリックによる拡大表示は実装しない。�
 - ページ取得失敗時は直前の行を消さず、失敗表示と再試行導線を出す。
 - タイトルは`index.html?chartId=<chartId>&versionId=<versionId>#list`へリンクし、同名曲や同一chart内の別versionを曖昧な検索に頼らず特定する。
 - トップは`GET /api/charts/:chartId`で対象chartを取得し、「選択中の投稿」として既存詳細カードを表示する。その下には`excludeChartId`で選択chartを除いた最近の10chartを表示し、10件ずつ追加取得できる。
-- 詳細APIは公開chartと公開versionだけを返すが、対象ツリーの復元用に`collapsed_by_completion=1`の中間履歴を含める。`is_hidden=1`のchart/versionは返さない。
-- 指定versionが中間履歴にある場合は、そのversionを含む履歴グループだけを展開する。無関係な履歴グループは折り畳み状態を維持する。
+- 詳細APIは公開chartと公開versionだけを返す。`is_hidden=1`のchart/versionは返さず、子が完成した親versionは通常のツリー要素として含める。旧completion由来の折り畳み情報は公開payloadで無効化する。
+- 指定versionは子孫の完成状態にかかわらず通常の行として選択・focusできるようにする。
 - 描画後の共通mountと折り畳み処理を待って対象行を再取得し、中央へスクロールしてfocusする。`prefers-reduced-motion: reduce`では即時スクロールとし、対象行はレイアウトを動かさない枠と「選択中」表示で4秒間強調する。
 - chartが見つからない場合、chart内に指定versionがない場合、API失敗を区別して案内する。API失敗時は再試行でき、不正な片側パラメータや長すぎるIDでも通常一覧を壊さない。
 - 初回投稿・追記投稿の成功後はレスポンスの`chartId`/`versionId`を使い、フォームとローカルminiViewをresetし、保存対象の作者・管理パスワードを復元して未送信判定を解除する。Turnstileをresetしてフォームを閉じた後、`history.replaceState`で詳細URLへ更新し、同じ詳細コントローラーで取得・履歴展開・focus・一時強調する。
@@ -687,7 +677,7 @@ pending一覧:
 - `POST /api/admin/delete-requests/:requestId/reject`を使い、`adminNote`を必須、1000文字以内とする。
 - `delete_requests.status='rejected'`, `handled_at`, `handled_by='admin'`, `admin_note`を設定する。
 - 同じversionに別のpending申請がなければ`delete_requested_at`を解除する。
-- `download_block_reason='delete_requested'`の場合だけDL制限を解除する。`withdrawn`, `superseded_by_completed_descendant`, `admin_blocked`, `admin_hidden`など別理由の制限は保持する。
+- `download_block_reason='delete_requested'`の場合だけ削除申請由来のDL制限を解除する。`withdrawn`, `admin_blocked`, `admin_hidden`など別理由の有効な制限は保持する。旧`superseded_by_completed_descendant`は公開上のDL制限として扱わない。
 - 却下時に`is_hidden`, `hidden_reason`, `withdrawn_at`を復旧しない。
 
 監査:
@@ -736,12 +726,11 @@ R2削除とD1更新は完全なトランザクションではない。R2削除�
 
 MVPの自動削除対象reason候補:
 
-- `superseded_by_completed_descendant`
 - `withdrawn`
 - `admin_blocked`
 - `admin_hidden`
 
-`delete_requested` はMVPでは自動削除対象に含めない。
+`delete_requested` と旧 `superseded_by_completed_descendant` はMVPでは自動削除対象に含めない。
 
 自動削除時はD1行を物理削除せず、`is_hidden=1` と `hidden_reason='auto_deleted_after_download_block'` にし、`file_deleted_at` と `file_delete_reason` を保存する。進捗画像は履歴確認用として残す。
 
@@ -878,7 +867,7 @@ RC★★変換:
 - `st10`～`st12`: `6`
 - `st13`以上: `7`
 
-掲載対象は`progress=100`で、`completed_at IS NOT NULL`または`is_rejected=1`のどちらかを満たし、version/chart公開中、`download_blocked=0`、`file_deleted_at/withdrawn_at/delete_requested_at IS NULL`、`collapsed_by_completion=0`、有効な32桁MD5ありをすべて満たすversionとする。完成指定のない通常版は、進捗が100になっていても掲載しない。公開中の没譜面は`completed_at`を補完・更新せず、NULLのまま掲載する。BANは既存versionの掲載条件にしない。
+掲載対象は`progress=100`で、`completed_at IS NOT NULL`または`is_rejected=1`のどちらかを満たし、version/chart公開中、有効なDL制限なし、`file_deleted_at/withdrawn_at/delete_requested_at IS NULL`、有効な32桁MD5ありをすべて満たすversionとする。旧 `superseded_by_completed_descendant` による `download_blocked` / `collapsed_by_completion` は有効な制限に含めない。完成指定のない通常版は、進捗が100になっていても掲載しない。公開中の没譜面は`completed_at`を補完・更新せず、NULLのまま掲載する。BANは既存versionの掲載条件にしない。
 
 同一MD5は、掲載基準日時（完成版は`completed_at`、没譜面は`created_at`）、`created_at`、version IDの降順で最初の1件だけを採用する。この重複排除は2表への分類前に行い、同一MD5が両方へ載らないようにする。異なるMD5の完成分岐と没譜面はそれぞれ掲載してよい。
 

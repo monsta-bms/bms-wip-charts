@@ -284,7 +284,10 @@ async function expectedSelected(tableId) {
       )
       AND COALESCE(versions.is_hidden, 0) = 0
       AND COALESCE(charts.is_hidden, 0) = 0
-      AND COALESCE(versions.download_blocked, 0) = 0
+      AND (
+        COALESCE(versions.download_blocked, 0) = 0
+        OR versions.download_block_reason = 'superseded_by_completed_descendant'
+      )
       AND COALESCE(versions.withdrawal_download_blocked, 0) = 0
       AND versions.file_deleted_at IS NULL
       AND versions.withdrawn_at IS NULL
@@ -294,7 +297,10 @@ async function expectedSelected(tableId) {
         WHERE difficulty_withdrawals.version_id = versions.id
           AND difficulty_withdrawals.status IN ('pending', 'processing', 'tombstoned', 'deleted')
       )
-      AND COALESCE(versions.collapsed_by_completion, 0) = 0
+      AND (
+        COALESCE(versions.collapsed_by_completion, 0) = 0
+        OR versions.collapsed_reason = 'superseded_by_completed_descendant'
+      )
       AND versions.md5 IS NOT NULL
       AND length(versions.md5) = 32
     ORDER BY datetime(COALESCE(versions.completed_at, versions.created_at)) DESC,

@@ -224,6 +224,11 @@ try {
     assert.deepEqual(complete.body.items.map((item) => item.versionId), [blockedWithOrigin.versionId]);
     const rejected = await requestList("/api/versions?status=rejected&pageSize=100");
     assert.deepEqual(rejected.body.items.map((item) => item.versionId), [blockedWithoutOrigin.versionId]);
+    const finished = await requestList("/api/versions?status=finished&pageSize=100");
+    assert.deepEqual(new Set(finished.body.items.map((item) => item.versionId)), new Set([
+      blockedWithOrigin.versionId,
+      blockedWithoutOrigin.versionId
+    ]));
     const dated = await requestList("/api/versions?dateFrom=2026-07-20&dateTo=2026-07-20&pageSize=100");
     assert.deepEqual(dated.body.items.map((item) => item.versionId), [availableWithOrigin.versionId]);
   });
@@ -247,6 +252,23 @@ try {
       assert.equal(Object.hasOwn(item, "file"), true);
       assert.equal(Object.hasOwn(item.file, "downloadUrl"), true);
     }
+  });
+
+  await check("favorites POST supports the combined complete and rejected status", async () => {
+    const { response, body } = await requestList("/api/versions/query", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        favoriteVersionIds: [availableWithOrigin.versionId, blockedWithOrigin.versionId, blockedWithoutOrigin.versionId],
+        status: "finished",
+        pageSize: 100
+      })
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(new Set(body.items.map((item) => item.versionId)), new Set([
+      blockedWithOrigin.versionId,
+      blockedWithoutOrigin.versionId
+    ]));
   });
 
   await check("favorites accepts 200 unique IDs and rejects 201", async () => {

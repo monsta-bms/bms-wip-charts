@@ -241,7 +241,7 @@
     minmax(110px, 0.65fr)
     minmax(160px, 0.9fr)
     64px
-    150px;
+    180px;
   column-gap: 12px;
   align-items: center;
 }

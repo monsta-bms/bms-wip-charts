@@ -291,10 +291,27 @@ check("pending manual preserves append policy", () => {
   const result = model({ lifecycleStatus: "withdrawal_pending", handlingMode: "manual_review" });
   assert.equal(result.append.available, true);
 });
-check("collapsed intermediate version cannot append", () => {
-  const result = model({ collapsedByCompletion: true });
-  assert.equal(result.append.label, "追記不可");
-  assert.equal(result.append.reason, "superseded_intermediate");
+check("completed-descendant legacy state keeps append available", () => {
+  const result = model({
+    collapsedByCompletion: true,
+    collapsedReason: "superseded_by_completed_descendant"
+  });
+  assert.equal(result.append.label, "追記投稿");
+  assert.equal(result.append.reason, "available");
+});
+check("completed-descendant legacy state keeps download available", () => {
+  const result = model({
+    downloadBlocked: true,
+    downloadBlockReason: "superseded_by_completed_descendant",
+    collapsedByCompletion: true,
+    collapsedReason: "superseded_by_completed_descendant"
+  });
+  assert.equal(result.download.label, "DL");
+  assert.equal(result.download.reason, "available");
+});
+check("unknown collapse state still fails closed", () => {
+  const result = model({ collapsedByCompletion: true, collapsedReason: "unknown" });
+  assert.equal(result.append.reason, "inconsistent_data");
 });
 
 check("active enables management and favorite", () => {

@@ -52,4 +52,12 @@ for (const phrase of ["正式公開を開始しました", "公開終了の予�
   assert.ok(launch.includes(phrase), `正式公開entryに「${phrase}」が含まれること`);
 }
 
+const latest = articles.find((entry) => entry.id === "CHANGELOG_20260804")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
+assert.ok(latest.includes("RC★／RC★★の難易度表に完成版と没譜面が正しく掲載されるよう修正しました。"), "最新entryに難易度表修正を掲載すること");
+for (const removed of [
+  "完成済み没譜面を明示して投稿できるようにしました。",
+  "管理者が過去versionの投稿状態を修正できるようにしました。",
+  "状態が不自然なversionを管理画面で確認できるようにしました。"
+]) assert.equal(latest.includes(removed), false, `最新entryから「${removed}」を除くこと`);
+
 process.stdout.write(`FINAL_PUBLIC_CHANGELOG_TESTS passed entries=${articles.length} oldest=${dates.at(-1)} newest=${dates[0]}\n`);
