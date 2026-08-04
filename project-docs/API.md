@@ -1574,3 +1574,18 @@ JSON object `{ "body": "..." }`を受け付ける。trim後1～500 Unicode code 
 固定codeは`VERSION_COMMENT_INVALID_REQUEST`、`VERSION_COMMENT_BODY_REQUIRED`、`VERSION_COMMENT_BODY_TOO_LONG`、`VERSION_COMMENT_VERSION_NOT_FOUND`、`VERSION_COMMENT_VERSION_UNAVAILABLE`、`VERSION_COMMENT_RATE_LIMITED`、`VERSION_COMMENT_POSTING_BLOCKED`、`VERSION_COMMENT_DB_FAILED`。すべて既存の`code`、`message`、`detail`形式で返し、IP／UA、fingerprint、Secret、内部moderation fieldを含めない。
 
 `GET /api/charts`、`GET /api/charts/:chartId`、`GET /api/versions`の公開versionには`commentCount`と`latestComment: { body, createdAt } | null`を追加する。`GET /api/versions`には投稿者コメント全文の`authorComment`も追加し、既存の`commentPreview`と`hasComment`を維持する。
+## 管理者向け投稿状態確認・補正
+
+### `GET /api/admin/versions/status-review`
+
+- Bearer `ADMIN_TOKEN`必須。
+- query: `q`、`suspiciousOnly=true|false`、`state=all|incomplete|completed|rejected_completed|inconsistent`、`page`、`pageSize`（最大100）。
+- 曲名、アーティスト、差分名、作者、version ID、chart IDを検索し、公開状態、progress、map算出progress、追記受付、parent/child、要確認理由、補正可否を返す。password、IP/UA hash等は返さない。
+
+### `PATCH /api/admin/versions/:versionId/status`
+
+- Bearer `ADMIN_TOKEN`必須。JSON bodyは `targetState`、`progress`、`allowAppend`、5～500文字の`reason`、`expectedUpdatedAt`を要求する。
+- `incomplete`はprogress 0～99かつallowAppend true、`completed`と`rejected_completed`はprogress 100とする。
+- 競合は409 `ADMIN_VERSION_STATE_CONFLICT`、変更不可状態は409 `ADMIN_VERSION_STATUS_UNAVAILABLE`、不存在は404 `ADMIN_VERSION_STATUS_NOT_FOUND`。
+- 成功時は変更前後のstate、progress、allowAppendと新しいupdatedAtを返す。修正理由は公開payloadへ含めない。
+- CORS許可methodはGET、POST、PATCH、OPTIONS。

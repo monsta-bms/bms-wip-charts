@@ -20,6 +20,7 @@ type DifficultyTableHtmlInput = {
 };
 
 const BMS_IR_BASE_URL = "https://bms-ir.org/new/song?songmd5=";
+export const PUBLIC_SITE_HOME_URL = "https://monsta-bms.github.io/bms-wip-charts/";
 
 const PAGE_STYLE = `
 :root {
@@ -109,6 +110,7 @@ a:focus-visible, summary:focus-visible {
 .eyebrow { margin: 0 0 .15rem; color: var(--muted); font-size: .82rem; font-weight: 700; }
 h1 { margin: 0; font-size: clamp(1.4rem, 2.8vw, 2rem); line-height: 1.2; }
 .switches { margin-top: .45rem; }
+.header-navigation { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; margin-top: .45rem; }
 .switch-group { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem; }
 .switch-label { margin-right: .25rem; color: var(--muted); font-size: .8rem; font-weight: 700; }
 .switch-link {
@@ -119,6 +121,17 @@ h1 { margin: 0; font-size: clamp(1.4rem, 2.8vw, 2rem); line-height: 1.2; }
   border-bottom: 2px solid transparent;
   font-size: .9rem;
   font-weight: 600;
+}
+.home-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: .35rem .65rem;
+  border: 1px solid var(--border);
+  border-radius: .35rem;
+  background: var(--surface);
+  font-size: .84rem;
+  font-weight: 750;
 }
 .switch-link[aria-current] {
   border-bottom-color: currentColor;
@@ -370,17 +383,24 @@ function levelSectionId(level: string): string {
   return /^\d+$/u.test(level) ? `level-${level}-heading` : "level-other-heading";
 }
 
+function renderHomeLink(): string {
+  return `<a class="home-link" href="${PUBLIC_SITE_HOME_URL}">← リサイクルセンターへ戻る</a>`;
+}
+
 function renderSwitches(table: DifficultyTableHtmlDefinition, theme: DifficultyTableHtmlTheme): string {
   const tableLink = (id: DifficultyTableHtmlDefinition["id"], label: string) => {
     const current = id === table.id ? ' aria-current="page"' : "";
     return `<a class="switch-link" href="/difficulty-tables/${id}?theme=${theme}"${current}>${label}</a>`;
   };
-  return `<div class="switches">
+  return `<div class="header-navigation">
+      <div class="home-link-group">${renderHomeLink()}</div>
+      <div class="switches">
       <nav class="switch-group" aria-label="難易度表の切替">
         <span class="switch-label">表</span>
         ${tableLink("rc-star", "RC★")}
         ${tableLink("rc-double-star", "RC★★")}
       </nav>
+      </div>
     </div>`;
 }
 
@@ -513,6 +533,7 @@ export function buildDifficultyTableErrorHtml(
 ${renderHead(request, table, theme)}
 <body>
   <main class="page-main" id="main-content">
+    <p>${renderHomeLink()}</p>
     <div class="error-state" role="alert">
       <h1>難易度表を読み込めませんでした。</h1>
       <p>時間を置いて再読み込みしてください。</p>

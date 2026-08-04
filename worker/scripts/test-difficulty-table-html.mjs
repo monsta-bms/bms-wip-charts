@@ -503,6 +503,24 @@ async function runTests(fixtures) {
     assert.ok(!starBody.includes('href="/difficulty-tables/rc-star?theme=white"'));
     assert.ok(!starBody.includes('href="/difficulty-tables/rc-star?theme=dark"'));
   });
+  await check("RC star has one public-site home link", () => {
+    assert.equal(countMatches(starBody, /class="home-link"/gu), 1);
+    assert.match(starBody, /href="https:\/\/monsta-bms\.github\.io\/bms-wip-charts\/">/u);
+  });
+  await check("RC double-star has one public-site home link", () => {
+    assert.equal(countMatches(doubleBody, /class="home-link"/gu), 1);
+    assert.ok(doubleBody.includes("← リサイクルセンターへ戻る"));
+  });
+  await check("public-site home link stays in the same tab", () => {
+    const homeLink = starBody.match(/<a class="home-link"[^>]+>/u)?.[0] ?? "";
+    assert.ok(homeLink);
+    assert.ok(!homeLink.includes("target="));
+  });
+  await check("public-site home link has a 44px target and separate group", () => {
+    assert.match(starBody, /\.home-link \{[\s\S]*min-height: 44px;/u);
+    assert.match(starBody, /class="home-link-group"/u);
+    assert.match(starBody, /class="switches"/u);
+  });
   await check("25 level sections follow header level order", () => {
     const level1 = starBody.indexOf('id="level-1-heading"');
     const level2 = starBody.indexOf('id="level-2-heading"');
@@ -759,6 +777,8 @@ async function runTests(fixtures) {
       assert.equal(response.headers.get("Content-Type"), "text/html; charset=utf-8");
       assert.ok(body.includes("難易度表を読み込めませんでした。"));
       assert.ok(!body.includes("private SQL detail"));
+      assert.equal(countMatches(body, /class="home-link"/gu), 1);
+      assert.match(body, /href="https:\/\/monsta-bms\.github\.io\/bms-wip-charts\/">/u);
       assert.equal(logs.length, 1);
       assert.deepEqual(logs[0], [
         "[difficulty-table-view] failed to build page",

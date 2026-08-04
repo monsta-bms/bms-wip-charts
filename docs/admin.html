@@ -6,7 +6,7 @@
     <script src="./theme-init.js?v=site-theme-14"></script>
     <meta name="robots" content="noindex,nofollow">
     <title>管理 | BMS制作途中譜面共有</title>
-    <link rel="stylesheet" href="./admin.css?v=withdrawal-lifecycle-16r">
+    <link rel="stylesheet" href="./admin.css?v=submission-status-admin-correction-01">
     <link rel="stylesheet" href="./theme.css?v=site-theme-14-final">
   </head>
   <body>
@@ -156,7 +156,85 @@
           <button id="adminBansNext" type="button" class="secondary-button" disabled>次へ</button>
         </nav>
       </section>
+
+      <section class="admin-queue admin-version-status" aria-labelledby="adminVersionStatusTitle">
+        <div class="admin-queue-header admin-version-status-header">
+          <div>
+            <h2 id="adminVersionStatusTitle">投稿状態の修正</h2>
+            <p>投稿状態が誤っているversionを検索し、制作途中・完成版・完成済み没譜面へ修正します。</p>
+          </div>
+          <button id="adminVersionStatusRefresh" type="button" class="secondary-button" disabled>再読み込み</button>
+        </div>
+        <form id="adminVersionStatusFilters" class="admin-version-status-filters" role="search">
+          <label for="adminVersionStatusQuery">検索</label>
+          <input id="adminVersionStatusQuery" type="search" maxlength="100" placeholder="曲名・作者・version ID・chart ID">
+          <label class="admin-version-status-check" for="adminVersionStatusSuspiciousOnly">
+            <input id="adminVersionStatusSuspiciousOnly" type="checkbox" checked>
+            <span>要確認のみ</span>
+          </label>
+          <label for="adminVersionStatusState">状態</label>
+          <select id="adminVersionStatusState">
+            <option value="all">すべて</option>
+            <option value="incomplete">制作途中</option>
+            <option value="completed">完成版</option>
+            <option value="rejected_completed">完成済み没譜面</option>
+            <option value="inconsistent">不整合</option>
+          </select>
+          <button type="submit">検索</button>
+        </form>
+        <p id="adminVersionStatusMessage" class="admin-version-status-message" role="status" hidden></p>
+        <div id="adminVersionStatusList" class="admin-version-status-list"></div>
+        <nav class="admin-pagination" aria-label="投稿状態の修正ページ">
+          <button id="adminVersionStatusPrevious" type="button" class="secondary-button" disabled>前へ</button>
+          <span id="adminVersionStatusPage">1 / 1</span>
+          <button id="adminVersionStatusNext" type="button" class="secondary-button" disabled>次へ</button>
+        </nav>
+      </section>
     </main>
+
+    <dialog id="adminVersionStatusDialog" class="admin-dialog admin-version-status-dialog">
+      <form id="adminVersionStatusForm" class="admin-dialog-panel">
+        <header class="admin-dialog-header">
+          <div><p class="admin-dialog-type">VERSION STATUS</p><h2>投稿状態を修正</h2></div>
+          <button type="button" class="dialog-close" data-version-status-close aria-label="閉じる">×</button>
+        </header>
+        <dl class="admin-dialog-summary admin-version-status-summary">
+          <div><dt>曲名</dt><dd id="adminVersionStatusSong"></dd></div>
+          <div><dt>差分名</dt><dd id="adminVersionStatusChart"></dd></div>
+          <div><dt>version</dt><dd id="adminVersionStatusVersion"></dd></div>
+          <div><dt>作者</dt><dd id="adminVersionStatusAuthor"></dd></div>
+          <div><dt>現在状態</dt><dd id="adminVersionStatusCurrent"></dd></div>
+          <div><dt>現在progress</dt><dd id="adminVersionStatusCurrentProgress"></dd></div>
+          <div><dt>マップ算出progress</dt><dd id="adminVersionStatusMapProgress"></dd></div>
+          <div><dt>child数</dt><dd id="adminVersionStatusChildren"></dd></div>
+          <div><dt>現在の追記受付</dt><dd id="adminVersionStatusCurrentAppend"></dd></div>
+        </dl>
+        <fieldset class="admin-version-status-targets">
+          <legend>修正先</legend>
+          <label><input type="radio" name="adminVersionStatusTarget" value="incomplete"> 制作途中</label>
+          <label><input type="radio" name="adminVersionStatusTarget" value="completed"> 完成版</label>
+          <label><input type="radio" name="adminVersionStatusTarget" value="rejected_completed"> 完成済み没譜面</label>
+        </fieldset>
+        <label for="adminVersionStatusProgress">progress</label>
+        <input id="adminVersionStatusProgress" type="number" min="0" max="100" step="1" required>
+        <label class="admin-version-status-check" for="adminVersionStatusAllowAppend">
+          <input id="adminVersionStatusAllowAppend" type="checkbox">
+          <span>追記受付を許可</span>
+        </label>
+        <label for="adminVersionStatusReason">修正理由（5～500文字）</label>
+        <textarea id="adminVersionStatusReason" rows="4" minlength="5" maxlength="500" required></textarea>
+        <p id="adminVersionStatusWarning" class="admin-version-status-warning" hidden></p>
+        <div class="admin-version-status-preview" aria-live="polite">
+          <p><strong>変更前:</strong> <span id="adminVersionStatusBefore"></span></p>
+          <p><strong>変更後:</strong> <span id="adminVersionStatusAfter"></span></p>
+        </div>
+        <p id="adminVersionStatusDialogMessage" class="admin-dialog-message" role="alert" hidden></p>
+        <div class="admin-dialog-actions">
+          <button type="button" class="secondary-button" data-version-status-close>キャンセル</button>
+          <button id="adminVersionStatusSubmit" type="submit">修正を適用</button>
+        </div>
+      </form>
+    </dialog>
 
     <dialog id="adminDecisionDialog" class="admin-dialog">
       <form id="adminDecisionForm" class="admin-dialog-panel">
@@ -234,7 +312,8 @@
     </dialog>
 
     <script src="./theme-controller.js?v=site-theme-14"></script>
-    <script src="./admin.js?v=withdrawal-lifecycle-16r"></script>
+    <script src="./admin.js?v=submission-status-admin-correction-01"></script>
     <script src="./admin-ban.js?v=ban-01"></script>
+    <script src="./admin-status.js?v=submission-status-admin-correction-01"></script>
   </body>
 </html>

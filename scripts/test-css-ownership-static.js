@@ -201,7 +201,8 @@ check("changed comment and progress assets use the release cache key", () => {
   assert.match(sources.index, /\.\/list-ui-refresh\.css\?v=css-cleanup-r4b2a-01/);
   assert.equal((sources.index.match(/css-cleanup-r4b2a-01/g) || []).length, 1);
   assert.doesNotMatch(sources.listHtml, /progress-style-r4b2f-01|detail-theme-r4b2e-01|favorite-theme-r4b2d-01|css-cleanup-r4b2a-01/);
-  assert.equal((sources.index.match(/version-comment-progress-01/g) || []).length, 12);
+  assert.equal((sources.index.match(/version-comment-progress-01/g) || []).length, 11);
+  assert.match(sources.index, /\.\/app\.js\?v=submission-status-admin-correction-01/);
   assert.equal((sources.listHtml.match(/version-comment-progress-01/g) || []).length, 7);
 });
 
@@ -559,9 +560,9 @@ check("R4B2b does not use clipping or visual workarounds", () => {
 });
 
 check("reviewed production JavaScript set includes static comment and progress helpers", () => {
-  assert.equal(productionJsFiles.length, 32);
+  assert.equal(productionJsFiles.length, 34);
   assert.equal(sha256(sources.progressThumbnail), "e2dbcee8975d7b95341875d1c4962fd2904a81873fd4cf7dbdbe757004a58bb6");
-  assert.equal(sha256(productionJsAggregate), "8e07c7947d51e01d9e40d2209cfaf28a5c40529414bdf210301477ab6a89ae68");
+  assert.equal(sha256(productionJsAggregate), "1de52314826f5139465bad812994e3d510ffeeef7f40f3ef9f30ac3b393f449b");
 });
 
 check("all known CSS issues are documented as resolved", () => {

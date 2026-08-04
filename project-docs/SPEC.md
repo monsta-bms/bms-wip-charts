@@ -1255,3 +1255,12 @@ RC★★変換:
 - 公開コメント投稿は公開可否を書込み直前にも確認し、既存の`ABUSE_HASH_SECRET`によるfingerprint、active BAN、10分／1時間の短時間制限を適用する。設定不足やDB失敗はfail closedとし、本文、IP／UA、hash、Secretをログへ出さない。
 - `/api/charts`、chart detail、`/api/versions`は既存SQL内で`commentCount`と`latestComment`を集約し、画面からversion単位の追加HTTP requestを行わない。旧Worker payloadで集約値がない場合は件数0、最新なしとして後方互換表示する。
 - 初回投稿と追記投稿の進捗マップは、解析済み・編集可能・今回の塗りが0件の場合だけ中央へ「ここをドラッグ」を表示する。1件以上の塗り、drag中、没譜面、完成版固定、解析中、解析失敗、map利用不可では非表示とし、全消去で0件へ戻ると再表示する。hintは`pointer-events:none`で座標判定へ影響しない。
+## SUBMISSION-STATUS-ADMIN-CORRECTION-01
+
+- 初回投稿の投稿状態は「制作途中」「完成版（初回は選択不可）」「完成済み没譜面」の3行で表示する。制作途中は `is_rejected=0`、`completed_at=NULL`、`progress=0～99`、`allow_append=1` とする。完成済み没譜面は `is_rejected=1`、`completed_at=NULL`、`progress=100` とし、追記受付を選択できる。
+- 初回の通常完成版は拒否し、通常完成版は追記投稿からのみ作成する。追記投稿では没譜面を拒否する。完成済み没譜面から制作途中へ戻す際は、選択前の進捗マップsnapshotを復元する。
+- 管理ページは認証済み管理者へversionの投稿状態確認一覧を提供し、制作途中・完成版・完成済み没譜面への手動補正を許可する。hidden、file削除済み、withdrawal pending、processing、tombstoned、deletedは補正不可とする。
+- 管理補正は `expectedUpdatedAt` で競合を検出し、対象version、共通progress map正規化、chart全体のcompletion collapse再計算、chart更新時刻、`admin_logs`を単一D1 batch transactionで更新する。失敗時は部分更新を残さない。
+- 要確認候補は、rejectedとmap進捗、未完成と100%、完成と100%未満、rejectedとcompletedの重複、rejectedと100%未満、保存progressとmap算出progressの大幅差をread-onlyで判定する。旧形式・解析不能mapは判定不可として断定しない。
+- RC★／RC★★ HTMLはheaderの切替navと別groupに、公開トップへ戻るabsolute URLを1件表示する。error HTMLにも同じ共通helperのリンクを表示し、JSON feedは変更しない。
+- 新しいD1 Migrationは追加せず、既存versions列・version_withdrawals・admin_logsを使用する。

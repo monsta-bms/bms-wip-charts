@@ -1667,3 +1667,11 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 本番D1の未適用Migrationは0件で、適用済み10件の最新が`0010_security_hash_key_versions.sql`だった。read-only preflightはpending 0件、processing 0件、`SECURITY_HASH_CUTOVER_READY`だった。
 - GitHub履歴は旧HEAD、`.wrangler`、`node_modules`、`.dev.vars`、SQLite／DBが各0件、fork 0件、local／remote tag 0件だった。旧commit URLのHTTP 200は失敗にせず、外部対応状態を`GITHUB_CACHE_PURGE_REQUEST_REQUIRED`とする。
 - production write 0件、Worker deploy 0件、Secret操作0件、push 0件。`git diff --check`は成功した。
+## SUBMISSION-STATUS-ADMIN-CORRECTION-01 回帰
+
+- `node scripts/test-submission-status-admin-correction.js`: 初回投稿3状態、hidden互換field、snapshot、投稿validation、管理画面/API、RCトップリンク、文書の静的回帰。
+- `node worker/scripts/test-admin-version-status.mjs`: isolated D1で管理認証、候補抽出、検索/filter/pagination、旧map、変更不可状態、3状態補正、map正規化、completion reconciliation、競合、validation、admin log、D1 batch rollback、CORS PATCHを確認する。
+- `node worker/scripts/test-difficulty-table-html.mjs`: RC★／RC★★とerror HTMLのトップリンク各1件、同一tab、44px操作領域、RC/theme切替、HEAD/ETag、JSON feed不変を確認する。
+- site-copyはmanifest baseline、31件のeditor suite、export後のUI・ガイド・更新履歴TXT round-trip差分0を確認する。
+- 全体回帰としてrepository hygiene、canonical schema、CSS ownership、JavaScript構文、HTML重複ID、リンク、Worker typecheck、deploy:check、Wrangler dry-run、`git diff --check`を実行する。
+- 本番QAのPATCHはfake version IDの404とinvalid payloadの400だけを確認し、既存production versionを変更しない。

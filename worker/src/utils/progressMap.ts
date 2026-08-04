@@ -60,6 +60,18 @@ type PrepareProgressMapParams = {
   analysisFailed?: boolean;
 };
 
+export type StoredProgressMapInspection = {
+  available: boolean;
+  progress: number | null;
+  normalized: ProgressMapJson | null;
+};
+
+export type AdminSubmissionState = "incomplete" | "completed" | "rejected_completed";
+
+export type AdminProgressMapNormalization = StoredProgressMapInspection & {
+  progressMapJson: string | null;
+};
+
 type PrepareAppendProgressMapParams = {
   rawProgressMap: string;
   versionId: string;
@@ -650,6 +662,105 @@ function buildStoredProgressMapSignature(rawProgressMap: string | null): string 
 
 export function hasUsableStoredProgressMap(rawProgressMap: string | null): boolean {
   return buildStoredProgressMapSignature(rawProgressMap) !== null;
+}
+
+export function inspectStoredProgressMap(
+  rawProgressMap: string | null,
+  versionId = "stored-version"
+): StoredProgressMapInspection {
+  if (!rawProgressMap?.trim()) {
+    return { available: false, progress: null, normalized: null };
+  }
+
+  const parsed = parseProgressMap(rawProgressMap);
+  if (!parsed.ok || !isRecord(parsed.value)) {
+    return { available: false, progress: null, normalized: null };
+  }
+
+  const layout = normalizeLayout(parsed.value, null);
+  if (!layout.ok) {
+    return { available: false, progress: null, normalized: null };
+  }
+
+  const normalizedLayers = normalizeFollowupLayers(
+    parsed.value,
+    layout.targetBlockCount,
+    versionId
+  );
+  if (!normalizedLayers.ok) {
+    return { available: false, progress: null, normalized: null };
+  }
+
+  const progress = layout.targetBlockCount === 0
+    ? 0
+    : Math.round((normalizedLayers.paintedIndexes.size / layout.targetBlockCount) * 100);
+  const normalized: ProgressMapJson = {
+    schemaVersion: 2,
+    blockMode: "standardized_measure",
+    firstMeasure: layout.firstMeasure,
+    lastMeasure: layout.lastMeasure,
+    targetBlockCount: layout.targetBlockCount,
+    blocks: layout.blocks,
+    layers: normalizedLayers.layers,
+    progress
+  };
+
+  return { available: true, progress, normalized };
+}
+
+export function normalizeStoredProgressMapForSubmissionState(params: {
+  rawProgressMap: string | null;
+  versionId: string;
+  targetState: AdminSubmissionState;
+  progress: number;
+}): AdminProgressMapNormalization {
+  const inspected = inspectStoredProgressMap(params.rawProgressMap, params.versionId);
+  if (!inspected.available || !inspected.normalized) {
+    return {
+      ...inspected,
+      progressMapJson: params.rawProgressMap
+    };
+  }
+
+  const normalized: ProgressMapJson = {
+    ...inspected.normalized,
+    blocks: inspected.normalized.blocks.map((block) => ({ ...block })),
+    layers: inspected.normalized.layers.map((layer) => ({
+      ...layer,
+      ranges: layer.ranges.map(([start, end]) => [start, end])
+    })),
+    progress: params.progress
+  };
+
+  if (params.targetState !== "incomplete") {
+    const fullRanges: Array<[number, number]> = normalized.targetBlockCount > 0
+      ? [[0, normalized.targetBlockCount - 1]]
+      : [];
+    const kind: ProgressMapLayerKind = params.targetState === "completed"
+      ? "completion_fill"
+      : "rejected_auto_fill";
+    const lastLayer = normalized.layers[normalized.layers.length - 1];
+    const completionLayer: ProgressMapLayer = {
+      versionId: params.versionId,
+      color: lastLayer?.color ?? PROGRESS_MAP_COLOR,
+      kind,
+      ranges: fullRanges
+    };
+
+    if (lastLayer) {
+      normalized.layers[normalized.layers.length - 1] = completionLayer;
+    } else {
+      normalized.layers.push(completionLayer);
+    }
+    normalized.progress = 100;
+  }
+
+  return {
+    available: true,
+    progress: inspected.progress,
+    normalized,
+    progressMapJson: JSON.stringify(normalized)
+  };
 }
 
 function normalizeClientProgressMap(

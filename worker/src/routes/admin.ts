@@ -11,6 +11,10 @@ import {
 } from "./bans";
 import { deleteR2CleanupFile, listR2CleanupCandidates } from "./r2Cleanup";
 import { backfillVersionSourceMetadata } from "./versionSourceMetadataBackfill";
+import {
+  listAdminVersionStatuses,
+  updateAdminVersionStatus
+} from "./adminVersionStatus";
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
@@ -1178,6 +1182,14 @@ export async function handleAdminRoute(
       return methodNotAllowed(request, env, request.method);
     }
     return listPendingDeleteRequests(request, env);
+  }
+
+  if (segments.length === 2 && segments[0] === "versions" && segments[1] === "status-review") {
+    return listAdminVersionStatuses(request, env);
+  }
+
+  if (segments.length === 3 && segments[0] === "versions" && segments[2] === "status") {
+    return updateAdminVersionStatus(request, env, segments[1]);
   }
 
   if (segments.length === 1 && segments[0] === "version-withdrawals") {

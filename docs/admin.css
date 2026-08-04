@@ -598,6 +598,163 @@ select:focus {
   overflow-wrap: anywhere;
 }
 
+.admin-version-status-header {
+  gap: 18px;
+}
+
+.admin-version-status-filters {
+  align-items: center;
+  border-top: 1px solid #dbe3e8;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: auto minmax(180px, 1fr) auto auto auto minmax(150px, auto) auto;
+  padding: 12px 18px;
+}
+
+.admin-version-status-filters > label:not(.admin-version-status-check) {
+  color: #5d6b75;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.admin-version-status-filters select {
+  min-height: 40px;
+  padding: 7px 9px;
+}
+
+.admin-version-status-check {
+  align-items: center;
+  display: inline-flex;
+  font-size: 0.82rem;
+  font-weight: 700;
+  gap: 7px;
+  min-height: 44px;
+}
+
+.admin-version-status-check input {
+  inline-size: 18px;
+  margin: 0;
+  min-height: 0;
+  width: 18px;
+}
+
+.admin-version-status-message {
+  background: #fff0f2;
+  border-block: 1px solid #edc6ce;
+  color: #81384a !important;
+  margin: 0 !important;
+  padding: 10px 18px;
+}
+
+.admin-version-status-list {
+  border-top: 1px solid #dbe3e8;
+}
+
+.admin-version-status-row {
+  border-bottom: 1px solid #e1e7eb;
+  display: grid;
+  gap: 12px 18px;
+  grid-template-columns: minmax(220px, 1.2fr) minmax(200px, 1fr) minmax(220px, 1fr) auto;
+  padding: 15px 18px;
+}
+
+.admin-version-status-row:last-child {
+  border-bottom: 0;
+}
+
+.admin-version-status-row h3,
+.admin-version-status-row p,
+.admin-version-status-preview p {
+  margin: 0;
+}
+
+.admin-version-status-row h3 {
+  font-size: 0.9rem;
+}
+
+.admin-version-status-row p,
+.admin-version-status-meta,
+.admin-version-status-reasons {
+  color: #667580;
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+
+.admin-version-status-meta {
+  display: grid;
+  gap: 3px;
+}
+
+.admin-version-status-reasons {
+  color: #7b5220;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.admin-version-status-action {
+  align-self: center;
+}
+
+.admin-version-status-targets {
+  border: 1px solid #d3dde3;
+  border-radius: 6px;
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 10px 12px;
+}
+
+.admin-version-status-targets legend {
+  color: #5d6b75;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.admin-version-status-targets label {
+  align-items: center;
+  display: flex;
+  gap: 7px;
+  min-height: 38px;
+}
+
+.admin-version-status-targets input {
+  inline-size: 18px;
+  margin: 0;
+  width: 18px;
+}
+
+.admin-version-status-warning,
+.admin-version-status-preview {
+  border-radius: 5px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  padding: 9px 10px;
+}
+
+.admin-version-status-warning {
+  background: #fff7e4;
+  border: 1px solid #ead8aa;
+  color: #725700;
+}
+
+.admin-version-status-preview {
+  background: #f3f7f6;
+  border: 1px solid #d3e1dc;
+  display: grid;
+  gap: 5px;
+}
+
+html[data-theme="dark"] .admin-version-status-row,
+html[data-theme="dark"] .admin-version-status-filters,
+html[data-theme="dark"] .admin-version-status-list {
+  border-color: #3e4a50;
+}
+
+html[data-theme="dark"] .admin-version-status-preview {
+  background: #202b28;
+  border-color: #40564f;
+}
+
 .admin-dialog-hint {
   color: #687680;
   font-size: 0.75rem;
@@ -642,6 +799,15 @@ select:focus {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .admin-version-status-filters,
+  .admin-version-status-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-version-status-action {
+    grid-column: 1 / -1;
+  }
+
   .admin-actions {
     grid-column: 1 / -1;
     justify-content: flex-start;
@@ -671,6 +837,19 @@ select:focus {
     align-items: stretch;
     display: grid;
     grid-template-columns: 1fr;
+  }
+
+  .admin-version-status-filters,
+  .admin-version-status-row {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .admin-version-status-filters > *,
+  .admin-version-status-action,
+  .admin-version-status-action button {
+    grid-column: auto;
+    width: 100%;
   }
 
   .admin-cleanup-header {

@@ -59,7 +59,7 @@ check("model, link, action, pipeline, and app load in contract order", () => {
     "./version-link-ui.js?v=chart-render-pipeline-r4a-01",
     "./version-action-ui.js?v=version-comment-progress-01",
     "./chart-render-pipeline.js?v=chart-render-pipeline-r4a-01",
-    "./app.js?v=version-comment-progress-01"
+    "./app.js?v=submission-status-admin-correction-01"
   ].map((src) => indexSources.indexOf(src));
   assert.ok(ordered.every((index) => index >= 0));
   assert.deepEqual(ordered, [...ordered].sort((left, right) => left - right));
@@ -80,7 +80,7 @@ check("model, link UI, and Action UI precede every index renderer consumer", () 
   const actionIndex = indexSources.indexOf("./version-action-ui.js?v=version-comment-progress-01");
   const consumers = [
     "./chart-render-pipeline.js?v=chart-render-pipeline-r4a-01",
-    "./app.js?v=version-comment-progress-01",
+    "./app.js?v=submission-status-admin-correction-01",
     "./progress-thumbnail-list.js?v=progress-style-r4b2f-01",
     "./branch-append-ui.js?v=version-comment-progress-01",
     "./branch-tree-list.js?v=version-comment-progress-01",
@@ -302,8 +302,8 @@ check("HTML IDs remain unique", () => {
   assert.deepEqual(duplicateIds(indexHtml), []);
   assert.deepEqual(duplicateIds(listHtml), []);
 });
-check("changed scripts use the comment and progress release cache key", () => {
-  assert.ok(indexSources.includes("./app.js?v=version-comment-progress-01"), "app.js cache key mismatch");
+check("changed scripts use their reviewed release cache keys", () => {
+  assert.ok(indexSources.includes("./app.js?v=submission-status-admin-correction-01"), "app.js cache key mismatch");
   assert.ok(indexSources.includes("./progress-thumbnail-list.js?v=progress-style-r4b2f-01"), "progress-thumbnail-list.js cache key mismatch");
   const unchangedR4aScripts = [
     "version-link-ui.js",
@@ -313,7 +313,7 @@ check("changed scripts use the comment and progress release cache key", () => {
   unchangedR4aScripts.forEach((name) => {
     assert.ok(indexSources.includes(`./${name}?v=chart-render-pipeline-r4a-01`), `${name} cache key mismatch`);
   });
-  ["version-ui-model.js", "version-action-ui.js", "version-comment-ui.js", "progress-map-drag-hint.js", "app.js", "branch-append-ui.js", "branch-tree-list.js", "favorites-list.js"].forEach((name) => {
+  ["version-ui-model.js", "version-action-ui.js", "version-comment-ui.js", "progress-map-drag-hint.js", "branch-append-ui.js", "branch-tree-list.js", "favorites-list.js"].forEach((name) => {
     assert.ok(indexSources.includes(`./${name}?v=version-comment-progress-01`), `${name} cache key mismatch`);
   });
   ["version-ui-model.js", "version-link-ui.js", "version-action-ui.js", "version-comment-ui.js", "list.js"].forEach((name) => {

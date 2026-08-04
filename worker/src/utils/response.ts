@@ -18,7 +18,7 @@ export type ApiErrorBody = {
   detail: string;
 };
 
-const allowedMethods = "GET,POST,OPTIONS";
+const allowedMethods = "GET,POST,PATCH,OPTIONS";
 const allowedHeaders = "Content-Type,Authorization,X-Turnstile-Token";
 
 function getAllowedOrigins(env: Env): string[] {
