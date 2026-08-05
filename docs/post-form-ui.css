@@ -901,6 +901,7 @@ button.difficulty-change-button {
   line-height: 1.35;
   min-height: 44px;
   min-width: 0;
+  padding-inline-start: 5px;
 }
 
 .submission-state-choice input[type="radio"] {
@@ -1335,7 +1336,7 @@ button.difficulty-change-button {
 }
 
 .submit-panel.is-form-open .form-section[data-post-requires-file]:not([hidden]) {
-  animation: post-section-reveal 160ms ease-out both;
+  animation: post-section-reveal 160ms ease-out;
 }
 
 @keyframes post-section-reveal {

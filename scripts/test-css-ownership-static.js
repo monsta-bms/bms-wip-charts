@@ -193,6 +193,7 @@ check("changed public UI, comment, and progress assets use their release cache k
   assert.match(sources.index, /\.\/chart-detail-link\.css\?v=detail-theme-r4b2e-01/);
   assert.equal((sources.index.match(/detail-theme-r4b2e-01/g) || []).length, 1);
   assert.match(sources.index, /\.\/theme\.css\?v=public-ui-refinement-patch-02/);
+  assert.match(sources.index, /\.\/post-form-ui\.css\?v=progress-tooltip-radio-inset-01/);
   assert.match(sources.index, /\.\/progress-thumbnail-list\.css\?v=progress-style-r4b2f-01/);
   assert.match(sources.index, /\.\/progress-thumbnail-list\.js\?v=progress-style-r4b2f-01/);
   assert.equal((sources.index.match(/progress-style-r4b2f-01/g) || []).length, 2);

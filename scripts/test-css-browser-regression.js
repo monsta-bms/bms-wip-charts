@@ -15,6 +15,7 @@ const widths = [390, 760, 1024, 1366];
 const apiPort = 8788;
 const tolerance = 0.25;
 const startedAt = process.hrtime.bigint();
+const progressFormFixture = fs.readFileSync(path.join(root, "scripts", "fixtures", "chart-metadata-extract-utf8.bms"), "utf8");
 const detailControlSelectors = {
   appendAvailable: '.version-row[data-version-id="version-active"] .append-version-button',
   appendStopped: ".append-policy-disabled-button",
@@ -1358,6 +1359,102 @@ async function captureProgressDragHintInteractions(cdp, sessionId) {
   return { helperStates, matrix };
 }
 
+async function capturePostFormPointerUi(cdp, sessionId) {
+  await setTheme(cdp, sessionId, "default");
+  await cdp.send("Emulation.setDeviceMetricsOverride", {
+    width: 1366,
+    height: 900,
+    deviceScaleFactor: 1,
+    mobile: false
+  }, sessionId);
+  await evaluate(cdp, sessionId, `(() => {
+    document.querySelector("#postFormToggle")?.click();
+    const input = document.querySelector("#chartFile");
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([${JSON.stringify(progressFormFixture)}], "progress-tooltip-regression.bms", { type: "text/plain" }));
+    input.files = transfer.files;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  })()`);
+  await waitFor(cdp, sessionId, `document.querySelector(".submit-panel")?.classList.contains("is-form-open")
+    && !document.querySelector(".progress-section")?.hidden
+    && document.querySelectorAll("#progressMapBlocks .progress-map-block").length > 0`, "post form progress fixture");
+  await new Promise((resolve) => setTimeout(resolve, 260));
+
+  const matrix = [];
+  for (const theme of themes) {
+    await setTheme(cdp, sessionId, theme);
+    for (const width of widths) {
+      await cdp.send("Emulation.setDeviceMetricsOverride", {
+        width,
+        height: 900,
+        deviceScaleFactor: 1,
+        mobile: false
+      }, sessionId);
+      await evaluate(cdp, sessionId, `document.querySelector("#progressMapBlocks")?.scrollIntoView({ block: "center" })`);
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      const entry = await evaluate(cdp, sessionId, `(() => {
+        const blocks = [...document.querySelectorAll("#progressMapBlocks .progress-map-block")];
+        const block = blocks[Math.floor(blocks.length / 2)];
+        const blockRect = block.getBoundingClientRect();
+        const pointer = {
+          x: blockRect.left + (blockRect.width / 2),
+          y: blockRect.top + (blockRect.height / 2)
+        };
+        block.dispatchEvent(new PointerEvent("pointermove", {
+          bubbles: true,
+          clientX: pointer.x,
+          clientY: pointer.y,
+          pointerId: 71,
+          pointerType: "mouse"
+        }));
+        const tooltip = document.querySelector("#progressMapTooltip");
+        const tooltipRect = tooltip.getBoundingClientRect();
+        const progressSection = document.querySelector(".progress-section");
+        const sectionStyle = getComputedStyle(progressSection);
+        const row = document.querySelector("#incompleteStateControl");
+        const radio = document.querySelector("#submissionStateIncomplete");
+        const rowRect = row.getBoundingClientRect();
+        const radioRect = radio.getBoundingClientRect();
+        return {
+          pointer,
+          tooltipHidden: tooltip.hidden,
+          tooltipText: tooltip.textContent,
+          tooltipOffset: {
+            x: tooltipRect.left - pointer.x,
+            y: tooltipRect.top - pointer.y
+          },
+          tooltipWithinViewport: tooltipRect.left >= 0 && tooltipRect.right <= innerWidth
+            && tooltipRect.top >= 0 && tooltipRect.bottom <= innerHeight,
+          sectionTransform: sectionStyle.transform,
+          sectionAnimationFillMode: sectionStyle.animationFillMode,
+          radioInset: radioRect.left - rowRect.left,
+          labelPaddingInlineStart: getComputedStyle(radio.closest(".submission-state-choice")).paddingInlineStart,
+          horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+        };
+      })()`);
+      assert.equal(entry.tooltipHidden, false, `${theme} ${width}px tooltip must be visible`);
+      assert.match(entry.tooltipText, /小節:/u);
+      assert.match(entry.tooltipText, /notes:/u);
+      assert.ok(entry.tooltipOffset.x >= 8 && entry.tooltipOffset.x <= 20, `${theme} ${width}px tooltip x offset ${entry.tooltipOffset.x}`);
+      assert.ok(entry.tooltipOffset.y >= 8 && entry.tooltipOffset.y <= 20, `${theme} ${width}px tooltip y offset ${entry.tooltipOffset.y}`);
+      assert.equal(entry.tooltipWithinViewport, true, `${theme} ${width}px tooltip escaped viewport`);
+      assert.equal(entry.sectionTransform, "none", `${theme} ${width}px progress section retained a transform`);
+      assert.equal(entry.sectionAnimationFillMode, "none", `${theme} ${width}px reveal animation retained its final frame`);
+      assert.ok(entry.radioInset >= 5 && entry.radioInset <= 6, `${theme} ${width}px radio inset ${entry.radioInset}`);
+      assert.equal(entry.labelPaddingInlineStart, "5px");
+      assert.equal(entry.horizontalOverflow, false, `${theme} ${width}px post form overflowed horizontally`);
+      matrix.push({ theme, width, ...entry });
+    }
+  }
+  await evaluate(cdp, sessionId, `(() => {
+    document.querySelector("#chartForm")?.reset();
+    window.BmsPostFormUi?.markClean?.();
+    window.BmsPostFormUi?.close?.();
+  })()`);
+  await waitFor(cdp, sessionId, `window.BmsPostFormUi?.isDirty?.() === false`, "post form fixture cleanup");
+  return { matrix };
+}
+
 async function captureVersionCommentInteractions(cdp, sessionId) {
   await setTheme(cdp, sessionId, "default");
   await cdp.send("Emulation.setDeviceMetricsOverride", {
@@ -1511,8 +1608,11 @@ async function captureVersionCommentInteractions(cdp, sessionId) {
   await waitFor(cdp, sessionId, `document.querySelector(${JSON.stringify(sourceSelector)})?.querySelector(".version-comment-count")?.textContent === "3"`, "in-place comment rerender");
   const inPlaceCount = await evaluate(cdp, sessionId, `document.querySelector(${JSON.stringify(sourceSelector)}).querySelector(".version-comment-count").textContent`);
 
+  const previousTimeOrigin = await evaluate(cdp, sessionId, "performance.timeOrigin");
   await cdp.send("Page.reload", { ignoreCache: true }, sessionId);
-  await waitFor(cdp, sessionId, `document.querySelector(${JSON.stringify(sourceSelector)})?.querySelector(".version-comment-count")?.textContent === "3"`, "reloaded comment summary");
+  await waitFor(cdp, sessionId, `performance.timeOrigin !== ${JSON.stringify(previousTimeOrigin)}`, "comment page reload navigation");
+  await waitFor(cdp, sessionId, `document.querySelector(${JSON.stringify(sourceSelector)})?.querySelector(".version-comment-count")?.textContent === "3"
+    && document.querySelector('.version-row[data-version-id="version-active"] .author-comment-preview-text')`, "reloaded comment summary");
   const reloadState = await evaluate(cdp, sessionId, `(() => ({
     count: document.querySelector(${JSON.stringify(sourceSelector)}).querySelector(".version-comment-count").textContent,
     authorText: document.querySelector('.version-row[data-version-id="version-active"] .author-comment-preview-text').textContent,
@@ -2693,6 +2793,7 @@ async function run() {
     const progressDragHint = await captureProgressDragHintInteractions(cdp, sessionId);
     const versionComments = await captureVersionCommentInteractions(cdp, sessionId);
     const detailRerender = await captureDetailRerenderRegression(cdp, sessionId);
+    const postFormPointerUi = await capturePostFormPointerUi(cdp, sessionId);
 
     const compactNavigationStart = process.hrtime.bigint();
     await cdp.send("Page.navigate", { url: `http://127.0.0.1:${staticPort}/list.html` }, sessionId);
@@ -2707,6 +2808,7 @@ async function run() {
       progressDragHint,
       versionComments,
       detailRerender,
+      postFormPointerUi,
       compact: compact.matrix
     };
     const wrapped = { detail: { matrix: detail.matrix }, detailRerender, compact: { matrix: compact.matrix } };
@@ -2735,7 +2837,7 @@ async function run() {
         max: Number(Math.max(...values).toFixed(1))
       };
     };
-    console.log(`css browser regression: ${detail.matrix.length} detail + ${compact.matrix.length} compact theme/width conditions and version comment interactions passed`);
+    console.log(`css browser regression: ${detail.matrix.length} detail + ${compact.matrix.length} compact + ${postFormPointerUi.matrix.length} post-form theme/width conditions and version comment interactions passed`);
     console.log(JSON.stringify({
       detailNavigationMs: Number(detailNavigationMs.toFixed(1)),
       compactNavigationMs: Number(compactNavigationMs.toFixed(1)),

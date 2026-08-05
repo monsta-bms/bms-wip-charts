@@ -9,7 +9,7 @@ const articles = [...html.matchAll(/<article\b[^>]*\bdata-copy-entry="([A-Z0-9_]
   .map((match) => ({ id: match[1], html: match[2] }));
 const manifestEntries = manifest.changelogEntries ?? [];
 
-assert.equal(articles.length, 19, "公開changelogは19 entryであること");
+assert.equal(articles.length, 20, "公開changelogは20 entryであること");
 assert.equal(manifestEntries.length, articles.length, "manifest entry数が一致すること");
 assert.equal(new Set(articles.map((entry) => entry.id)).size, articles.length, "ENTRY IDが重複しないこと");
 assert.deepEqual(manifestEntries.map((entry) => entry.id), articles.map((entry) => entry.id), "manifestとHTMLのENTRY順が一致すること");
@@ -52,12 +52,18 @@ for (const phrase of ["正式公開を開始しました", "公開終了の予�
   assert.ok(launch.includes(phrase), `正式公開entryに「${phrase}」が含まれること`);
 }
 
-const latest = articles.find((entry) => entry.id === "CHANGELOG_20260804")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
-assert.ok(latest.includes("RC★／RC★★の難易度表に完成版と没譜面が正しく掲載されるよう修正しました。"), "最新entryに難易度表修正を掲載すること");
+const latest = articles.find((entry) => entry.id === "CHANGELOG_20260805")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
+for (const phrase of [
+  "投稿フォームの操作性を改善",
+  "進捗マップの小節・時間・ノーツ情報を、カーソルの近くへ表示するよう修正しました。",
+  "投稿状態の選択ボタンに左余白を加え、枠へ重ならないよう調整しました。"
+]) assert.ok(latest.includes(phrase), `最新entryに「${phrase}」を掲載すること`);
+const difficultyTableUpdate = articles.find((entry) => entry.id === "CHANGELOG_20260804")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
+assert.ok(difficultyTableUpdate.includes("RC★／RC★★の難易度表に完成版と没譜面が正しく掲載されるよう修正しました。"), "2026-08-04 entryに難易度表修正を掲載すること");
 for (const removed of [
   "完成済み没譜面を明示して投稿できるようにしました。",
   "管理者が過去versionの投稿状態を修正できるようにしました。",
   "状態が不自然なversionを管理画面で確認できるようにしました。"
-]) assert.equal(latest.includes(removed), false, `最新entryから「${removed}」を除くこと`);
+]) assert.equal(difficultyTableUpdate.includes(removed), false, `2026-08-04 entryから「${removed}」を除くこと`);
 
 process.stdout.write(`FINAL_PUBLIC_CHANGELOG_TESTS passed entries=${articles.length} oldest=${dates.at(-1)} newest=${dates[0]}\n`);

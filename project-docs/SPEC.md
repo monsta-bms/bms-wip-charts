@@ -1277,3 +1277,9 @@ RC★★変換:
 - 投稿フォームのsection背景は共通surfaceへ統一し、section間は単一の下線だけで区切る。操作領域と内容確認だけを`surface-muted`とし、作者欄だけの背景・左線・全周枠を設けない。
 - 想定難易度pickerは選択前後とも常時展開し、compact summaryへ切り替えない。選択値は同じpicker内のpreviewだけを更新する。
 - RC★／RC★★の投稿者コメントは吹き出し記号`💬`で表示し、`aria-label="コメント"`、desktop 40px以上、mobile 44px以上、hover／focus／active状態を備える。API schema、JSON feed、D1、R2、Secret、投稿ロジックは変更しない。
+
+## PROGRESS-MAP-POINTER-UI-01
+
+- 投稿フォームのファイル選択後sectionは160msの表示アニメーションを維持するが、終了後に`transform`を保持しない。進捗マップのtooltipと右クリックpopoverはviewport基準の`position: fixed`を維持し、小節・時間・ノーツ情報をpointerから12pxの近傍へ表示する。viewport端では既存どおり反転または10px margin内へ収める。
+- 投稿状態の「制作途中」「完成版」「完成済み没譜面」は、各選択labelへ`padding-inline-start: 5px`を付け、radioと選択row左端の間隔を確保する。rowのgrid、説明、badge、disabled条件、44px操作高は変更しない。
+- 公開更新履歴へ2026/08/05の投稿フォーム操作性改善を追加する。API schema、Worker処理、D1、R2、Secret、投稿状態ロジック、進捗マップ保存形式は変更しない。

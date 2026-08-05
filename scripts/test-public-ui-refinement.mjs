@@ -78,6 +78,14 @@ check("post form reveals later sections only after file selection", () => {
   assert.match(sources.formUi, /function syncDeferredSections\(\)/u);
   assert.match(sources.formUi, /section\.hidden = !hasSelectedFile/u);
 });
+check("post form tooltip keeps viewport positioning after section reveal", () => {
+  assert.match(sources.formCss, /\.form-section\[data-post-requires-file\]:not\(\[hidden\]\) \{\s*animation: post-section-reveal 160ms ease-out;\s*\}/u);
+  assert.doesNotMatch(sources.formCss, /animation: post-section-reveal[^;]*(?:both|forwards)/u);
+  assert.match(sources.index, /\.\/post-form-ui\.css\?v=progress-tooltip-radio-inset-01/u);
+});
+check("submission state choices keep a five pixel inline inset", () => {
+  assert.match(sources.formCss, /\.submission-state-choice \{[^}]*padding-inline-start: 5px;/su);
+});
 check("rejected completion immediately explains 100 percent", () => assert.match(sources.formReview, /進捗を100%として投稿します。/u));
 check("review summary contains all accepted fields", () => {
   for (const label of ["ファイル", "曲名", "差分名", "作者", "難易度", "投稿状態", "進捗", "追記受付", "管理パスワード"]) {
@@ -160,6 +168,10 @@ check("guide slash links are separate navigation links", () => assert.match(sour
 check("changelog remains a flat article list", () => {
   assert.ok((sources.changelog.match(/<article class="changelog-entry" data-copy-entry=/gu) || []).length >= 1);
   assert.doesNotMatch(sources.changelog, /<details|最新.*badge|changelog-month/u);
+});
+check("changelog includes the 2026-08-05 form usability update", () => {
+  assert.match(sources.changelog, /data-copy-entry="CHANGELOG_20260805"[\s\S]*進捗マップの小節・時間・ノーツ情報を、カーソルの近くへ表示するよう修正しました。/u);
+  assert.match(sources.changelog, /data-copy-entry="CHANGELOG_20260805"[\s\S]*投稿状態の選択ボタンに左余白を加え、枠へ重ならないよう調整しました。/u);
 });
 check("guide and changelog share the widened content measure", () => assert.match(sources.headerCss, /\.content-page \{\s*max-width: min\(100%, 114ch\);/u));
 check("RC header has top, title, switch and theme", () => {

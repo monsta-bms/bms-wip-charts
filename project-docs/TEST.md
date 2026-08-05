@@ -1701,3 +1701,9 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 390／760／1024／1366px、white／default／darkでtop、投稿フォーム初期・ファイル選択後・難易度選択前後、最近の投稿、独立一覧filter、guide、changelog、RC★、RC★★を確認する。horizontal overflow、clipping、操作重なり、Console error／warningは0とする。
 - 状態filterの完成済み選択前後で対象controlのviewport座標を比較し、上下ジャンプがないことを確認する。難易度選択前後はpicker外枠の幅・高さが変わらないことを確認する。
 - repository hygiene、canonical schema、CSS ownership、JavaScript構文、HTML重複ID、link、site-copy往復、Worker typecheck、deploy:check、Wrangler dry-run、`git diff --check`を実行する。D1／R2／Secret操作とproduction writeは行わない。
+
+## PROGRESS-MAP-POINTER-UI-01 回帰
+
+- `node scripts/test-public-ui-refinement.mjs`で後続sectionの表示アニメーションに`both`／`forwards`がなく、投稿状態labelの`padding-inline-start`が5px、変更したCSSのcache keyと2026/08/05更新履歴が一致することを確認する。
+- `node scripts/test-css-browser-regression.js`で実際の投稿フォームへBMS fixtureを読み込み、white／default／dark × 390／760／1024／1366pxの12条件を確認する。表示アニメーション完了後のprogress sectionは`transform: none`、tooltipはpointerの右下8～20px、radioはrow左端から5px以上、horizontal overflowは0件、Console error／warningは0／0とする。
+- 更新履歴は20 entry、新しい順、manifestとの順序・hash一致、site-copy export／validate／applyの往復差分0を確認する。repository hygiene、canonical schema、CSS ownership、JavaScript構文、HTML重複ID、link、Worker typecheck、deploy:check、Wrangler dry-run、`git diff --check`を実行する。
