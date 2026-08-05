@@ -48,7 +48,7 @@ assert.doesNotMatch(branchTree, /actions\.querySelector\("a\[href\], \.download-
 assert.match(versionLinkUi, /version-download-control download-disabled download-button download-blocked-control/);
 assert.match(branchTree, /enhanceLinkControls\(actions, uiModel, displayVersionLabel\)/);
 
-assert.match(listHtml, /<span>リンク<\/span>/);
+assert.match(listHtml, /<span>操作<\/span>/);
 assert.match(listJs, /BmsVersionUiModel\?\.buildVersionUiModel/);
 assert.match(versionUiModel, /new URL\(value\.trim\(\), workerBase\)/);
 assert.match(versionUiModel, /url\.origin !== workerBase\.origin/);

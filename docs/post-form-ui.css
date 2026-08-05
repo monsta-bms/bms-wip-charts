@@ -1344,3 +1344,179 @@ button.difficulty-change-button {
     transition: none;
   }
 }
+
+/* PUBLIC-UI-REFINEMENT-01 */
+.submit-panel.is-form-open {
+  --post-panel-bg: var(--surface);
+  --post-section-bg: var(--surface);
+  --post-operation-bg: var(--surface-muted);
+  --post-input-bg: var(--input-bg);
+  --post-line: var(--line-strong);
+  --post-line-soft: var(--line);
+  --post-accent: var(--primary);
+  --post-text: var(--text);
+  --post-muted: var(--muted);
+  background: var(--surface);
+}
+
+.submit-panel.is-form-open .form-sections {
+  gap: 16px;
+}
+
+.submit-panel.is-form-open .form-section {
+  background: var(--surface);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  padding: 8px 0 20px;
+}
+
+.submit-panel.is-form-open .form-section:last-child {
+  border-bottom: 0;
+  padding-bottom: 4px;
+}
+
+.submit-panel.is-form-open .form-section-title {
+  color: var(--text);
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.submit-panel.is-form-open .field-label,
+.submit-panel.is-form-open .submission-subtitle,
+.submit-panel.is-form-open .post-state-name,
+.submit-panel.is-form-open .progress-policy-heading {
+  color: var(--text);
+  font-size: .92rem;
+  font-weight: 650;
+}
+
+.submit-panel.is-form-open .field-help,
+.submit-panel.is-form-open .post-state-description,
+.management-submit-rail .field-help {
+  color: var(--muted);
+  font-size: .875rem;
+  line-height: 1.5;
+}
+
+.author-details-group {
+  background: transparent;
+  border-left: 0;
+  border-top: 1px solid var(--line);
+  padding: 12px 0 0;
+}
+
+.optional-fields {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  grid-column: 1 / -1;
+}
+
+.optional-fields > summary {
+  color: var(--primary);
+  cursor: pointer;
+  font-weight: 650;
+  min-height: 44px;
+  padding: 10px 12px;
+}
+
+.optional-fields-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 4px 12px 14px;
+}
+
+.optional-fields-grid .origin-url-field { grid-column: 1 / -1; }
+
+.difficulty-step-label {
+  color: var(--muted);
+  display: block;
+  font-size: .875rem;
+  font-weight: 650;
+  margin: 0 0 6px;
+}
+
+.difficulty-choice-area .difficulty-step-label { margin-top: 10px; }
+
+.difficulty-tab,
+.difficulty-chip {
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: var(--text);
+}
+
+.difficulty-tab[aria-pressed="true"],
+.difficulty-chip[aria-pressed="true"] {
+  background: var(--primary-soft);
+  border: 2px solid var(--primary);
+  color: var(--text);
+  font-weight: 750;
+}
+
+.difficulty-tab[aria-pressed="true"]::before,
+.difficulty-chip[aria-pressed="true"]::before {
+  content: "✓ ";
+}
+
+.post-review {
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.post-review h4 {
+  font-size: 1rem;
+  margin: 0 0 12px;
+}
+
+.post-review-summary {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.post-review-row {
+  align-items: baseline;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(110px, .3fr) minmax(0, 1fr);
+  padding: 8px 0;
+}
+
+.post-review-row:first-child { border-top: 0; }
+.post-review-row dt { color: var(--muted); font-size: .875rem; font-weight: 650; }
+.post-review-row dd { align-items: center; display: flex; gap: 12px; justify-content: space-between; margin: 0; min-width: 0; }
+.post-review-value { overflow-wrap: anywhere; }
+.post-review-change { background: transparent; color: var(--primary); flex: 0 0 auto; min-height: 32px; padding: 2px 6px; text-decoration: underline; }
+.post-review-change:hover,
+.post-review-change:focus-visible { background: var(--primary-soft); }
+
+.review-section .turnstile-control { justify-items: start; margin: 16px 0 0; }
+.review-section .form-actions { justify-content: flex-start; margin-top: 16px; }
+
+.post-error-summary {
+  white-space: normal;
+}
+
+.post-error-summary-title { margin: 0; }
+.post-error-summary-list { margin: 8px 0 0; padding-left: 1.25rem; }
+.post-error-summary-list button {
+  background: transparent;
+  color: var(--danger);
+  min-height: 32px;
+  padding: 2px 4px;
+  text-align: left;
+  text-decoration: underline;
+}
+
+@media (max-width: 760px) {
+  .optional-fields-grid { grid-template-columns: 1fr; }
+  .optional-fields-grid .origin-url-field { grid-column: auto; }
+  .post-review-row { grid-template-columns: 1fr; gap: 4px; }
+  .review-section .form-actions,
+  .review-section .form-actions button { width: 100%; }
+}

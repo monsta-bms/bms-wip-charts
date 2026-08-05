@@ -1253,3 +1253,16 @@ RC★★変換:
 - 要確認候補は、rejectedとmap進捗、未完成と100%、完成と100%未満、rejectedとcompletedの重複、rejectedと100%未満、保存progressとmap算出progressの大幅差をread-onlyで判定する。旧形式・解析不能mapは判定不可として断定しない。
 - RC★／RC★★ HTMLはheaderの切替navと別groupに、公開トップへ戻るabsolute URLを1件表示する。error HTMLにも同じ共通helperのリンクを表示し、JSON feedは変更しない。
 - 新しいD1 Migrationは追加せず、既存versions列・version_withdrawals・admin_logsを使用する。
+
+## PUBLIC-UI-REFINEMENT-01
+
+- 共通headerはリサイクルセンター、RC★、RC★★、使い方、投稿する、投稿一覧、更新履歴、テーマを判別できる順で表示し、RC★とRC★★を独立リンクとして維持する。現在地は文字色と下線で示し、1024px以下ではkeyboard操作可能なmenuへ切り替える。
+- トップは「BMS差分共有サイト」「未完成譜面・没譜面を共有する」を主情報とし、差分投稿だけをprimary CTAにする。最近の投稿の取得件数、追加読み込み、全件リンク、chart指定表示は変更しない。
+- 投稿フォームは譜面ファイル、楽曲情報、差分情報、進捗と投稿状態、投稿後の管理、内容確認の6区分とする。サブタイトル、サブアーティスト、原曲配布URLは任意項目detailsへ置き、解析または入力で値がある場合は開く。
+- 内容確認にはファイル名、曲名、差分名、作者、難易度、投稿状態、進捗、追記受付、管理パスワードの設定有無だけを表示する。パスワード本文は表示しない。変更操作は対象fieldを表示してfocusする。validationは上部summaryとinline errorを併用し、summaryから対象fieldへ移動できる。
+- 公開版の操作名は「原曲」「DL」「追記投稿」「コメント」「投稿操作」とする。投稿操作dialogの見出しは「投稿後の操作」とし、管理者用機能と区別する。DL表記とリンクは維持する。
+- 独立投稿一覧は検索、3段階の主状態、完成済み選択時だけ表示する3種の副状態、並び順、お気に入りを常時表示し、期間はdetailsへ置く。既存status parameter 5値とURL互換を維持し、適用中条件は個別解除と一括解除ができるchipで示す。
+- 独立投稿一覧の結果は投稿日、譜面、難易度・作者、進捗・コメント、操作の5領域とする。件数summaryは「件」に統一し、操作領域にDLを直接表示する。
+- 使い方は「このサイトでできること」「最短手順」「詳しい使い方」「投稿管理」「安全案内」の順とし、拡張子はbms・bme・bml・zipの小文字を維持する。更新履歴はdata-copy-entry付きの新しい順flat listを維持する。
+- RC★／RC★★ HTMLはトップへ戻る、表名、RC切替、テーマの順にheaderへ置く。「原曲」「DL」「コメント」を表示し、JSON取込リンクをdetailsへまとめる。JSON feed、ETag、HEAD、難易度分類は変更しない。
+- 公開UIはsystem fontとgreen accentを維持し、body 16px、主要文字14px以上、desktop操作40px以上、mobile操作44pxを基本とする。API schema、D1、R2、Secret、投稿状態logicは変更しない。

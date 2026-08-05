@@ -30,8 +30,8 @@ const PAGE_STYLE = `
   --surface: #ffffff;
   --table-head: #f2f4f4;
   --row: #ffffff;
-  --row-alt: #eceeef;
-  --row-hover: #e2e8ea;
+  --row-alt: #f6f7f7;
+  --row-hover: #eef2f1;
   --text: #111820;
   --muted: #47525a;
   --border: #d3d7d9;
@@ -44,8 +44,8 @@ html[data-theme="white"] {
   --page-bg: #ffffff;
   --header-bg: #f1f4f3;
   --table-head: #f7f8f8;
-  --row-alt: #f1f2f3;
-  --row-hover: #e8edf0;
+  --row-alt: #f8f9f9;
+  --row-hover: #f0f3f2;
   --text: #0e151b;
   --muted: #4b565d;
   --border: #d9dcde;
@@ -61,8 +61,8 @@ html[data-theme="dark"] {
   --surface: #191f22;
   --table-head: #20272a;
   --row: #191f22;
-  --row-alt: #242b2f;
-  --row-hover: #303a3f;
+  --row-alt: #1d2427;
+  --row-hover: #252e32;
   --text: #eef2f4;
   --muted: #b5bec3;
   --border: #3e474c;
@@ -82,6 +82,7 @@ body {
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   line-height: 1.45;
   overflow-wrap: anywhere;
+  font-size: 16px;
 }
 a { color: var(--link); text-underline-offset: .18em; }
 a:hover { color: var(--link-hover); }
@@ -106,8 +107,7 @@ a:focus-visible, summary:focus-visible {
   margin: 0 auto;
   padding-inline: clamp(.75rem, 2.4vw, 2rem);
 }
-.page-header-inner { padding-block: .7rem; }
-.eyebrow { margin: 0 0 .15rem; color: var(--muted); font-size: .82rem; font-weight: 700; }
+.page-header-inner { display: grid; gap: .4rem; padding-block: .7rem; }
 h1 { margin: 0; font-size: clamp(1.4rem, 2.8vw, 2rem); line-height: 1.2; }
 .switches { margin-top: .45rem; }
 .header-navigation { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; margin-top: .45rem; }
@@ -116,8 +116,8 @@ h1 { margin: 0; font-size: clamp(1.4rem, 2.8vw, 2rem); line-height: 1.2; }
 .switch-link {
   display: inline-flex;
   align-items: center;
-  min-height: 1.75rem;
-  padding: .1rem .35rem;
+  min-height: 40px;
+  padding: .3rem .5rem;
   border-bottom: 2px solid transparent;
   font-size: .9rem;
   font-weight: 600;
@@ -145,7 +145,7 @@ h1 { margin: 0; font-size: clamp(1.4rem, 2.8vw, 2rem); line-height: 1.2; }
   border: 1px solid var(--border);
   background: var(--surface);
 }
-.intro h2 { margin: 0 0 .2rem; font-size: 1rem; }
+.intro h2 { margin: 0 0 .3rem; font-size: 1.15rem; }
 .intro p { margin: 0; color: var(--muted); }
 .stats { display: flex; flex-wrap: wrap; gap: .15rem 1rem; margin-top: .4rem; font-size: .9rem; }
 .stats strong { color: var(--text); }
@@ -181,7 +181,7 @@ h1 { margin: 0; font-size: clamp(1.4rem, 2.8vw, 2rem); line-height: 1.2; }
   word-break: normal;
 }
 .difficulty-table tbody tr:last-child td { border-bottom: 0; }
-.difficulty-table th { padding-block: .375rem; background: var(--table-head); font-size: .8rem; font-weight: 650; }
+.difficulty-table th { padding-block: .5rem; background: var(--table-head); font-size: .875rem; font-weight: 650; }
 .difficulty-table th:nth-last-child(-n+2) { text-align: center; }
 .difficulty-table tbody .chart-row:nth-child(odd) { background: var(--row); }
 .difficulty-table tbody .chart-row:nth-child(even) { background: var(--row-alt); }
@@ -190,15 +190,15 @@ h1 { margin: 0; font-size: clamp(1.4rem, 2.8vw, 2rem); line-height: 1.2; }
 .title-link { font-weight: 500; text-decoration: underline; }
 .cell-authors { color: var(--muted); }
 .comment-summary { display: flex; flex-wrap: wrap; align-items: center; gap: .1rem .4rem; }
-.original-difficulty { color: var(--muted); font-size: .82rem; white-space: nowrap; }
+.original-difficulty { color: var(--muted); font-size: .875rem; white-space: nowrap; }
 .row-comment { display: inline-block; }
 .row-comment summary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 30px;
-  min-height: 30px;
-  padding: 0 .15rem;
+  min-width: 40px;
+  min-height: 40px;
+  padding: .25rem .5rem;
   color: var(--link);
   cursor: pointer;
   line-height: 1;
@@ -217,9 +217,9 @@ h1 { margin: 0; font-size: clamp(1.4rem, 2.8vw, 2rem); line-height: 1.2; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 30px;
-  min-height: 30px;
-  padding: .1rem;
+  min-width: 40px;
+  min-height: 40px;
+  padding: .25rem .5rem;
   border: 0;
   background: none;
   font-size: .85rem;
@@ -235,8 +235,9 @@ h1 { margin: 0; font-size: clamp(1.4rem, 2.8vw, 2rem); line-height: 1.2; }
   text-align: center;
 }
 .empty-state p, .error-state p { margin: .3rem 0; }
-.resource-links { margin: 1.5rem 0 0; color: var(--muted); font-size: .85rem; }
-.resource-links a { margin-right: .75rem; }
+.resource-links { margin: 1.5rem 0 0; color: var(--muted); font-size: .875rem; }
+.resource-links summary { cursor: pointer; font-weight: 650; min-height: 40px; padding-block: .45rem; }
+.resource-link-list { display: flex; flex-wrap: wrap; gap: .5rem 1rem; margin: .25rem 0 0; }
 .page-footer { padding-block: 0 2rem; color: var(--muted); font-size: .8rem; }
 @media (min-width: 960px) {
   col.col-difficulty { width: 5.5rem; }
@@ -392,15 +393,24 @@ function renderSwitches(table: DifficultyTableHtmlDefinition, theme: DifficultyT
     const current = id === table.id ? ' aria-current="page"' : "";
     return `<a class="switch-link" href="/difficulty-tables/${id}?theme=${theme}"${current}>${label}</a>`;
   };
+  const themeLink = (value: DifficultyTableHtmlTheme, label: string) => {
+    const current = value === theme ? ' aria-current="page"' : "";
+    return `<a class="switch-link" href="/difficulty-tables/${table.id}?theme=${value}"${current}>${label}</a>`;
+  };
   return `<div class="header-navigation">
-      <div class="home-link-group">${renderHomeLink()}</div>
       <div class="switches">
       <nav class="switch-group" aria-label="難易度表の切替">
-        <span class="switch-label">表</span>
+        <span class="switch-label">難易度表</span>
         ${tableLink("rc-star", "RC★")}
         ${tableLink("rc-double-star", "RC★★")}
       </nav>
       </div>
+      <nav class="switch-group" aria-label="テーマの切替">
+        <span class="switch-label">テーマ</span>
+        ${themeLink("white", "ホワイト")}
+        ${themeLink("default", "デフォルト")}
+        ${themeLink("dark", "ダーク")}
+      </nav>
     </div>`;
 }
 
@@ -417,14 +427,14 @@ function renderModelRow(model: DifficultyTableViewModel, request: Request): stri
     : escapedTitle;
   const originUrl = safeHttpUrl(model.originUrl);
   const originContent = originUrl
-    ? `<a class="action-link" href="${escapeHtml(originUrl)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(`${displayTitle}の原曲・本体配布ページを開く`)}">曲</a>`
+    ? `<a class="action-link" href="${escapeHtml(originUrl)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(`${displayTitle}の原曲・本体配布ページを開く`)}">原曲</a>`
     : renderMissing();
   const downloadUrl = safeDownloadUrl(model.downloadUrl, request);
   const downloadContent = downloadUrl
     ? `<a class="action-link" href="${escapeHtml(downloadUrl)}" aria-label="${escapeHtml(`${displayTitle}の譜面ファイルをダウンロード`)}">DL</a>`
     : renderMissing();
   const commentDetails = model.postComment
-    ? `<details class="row-comment"><summary aria-label="コメントを見る">💬</summary><div class="comment-body">${escapeHtml(model.postComment)}</div></details>`
+    ? `<details class="row-comment"><summary aria-label="コメントを見る">コメント</summary><div class="comment-body">${escapeHtml(model.postComment)}</div></details>`
     : "";
   return `<tr class="chart-row" role="row">
           <td role="cell" class="cell-difficulty" data-label="難易度"><span class="mobile-label" aria-hidden="true">難易度</span>${escapeHtml(model.levelLabel)}</td>
@@ -432,7 +442,7 @@ function renderModelRow(model: DifficultyTableViewModel, request: Request): stri
           <td role="cell" class="cell-artist" data-label="アーティスト"><span class="mobile-label" aria-hidden="true">アーティスト</span>${model.displayArtist ? escapeHtml(model.displayArtist) : renderMissing()}</td>
           <td role="cell" class="cell-authors" data-label="作者一覧"><span class="mobile-label" aria-hidden="true">作者一覧</span>${model.authorsText ? escapeHtml(model.authorsText) : renderMissing()}</td>
           <td role="cell" class="cell-comment" data-label="コメント"><span class="mobile-label" aria-hidden="true">コメント</span><div class="comment-summary"><span class="original-difficulty">元: ${escapeHtml(model.originalDifficulty)}</span>${commentDetails}</div></td>
-          <td role="cell" class="cell-origin" data-label="曲"><span class="mobile-label" aria-hidden="true">曲</span>${originContent}</td>
+          <td role="cell" class="cell-origin" data-label="原曲"><span class="mobile-label" aria-hidden="true">原曲</span>${originContent}</td>
           <td role="cell" class="cell-download" data-label="DL"><span class="mobile-label" aria-hidden="true">DL</span>${downloadContent}</td>
         </tr>`;
 }
@@ -454,7 +464,7 @@ function renderLevelSection(
             <col class="col-difficulty"><col class="col-title"><col class="col-artist"><col class="col-authors"><col class="col-comment"><col class="col-origin"><col class="col-download">
           </colgroup>
           <thead role="rowgroup"><tr role="row">
-            <th role="columnheader" scope="col">難易度</th><th role="columnheader" scope="col">曲名</th><th role="columnheader" scope="col">アーティスト</th><th role="columnheader" scope="col">作者一覧</th><th role="columnheader" scope="col">コメント</th><th role="columnheader" scope="col">曲</th><th role="columnheader" scope="col">DL</th>
+            <th role="columnheader" scope="col">難易度</th><th role="columnheader" scope="col">曲名</th><th role="columnheader" scope="col">アーティスト</th><th role="columnheader" scope="col">作者一覧</th><th role="columnheader" scope="col">コメント</th><th role="columnheader" scope="col">原曲</th><th role="columnheader" scope="col">DL</th>
           </tr></thead>
           <tbody role="rowgroup">
         ${models.map((model) => renderModelRow(model, request)).join("\n        ")}
@@ -482,7 +492,7 @@ function renderHead(
 function renderResourceLinks(request: Request, table: DifficultyTableHtmlDefinition): string {
   const headerUrl = absoluteUrl(request, `/api/difficulty-tables/${table.id}/header.json`);
   const dataUrl = absoluteUrl(request, `/api/difficulty-tables/${table.id}/data.json`);
-  return `<p class="resource-links">難易度表取込用：<a href="${escapeHtml(headerUrl)}">header.json</a><a href="${escapeHtml(dataUrl)}">data.json</a></p>`;
+  return `<details class="resource-links"><summary>難易度表の取込用リンク</summary><p class="resource-link-list"><a href="${escapeHtml(headerUrl)}">header.json</a><a href="${escapeHtml(dataUrl)}">data.json</a></p></details>`;
 }
 
 export function buildDifficultyTableHtml(input: DifficultyTableHtmlInput): string {
@@ -496,7 +506,7 @@ export function buildDifficultyTableHtml(input: DifficultyTableHtmlInput): strin
   });
   const content = sections.length > 0
     ? sections.join("\n    ")
-    : '<div class="empty-state"><p>現在、この難易度に掲載されている譜面はありません。</p></div>';
+    : `<div class="empty-state"><p>現在、この難易度に掲載されている譜面はありません。</p><p>${renderHomeLink()} <a class="home-link" href="${PUBLIC_SITE_HOME_URL}list.html">投稿一覧を見る</a></p></div>`;
   return `<!doctype html>
 <html lang="ja" data-theme="${input.theme}">
 ${renderHead(input.request, input.table, input.theme)}
@@ -504,7 +514,7 @@ ${renderHead(input.request, input.table, input.theme)}
   <a class="skip-link" href="#main-content">本文へ移動</a>
   <header class="page-header">
     <div class="page-header-inner">
-      <p class="eyebrow">BMS差分共有サイト・完成版難易度表</p>
+      ${renderHomeLink()}
       <h1>${escapeHtml(input.table.name)}</h1>
       ${renderSwitches(input.table, input.theme)}
     </div>
@@ -512,7 +522,7 @@ ${renderHead(input.request, input.table, input.theme)}
   <main class="page-main" id="main-content">
     <section class="intro" aria-labelledby="table-description-heading">
       <h2 id="table-description-heading">この難易度表について</h2>
-      <p>制作途中譜面共有サイトへ投稿された完成版を掲載し、投稿時の難易度をRC難易度へ変換しています。元難易度はコメント欄、曲名はBMS-IR、「曲」は原曲・本体ページ、「DL」は投稿された譜面ファイルへのリンクです。</p>
+      <p>完成版と完成済み没譜面を掲載しています。曲名はBMS-IR、原曲は本体・原曲配布先、DLは差分ファイル、コメントは投稿者コメントです。</p>
       <div class="stats" aria-label="掲載状況"><strong>全${input.models.length}譜面</strong><span>最終更新：${formatJstTimestamp(latestUpdatedAt)}</span></div>
     </section>
     ${content}
@@ -536,7 +546,7 @@ ${renderHead(request, table, theme)}
     <p>${renderHomeLink()}</p>
     <div class="error-state" role="alert">
       <h1>難易度表を読み込めませんでした。</h1>
-      <p>時間を置いて再読み込みしてください。</p>
+      <p>時間を置いて、<a href="${escapeHtml(request.url)}">このページを再読み込み</a>してください。</p>
     </div>
     ${renderResourceLinks(request, table)}
   </main>

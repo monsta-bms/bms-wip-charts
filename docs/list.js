@@ -16,7 +16,10 @@
   const searchInput = document.getElementById("compactSearchInput");
   const searchClearButton = document.getElementById("compactSearchClear");
   const sortInputs = [...document.querySelectorAll('input[name="compactSort"]')];
-  const statusInputs = [...document.querySelectorAll('input[name="compactStatus"]')];
+  const statusGroupInputs = [...document.querySelectorAll('input[name="compactStatusGroup"]')];
+  const finishedStatusInputs = [...document.querySelectorAll('input[name="compactFinishedStatus"]')];
+  const finishedSubtypes = document.getElementById("compactFinishedSubtypes");
+  const dateDetails = document.getElementById("compactDateDetails");
   const dateFromInput = document.getElementById("compactDateFrom");
   const dateToInput = document.getElementById("compactDateTo");
   const dateApplyButton = document.getElementById("compactDateApply");
@@ -24,6 +27,7 @@
   const dateShortcuts = document.getElementById("compactDateShortcuts");
   const dateHeading = document.getElementById("compactDateHeading");
   const favoriteOnlyInput = document.getElementById("compactFavoriteOnly");
+  const activeFilters = document.getElementById("compactActiveFilters");
   const summary = document.getElementById("compactListSummary");
   const list = document.getElementById("compactVersionList");
   const feedback = document.getElementById("compactListFeedback");
@@ -31,9 +35,10 @@
   const pagination = document.getElementById("compactPagination");
   const results = document.querySelector(".compact-results");
 
-  if (!searchForm || !searchInput || !searchClearButton || sortInputs.length === 0 || statusInputs.length === 0
+  if (!searchForm || !searchInput || !searchClearButton || sortInputs.length === 0
+    || statusGroupInputs.length === 0 || finishedStatusInputs.length === 0 || !finishedSubtypes || !dateDetails
     || !dateFromInput || !dateToInput || !dateApplyButton || !dateError || !dateShortcuts || !dateHeading
-    || !favoriteOnlyInput || !summary || !list || !feedback || !retryButton || !pagination) {
+    || !favoriteOnlyInput || !activeFilters || !summary || !list || !feedback || !retryButton || !pagination) {
     return;
   }
 
@@ -440,7 +445,7 @@
           <time class="compact-date" datetime="${escapeHtml(displayedAt.datetime)}" title="${escapeHtml(displayedAt.full)}">${escapeHtml(displayedAt.short)}</time>
           ${relativeTimeBadge}
         </div>
-        <div class="compact-title-cell" title="${escapeHtml(fullLabel)}">
+        <div class="compact-sheet-cell compact-title-cell" title="${escapeHtml(fullLabel)}">
           <div class="compact-title-line">
             <a class="compact-song-title compact-detail-link" href="${escapeHtml(detailUrl.toString())}">${escapeHtml(fullTitle)}</a>
             <span class="compact-state-badges">${stateBadges}</span>
@@ -456,11 +461,15 @@
             </span>
           </div>
         </div>
-        <div class="compact-difficulty"><span class="compact-field-label">難易度</span><span>${escapeHtml(difficulty)}</span></div>
-        <div class="compact-author"><span class="compact-field-label">作者</span><span title="${escapeHtml(author)}">${escapeHtml(author)}</span></div>
-        <div class="compact-comment"></div>
-        <div class="compact-progress"><span class="compact-field-label">進捗</span><span>${escapeHtml(progress)}%</span></div>
-        <div class="compact-links"><span class="compact-field-label">リンク</span>${originControl}${downloadControl}${commentControl}</div>
+        <div class="compact-meta-cell">
+          <div class="compact-difficulty"><span class="compact-field-label">難易度</span><span>${escapeHtml(difficulty)}</span></div>
+          <div class="compact-author"><span class="compact-field-label">作者</span><span title="${escapeHtml(author)}">${escapeHtml(author)}</span></div>
+        </div>
+        <div class="compact-activity-cell">
+          <div class="compact-progress"><span class="compact-field-label">進捗</span><span>${escapeHtml(progress)}%</span></div>
+          <div class="compact-comment"></div>
+        </div>
+        <div class="compact-links compact-actions-cell"><span class="compact-field-label">操作</span>${originControl}${downloadControl}${commentControl}</div>
       </article>
     `;
   }
@@ -533,13 +542,13 @@
       const hidden = state.favoriteOnly && state.unavailableFavoriteCount > 0
         ? ` 見つからないお気に入り ${state.unavailableFavoriteCount}件`
         : "";
-      summary.textContent = `0版を表示${hidden}`;
+      summary.textContent = `0件${hidden}`;
       return;
     }
 
     const start = ((state.page - 1) * PAGE_SIZE) + 1;
     const end = start + state.items.length - 1;
-    const queryPrefix = state.query ? `「${state.query}」: ` : "";
+      const queryPrefix = state.query ? `「${state.query}」の検索結果 ` : "";
     if (state.favoriteOnly) {
       const conditionPrefix = state.query || state.status !== "all" || state.dateFrom || state.dateTo
         ? "条件に一致する"
@@ -547,10 +556,61 @@
       const unavailable = state.unavailableFavoriteCount > 0
         ? ` / 見つからないお気に入り ${state.unavailableFavoriteCount}件`
         : "";
-      summary.textContent = `${queryPrefix}${conditionPrefix}公開中のお気に入り${state.total}件中 ${start}～${end}件を表示${unavailable}`;
+      summary.textContent = `${queryPrefix}${conditionPrefix}公開中のお気に入り ${state.total}件中 ${start}～${end}件${unavailable}`;
       return;
     }
-    summary.textContent = `${queryPrefix}全${state.total}版中 ${start}～${end}版を表示`;
+    summary.textContent = `${queryPrefix}${state.total}件中 ${start}～${end}件`;
+  }
+
+  function statusLabel(status) {
+    return ({
+      incomplete: "制作途中",
+      finished: "完成＋没譜面",
+      complete: "通常完成",
+      rejected: "没譜面"
+    })[status] || "";
+  }
+
+  function statusGroup(status) {
+    if (status === "incomplete") return "incomplete";
+    if (["finished", "complete", "rejected"].includes(status)) return "finished";
+    return "all";
+  }
+
+  function renderActiveFilters() {
+    const filters = [];
+    if (state.query) filters.push({ key: "query", label: `検索: ${state.query}` });
+    if (state.status !== "all") filters.push({ key: "status", label: statusLabel(state.status) });
+    if (state.dateFrom || state.dateTo) {
+      const label = state.activeDateShortcut
+        ? ({ today: "今日", week: "今週", month: "今月", year: "今年" })[state.activeDateShortcut]
+        : [state.dateFrom || "指定なし", state.dateTo || "指定なし"].join("～");
+      filters.push({ key: "date", label });
+    }
+    if (state.favoriteOnly) filters.push({ key: "favorite", label: "お気に入り" });
+    activeFilters.hidden = filters.length === 0;
+    if (filters.length === 0) {
+      activeFilters.replaceChildren();
+      return;
+    }
+    const label = document.createElement("span");
+    label.className = "compact-active-filters-label";
+    label.textContent = "適用中:";
+    const controls = filters.map((filter) => {
+      const button = document.createElement("button");
+      button.className = "compact-filter-chip";
+      button.type = "button";
+      button.dataset.clearFilter = filter.key;
+      button.textContent = `${filter.label} ×`;
+      button.setAttribute("aria-label", `${filter.label}を解除`);
+      return button;
+    });
+    const clearAll = document.createElement("button");
+    clearAll.className = "compact-filter-clear-all";
+    clearAll.type = "button";
+    clearAll.dataset.clearFilter = "all";
+    clearAll.textContent = "すべて解除";
+    activeFilters.replaceChildren(label, ...controls, clearAll);
   }
 
   function paginationTokens(current, totalPages) {
@@ -600,15 +660,20 @@
     sortInputs.forEach((input) => {
       input.checked = input.value === state.sort;
     });
-    statusInputs.forEach((input) => {
-      input.checked = input.value === state.status;
+    statusGroupInputs.forEach((input) => {
+      input.checked = input.value === statusGroup(state.status);
     });
+    finishedStatusInputs.forEach((input) => {
+      input.checked = input.value === (statusGroup(state.status) === "finished" ? state.status : "finished");
+    });
+    finishedSubtypes.hidden = statusGroup(state.status) !== "finished";
     dateFromInput.value = state.draftDateFrom;
     dateToInput.value = state.draftDateTo;
     dateHeading.textContent = state.sort === "updated" ? "更新日" : "投稿日";
     favoriteOnlyInput.checked = state.favoriteOnly;
     dateError.textContent = state.dateError;
     dateError.hidden = !state.dateError;
+    if (state.dateFrom || state.dateTo || state.dateError) dateDetails.open = true;
     const hasDateError = Boolean(state.dateError);
     dateFromInput.setAttribute("aria-invalid", hasDateError ? "true" : "false");
     dateToInput.setAttribute("aria-invalid", hasDateError ? "true" : "false");
@@ -617,6 +682,7 @@
       button.disabled = !hasServerClock;
       button.setAttribute("aria-pressed", button.dataset.dateShortcut === state.activeDateShortcut ? "true" : "false");
     });
+    renderActiveFilters();
   }
 
   function renderCurrent() {
@@ -845,11 +911,36 @@
     }
   }));
 
-  statusInputs.forEach((input) => input.addEventListener("change", () => {
+  statusGroupInputs.forEach((input) => input.addEventListener("change", () => {
     if (input.checked) {
       applyFilterChange({ status: validStatuses.has(input.value) ? input.value : "all" });
     }
   }));
+
+  finishedStatusInputs.forEach((input) => input.addEventListener("change", () => {
+    if (input.checked) {
+      applyFilterChange({ status: validStatuses.has(input.value) ? input.value : "finished" });
+    }
+  }));
+
+  activeFilters.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-clear-filter]");
+    if (!button) return;
+    const key = button.dataset.clearFilter;
+    const changes = {};
+    if (key === "all" || key === "query") changes.query = "";
+    if (key === "all" || key === "status") changes.status = "all";
+    if (key === "all" || key === "date") {
+      changes.dateFrom = "";
+      changes.dateTo = "";
+      state.draftDateFrom = "";
+      state.draftDateTo = "";
+      state.activeDateShortcut = "";
+      state.dateError = "";
+    }
+    if (key === "all" || key === "favorite") changes.favoriteOnly = false;
+    if (Object.keys(changes).length > 0) applyFilterChange(changes);
+  });
 
   const handleDateDraftInput = () => {
     state.draftDateFrom = dateFromInput.value;

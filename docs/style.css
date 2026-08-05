@@ -1184,3 +1184,52 @@ textarea[aria-invalid="true"] {
     width: 100%;
   }
 }
+
+/* PUBLIC-UI-REFINEMENT-01: shared public component sizing and hierarchy. */
+html {
+  scroll-padding-top: var(--site-header-offset, 72px);
+}
+
+body {
+  font-size: 16px;
+}
+
+h1 { font-size: clamp(1.75rem, 3vw, 2.25rem); }
+h2 { font-size: clamp(1.3rem, 2vw, 1.55rem); }
+h3 { font-size: 1.15rem; }
+
+button,
+.version-actions a,
+.version-link-control,
+.compact-link-control {
+  border-radius: 6px;
+  min-height: 40px;
+}
+
+.panel,
+.chart-group {
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.version-actions .version-management-button,
+.version-actions .append-version-button,
+.version-actions .version-comment-button,
+.version-actions .version-origin-link,
+.version-actions .version-download-control {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+  min-height: 40px;
+  padding-inline: 12px;
+}
+
+@media (max-width: 640px) {
+  .version-actions .version-management-button,
+  .version-actions .append-version-button,
+  .version-actions .version-comment-button,
+  .version-actions .version-origin-link,
+  .version-actions .version-download-control {
+    min-height: 44px;
+  }
+}

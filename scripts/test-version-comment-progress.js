@@ -123,8 +123,11 @@ check("tree and compact rerenders remount the same author-comment component", ()
   assert.match(tree, /createCommentControl/);
   assert.match(compact, /createCommentControl/);
 });
-check("compact list exposes the combined completed and rejected filter", () => {
-  assert.match(compactHtml, /name="compactStatus" value="finished"[^>]*><span data-copy-key="list-status-finished">完成＆没譜面<\/span>/u);
+check("compact list exposes the two-stage completed and rejected filters", () => {
+  assert.match(compactHtml, /name="compactStatusGroup" value="finished"[^>]*><span>完成済み<\/span>/u);
+  assert.match(compactHtml, /name="compactFinishedStatus" value="finished"[^>]*><span data-copy-key="list-status-finished">完成＋没譜面<\/span>/u);
+  assert.match(compactHtml, /name="compactFinishedStatus" value="complete"[^>]*><span data-copy-key="list-status-complete">通常完成<\/span>/u);
+  assert.match(compactHtml, /name="compactFinishedStatus" value="rejected"[^>]*><span data-copy-key="list-status-rejected">没譜面<\/span>/u);
   assert.match(compact, /validStatuses = new Set\(\["all", "incomplete", "complete", "rejected", "finished"\]\)/u);
 });
 check("compact list reserves enough desktop width for comment actions", () => {

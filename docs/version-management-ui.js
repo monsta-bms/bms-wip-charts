@@ -292,7 +292,7 @@
     state.loading = true;
     state.submitting = false;
 
-    title.textContent = `投稿管理: ${state.versionLabel}`;
+    title.textContent = `投稿後の操作: ${state.versionLabel}`;
     versionValue.textContent = state.versionLabel;
     authorValue.textContent = state.author;
     createdAtValue.textContent = formatDateTime(state.createdAt);

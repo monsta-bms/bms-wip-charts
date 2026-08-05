@@ -258,16 +258,16 @@ check("unknown management is hidden", () => assert.equal(createManagementControl
 check("hidden management is hidden", () => assert.equal(createManagementControl(model({ hidden: true }), managementOptions()), null));
 check("redacted management is hidden", () => assert.equal(createManagementControl(model({ publicDataRedacted: true }), managementOptions()), null));
 check("missing version id management is hidden", () => assert.equal(createManagementControl({ ...model(), versionId: "" }, managementOptions()), null));
-check("management class and text remain stable", () => {
+check("management class and public action text remain stable", () => {
   const button = createManagementControl(model(), managementOptions());
   assert.equal(button.className, "secondary version-management-button");
-  assert.equal(button.textContent, "…");
+  assert.equal(button.textContent, "投稿操作");
   assert.equal(button.type, "button");
 });
-check("management title and aria remain stable", () => {
+check("management title and aria describe the public action", () => {
   const button = createManagementControl(model(), managementOptions());
-  assert.equal(button.title, "BASE の投稿管理");
-  assert.equal(button.getAttribute("aria-label"), "BASE の投稿管理");
+  assert.equal(button.title, "BASE の投稿後の操作を開く");
+  assert.equal(button.getAttribute("aria-label"), "BASE の投稿後の操作を開く");
 });
 check("management identity datasets remain compatible", () => {
   const button = createManagementControl(model(), managementOptions());

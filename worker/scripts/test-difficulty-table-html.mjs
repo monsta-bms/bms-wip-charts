@@ -483,8 +483,8 @@ async function runTests(fixtures) {
     assert.match(starBody, /<title>リサイクルセンター RC★<\/title>/u);
     assert.match(starBody, /<h1>リサイクルセンター RC★<\/h1>/u);
   });
-  await check("20 explanation defines RC conversion and link roles", () => {
-    for (const value of ["完成版", "RC難易度へ変換", "元難易度", "BMS-IR", "原曲・本体ページ", "譜面ファイル"]) {
+  await check("20 explanation defines published states and link roles", () => {
+    for (const value of ["完成版", "完成済み没譜面", "BMS-IR", "原曲", "差分ファイル", "投稿者コメント"]) {
       assert.ok(starBody.includes(value), value);
     }
   });
@@ -498,10 +498,10 @@ async function runTests(fixtures) {
     assert.match(starBody, /href="\/difficulty-tables\/rc-double-star\?theme=default"/u);
     assert.match(starBody, /href="\/difficulty-tables\/rc-star\?theme=default" aria-current="page"/u);
   });
-  await check("24 theme UI is absent while theme query support remains", () => {
-    assert.ok(!starBody.includes('aria-label="表示テーマの切替"'));
-    assert.ok(!starBody.includes('href="/difficulty-tables/rc-star?theme=white"'));
-    assert.ok(!starBody.includes('href="/difficulty-tables/rc-star?theme=dark"'));
+  await check("24 theme UI exposes all supported themes", () => {
+    assert.ok(starBody.includes('aria-label="テーマの切替"'));
+    assert.ok(starBody.includes('href="/difficulty-tables/rc-star?theme=white"'));
+    assert.ok(starBody.includes('href="/difficulty-tables/rc-star?theme=dark"'));
   });
   await check("RC star has one public-site home link", () => {
     assert.equal(countMatches(starBody, /class="home-link"/gu), 1);
@@ -516,9 +516,9 @@ async function runTests(fixtures) {
     assert.ok(homeLink);
     assert.ok(!homeLink.includes("target="));
   });
-  await check("public-site home link has a 44px target and separate group", () => {
+  await check("public-site home link has a 44px target before the switches", () => {
     assert.match(starBody, /\.home-link \{[\s\S]*min-height: 44px;/u);
-    assert.match(starBody, /class="home-link-group"/u);
+    assert.ok(starBody.indexOf("← リサイクルセンターへ戻る") < starBody.indexOf("<h1>リサイクルセンター RC★</h1>"));
     assert.match(starBody, /class="switches"/u);
   });
   await check("25 level sections follow header level order", () => {
@@ -538,7 +538,7 @@ async function runTests(fixtures) {
   });
   await check("28 all seven columns are present in fixed order", () => {
     const headers = [...starBody.matchAll(/<th[^>]*>([^<]+)<\/th>/gu)].slice(0, 7).map((match) => match[1]);
-    assert.deepEqual(headers, ["難易度", "曲名", "アーティスト", "作者一覧", "コメント", "曲", "DL"]);
+    assert.deepEqual(headers, ["難易度", "曲名", "アーティスト", "作者一覧", "コメント", "原曲", "DL"]);
   });
   await check("29 empty selection produces a complete empty state without a table", async () => {
     const emptyEnv = {
@@ -550,6 +550,7 @@ async function runTests(fixtures) {
     assert.ok(body.includes("現在、この難易度に掲載されている譜面はありません。"));
     assert.equal(countMatches(body, /<table\b/gu), 0);
     assert.ok(body.includes("header.json") && body.includes("data.json"));
+    assert.ok(body.includes("投稿一覧を見る"));
   });
   await check("30 unavailable metadata falls back to stored display fields", () => {
     assert.ok(starBody.includes("Unavailable Stored [TEST]"));
@@ -578,13 +579,13 @@ async function runTests(fixtures) {
   await check("34 BMS-IR link has target, rel, and fixed title", () => {
     assert.match(starBody, /href="https:\/\/bms-ir\.org[^>]+target="_blank" rel="noopener noreferrer" title="BMS-IRで譜面情報を開く"/u);
   });
-  await check("35 曲 link uses the validated origin URL", () => {
-    assert.match(starBody, /href="https:\/\/example\.com\/original\?download&#61;1" target="_blank" rel="noopener noreferrer"[^>]*>曲<\/a>/u);
+  await check("35 原曲 link uses the validated origin URL", () => {
+    assert.match(starBody, /href="https:\/\/example\.com\/original\?download&#61;1" target="_blank" rel="noopener noreferrer"[^>]*>原曲<\/a>/u);
   });
   await check("36 missing origin is rendered as non-link", () => {
     const fallbackRow = starBody.match(/<tr class="chart-row" role="row">[\s\S]*?Unavailable Stored[\s\S]*?<\/tr>/u)?.[0] ?? "";
     assert.ok(fallbackRow.includes('aria-label="情報なし">—</span>'));
-    assert.ok(!fallbackRow.includes(">曲</a>"));
+    assert.ok(!fallbackRow.includes(">原曲</a>"));
   });
   await check("37 javascript origin is rejected", () => {
     assert.ok(!starBody.includes('href="javascript:'));
@@ -620,10 +621,10 @@ async function runTests(fixtures) {
     assert.ok(!fallbackRow.includes("<details"));
   });
   await check("45 post comment adds native details", () => {
-    assert.match(starBody, /<details class="row-comment"><summary aria-label="コメントを見る">💬<\/summary>/u);
+    assert.match(starBody, /<details class="row-comment"><summary aria-label="コメントを見る">コメント<\/summary>/u);
   });
   await check("46 details uses native keyboard-operable summary without inline handlers", () => {
-    assert.match(starBody, /<details[^>]*><summary aria-label="コメントを見る">💬<\/summary>/u);
+    assert.match(starBody, /<details[^>]*><summary aria-label="コメントを見る">コメント<\/summary>/u);
     assert.ok(!starBody.includes("onclick="));
   });
   await check("47 comment newlines are preserved structurally", () => {
@@ -712,14 +713,14 @@ async function runTests(fixtures) {
     assert.match(starBody, /padding: \.4375rem \.5625rem;/u);
     assert.match(starBody, /\.level-heading \{[\s\S]*padding: \.35rem \.65rem;[\s\S]*font-size: 1rem;/u);
   });
-  await check("68 曲 and DL are lightweight action links with no button box", () => {
+  await check("68 原曲 and DL are lightweight action links with no button box", () => {
     assert.ok(starBody.includes('class="action-link"'));
     assert.ok(!starBody.includes('class="compact-link"'));
     assert.match(starBody, /\.action-link \{[\s\S]*border: 0;[\s\S]*background: none;/u);
   });
-  await check("69 compact comment summary keeps native details and accessible icon", () => {
-    assert.match(starBody, /<div class="comment-summary"><span class="original-difficulty">元: ★2<\/span><details class="row-comment"><summary aria-label="コメントを見る">💬<\/summary>/u);
-    assert.match(starBody, /\.row-comment summary[\s\S]*min-width: 30px;[\s\S]*min-height: 30px;/u);
+  await check("69 compact comment summary keeps native details and a visible label", () => {
+    assert.match(starBody, /<div class="comment-summary"><span class="original-difficulty">元: ★2<\/span><details class="row-comment"><summary aria-label="コメントを見る">コメント<\/summary>/u);
+    assert.match(starBody, /\.row-comment summary[\s\S]*min-width: 40px;[\s\S]*min-height: 40px;/u);
     assert.match(starBody, /\.comment-body \{[\s\S]*background: transparent;/u);
   });
   await check("70 mobile keeps actions horizontal with 44px targets", () => {
@@ -731,7 +732,7 @@ async function runTests(fixtures) {
     for (const token of ["--row-alt", "--row-hover", "--table-head"]) {
       assert.equal(countMatches(starBody, new RegExp(`${token}:`, "gu")), 3);
     }
-    assert.match(starBody, /html\[data-theme="white"\][\s\S]*--row-alt: #f1f2f3;/u);
+    assert.match(starBody, /html\[data-theme="white"\][\s\S]*--row-alt: #f8f9f9;/u);
     assert.match(starBody, /html\[data-theme="dark"\][\s\S]*--row: #191f22;/u);
   });
   await check("72 column balance favors title and keeps action columns narrow", () => {

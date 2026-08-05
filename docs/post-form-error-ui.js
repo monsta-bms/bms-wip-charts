@@ -225,9 +225,27 @@
     clearOwnedSummary(source);
   }
 
-  function showSummary(message, source) {
+  function showSummary(message, source, errors = []) {
     if (!errorBox) return;
-    errorBox.textContent = message;
+    const heading = document.createElement("p");
+    heading.className = "post-error-summary-title";
+    heading.textContent = message;
+    const children = [heading];
+    if (errors.length > 0) {
+      const list = document.createElement("ul");
+      list.className = "post-error-summary-list";
+      errors.forEach((error) => {
+        const item = document.createElement("li");
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.postErrorTarget = error.fieldKey;
+        button.textContent = error.message;
+        item.append(button);
+        list.append(item);
+      });
+      children.push(list);
+    }
+    errorBox.replaceChildren(...children);
     errorBox.hidden = false;
     errorBox.dataset.postErrorOwned = "true";
     errorBox.dataset.postErrorSource = source;
@@ -336,9 +354,9 @@
     if (options.replace !== false) clearAll({ source });
     normalized.forEach((error) => setFieldState(error.fieldKey, true, error.message, source));
     if (options.showSummary !== false && normalized.length > 0) {
-      showSummary(options.summary || `入力内容を確認してください（${normalized.length}件）。`, source);
+      showSummary(options.summary || `入力内容を確認してください（${normalized.length}件）。`, source, normalized);
     }
-    if (options.reveal !== false && normalized[0]) void revealField(normalized[0].fieldKey);
+    if (options.reveal !== false && normalized[0]) void revealGeneral();
     return normalized;
   }
 
@@ -414,6 +432,10 @@
   form?.addEventListener("change", (event) => {
     const fieldKey = inputFieldKeys[event.target?.id];
     if (fieldKey && currentValueIsValid(fieldKey, event.target)) clearField(fieldKey);
+  });
+  errorBox?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-post-error-target]");
+    if (button) void revealField(button.dataset.postErrorTarget);
   });
   fileDropControl && new MutationObserver(() => {
     if (fileDropControl.dataset.state === "ready") clearField("file");

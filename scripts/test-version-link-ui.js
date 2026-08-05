@@ -140,8 +140,8 @@ check("origin target remains blank", () => {
 check("origin rel remains noopener noreferrer", () => {
   assert.equal(createOriginLink(model(), options()).getAttribute("rel"), "noopener noreferrer");
 });
-check("origin text remains 曲", () => {
-  assert.equal(createOriginLink(model(), options()).textContent, "曲");
+check("origin text is 原曲", () => {
+  assert.equal(createOriginLink(model(), options()).textContent, "原曲");
 });
 check("origin default class remains stable", () => {
   assert.equal(createOriginLink(model(), options()).className, "version-origin-link");
@@ -231,7 +231,7 @@ check("origin serialization preserves the existing default DOM", () => {
   const control = createOriginLink(model(), options());
   assert.equal(
     serializeControl(control),
-    '<a class="version-origin-link" href="https://songs.example.test/original" target="_blank" rel="noopener noreferrer" title="原曲・本体の配布ページを開く" aria-label="ver1.0 の原曲・本体の配布ページを開く（外部サイト）">曲</a>'
+    '<a class="version-origin-link" href="https://songs.example.test/original" target="_blank" rel="noopener noreferrer" title="原曲・本体の配布ページを開く" aria-label="ver1.0 の原曲・本体の配布ページを開く（外部サイト）">原曲</a>'
   );
 });
 check("download serialization preserves the existing default DOM", () => {
@@ -273,7 +273,7 @@ check("compact origin serialization preserves the existing DOM", () => {
   }));
   assert.equal(
     serializeControl(control),
-    '<a class="compact-link-control compact-origin-link" href="https://songs.example.test/original" target="_blank" rel="noopener noreferrer" title="原曲・本体の配布ページを開く" aria-label="曲名 の原曲・本体の配布ページを開く（外部サイト）">曲</a>'
+    '<a class="compact-link-control compact-origin-link" href="https://songs.example.test/original" target="_blank" rel="noopener noreferrer" title="原曲・本体の配布ページを開く" aria-label="曲名 の原曲・本体の配布ページを開く（外部サイト）">原曲</a>'
   );
 });
 check("compact download serialization preserves the existing DOM", () => {
@@ -535,7 +535,7 @@ check("eight-version integration builds one model and two controls per version",
     originNodeCount: 8,
     downloadNodeCount: 8,
     urlParseCount: 24,
-    htmlBytes: 2880
+      htmlBytes: 2904
   });
   assert.equal(targetDocument.createdCount, 16);
 });

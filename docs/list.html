@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <script src="./theme-init.js?v=site-theme-14"></script>
     <title>投稿一覧 | リサイクルセンター</title>
-    <link rel="stylesheet" href="./style.css?v=version-comment-progress-01">
-    <link rel="stylesheet" href="./site-header.css?v=recycle-ux-02a">
-    <link rel="stylesheet" href="./list.css?v=public-list-finished-01">
-    <link rel="stylesheet" href="./theme.css?v=song-and-chart-links-01">
+    <link rel="stylesheet" href="./style.css?v=public-ui-refinement-01">
+    <link rel="stylesheet" href="./site-header.css?v=public-ui-refinement-01">
+    <link rel="stylesheet" href="./list.css?v=public-ui-refinement-01">
+    <link rel="stylesheet" href="./theme.css?v=public-ui-refinement-01">
     <link rel="stylesheet" href="./version-comment-ui.css?v=version-comment-progress-01">
   </head>
   <body id="top">
@@ -48,11 +48,21 @@
                 <fieldset class="compact-filter-fieldset">
                   <legend class="visually-hidden">状態</legend>
                   <div class="compact-radio-group compact-status-options">
-                    <label class="compact-radio-choice"><input type="radio" name="compactStatus" value="all"><span data-copy-key="list-status-all">すべて</span></label>
-                    <label class="compact-radio-choice"><input type="radio" name="compactStatus" value="finished"><span data-copy-key="list-status-finished">完成＆没譜面</span></label>
-                    <label class="compact-radio-choice"><input type="radio" name="compactStatus" value="complete"><span data-copy-key="list-status-complete">完成</span></label>
-                    <label class="compact-radio-choice"><input type="radio" name="compactStatus" value="incomplete"><span data-copy-key="list-status-incomplete">未完成</span></label>
-                    <label class="compact-radio-choice"><input type="radio" name="compactStatus" value="rejected"><span data-copy-key="list-status-rejected">没譜面</span></label>
+                    <label class="compact-radio-choice"><input type="radio" name="compactStatusGroup" value="all"><span data-copy-key="list-status-all">すべて</span></label>
+                    <label class="compact-radio-choice"><input type="radio" name="compactStatusGroup" value="incomplete"><span data-copy-key="list-status-incomplete">制作途中</span></label>
+                    <label class="compact-radio-choice"><input type="radio" name="compactStatusGroup" value="finished"><span>完成済み</span></label>
+                  </div>
+                </fieldset>
+              </div>
+
+              <div class="compact-filter-row compact-finished-subtypes" id="compactFinishedSubtypes" hidden>
+                <span class="compact-filter-label" aria-hidden="true">完成済みの種類</span>
+                <fieldset class="compact-filter-fieldset">
+                  <legend class="visually-hidden">完成済みの種類</legend>
+                  <div class="compact-radio-group compact-status-options">
+                    <label class="compact-radio-choice"><input type="radio" name="compactFinishedStatus" value="finished"><span data-copy-key="list-status-finished">完成＋没譜面</span></label>
+                    <label class="compact-radio-choice"><input type="radio" name="compactFinishedStatus" value="complete"><span data-copy-key="list-status-complete">通常完成</span></label>
+                    <label class="compact-radio-choice"><input type="radio" name="compactFinishedStatus" value="rejected"><span data-copy-key="list-status-rejected">没譜面</span></label>
                   </div>
                 </fieldset>
               </div>
@@ -68,8 +78,8 @@
                 </fieldset>
               </div>
 
-              <div class="compact-filter-row compact-date-filter-row">
-                <span id="compactDateFilterLabel" class="compact-filter-label">期間</span>
+              <details class="compact-date-filter-row" id="compactDateDetails">
+                <summary id="compactDateFilterLabel">期間を指定</summary>
                 <div class="compact-date-filter" role="group" aria-labelledby="compactDateFilterLabel">
                   <div class="compact-date-controls">
                     <label><span>開始日</span><input id="compactDateFrom" type="date" aria-describedby="compactDateError"></label>
@@ -86,7 +96,7 @@
                     <button class="secondary" type="button" data-date-shortcut="none">指定なし</button>
                   </div>
                 </div>
-              </div>
+              </details>
 
               <div class="compact-filter-row">
                 <span class="compact-filter-label" aria-hidden="true">その他</span>
@@ -100,6 +110,7 @@
               </div>
             </div>
           </div>
+          <div id="compactActiveFilters" class="compact-active-filters" aria-label="適用中の条件" hidden></div>
           <p id="compactListSummary" class="compact-list-summary" aria-live="polite">一覧を読み込んでいます。</p>
         </section>
 
@@ -107,12 +118,10 @@
           <h2 id="compactResultsHeading" class="visually-hidden">検索結果</h2>
           <div class="compact-list-head" aria-hidden="true">
             <span id="compactDateHeading">投稿日</span>
-            <span>タイトル</span>
-            <span>難易度</span>
-            <span>作者</span>
-            <span>コメント</span>
-            <span>進捗</span>
-            <span>リンク</span>
+            <span>譜面</span>
+            <span>難易度・作者</span>
+            <span>進捗・コメント</span>
+            <span>操作</span>
           </div>
           <div id="compactVersionList" class="compact-version-list" aria-busy="true">
             <p class="compact-list-state" data-copy-key="list-loading">読み込み中...</p>
@@ -126,12 +135,12 @@
       </main>
     </div>
 
-    <script src="./theme-controller.js?v=site-theme-14"></script>
-    <script src="./site-header.js?v=site-theme-14"></script>
+    <script src="./theme-controller.js?v=public-ui-refinement-01"></script>
+    <script src="./site-header.js?v=public-ui-refinement-01"></script>
     <script src="./version-ui-model.js?v=completed-parent-access-01"></script>
-    <script src="./version-link-ui.js?v=version-link-ui-r2-01"></script>
-    <script src="./version-action-ui.js?v=version-comment-progress-01"></script>
+    <script src="./version-link-ui.js?v=public-ui-refinement-01"></script>
+    <script src="./version-action-ui.js?v=public-ui-refinement-01"></script>
     <script src="./version-comment-ui.js?v=version-comment-progress-01"></script>
-    <script src="./list.js?v=public-list-finished-01"></script>
+    <script src="./list.js?v=public-ui-refinement-01"></script>
   </body>
 </html>

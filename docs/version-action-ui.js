@@ -126,9 +126,9 @@
     const button = targetDocument.createElement("button");
     button.className = "secondary version-management-button";
     button.type = "button";
-    button.textContent = "…";
-    button.title = `${versionLabel} の投稿管理`;
-    button.setAttribute("aria-label", `${versionLabel} の投稿管理`);
+    button.textContent = "投稿操作";
+    button.title = `${versionLabel} の投稿後の操作を開く`;
+    button.setAttribute("aria-label", `${versionLabel} の投稿後の操作を開く`);
     button.dataset.versionId = versionId;
     button.dataset.chartId = typeof options.chartId === "string" ? options.chartId : "";
     button.dataset.versionLabel = versionLabel;

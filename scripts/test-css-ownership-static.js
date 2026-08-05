@@ -172,7 +172,7 @@ check("index stylesheet order remains stable", () => {
     "progress-thumbnail-list.css",
     "version-comment-ui.css"
   ]);
-  const themeIndex = sources.index.indexOf("./theme.css?v=progress-style-r4b2f-01");
+  const themeIndex = sources.index.indexOf("./theme.css?v=public-ui-refinement-01");
   const favoriteCssIndex = sources.index.indexOf("./favorites-list.css?v=version-comment-progress-01");
   const progressCssIndex = sources.index.indexOf("./progress-thumbnail-list.css?v=progress-style-r4b2f-01");
   const progressScriptIndex = sources.index.indexOf("./progress-thumbnail-list.js?v=progress-style-r4b2f-01");
@@ -188,25 +188,26 @@ check("compact-list stylesheet order includes the static comment component", () 
   assert.deepEqual(stylesheetNames(sources.listHtml), ["style.css", "site-header.css", "list.css", "theme.css", "version-comment-ui.css"]);
 });
 
-check("changed comment and progress assets use the release cache key", () => {
+check("changed public UI, comment, and progress assets use their release cache keys", () => {
   assert.match(sources.index, /\.\/branch-tree-list\.css\?v=version-comment-progress-01/);
   assert.match(sources.index, /\.\/chart-detail-link\.css\?v=detail-theme-r4b2e-01/);
   assert.equal((sources.index.match(/detail-theme-r4b2e-01/g) || []).length, 1);
-  assert.match(sources.index, /\.\/theme\.css\?v=progress-style-r4b2f-01/);
+  assert.match(sources.index, /\.\/theme\.css\?v=public-ui-refinement-01/);
   assert.match(sources.index, /\.\/progress-thumbnail-list\.css\?v=progress-style-r4b2f-01/);
   assert.match(sources.index, /\.\/progress-thumbnail-list\.js\?v=progress-style-r4b2f-01/);
-  assert.equal((sources.index.match(/progress-style-r4b2f-01/g) || []).length, 3);
+  assert.equal((sources.index.match(/progress-style-r4b2f-01/g) || []).length, 2);
   assert.match(sources.index, /\.\/favorites-list\.css\?v=version-comment-progress-01/);
   assert.match(sources.index, /\.\/favorites-list\.js\?v=completed-parent-access-01/);
   assert.match(sources.index, /\.\/list-ui-refresh\.css\?v=css-cleanup-r4b2a-01/);
   assert.equal((sources.index.match(/css-cleanup-r4b2a-01/g) || []).length, 1);
   assert.doesNotMatch(sources.listHtml, /progress-style-r4b2f-01|detail-theme-r4b2e-01|favorite-theme-r4b2d-01|css-cleanup-r4b2a-01/);
-  assert.equal((sources.index.match(/version-comment-progress-01/g) || []).length, 8);
+  assert.equal((sources.index.match(/version-comment-progress-01/g) || []).length, 6);
   assert.equal((sources.index.match(/completed-parent-access-01/g) || []).length, 3);
   assert.match(sources.index, /\.\/app\.js\?v=submission-status-admin-correction-01/);
-  assert.equal((sources.listHtml.match(/version-comment-progress-01/g) || []).length, 4);
+  assert.equal((sources.listHtml.match(/version-comment-progress-01/g) || []).length, 2);
   assert.equal((sources.listHtml.match(/completed-parent-access-01/g) || []).length, 1);
-  assert.equal((sources.listHtml.match(/public-list-finished-01/g) || []).length, 2);
+  assert.equal((sources.index.match(/public-ui-refinement-01/g) || []).length, 10);
+  assert.equal((sources.listHtml.match(/public-ui-refinement-01/g) || []).length, 9);
 });
 
 check("favorite and progress runtime styles are completely removed", () => {
@@ -217,8 +218,8 @@ check("favorite and progress runtime styles are completely removed", () => {
 
 check("protected CSS hashes remain stable", () => {
   const expected = new Map([
-    [sources.style, "c48375e56b16c4e6eabcc2e9a0c4376646918af74a363f3ff9242f4ca17e4783"],
-    [sources.list, "1dd737426df587d011b61b0feffdfee732df4156ebb516fd5caa97407a818138"],
+    [sources.style, "e098f16d091b1f56e6ac6fac1a1c52e880d79c3d3f38eff746b6755f605e01db"],
+    [sources.list, "295873bfe249e3ebe39d786258ad389a224c0655702586c6349089382e1e524c"],
     [sources.treePolish, "e0d1cf234c249070294491982088d34812c602e92ccdca7377011d7292e9f4ad"],
     [sources.chartMiniview, "e92980af2dde81ce2051a9216d744d62ee9fbed18e8423f6461296f65791d49c"],
     [sources.management, "d0b09e7e107d9dcaf5830f243761357462e27765bf3d24bfa78aad0a1b81bcb7"]
@@ -473,9 +474,9 @@ check("appended batch boundary remains outside R4B2e", () => {
   assert.equal(mark.background, "#f4f9f7");
 });
 
-check("R4B2f CSS hashes match the reviewed implementation", () => {
+check("protected CSS hashes match the reviewed implementation", () => {
   assert.equal(sha256(sources.chartDetail), "c45722a66d547ecb51825e67dc3e65cc31413f7820a5d34db8b45eb23dbe0882");
-  assert.equal(sha256(sources.theme), "5b91d40156a17f9fbce1f6c46ec2f279bf6cf92713f2f7732cf3bd5a1d6a401b");
+  assert.equal(sha256(sources.theme), "32963e73d0ae0a29f6fd3ef4014a2b194bc94686170020e9622504e408c81f95");
   assert.equal(sha256(sources.progressCss), "24d5a258fb4b737584cd54700544f6c496a8065639120d047ccc80135e1e3304");
 });
 
@@ -503,7 +504,7 @@ check("append-stopped component selector is narrowly owned by branch-tree-list",
 check("append-stopped semantic tokens exist for every theme and meet contrast targets", () => {
   const expectations = [
     ["html[data-theme=\"white\"]", "#eef3f1", "#cfd8d5", "#65716e", "none", "#ffffff"],
-    ["html[data-theme=\"default\"]", "#eef3f1", "#aab9b4", "#65716e", "none", "#f0f3f2"],
+    ["html[data-theme=\"default\"]", "#eef3f1", "#aab9b4", "#65716e", "none", "#fafbfb"],
     ["html[data-theme=\"dark\"]", "#2b3934", "#76978b", "#9caaa5", "inset 0 0 0 1px var(--append-disabled-border)", "#18211e"]
   ];
   for (const [selector, background, border, textColor, shadow, surrounding] of expectations) {
@@ -562,10 +563,10 @@ check("R4B2b does not use clipping or visual workarounds", () => {
   assert.doesNotMatch(mobileSource, /font-size\s*:|position\s*:\s*absolute|transform\s*:|margin-left\s*:\s*-|overflow\s*:\s*hidden|text-overflow\s*:|white-space\s*:\s*normal/);
 });
 
-check("reviewed production JavaScript set includes static comment and progress helpers", () => {
-  assert.equal(productionJsFiles.length, 34);
+check("reviewed production JavaScript set includes public review, comment, and progress helpers", () => {
+  assert.equal(productionJsFiles.length, 35);
   assert.equal(sha256(sources.progressThumbnail), "e2dbcee8975d7b95341875d1c4962fd2904a81873fd4cf7dbdbe757004a58bb6");
-  assert.equal(sha256(productionJsAggregate), "19513db529d52c85d64badd9f4e0742da7a8e03347f4396151378edf6a2bcad6");
+  assert.equal(sha256(productionJsAggregate), "c9272e24deb41dfc7480a673df1a83bed2dc07195713b0bee0229858fa93a3b1");
 });
 
 check("all known CSS issues are documented as resolved", () => {

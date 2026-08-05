@@ -6,16 +6,16 @@
     <script src="./theme-init.js?v=site-theme-14"></script>
     <meta name="turnstile-sitekey" content="0x4AAAAAAD0OJhR8c4dKkDrk">
     <title>リサイクルセンター</title>
-    <link rel="stylesheet" href="./style.css?v=version-comment-progress-01">
-    <link rel="stylesheet" href="./site-header.css?v=recycle-ux-02a">
+    <link rel="stylesheet" href="./style.css?v=public-ui-refinement-01">
+    <link rel="stylesheet" href="./site-header.css?v=public-ui-refinement-01">
     <link rel="stylesheet" href="./branch-tree-list.css?v=version-comment-progress-01">
     <link rel="stylesheet" href="./list-ui-refresh.css?v=css-cleanup-r4b2a-01">
     <link rel="stylesheet" href="./chart-miniview.css?v=post-form-miniview-01">
     <link rel="stylesheet" href="./tree-progress-polish.css?v=tree-shape-fix-01">
     <link rel="stylesheet" href="./version-management-ui.css?v=withdrawal-lifecycle-16r">
-    <link rel="stylesheet" href="./post-form-ui.css?v=submission-status-admin-correction-01">
+    <link rel="stylesheet" href="./post-form-ui.css?v=public-ui-refinement-01">
     <link rel="stylesheet" href="./chart-detail-link.css?v=detail-theme-r4b2e-01">
-    <link rel="stylesheet" href="./theme.css?v=progress-style-r4b2f-01">
+    <link rel="stylesheet" href="./theme.css?v=public-ui-refinement-01">
     <link rel="stylesheet" href="./favorites-list.css?v=version-comment-progress-01">
     <link rel="stylesheet" href="./progress-thumbnail-list.css?v=progress-style-r4b2f-01">
     <link rel="stylesheet" href="./version-comment-ui.css?v=version-comment-progress-01">
@@ -29,14 +29,12 @@
       <main>
         <section class="recycle-overview" aria-labelledby="recycleOverviewTitle">
           <div class="recycle-overview-copy">
-
-            <h1 id="recycleOverviewTitle">
-              全差分作者が求めていた
-              <span data-copy-key="home-overview-title-line-2">没譜面・未完成譜面の専用投稿サイト</span>
-            </h1>
+            <p class="recycle-overview-eyebrow">BMS差分共有サイト</p>
+            <h1 id="recycleOverviewTitle" data-copy-key="home-overview-title-line-2">未完成譜面・没譜面を共有する</h1>
             <p class="recycle-overview-description" data-copy-key="home-overview-description">
-              追記機能・難易度表機能つき
+              制作途中の譜面を引き継いだり、完成済みの没譜面を公開できる共有サイトです。
             </p>
+            <p class="recycle-overview-catch">全差分作者が求めていた、追記機能・難易度表機能つき。</p>
             <p class="recycle-overview-note">
               <strong data-copy-key="home-overview-note-primary">アカウント登録は不要です。</strong>
               <span data-copy-key="home-overview-note-secondary">音源ファイルはアップロードできません。</span>
@@ -44,12 +42,12 @@
           </div>
           <nav class="recycle-overview-actions" aria-label="主要な操作">
             <a class="recycle-cta recycle-cta-primary" href="./index.html#post" data-copy-key="home-action-post">差分を投稿する</a>
-            <a class="recycle-cta" href="./list.html" data-copy-key="home-action-list">投稿一覧を見る</a>
-            <a class="recycle-cta" href="./guide.html" data-copy-key="home-action-guide">概要＆使い方</a>
+            <a class="recycle-cta" href="./list.html" data-copy-key="home-action-list">投稿を探す</a>
+            <a class="recycle-cta recycle-cta-text" href="./guide.html" data-copy-key="home-action-guide">初めての方へ</a>
           </nav>
         </section>
 
-        <section class="notice" id="errorBox" role="alert" aria-live="polite" hidden></section>
+        <section class="notice post-error-summary" id="errorBox" role="alert" aria-live="assertive" tabindex="-1" hidden></section>
 
         <section class="panel submit-panel" id="post" aria-labelledby="submitTitle">
           <div class="section-heading post-form-launcher">
@@ -144,16 +142,6 @@
                     <span class="metadata-candidate-status visually-hidden" id="metadataCandidateStatus-title"></span>
                   </div>
 
-                  <div class="field metadata-field" data-metadata-field="subtitle">
-                    <label class="field-label" for="subtitle">サブタイトル</label>
-                    <div class="metadata-input-wrap">
-                      <input id="subtitle" name="subtitle" type="text" autocomplete="off">
-                      <button class="metadata-bubble-reopen" type="button" aria-label="候補操作を表示" hidden></button>
-                    </div>
-                    <div class="metadata-candidate-host" aria-label="サブタイトルの候補操作" hidden></div>
-                    <span class="metadata-candidate-status visually-hidden" id="metadataCandidateStatus-subtitle"></span>
-                  </div>
-
                   <div class="field metadata-field" data-metadata-field="artist">
                     <label class="field-label" for="artist">アーティスト <span class="required-mark">*</span></label>
                     <div class="metadata-input-wrap">
@@ -164,21 +152,34 @@
                     <span class="metadata-candidate-status visually-hidden" id="metadataCandidateStatus-artist"></span>
                   </div>
 
-                  <div class="field metadata-field" data-metadata-field="subartist">
-                    <label class="field-label" for="subartist">サブアーティスト</label>
-                    <div class="metadata-input-wrap">
-                      <input id="subartist" name="subartist" type="text" autocomplete="off">
-                      <button class="metadata-bubble-reopen" type="button" aria-label="候補操作を表示" hidden></button>
+                  <details class="optional-fields" id="optionalSongFields">
+                    <summary>任意項目</summary>
+                    <div class="optional-fields-grid">
+                      <div class="field metadata-field" data-metadata-field="subtitle">
+                        <label class="field-label" for="subtitle">サブタイトル</label>
+                        <div class="metadata-input-wrap">
+                          <input id="subtitle" name="subtitle" type="text" autocomplete="off">
+                          <button class="metadata-bubble-reopen" type="button" aria-label="候補操作を表示" hidden></button>
+                        </div>
+                        <div class="metadata-candidate-host" aria-label="サブタイトルの候補操作" hidden></div>
+                        <span class="metadata-candidate-status visually-hidden" id="metadataCandidateStatus-subtitle"></span>
+                      </div>
+                      <div class="field metadata-field" data-metadata-field="subartist">
+                        <label class="field-label" for="subartist">サブアーティスト</label>
+                        <div class="metadata-input-wrap">
+                          <input id="subartist" name="subartist" type="text" autocomplete="off">
+                          <button class="metadata-bubble-reopen" type="button" aria-label="候補操作を表示" hidden></button>
+                        </div>
+                        <div class="metadata-candidate-host" aria-label="サブアーティストの候補操作" hidden></div>
+                        <span class="metadata-candidate-status visually-hidden" id="metadataCandidateStatus-subartist"></span>
+                      </div>
+                      <label class="field origin-url-field">
+                        <span class="field-label">原曲配布URL</span>
+                        <input id="originUrl" name="originUrl" type="url" maxlength="2048" inputmode="url" autocomplete="url" placeholder="https://example.com/original-song">
+                        <span class="field-help">リンク先の確認は行いません。</span>
+                      </label>
                     </div>
-                    <div class="metadata-candidate-host" aria-label="サブアーティストの候補操作" hidden></div>
-                    <span class="metadata-candidate-status visually-hidden" id="metadataCandidateStatus-subartist"></span>
-                  </div>
-
-                  <label class="field origin-url-field">
-                    <span class="field-label">原曲配布URL（任意）</span>
-                    <input id="originUrl" name="originUrl" type="url" maxlength="2048" inputmode="url" autocomplete="url" placeholder="https://example.com/original-song">
-                    <span class="field-help">リンク先の確認は行いません。</span>
-                  </label>
+                  </details>
                 </div>
               </section>
 
@@ -202,14 +203,16 @@
                           >変更</button>
                         </div>
                         <div class="difficulty-picker" id="difficultyPicker" aria-invalid="false">
-                          <div class="difficulty-tabs" role="group" aria-label="想定難易度の種類">
+                          <span class="difficulty-step-label">1. 難易度表の種類</span>
+                          <div class="difficulty-tabs" role="group" aria-label="難易度表の種類">
                             <button class="difficulty-tab" type="button" data-difficulty-mode="symbol" data-symbol="★" aria-pressed="true">★</button>
                             <button class="difficulty-tab" type="button" data-difficulty-mode="symbol" data-symbol="★★" aria-pressed="false">★★</button>
                             <button class="difficulty-tab" type="button" data-difficulty-mode="symbol" data-symbol="sl" aria-pressed="false">sl</button>
                             <button class="difficulty-tab" type="button" data-difficulty-mode="symbol" data-symbol="st" aria-pressed="false">st</button>
-                            <button class="difficulty-tab" type="button" data-difficulty-mode="manual" aria-pressed="false">手入力</button>
+                            <button class="difficulty-tab" type="button" data-difficulty-mode="manual" aria-pressed="false">その他・手入力</button>
                           </div>
                           <div class="difficulty-choice-area">
+                            <span class="difficulty-step-label">2. 数値</span>
                             <div class="difficulty-chips" id="difficultyChips" role="group" aria-label="想定難易度の数字"></div>
                             <div class="difficulty-manual" id="difficultyManualPanel" hidden>
                               <input id="difficultyManual" type="text" inputmode="text" autocomplete="off" placeholder="例: ★12 / sl10 / 自由入力">
@@ -252,7 +255,7 @@
               </section>
 
               <section class="form-section progress-section" aria-labelledby="progressSectionTitle">
-                <h3 class="form-section-title" id="progressSectionTitle">進捗</h3>
+                <h3 class="form-section-title" id="progressSectionTitle">進捗と投稿状態</h3>
                 <div class="progress-map-field">
                   <div class="progress-map-header" id="progressMapHeader" hidden>
                     <span class="field-label">進捗マップ</span>
@@ -350,8 +353,8 @@
                 </div>
               </section>
 
-              <section class="form-section submission-section" aria-labelledby="submissionSectionTitle">
-                <h3 class="form-section-title" id="submissionSectionTitle">管理・コメント・投稿</h3>
+              <section class="form-section submission-section management-section" aria-labelledby="submissionSectionTitle">
+                <h3 class="form-section-title" id="submissionSectionTitle">投稿後の管理</h3>
                 <div class="post-form-footer">
                   <div class="comment-column">
                     <span class="submission-subtitle" id="commentSectionLabel">コメント</span>
@@ -367,13 +370,13 @@
                       <label class="field">
                         <span class="field-label">管理パスワード <span class="required-mark">*</span></span>
                         <input id="password" name="password" type="password" autocomplete="current-password" required>
-                        <span class="field-help">取り下げ・削除申請に使用します。再発行できません。</span>
+                        <span class="field-help">投稿後の取り下げに必要です。再発行できません。<a href="./guide.html#management">詳しく見る</a></span>
                       </label>
 
                       <label class="field checkbox-field save-password-field">
                         <input id="savePassword" type="checkbox">
                         <span class="checkbox-copy">
-                          <span class="checkbox-title">パスワードを保存</span>
+                          <span class="checkbox-title">この端末に保存</span>
                           <span class="field-help">この端末に保存します。共有PCではOFFにしてください。</span>
                         </span>
                       </label>
@@ -384,17 +387,24 @@
                       </div>
                     </div>
 
-                    <div class="turnstile-control" aria-label="投稿認証">
-                      <div class="turnstile-widget" id="turnstileWidget"></div>
-                      <p class="turnstile-status" id="turnstileStatus" role="status" aria-live="polite" hidden></p>
-                      <button class="secondary turnstile-retry" id="turnstileRetryButton" type="button" hidden>認証を再読み込み</button>
-                    </div>
-
-                    <div class="form-actions">
-                      <button class="secondary" id="cancelAppendButton" type="button" hidden>追記をやめる</button>
-                      <button id="submitButton" type="submit">投稿する</button>
-                    </div>
                   </div>
+                </div>
+              </section>
+
+              <section class="form-section review-section" aria-labelledby="reviewSectionTitle">
+                <h3 class="form-section-title" id="reviewSectionTitle">内容確認</h3>
+                <div class="post-review" aria-live="polite">
+                  <h4>この内容で投稿します</h4>
+                  <dl id="postReviewSummary" class="post-review-summary"></dl>
+                </div>
+                <div class="turnstile-control" aria-label="投稿認証">
+                  <div class="turnstile-widget" id="turnstileWidget"></div>
+                  <p class="turnstile-status" id="turnstileStatus" role="status" aria-live="polite" hidden></p>
+                  <button class="secondary turnstile-retry" id="turnstileRetryButton" type="button" hidden>認証を再読み込み</button>
+                </div>
+                <div class="form-actions">
+                  <button class="secondary" id="cancelAppendButton" type="button" hidden>追記をやめる</button>
+                  <button id="submitButton" type="submit">この内容で投稿する</button>
                 </div>
               </section>
             </div>
@@ -429,7 +439,7 @@
     <dialog class="version-management-dialog" id="versionManagementDialog" aria-labelledby="versionManagementTitle">
       <form class="version-management-panel" id="versionManagementForm" novalidate>
         <div class="version-management-header">
-          <h2 id="versionManagementTitle">投稿管理</h2>
+          <h2 id="versionManagementTitle">投稿後の操作</h2>
           <button class="version-management-close" type="button" data-version-management-close aria-label="閉じる">×</button>
         </div>
 
@@ -503,8 +513,8 @@
       </div>
     </dialog>
 
-    <script src="./theme-controller.js?v=site-theme-14"></script>
-    <script src="./site-header.js?v=site-theme-14"></script>
+    <script src="./theme-controller.js?v=public-ui-refinement-01"></script>
+    <script src="./site-header.js?v=public-ui-refinement-01"></script>
     <script src="./progress-layer-colors.js?v=ui-tree-overlay-01"></script>
     <script src="./zip-bms-reader.js?v=zip-bms-analysis-01"></script>
     <script src="./local-bms-analysis.js?v=post-form-miniview-01"></script>
@@ -513,8 +523,8 @@
     <script src="./post-form-error-ui.js?v=phase-9c-post-errors"></script>
     <script src="./chart-metadata-extract.js?v=chart-metadata-extract-01"></script>
     <script src="./version-ui-model.js?v=completed-parent-access-01"></script>
-    <script src="./version-link-ui.js?v=chart-render-pipeline-r4a-01"></script>
-    <script src="./version-action-ui.js?v=version-comment-progress-01"></script>
+    <script src="./version-link-ui.js?v=public-ui-refinement-01"></script>
+    <script src="./version-action-ui.js?v=public-ui-refinement-01"></script>
     <script src="./version-comment-ui.js?v=version-comment-progress-01"></script>
     <script src="./progress-map-drag-hint.js?v=version-comment-progress-01"></script>
     <script src="./chart-render-pipeline.js?v=chart-render-pipeline-r4a-01"></script>
@@ -530,7 +540,8 @@
     <script src="./tree-progress-polish.js?v=post-form-tree-12"></script>
     <script src="./favorites-list.js?v=completed-parent-access-01"></script>
     <script src="./version-management-ui.js?v=withdrawal-lifecycle-16r"></script>
-    <script src="./post-form-ui.js?v=phase-9c-post-errors"></script>
+    <script src="./post-form-ui.js?v=public-ui-refinement-01"></script>
+    <script src="./post-form-review-ui.js?v=public-ui-refinement-01"></script>
     <script src="./chart-detail-link.js?v=chart-render-pipeline-r4a-01"></script>
   </body>
 </html>

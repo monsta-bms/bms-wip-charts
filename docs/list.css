@@ -792,3 +792,100 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* PUBLIC-UI-REFINEMENT-01 */
+.compact-list-page { max-width: 1366px; padding-top: 20px; }
+.compact-list-header { border-color: var(--line); }
+.compact-list-header p,
+.compact-search-form label,
+.compact-list-summary { color: var(--muted); font-size: .875rem; }
+.compact-filter-panel { background: var(--surface); border-color: var(--line); border-radius: 8px; }
+.compact-filter-groups { border-color: var(--line); }
+.compact-filter-row,
+.compact-date-filter-row { border-bottom: 1px solid var(--line); }
+.compact-filter-label { color: var(--muted); font-size: .875rem; }
+.compact-radio-choice { background: var(--surface-raised); border-color: var(--line-strong); border-radius: 6px; color: var(--text); }
+.compact-radio-choice:has(input:checked) { background: var(--primary-soft); border: 2px solid var(--primary); color: var(--text); }
+.compact-date-filter-row { padding: 8px 0; }
+.compact-date-filter-row > summary { color: var(--primary); cursor: pointer; font-weight: 650; min-height: 44px; padding: 10px 0; }
+.compact-date-filter { padding: 4px 0 8px; }
+.compact-date-shortcuts button { background: var(--surface-raised); color: var(--text); }
+.compact-date-controls label { color: var(--muted); font-size: .875rem; }
+.compact-favorite-filter { color: var(--text); }
+
+.compact-active-filters {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.compact-active-filters-label { color: var(--muted); font-size: .875rem; }
+.compact-filter-chip,
+.compact-filter-clear-all {
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--text);
+  min-height: 32px;
+  padding: 4px 10px;
+}
+.compact-filter-clear-all { background: transparent; border-color: transparent; color: var(--primary); text-decoration: underline; }
+
+.compact-list-head,
+.compact-version-row {
+  grid-template-columns: 106px minmax(260px, 1.5fr) minmax(150px, .75fr) minmax(210px, 1fr) minmax(230px, auto);
+  column-gap: 16px;
+}
+
+.compact-list-head { background: var(--surface-muted); border-color: var(--line-strong); color: var(--muted); font-size: .8rem; }
+.compact-version-list { border-color: var(--line-strong); }
+.compact-version-row { background: var(--surface-raised); border: 1px solid var(--line); border-radius: 8px; margin: 8px 0; min-height: 84px; padding: 12px; }
+.compact-version-row:nth-child(even) { background: var(--surface); }
+.compact-song-title { color: var(--text); font-size: 1rem; }
+.compact-version-title { color: var(--muted); font-size: .8rem; }
+.compact-meta-cell,
+.compact-activity-cell { display: grid; gap: 6px; min-width: 0; }
+.compact-comment { display: block; min-width: 0; overflow: hidden; }
+.compact-links { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-start; }
+.compact-links a,
+.compact-links button,
+.compact-links .compact-link-control { align-items: center; display: inline-flex; justify-content: center; min-height: 40px; padding-inline: 10px; }
+
+@media (max-width: 900px) {
+  .compact-list-head { display: none; }
+  .compact-version-list { border-top: 1px solid var(--line-strong); }
+  .compact-version-row,
+  .compact-version-row.has-comment {
+    display: grid;
+    gap: 10px;
+    grid-template-areas:
+      "date date"
+      "sheet sheet"
+      "meta activity"
+      "actions actions";
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    padding: 14px 12px;
+  }
+  .compact-date-cell { grid-area: date; }
+  .compact-sheet-cell { grid-area: sheet; }
+  .compact-meta-cell { grid-area: meta; }
+  .compact-activity-cell { grid-area: activity; }
+  .compact-actions-cell { grid-area: actions; }
+  .compact-comment { white-space: normal; }
+  .compact-links a,
+  .compact-links button,
+  .compact-links .compact-link-control { min-height: 44px; }
+}
+
+@media (max-width: 520px) {
+  .compact-filter-row { grid-template-columns: 1fr; gap: 6px; padding: 10px 0; }
+  .compact-status-options,
+  .compact-sort-options { grid-template-columns: 1fr; }
+  .compact-version-row,
+  .compact-version-row.has-comment {
+    grid-template-areas: "date" "sheet" "meta" "activity" "actions";
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

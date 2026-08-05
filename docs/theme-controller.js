@@ -149,7 +149,7 @@
     label.className = "theme-control-field";
     const labelText = document.createElement("span");
     labelText.className = "theme-control-label";
-    labelText.textContent = "表示";
+    labelText.textContent = "テーマ";
     const select = document.createElement("select");
     select.className = "theme-control-select";
     select.dataset.themeSelect = "true";

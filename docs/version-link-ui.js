@@ -83,7 +83,7 @@
     anchor.setAttribute("rel", "noopener noreferrer");
     anchor.setAttribute("title", "原曲・本体の配布ページを開く");
     setOptionalAttribute(anchor, "aria-label", options.ariaLabel);
-    anchor.textContent = typeof options.text === "string" ? options.text : "曲";
+    anchor.textContent = typeof options.text === "string" ? options.text : "原曲";
     return markCreated(anchor);
   }
 

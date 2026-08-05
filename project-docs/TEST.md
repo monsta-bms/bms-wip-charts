@@ -1686,3 +1686,10 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - RC★／RC★★は旧completion理由だけで完成版を除外しない。R2 cleanup候補は旧completion理由を対象にしない。
 - 隔離結果はVersion UI Model 74件、Action UI 77件、version source metadata統合22件、version withdrawal active 24件、admin version status 28件、difficulty view model 21件、version list 4件、描画static 41件、CSS ownership 38件が成功した。
 - repository hygiene 17件、canonical schema 42件、Worker typecheck、Wrangler dry-run、JavaScript構文、HTML重複ID、`git diff --check`が成功すること。本番deploy、D1/R2/Secret操作、production write、commit、pushはこのローカル実装工程では行わない。
+
+## PUBLIC-UI-REFINEMENT-01 回帰
+
+- `node scripts/test-public-ui-refinement.mjs`でheaderの独立RCリンク、1024px menu、hero、フォーム6区分、任意項目、内容確認、error summary、原曲／投稿操作、一覧2段階status・期間details・active filter・5領域、guide小文字拡張子、changelog flat list、RC UIを静的確認する。
+- 既存のVersion Link UI、Version Action UI、submission status、comment、favorite、branch tree、progress map、difficulty table HTMLを再実行し、投稿／withdrawal／classification logicとDL linkが変わらないことを確認する。
+- 320、360、390、760、1024、1366、1920pxとwhite／default／darkで主要routeのhorizontal overflow、操作clip、duplicate ID、Console error／warningを確認する。主要acceptanceは390、760、1024、1366pxとする。
+- repository hygiene、canonical schema、CSS ownership、site-copy round-trip、changelog／guide editor、JavaScript構文、HTML重複ID、link、Worker typecheck、deploy:check、Wrangler dry-run、`git diff --check`を実行する。本番投稿、D1／R2／Secret操作は行わない。
