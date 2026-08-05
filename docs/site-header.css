@@ -615,7 +615,11 @@
 }
 
 .content-page {
-  max-width: 76ch;
+  max-width: min(100%, 114ch);
+}
+
+.content-page-lead {
+  max-width: 88ch;
 }
 
 .content-page-header {

@@ -7,15 +7,15 @@
     <meta name="turnstile-sitekey" content="0x4AAAAAAD0OJhR8c4dKkDrk">
     <title>リサイクルセンター</title>
     <link rel="stylesheet" href="./style.css?v=public-ui-refinement-01">
-    <link rel="stylesheet" href="./site-header.css?v=public-ui-refinement-01">
-    <link rel="stylesheet" href="./branch-tree-list.css?v=version-comment-progress-01">
+    <link rel="stylesheet" href="./site-header.css?v=public-ui-refinement-patch-02">
+    <link rel="stylesheet" href="./branch-tree-list.css?v=public-ui-refinement-patch-02">
     <link rel="stylesheet" href="./list-ui-refresh.css?v=css-cleanup-r4b2a-01">
     <link rel="stylesheet" href="./chart-miniview.css?v=post-form-miniview-01">
     <link rel="stylesheet" href="./tree-progress-polish.css?v=tree-shape-fix-01">
-    <link rel="stylesheet" href="./version-management-ui.css?v=withdrawal-lifecycle-16r">
-    <link rel="stylesheet" href="./post-form-ui.css?v=public-ui-refinement-01">
+    <link rel="stylesheet" href="./version-management-ui.css?v=public-ui-refinement-patch-02">
+    <link rel="stylesheet" href="./post-form-ui.css?v=public-ui-refinement-patch-02">
     <link rel="stylesheet" href="./chart-detail-link.css?v=detail-theme-r4b2e-01">
-    <link rel="stylesheet" href="./theme.css?v=public-ui-refinement-01">
+    <link rel="stylesheet" href="./theme.css?v=public-ui-refinement-patch-02">
     <link rel="stylesheet" href="./favorites-list.css?v=version-comment-progress-01">
     <link rel="stylesheet" href="./progress-thumbnail-list.css?v=progress-style-r4b2f-01">
     <link rel="stylesheet" href="./version-comment-ui.css?v=version-comment-progress-01">
@@ -29,12 +29,13 @@
       <main>
         <section class="recycle-overview" aria-labelledby="recycleOverviewTitle">
           <div class="recycle-overview-copy">
-            <p class="recycle-overview-eyebrow">BMS差分共有サイト</p>
-            <h1 id="recycleOverviewTitle" data-copy-key="home-overview-title-line-2">未完成譜面・没譜面を共有する</h1>
+            <h1 id="recycleOverviewTitle">
+              全差分作者が求めていた
+              <span data-copy-key="home-overview-title-line-2">没譜面・未完成譜面の専用投稿サイト</span>
+            </h1>
             <p class="recycle-overview-description" data-copy-key="home-overview-description">
-              制作途中の譜面を引き継いだり、完成済みの没譜面を公開できる共有サイトです。
+              追記機能・難易度表機能つき
             </p>
-            <p class="recycle-overview-catch">全差分作者が求めていた、追記機能・難易度表機能つき。</p>
             <p class="recycle-overview-note">
               <strong data-copy-key="home-overview-note-primary">アカウント登録は不要です。</strong>
               <span data-copy-key="home-overview-note-secondary">音源ファイルはアップロードできません。</span>
@@ -42,8 +43,8 @@
           </div>
           <nav class="recycle-overview-actions" aria-label="主要な操作">
             <a class="recycle-cta recycle-cta-primary" href="./index.html#post" data-copy-key="home-action-post">差分を投稿する</a>
-            <a class="recycle-cta" href="./list.html" data-copy-key="home-action-list">投稿を探す</a>
-            <a class="recycle-cta recycle-cta-text" href="./guide.html" data-copy-key="home-action-guide">初めての方へ</a>
+            <a class="recycle-cta" href="./list.html" data-copy-key="home-action-list">投稿一覧を見る</a>
+            <a class="recycle-cta recycle-cta-text" href="./guide.html" data-copy-key="home-action-guide">概要＆使い方</a>
           </nav>
         </section>
 
@@ -129,7 +130,7 @@
                 </div>
               </section>
 
-              <section class="form-section song-info-section" aria-labelledby="songInfoSectionTitle">
+              <section class="form-section song-info-section" aria-labelledby="songInfoSectionTitle" data-post-requires-file hidden>
                 <h3 class="form-section-title" id="songInfoSectionTitle">楽曲情報</h3>
                 <div class="section-fields two-column-fields">
                   <div class="field metadata-field" data-metadata-field="title">
@@ -183,7 +184,7 @@
                 </div>
               </section>
 
-              <section class="form-section diff-info-section" aria-labelledby="diffInfoSectionTitle">
+              <section class="form-section diff-info-section" aria-labelledby="diffInfoSectionTitle" data-post-requires-file hidden>
                 <h3 class="form-section-title" id="diffInfoSectionTitle">差分情報</h3>
                 <div class="section-fields diff-fields">
                   <section class="diff-group chart-details-group" aria-labelledby="chartDetailsHeading">
@@ -254,7 +255,7 @@
                 </div>
               </section>
 
-              <section class="form-section progress-section" aria-labelledby="progressSectionTitle">
+              <section class="form-section progress-section" aria-labelledby="progressSectionTitle" data-post-requires-file hidden>
                 <h3 class="form-section-title" id="progressSectionTitle">進捗と投稿状態</h3>
                 <div class="progress-map-field">
                   <div class="progress-map-header" id="progressMapHeader" hidden>
@@ -353,7 +354,7 @@
                 </div>
               </section>
 
-              <section class="form-section submission-section management-section" aria-labelledby="submissionSectionTitle">
+              <section class="form-section submission-section management-section" aria-labelledby="submissionSectionTitle" data-post-requires-file hidden>
                 <h3 class="form-section-title" id="submissionSectionTitle">投稿後の管理</h3>
                 <div class="post-form-footer">
                   <div class="comment-column">
@@ -391,7 +392,7 @@
                 </div>
               </section>
 
-              <section class="form-section review-section" aria-labelledby="reviewSectionTitle">
+              <section class="form-section review-section" aria-labelledby="reviewSectionTitle" data-post-requires-file hidden>
                 <h3 class="form-section-title" id="reviewSectionTitle">内容確認</h3>
                 <div class="post-review" aria-live="polite">
                   <h4>この内容で投稿します</h4>
@@ -439,7 +440,7 @@
     <dialog class="version-management-dialog" id="versionManagementDialog" aria-labelledby="versionManagementTitle">
       <form class="version-management-panel" id="versionManagementForm" novalidate>
         <div class="version-management-header">
-          <h2 id="versionManagementTitle">投稿後の操作</h2>
+          <h2 id="versionManagementTitle">削除確認</h2>
           <button class="version-management-close" type="button" data-version-management-close aria-label="閉じる">×</button>
         </div>
 
@@ -495,7 +496,7 @@
 
         <p class="version-management-message" id="versionManagementMessage" role="status" aria-live="polite" hidden></p>
         <div class="version-management-buttons">
-          <button class="secondary" type="button" data-version-management-close data-copy-key="management-cancel">キャンセル</button>
+          <button class="secondary version-management-cancel-button" type="button" data-version-management-close data-copy-key="management-cancel">キャンセル</button>
         </div>
       </form>
     </dialog>
@@ -518,30 +519,30 @@
     <script src="./progress-layer-colors.js?v=ui-tree-overlay-01"></script>
     <script src="./zip-bms-reader.js?v=zip-bms-analysis-01"></script>
     <script src="./local-bms-analysis.js?v=post-form-miniview-01"></script>
-    <script src="./turnstile-controller.js?v=turnstile-01"></script>
+    <script src="./turnstile-controller.js?v=public-ui-refinement-patch-02"></script>
     <script src="./post-form-preferences.js?v=post-form-ux-11"></script>
     <script src="./post-form-error-ui.js?v=phase-9c-post-errors"></script>
     <script src="./chart-metadata-extract.js?v=chart-metadata-extract-01"></script>
     <script src="./version-ui-model.js?v=completed-parent-access-01"></script>
     <script src="./version-link-ui.js?v=public-ui-refinement-01"></script>
-    <script src="./version-action-ui.js?v=public-ui-refinement-01"></script>
+    <script src="./version-action-ui.js?v=public-ui-refinement-patch-02"></script>
     <script src="./version-comment-ui.js?v=version-comment-progress-01"></script>
     <script src="./progress-map-drag-hint.js?v=version-comment-progress-01"></script>
     <script src="./chart-render-pipeline.js?v=chart-render-pipeline-r4a-01"></script>
-    <script src="./app.js?v=submission-status-admin-correction-01"></script>
+    <script src="./app.js?v=public-ui-refinement-patch-02"></script>
     <script src="./submission-status-ui.js?v=submission-status-admin-correction-01"></script>
     <script src="./progress-song-end-analysis.js?v=chart-miniview-position-01"></script>
     <script src="./progress-thumbnail-list.js?v=progress-style-r4b2f-01"></script>
     <script src="./chart-miniview.js?v=post-form-miniview-01"></script>
-    <script src="./branch-append-ui.js?v=version-comment-progress-01"></script>
+    <script src="./branch-append-ui.js?v=public-ui-refinement-patch-02"></script>
     <script src="./progress-image-preview.js?v=post-form-ux-09a"></script>
     <script src="./progress-image-formdata.js?v=ui-tree-overlay-01"></script>
-    <script src="./branch-tree-list.js?v=completed-parent-access-01"></script>
+    <script src="./branch-tree-list.js?v=public-ui-refinement-patch-02"></script>
     <script src="./tree-progress-polish.js?v=post-form-tree-12"></script>
     <script src="./favorites-list.js?v=completed-parent-access-01"></script>
-    <script src="./version-management-ui.js?v=withdrawal-lifecycle-16r"></script>
-    <script src="./post-form-ui.js?v=public-ui-refinement-01"></script>
-    <script src="./post-form-review-ui.js?v=public-ui-refinement-01"></script>
+    <script src="./version-management-ui.js?v=public-ui-refinement-patch-02"></script>
+    <script src="./post-form-ui.js?v=public-ui-refinement-patch-02"></script>
+    <script src="./post-form-review-ui.js?v=public-ui-refinement-patch-02"></script>
     <script src="./chart-detail-link.js?v=chart-render-pipeline-r4a-01"></script>
   </body>
 </html>

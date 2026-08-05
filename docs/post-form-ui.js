@@ -27,6 +27,7 @@
   const fileChangeButton = document.querySelector("#chartFileChangeButton");
   const fileClearButton = document.querySelector("#chartFileClearButton");
   const fileDropError = document.querySelector("#chartFileDropError");
+  const deferredSections = Array.from(form?.querySelectorAll("[data-post-requires-file]") || []);
 
   if (!panel || !form || !body || !toggle || !summary) {
     return;
@@ -42,6 +43,14 @@
   let dropStateBeforeDrag = "empty";
   let dropDetailBeforeDrag = {};
   let lastDropDetail = {};
+
+  function syncDeferredSections() {
+    const hasSelectedFile = Boolean(fileInput?.files?.length);
+    deferredSections.forEach((section) => {
+      section.hidden = !hasSelectedFile;
+    });
+    form.classList.toggle("has-selected-chart-file", hasSelectedFile);
+  }
 
   function isFileDrag(event) {
     return Array.from(event?.dataTransfer?.types || []).includes("Files");
@@ -449,6 +458,7 @@
     lastFormActionAt = fileInput.files?.length ? Date.now() : 0;
     manuallyCollapsed = false;
     setOpen(true);
+    syncDeferredSections();
     if (fileDropControl?.dataset.state === "error") {
       // The parser already supplied a user-safe error for this selection.
     } else if (fileInput.files?.[0]) {
@@ -473,6 +483,7 @@
     lastFormActionAt = 0;
     window.setTimeout(() => {
       setDropState("empty");
+      syncDeferredSections();
       manuallyCollapsed = false;
       setOpen(isAppendMode() || isDirty());
       updateSummary();
@@ -516,6 +527,7 @@
     }
   });
   window.addEventListener("pageshow", () => {
+    syncDeferredSections();
     if (isDirty()) {
       setOpen(true);
     }
@@ -557,4 +569,5 @@
   } else {
     setOpen(false);
   }
+  syncDeferredSections();
 })();

@@ -132,7 +132,7 @@
           "allowEmpty": false,
           "deploymentTarget": "PAGES",
           "blockId": "HOME_OVERVIEW",
-          "sourceValueSha256": "6e1fc5522723da2bd4d634f68ac5dc1c15d6f90e7a9c9dc2cefc3537487f1fc2"
+          "sourceValueSha256": "4d79437c121f2555e93b67a2a3c6d268c7a01fc604df911c91c5b1de05b36a87"
         },
         {
           "key": "TITLE_LINE_2",
@@ -146,7 +146,7 @@
           "allowEmpty": false,
           "deploymentTarget": "PAGES",
           "blockId": "HOME_OVERVIEW",
-          "sourceValueSha256": "6e1fc5522723da2bd4d634f68ac5dc1c15d6f90e7a9c9dc2cefc3537487f1fc2"
+          "sourceValueSha256": "367b35454c2eaa755d7b3f7a9e0e8d0100ee49138e7c5436275472b4ef626e58"
         },
         {
           "key": "DESCRIPTION",
@@ -160,7 +160,7 @@
           "allowEmpty": false,
           "deploymentTarget": "PAGES",
           "blockId": "HOME_OVERVIEW",
-          "sourceValueSha256": "fb8352186644c239cd3b90338ffa64e06a13fc12533801674e5494ed082da906"
+          "sourceValueSha256": "4d4e2bd2df5558473c6588f17d06cf99a9e5821cdc13b2325d972e568febf49a"
         },
         {
           "key": "NOTE_PRIMARY",
@@ -191,7 +191,7 @@
           "sourceValueSha256": "1a11cf60db32f27f909dd5e69ef9eb482fdff5f0502c7b47c6ec47bf0cc1cf05"
         }
       ],
-      "sourceValueSha256": "c4cca30eac7b208e8bdd0ab926ec6be32c91a1282746b23de886db8da23977b2"
+      "sourceValueSha256": "75d1e3c1d0e34000a8973bba910bac23f63c43ad1a15b8dc9a49f7c3474c6860"
     },
     {
       "id": "HOME_ACTIONS",
@@ -223,7 +223,7 @@
           "allowEmpty": false,
           "deploymentTarget": "PAGES",
           "blockId": "HOME_ACTIONS",
-          "sourceValueSha256": "dbac30c6bd7fa0a4724c23df4e1a5b3e319caeb714e991ecedc2253d653c0276"
+          "sourceValueSha256": "b41c8047040cd7dcec8db2dc53954d9fd04886253136582aa5ed5abe166df103"
         },
         {
           "key": "GUIDE",
@@ -237,10 +237,10 @@
           "allowEmpty": false,
           "deploymentTarget": "PAGES",
           "blockId": "HOME_ACTIONS",
-          "sourceValueSha256": "56ebd46b12e0974b6a8115e6e52135b25ef06ed48b540e2e2949c0e01a311adb"
+          "sourceValueSha256": "c5c4aa21ef6f6e52cc5143f8717fdde2739ca7403d78c84d18766b984d3b2720"
         }
       ],
-      "sourceValueSha256": "468e9627c56e253487933d4ed055843417d3842401bf648afac86cb6f0f1f874"
+      "sourceValueSha256": "bffa7393b0a37fcb1ba85576cf0a931561f7e448392d88003c0897c41a79691a"
     },
     {
       "id": "POST_LAUNCHER",
@@ -1083,7 +1083,7 @@
           "deploymentTarget": "PAGES",
           "blockId": "EMPTY_AND_LOAD_FAILURES",
           "locator": {
-            "stringOrdinal": 490,
+            "stringOrdinal": 492,
             "beforeAnchorSha256": "1282c367df4cfce330bd5397a54d014a65149c5a3fa2f2bc4df020f3903658ed",
             "afterAnchorSha256": "ba1eea43775b9cd64f8a1ccf8e1ae4f61331321c31a476c0745a2246cba3fa5e"
           },
@@ -1098,7 +1098,7 @@
           "deploymentTarget": "PAGES",
           "blockId": "EMPTY_AND_LOAD_FAILURES",
           "locator": {
-            "stringOrdinal": 491,
+            "stringOrdinal": 493,
             "beforeAnchorSha256": "2651636928bbb30a81a71fa30edbfab32853352c281b07944972c54dc99a7305",
             "afterAnchorSha256": "c6e2e533a5eeb818bab22be7dcd5611de9c599509c4a894864d8984f3ab102aa"
           },
@@ -1113,7 +1113,7 @@
           "deploymentTarget": "PAGES",
           "blockId": "EMPTY_AND_LOAD_FAILURES",
           "locator": {
-            "stringOrdinal": 219,
+            "stringOrdinal": 230,
             "beforeAnchorSha256": "3ce5cbdc0bea9cab57fce9dac204d5ab5829fb23eff10b4a4e166c0698be247d",
             "afterAnchorSha256": "04d214d4c44a02acb3ff359f7824c3f3ab2c1c79f99dddc9708b294cc7dafaeb"
           },
@@ -1128,7 +1128,7 @@
           "deploymentTarget": "PAGES",
           "blockId": "EMPTY_AND_LOAD_FAILURES",
           "locator": {
-            "stringOrdinal": 222,
+            "stringOrdinal": 233,
             "beforeAnchorSha256": "9c5bfdc18bcfe2e1aab6fe0c3efeda231b6d4ef4453d9b635bfb7f49fb280cc9",
             "afterAnchorSha256": "91ee1445cf014d57a17c82d51f6da632b6e04480790212ed85e0ea4d945a51df"
           },
@@ -1143,7 +1143,7 @@
           "deploymentTarget": "PAGES",
           "blockId": "EMPTY_AND_LOAD_FAILURES",
           "locator": {
-            "stringOrdinal": 224,
+            "stringOrdinal": 235,
             "beforeAnchorSha256": "1cb921f1c12b92904f10ad212152ffc3817408b2a9a26384ad73fabd102abc15",
             "afterAnchorSha256": "0d658ac1d399e86706ba0cee08a76ac9ca323a78cd6bdc41debfc81efac4109e"
           },
@@ -1158,7 +1158,7 @@
           "deploymentTarget": "PAGES",
           "blockId": "EMPTY_AND_LOAD_FAILURES",
           "locator": {
-            "stringOrdinal": 225,
+            "stringOrdinal": 236,
             "beforeAnchorSha256": "2269fc61af778c3717a077625419d0fcfcceb9e1d46ea211b71b33ab42b82a99",
             "afterAnchorSha256": "9d0eaf0801a27fd83864d225c200035c44fb7211a4709795d25a024dbf843b93"
           },
@@ -1173,7 +1173,7 @@
           "deploymentTarget": "PAGES",
           "blockId": "EMPTY_AND_LOAD_FAILURES",
           "locator": {
-            "stringOrdinal": 319,
+            "stringOrdinal": 331,
             "beforeAnchorSha256": "a4a10b05d153dbd4c89c23d488fa02a1f4c53f7b505949dc645201505cab11bb",
             "afterAnchorSha256": "2df9c6f54e0d5196623a01e500d32d22624580b720616fe35afeb3cee8ff4421"
           },
@@ -1214,7 +1214,7 @@
           "allowEmpty": false,
           "deploymentTarget": "PAGES",
           "blockId": "MANAGEMENT_PANEL",
-          "sourceValueSha256": "a6d8c0485a27fa294fdf697f021b90450d8ef55a8563eae5674c38d16177bf97"
+          "sourceValueSha256": "2c09c1433edd199994b6072536c66d22f4d63dde46408ef514cbb94ae719ae25"
         },
         {
           "key": "ACTION_TITLE",
@@ -1276,7 +1276,7 @@
           "sourceValueSha256": "bca84ea5c65fee0eccd1f23a972b95cce908f83977c65b4e8b32ca72a772a9a5"
         }
       ],
-      "sourceValueSha256": "15f43e8c28c011956c54d4776397e6602dcebb39f1a7a85e3ee6920367ac7792"
+      "sourceValueSha256": "51fc0f256a1a7e52c274c4b0961e2d2095717bae22c7649daad7c46ab17011f8"
     },
     {
       "id": "MANAGEMENT_CONFIRMATIONS",
@@ -1306,7 +1306,7 @@
           "deploymentTarget": "PAGES",
           "blockId": "MANAGEMENT_CONFIRMATIONS",
           "locator": {
-            "stringOrdinal": 199,
+            "stringOrdinal": 201,
             "beforeAnchorSha256": "017a666af7ac8323f76ec55c38affb05e093d982e404b29c63e74db20ca1f305",
             "afterAnchorSha256": "f5df3d5d74d54c7fd586db34cc0339391d36f4db7865682b006d547fe30eb479"
           },
@@ -1321,7 +1321,7 @@
           "deploymentTarget": "PAGES",
           "blockId": "MANAGEMENT_CONFIRMATIONS",
           "locator": {
-            "stringOrdinal": 170,
+            "stringOrdinal": 174,
             "beforeAnchorSha256": "4e5fd849cd7895ab63de7750eae696cbae99db703666bdf9354198b23773bb0f",
             "afterAnchorSha256": "77e445b52259df4c09fb6a5b6e8e9cb03b9f4de125426a1c5a92be9593fb99df"
           },
@@ -1336,7 +1336,7 @@
           "deploymentTarget": "PAGES",
           "blockId": "MANAGEMENT_CONFIRMATIONS",
           "locator": {
-            "stringOrdinal": 171,
+            "stringOrdinal": 175,
             "beforeAnchorSha256": "80f7658e06bffeb79aab11d6e05a712ab95eea012bfab5ef2d9ec591f9950265",
             "afterAnchorSha256": "c17665e6b7385b727bb908cd06b8c0ed782c33d7f7dba1d4d72f7db47133d91d"
           },
@@ -1351,7 +1351,7 @@
           "deploymentTarget": "PAGES",
           "blockId": "MANAGEMENT_CONFIRMATIONS",
           "locator": {
-            "stringOrdinal": 173,
+            "stringOrdinal": 177,
             "beforeAnchorSha256": "282aedd0d5f15f6c54463193499cabc47f283fdd2f15dfe44f1a88917280a823",
             "afterAnchorSha256": "18d2d0b08e3cd26c0797ba18962b0cb8c2c3b94ea51ceff690207290ee8ba03c"
           },
@@ -1366,7 +1366,7 @@
           "deploymentTarget": "PAGES",
           "blockId": "MANAGEMENT_CONFIRMATIONS",
           "locator": {
-            "stringOrdinal": 174,
+            "stringOrdinal": 178,
             "beforeAnchorSha256": "6914e90440fb00c349cf42e8ca0e192dbe4453e384c3e94757f823939d3fce6f",
             "afterAnchorSha256": "cf93cbafbab1aa0d624d1ed0cfdf8813f8623c76dfab72389845079a2402df46"
           },
@@ -1447,7 +1447,7 @@
       "allowEmpty": false,
       "headingId": "managementTitle",
       "allowedLinks": [],
-      "sourceValueSha256": "5fadea320c00cb8248dd03333b888a91a9dd65db806ae1dc0678c55baa635fd1"
+      "sourceValueSha256": "e06ad84c04b8cb41fd3b64f7abb544aa322f2aea7faec37b0c33184555ad8b27"
     },
     {
       "id": "GUIDE_SAFETY",

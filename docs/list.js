@@ -425,6 +425,9 @@
       }))
       : "") || `<span class="compact-link-control compact-download-disabled" aria-label="${escapeHtml(`${fullTitle} / ${versionChartName} / ${versionLabel} はダウンロードできません`)}">DL不可</span>`;
     const actionUi = window.BmsVersionActionUi;
+    const appendControl = typeof actionUi?.createAppendControl === "function"
+      ? actionUi.createAppendControl(uiModel, { chartId: String(item.chartId || "") })?.outerHTML || ""
+      : "";
     const commentControl = typeof actionUi?.createCommentControl === `function`
       ? actionUi.createCommentControl(uiModel, {
           songTitle: fullTitle,
@@ -433,6 +436,21 @@
           author,
           authorComment: String(item.authorComment || item.author_comment || item.commentPreview || ``)
         })?.outerHTML || ``
+      : "";
+    const managementControl = typeof actionUi?.createManagementControl === "function"
+      ? actionUi.createManagementControl(uiModel, {
+          chartId: String(item.chartId || ""),
+          versionLabel,
+          author,
+          withdrawn: item.withdrawn === true,
+          deleteRequested: item.deleteRequested === true || item.delete_requested === true,
+          requestMode: String(item.requestMode || item.request_mode || ""),
+          scheduledAt: String(item.scheduledAt || item.scheduled_at || ""),
+          canCancelWithdrawal: item.canCancelWithdrawal === true,
+          createdAt: String(item.createdAt || item.created_at || ""),
+          within24Hours: item.within24Hours === true,
+          hasDescendants: item.hasDescendants === true || item.has_descendants === true
+        })?.outerHTML || ""
       : "";
     const detailUrl = new URL("./index.html", document.baseURI);
     detailUrl.searchParams.set("chartId", String(item.chartId || ""));
@@ -469,7 +487,7 @@
           <div class="compact-progress"><span class="compact-field-label">進捗</span><span>${escapeHtml(progress)}%</span></div>
           <div class="compact-comment"></div>
         </div>
-        <div class="compact-links compact-actions-cell"><span class="compact-field-label">操作</span>${originControl}${downloadControl}${commentControl}</div>
+        <div class="compact-links compact-actions-cell"><span class="compact-field-label">操作</span>${originControl}${downloadControl}${appendControl}${commentControl}${managementControl}</div>
       </article>
     `;
   }
@@ -666,7 +684,9 @@
     finishedStatusInputs.forEach((input) => {
       input.checked = input.value === (statusGroup(state.status) === "finished" ? state.status : "finished");
     });
-    finishedSubtypes.hidden = statusGroup(state.status) !== "finished";
+    const showFinishedSubtypes = statusGroup(state.status) === "finished";
+    finishedSubtypes.hidden = !showFinishedSubtypes;
+    finishedSubtypes.setAttribute("aria-hidden", String(!showFinishedSubtypes));
     dateFromInput.value = state.draftDateFrom;
     dateToInput.value = state.draftDateTo;
     dateHeading.textContent = state.sort === "updated" ? "更新日" : "投稿日";
@@ -774,7 +794,7 @@
       state.errorCode = "TOO_MANY_LOCAL_FAVORITES";
       setFeedback(`お気に入りが${MAX_FAVORITES}件を超えているため一覧を取得できません。`);
       renderCurrent();
-      return;
+      return false;
     }
 
     const requestSequence = state.requestSequence + 1;
@@ -821,6 +841,7 @@
       state.loading = false;
       setFeedback(state.total > 0 && !state.hasNext && state.page === totalPages ? "最終ページです。" : "");
       renderCurrent();
+      return true;
     } catch (error) {
       if (error?.name === "AbortError" || requestSequence !== state.requestSequence) {
         return;
@@ -840,6 +861,7 @@
         ? "ページの取得に失敗しました。直前の表示を残しています。"
         : "一覧の取得に失敗しました。");
       renderCurrent();
+      return false;
     } finally {
       if (requestSequence === state.requestSequence) {
         state.loading = false;
@@ -995,6 +1017,20 @@
     scrollToResults();
   });
 
+  list.addEventListener("click", (event) => {
+    const appendButton = event.target.closest(".append-version-button");
+    if (!appendButton || appendButton.disabled) {
+      return;
+    }
+    event.preventDefault();
+    const detailUrl = new URL("./index.html", document.baseURI);
+    detailUrl.searchParams.set("chartId", appendButton.dataset.chartId || "");
+    detailUrl.searchParams.set("versionId", appendButton.dataset.parentVersionId || "");
+    detailUrl.searchParams.set("appendVersionId", appendButton.dataset.parentVersionId || "");
+    detailUrl.hash = "list";
+    window.location.assign(detailUrl.toString());
+  });
+
   window.addEventListener("popstate", () => {
     const locationState = readLocationState();
     Object.assign(state, locationState, {
@@ -1019,6 +1055,10 @@
     if (!document.hidden) {
       refreshRelativeTimeBadges();
     }
+  });
+
+  window.BmsCompactVersionList = Object.freeze({
+    refreshAfterDeletion: () => loadVersions()
   });
 
   updateLocation({ replace: true });

@@ -6,8 +6,9 @@
     <script src="./theme-init.js?v=site-theme-14"></script>
     <title>投稿一覧 | リサイクルセンター</title>
     <link rel="stylesheet" href="./style.css?v=public-ui-refinement-01">
-    <link rel="stylesheet" href="./site-header.css?v=public-ui-refinement-01">
-    <link rel="stylesheet" href="./list.css?v=public-ui-refinement-01">
+    <link rel="stylesheet" href="./site-header.css?v=public-ui-refinement-patch-02">
+    <link rel="stylesheet" href="./list.css?v=public-ui-refinement-patch-02">
+    <link rel="stylesheet" href="./version-management-ui.css?v=public-ui-refinement-patch-02">
     <link rel="stylesheet" href="./theme.css?v=public-ui-refinement-01">
     <link rel="stylesheet" href="./version-comment-ui.css?v=version-comment-progress-01">
   </head>
@@ -55,7 +56,7 @@
                 </fieldset>
               </div>
 
-              <div class="compact-filter-row compact-finished-subtypes" id="compactFinishedSubtypes" hidden>
+              <div class="compact-filter-row compact-finished-subtypes" id="compactFinishedSubtypes" aria-hidden="true" hidden>
                 <span class="compact-filter-label" aria-hidden="true">完成済みの種類</span>
                 <fieldset class="compact-filter-fieldset">
                   <legend class="visually-hidden">完成済みの種類</legend>
@@ -135,12 +136,56 @@
       </main>
     </div>
 
+    <dialog class="version-management-dialog" id="versionManagementDialog" aria-labelledby="versionManagementTitle">
+      <form class="version-management-panel" id="versionManagementForm" novalidate>
+        <div class="version-management-header">
+          <h2 id="versionManagementTitle">削除確認</h2>
+          <button class="version-management-close" type="button" data-version-management-close aria-label="閉じる">×</button>
+        </div>
+
+        <dl class="version-management-summary">
+          <div><dt>版</dt><dd id="versionManagementVersion">-</dd></div>
+          <div><dt>作者</dt><dd id="versionManagementAuthor">-</dd></div>
+          <div><dt>状態</dt><dd id="versionManagementState">-</dd></div>
+          <div><dt>投稿日時</dt><dd id="versionManagementCreatedAt">-</dd></div>
+          <div><dt>処理予定</dt><dd id="versionManagementSchedule">-</dd></div>
+          <div><dt>ダウンロード</dt><dd id="versionManagementDownload">-</dd></div>
+          <div><dt>追記受付</dt><dd id="versionManagementAllowAppend">-</dd></div>
+        </dl>
+
+        <label class="field">
+          <span class="field-label">管理パスワード <span class="required-mark">*</span></span>
+          <input id="versionManagementPassword" type="password" autocomplete="current-password" required>
+          <span class="field-help">投稿時の管理パスワードを入力してください。公開されず、再発行できません。</span>
+        </label>
+
+        <section class="version-management-action" aria-labelledby="withdrawalActionTitle">
+          <h3 id="withdrawalActionTitle">投稿を取り下げる</h3>
+          <p id="versionWithdrawalDescription">対象の状態を確認しています。</p>
+          <label class="field version-withdrawal-reason" id="versionWithdrawalReasonField" hidden>
+            <span class="field-label">取り下げ理由 <span class="required-mark">*</span></span>
+            <textarea id="versionWithdrawalReason" rows="4" minlength="10" maxlength="500"></textarea>
+            <span class="field-help">管理者確認や、申請期間中に派生版・参照が追加された場合の判断に使用します。</span>
+          </label>
+          <div class="version-management-buttons">
+            <button class="version-withdrawal-action-button" id="versionWithdrawalActionButton" type="button" disabled>確認中…</button>
+          </div>
+        </section>
+
+        <p class="version-management-message" id="versionManagementMessage" role="status" aria-live="polite" hidden></p>
+        <div class="version-management-buttons">
+          <button class="secondary version-management-cancel-button" type="button" data-version-management-close data-copy-key="management-cancel">キャンセル</button>
+        </div>
+      </form>
+    </dialog>
+
     <script src="./theme-controller.js?v=public-ui-refinement-01"></script>
     <script src="./site-header.js?v=public-ui-refinement-01"></script>
     <script src="./version-ui-model.js?v=completed-parent-access-01"></script>
     <script src="./version-link-ui.js?v=public-ui-refinement-01"></script>
-    <script src="./version-action-ui.js?v=public-ui-refinement-01"></script>
+    <script src="./version-action-ui.js?v=public-ui-refinement-patch-02"></script>
     <script src="./version-comment-ui.js?v=version-comment-progress-01"></script>
-    <script src="./list.js?v=public-ui-refinement-01"></script>
+    <script src="./list.js?v=public-ui-refinement-patch-02"></script>
+    <script src="./version-management-ui.js?v=public-ui-refinement-patch-02"></script>
   </body>
 </html>

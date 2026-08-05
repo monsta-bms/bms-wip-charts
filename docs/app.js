@@ -424,15 +424,14 @@ function getCurrentDifficultyValue() {
 }
 
 function setDifficultyPickerExpanded(expanded, { focus = false } = {}) {
-  const hasValue = Boolean(getCurrentDifficultyValue());
-  const nextExpanded = Boolean(expanded) || !hasValue;
+  const nextExpanded = true;
   difficultyPickerExpanded = nextExpanded;
-  difficultyPicker.hidden = !nextExpanded;
-  difficultyCompact.hidden = nextExpanded;
-  difficultyField?.classList.toggle("is-compact", !nextExpanded);
-  difficultySection?.classList.toggle("is-difficulty-compact", !nextExpanded);
-  difficultyChangeButton?.setAttribute("aria-expanded", String(nextExpanded));
-  difficultyPicker.setAttribute("aria-hidden", String(!nextExpanded));
+  difficultyPicker.hidden = false;
+  difficultyCompact.hidden = true;
+  difficultyField?.classList.remove("is-compact");
+  difficultySection?.classList.remove("is-difficulty-compact");
+  difficultyChangeButton?.setAttribute("aria-expanded", "true");
+  difficultyPicker.setAttribute("aria-hidden", "false");
 
   if (focus && nextExpanded) {
     const selectedTab = difficultyTabs.find((tab) => tab.getAttribute("aria-pressed") === "true");
@@ -441,12 +440,8 @@ function setDifficultyPickerExpanded(expanded, { focus = false } = {}) {
 }
 
 function collapseDifficultyPickerIfSelected() {
-  if (!getCurrentDifficultyValue()) {
-    return false;
-  }
-
-  setDifficultyPickerExpanded(false);
-  return true;
+  setDifficultyPickerExpanded(true);
+  return false;
 }
 
 function updateDifficultyValue() {

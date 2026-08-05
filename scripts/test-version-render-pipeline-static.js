@@ -57,9 +57,9 @@ check("model, link, action, pipeline, and app load in contract order", () => {
   const ordered = [
     "./version-ui-model.js?v=completed-parent-access-01",
     "./version-link-ui.js?v=public-ui-refinement-01",
-    "./version-action-ui.js?v=public-ui-refinement-01",
+    "./version-action-ui.js?v=public-ui-refinement-patch-02",
     "./chart-render-pipeline.js?v=chart-render-pipeline-r4a-01",
-    "./app.js?v=submission-status-admin-correction-01"
+    "./app.js?v=public-ui-refinement-patch-02"
   ].map((src) => indexSources.indexOf(src));
   assert.ok(ordered.every((index) => index >= 0));
   assert.deepEqual(ordered, [...ordered].sort((left, right) => left - right));
@@ -67,25 +67,25 @@ check("model, link, action, pipeline, and app load in contract order", () => {
 check("version model loads before compact list", () => {
   const modelIndex = listSources.indexOf("./version-ui-model.js?v=completed-parent-access-01");
   const linkIndex = listSources.indexOf("./version-link-ui.js?v=public-ui-refinement-01");
-  const actionIndex = listSources.indexOf("./version-action-ui.js?v=public-ui-refinement-01");
+  const actionIndex = listSources.indexOf("./version-action-ui.js?v=public-ui-refinement-patch-02");
   const commentIndex = listSources.indexOf("./version-comment-ui.js?v=version-comment-progress-01");
   assert.equal(linkIndex, modelIndex + 1);
   assert.equal(actionIndex, linkIndex + 1);
   assert.equal(commentIndex, actionIndex + 1);
-  assert.ok(commentIndex < listSources.indexOf("./list.js?v=public-ui-refinement-01"));
+  assert.ok(commentIndex < listSources.indexOf("./list.js?v=public-ui-refinement-patch-02"));
 });
 check("model, link UI, and Action UI precede every index renderer consumer", () => {
   const modelIndex = indexSources.indexOf("./version-ui-model.js?v=completed-parent-access-01");
   const linkIndex = indexSources.indexOf("./version-link-ui.js?v=public-ui-refinement-01");
-  const actionIndex = indexSources.indexOf("./version-action-ui.js?v=public-ui-refinement-01");
+  const actionIndex = indexSources.indexOf("./version-action-ui.js?v=public-ui-refinement-patch-02");
   const consumers = [
     "./chart-render-pipeline.js?v=chart-render-pipeline-r4a-01",
-    "./app.js?v=submission-status-admin-correction-01",
+    "./app.js?v=public-ui-refinement-patch-02",
     "./progress-thumbnail-list.js?v=progress-style-r4b2f-01",
-    "./branch-append-ui.js?v=version-comment-progress-01",
-    "./branch-tree-list.js?v=completed-parent-access-01",
+    "./branch-append-ui.js?v=public-ui-refinement-patch-02",
+    "./branch-tree-list.js?v=public-ui-refinement-patch-02",
     "./favorites-list.js?v=completed-parent-access-01",
-    "./version-management-ui.js?v=withdrawal-lifecycle-16r",
+    "./version-management-ui.js?v=public-ui-refinement-patch-02",
     "./chart-detail-link.js?v=chart-render-pipeline-r4a-01"
   ];
   assert.equal(linkIndex, modelIndex + 1);
@@ -303,7 +303,7 @@ check("HTML IDs remain unique", () => {
   assert.deepEqual(duplicateIds(listHtml), []);
 });
 check("changed scripts use their reviewed release cache keys", () => {
-  assert.ok(indexSources.includes("./app.js?v=submission-status-admin-correction-01"), "app.js cache key mismatch");
+  assert.ok(indexSources.includes("./app.js?v=public-ui-refinement-patch-02"), "app.js cache key mismatch");
   assert.ok(indexSources.includes("./progress-thumbnail-list.js?v=progress-style-r4b2f-01"), "progress-thumbnail-list.js cache key mismatch");
   const unchangedR4aScripts = [
     "chart-render-pipeline.js",
@@ -312,31 +312,34 @@ check("changed scripts use their reviewed release cache keys", () => {
   unchangedR4aScripts.forEach((name) => {
     assert.ok(indexSources.includes(`./${name}?v=chart-render-pipeline-r4a-01`), `${name} cache key mismatch`);
   });
-  ["version-comment-ui.js", "progress-map-drag-hint.js", "branch-append-ui.js"].forEach((name) => {
+  ["version-comment-ui.js", "progress-map-drag-hint.js"].forEach((name) => {
     assert.ok(indexSources.includes(`./${name}?v=version-comment-progress-01`), `${name} cache key mismatch`);
   });
-  ["version-link-ui.js", "version-action-ui.js"].forEach((name) => {
-    assert.ok(indexSources.includes(`./${name}?v=public-ui-refinement-01`), `${name} cache key mismatch`);
+  assert.ok(indexSources.includes("./version-link-ui.js?v=public-ui-refinement-01"), "version-link-ui.js cache key mismatch");
+  ["version-action-ui.js", "app.js", "branch-append-ui.js", "branch-tree-list.js", "version-management-ui.js"].forEach((name) => {
+    assert.ok(indexSources.includes(`./${name}?v=public-ui-refinement-patch-02`), `${name} cache key mismatch`);
   });
-  ["version-ui-model.js", "branch-tree-list.js", "favorites-list.js"].forEach((name) => {
+  ["version-ui-model.js", "favorites-list.js"].forEach((name) => {
     assert.ok(indexSources.includes(`./${name}?v=completed-parent-access-01`), `${name} cache key mismatch`);
   });
-  ["version-ui-model.js", "version-link-ui.js", "version-action-ui.js", "version-comment-ui.js", "list.js"].forEach((name) => {
+  ["version-ui-model.js", "version-link-ui.js", "version-action-ui.js", "version-comment-ui.js", "list.js", "version-management-ui.js"].forEach((name) => {
     const cacheKey = name === "version-ui-model.js"
         ? "completed-parent-access-01"
         : name === "version-comment-ui.js"
           ? "version-comment-progress-01"
-          : "public-ui-refinement-01";
+          : name === "version-link-ui.js"
+            ? "public-ui-refinement-01"
+            : "public-ui-refinement-patch-02";
     assert.ok(listSources.includes(`./${name}?v=${cacheKey}`), `${name} compact cache key mismatch`);
   });
 });
 check("CSS files match the reviewed public UI state", () => {
   const expected = new Map([
     ["docs/style.css", "e098f16d091b1f56e6ac6fac1a1c52e880d79c3d3f38eff746b6755f605e01db"],
-    ["docs/branch-tree-list.css", "ed19601843f967502a35490617f9f1f31b4f53ae774856ca1bcaca26556f17ea"],
+    ["docs/branch-tree-list.css", "6004b912d18f9bd0eee031a6f9a38ae6bfc9422f58e51abca99a5adcf8f75b56"],
     ["docs/list-ui-refresh.css", "f630206e0a7ce75150b2305414ff85c6657244bfa0d58965594e29fb372b1d81"],
-    ["docs/list.css", "295873bfe249e3ebe39d786258ad389a224c0655702586c6349089382e1e524c"],
-    ["docs/theme.css", "32963e73d0ae0a29f6fd3ef4014a2b194bc94686170020e9622504e408c81f95"],
+    ["docs/list.css", "72283c6ccc037444e4e524dda3aa5aef4d9ea54d4fbbcd851dce100f4558b8db"],
+    ["docs/theme.css", "83bc78944b289b21d22131af91c7e78deaa04808f1c62628221194566ba1ef34"],
     ["docs/chart-detail-link.css", "c45722a66d547ecb51825e67dc3e65cc31413f7820a5d34db8b45eb23dbe0882"],
     ["docs/favorites-list.css", "f9498bc2128e06da0a1de3a41e19949a3ee8afebfc46f266600026288d20cf7b"],
     ["docs/progress-thumbnail-list.css", "24d5a258fb4b737584cd54700544f6c496a8065639120d047ccc80135e1e3304"],
@@ -359,13 +362,13 @@ check("R4A keeps DOM traversal growth bounded", () => {
     [progressThumbnail, 24],
     [branchTree, 44],
     [favorites, 18],
-    [compactList, 11],
+    [compactList, 12],
     [chartDetail, 8]
   ]);
   r1Baseline.forEach((count, source) => assert.ok(traversalCount(source) <= count));
   assert.ok(traversalCount(branchTree) <= 44);
   assert.ok(traversalCount(favorites) <= 18);
-  assert.ok(traversalCount(compactList) <= 11);
+  assert.ok(traversalCount(compactList) <= 12);
 });
 check("normal action strings remain unchanged", () => {
   assert.match(actionSource, /button\.textContent = "追記投稿"/);

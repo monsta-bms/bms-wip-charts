@@ -54,6 +54,8 @@
   const cancelAppendButton = document.querySelector("#cancelAppendButton");
   const chartList = document.querySelector("#chartList");
   const chartInteractionRoot = document.querySelector("#list") || chartList;
+  const requestedAppendVersionId = new URL(window.location.href).searchParams.get("appendVersionId") || "";
+  let requestedAppendHandled = false;
 
   const appendState = {
     active: false,
@@ -1518,9 +1520,21 @@
 
     if (context.mode === "append") {
       target.insertAdjacentHTML("beforeend", markup);
-      return;
+    } else {
+      target.innerHTML = markup;
     }
-    target.innerHTML = markup;
+
+    if (!requestedAppendHandled && requestedAppendVersionId) {
+      const requestedTarget = appendState.charts.flatMap((entry) => {
+          const versions = Array.isArray(entry?.versions) ? entry.versions : [];
+          const version = versions.find((item) => (item.id || item.versionId) === requestedAppendVersionId);
+          return version ? [{ entry, version }] : [];
+        })[0];
+      if (requestedTarget) {
+        requestedAppendHandled = true;
+        window.queueMicrotask(() => enterAppendMode(requestedTarget.entry, requestedTarget.version));
+      }
+    }
   }
 
   function findAppendTarget(chartId, parentVersionId) {

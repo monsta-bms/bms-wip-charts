@@ -1,6 +1,6 @@
 (() => {
   const apiBaseUrl = window.API_BASE_URL || "https://bms-wip-charts-worker.monsta3228gsl.workers.dev";
-  const chartList = document.querySelector("#chartList");
+  const chartList = document.querySelector("#chartList") || document.querySelector("#compactVersionList");
   const chartInteractionRoot = document.querySelector("#list") || chartList;
   const dialog = document.querySelector("#versionManagementDialog");
   if (!chartList || !chartInteractionRoot || !dialog) return;
@@ -292,7 +292,7 @@
     state.loading = true;
     state.submitting = false;
 
-    title.textContent = `投稿後の操作: ${state.versionLabel}`;
+    title.textContent = `削除確認: ${state.versionLabel}`;
     versionValue.textContent = state.versionLabel;
     authorValue.textContent = state.author;
     createdAtValue.textContent = formatDateTime(state.createdAt);
@@ -316,6 +316,18 @@
 
   async function refreshPublicViews(outcome) {
     const failures = [];
+    try {
+      if (typeof window.BmsCompactVersionList?.refreshAfterDeletion === "function") {
+        const refreshed = await window.BmsCompactVersionList.refreshAfterDeletion({
+          chartId: state.chartId,
+          versionId: state.versionId,
+          outcome
+        });
+        if (refreshed === false) failures.push("compact-list");
+      }
+    } catch {
+      failures.push("compact-list");
+    }
     try {
       const refreshed = await window.BmsChartDetail?.refreshAfterManagement?.({
         chartId: state.chartId,

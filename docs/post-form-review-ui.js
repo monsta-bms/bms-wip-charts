@@ -13,7 +13,7 @@
     { label: "曲名", target: "title", value: () => valueOf("title") || "未入力" },
     { label: "差分名", target: "chartName", value: () => valueOf("chartName") || "未入力" },
     { label: "作者", target: "author", value: () => valueOf("author") || "未入力" },
-    { label: "難易度", target: "difficultyPicker", focus: "difficultyChangeButton", value: () => valueOf("difficulty") || "未選択" },
+    { label: "難易度", target: "difficultyPicker", focus: "difficultyManual", value: () => valueOf("difficulty") || "未選択" },
     { label: "投稿状態", target: "postStatePanelTitle", focus: "submissionStateIncomplete", value: submissionStateLabel },
     { label: "進捗", target: "progress", value: () => `${normalizeProgress(valueOf("progress"))}%` },
     { label: "追記受付", target: "allowAppend", value: () => document.getElementById("allowAppend")?.checked ? "受け付ける" : "受け付けない" },
@@ -95,7 +95,9 @@
     }
     if (optionalFields?.contains(target)) optionalFields.open = true;
     if (targetId === "difficultyPicker") window.BmsDifficultyUi?.expand?.();
-    const focusTarget = document.getElementById(focusId) || target;
+    const focusTarget = targetId === "difficultyPicker"
+      ? target.querySelector('[aria-pressed="true"]') || target.querySelector("button")
+      : document.getElementById(focusId) || target;
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     target.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "center" });
     window.requestAnimationFrame(() => focusTarget.focus({ preventScroll: true }));

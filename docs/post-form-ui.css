@@ -1329,6 +1329,57 @@ button.difficulty-change-button {
   }
 }
 
+/* PUBLIC-UI-REFINEMENT-PATCH-02: staged reveal and simplified surfaces. */
+.submit-panel.is-form-open .form-section[data-post-requires-file][hidden] {
+  display: none;
+}
+
+.submit-panel.is-form-open .form-section[data-post-requires-file]:not([hidden]) {
+  animation: post-section-reveal 160ms ease-out both;
+}
+
+@keyframes post-section-reveal {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.submit-panel.is-form-open .form-section {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  padding: 8px 0 20px;
+}
+
+.submit-panel.is-form-open .form-section:first-child {
+  border-top: 0;
+  padding-top: 8px;
+}
+
+.submit-panel.is-form-open .author-details-group,
+.submit-panel.is-form-open .chart-details-group {
+  background: transparent;
+  border: 0;
+  padding-inline: 0;
+}
+
+.submit-panel.is-form-open .progress-operation-row,
+.submit-panel.is-form-open .progress-policy-controls,
+.submit-panel.is-form-open .post-review {
+  background: var(--surface-muted);
+  border-color: var(--line);
+}
+
+.submit-panel.is-form-open .difficulty-picker {
+  min-height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .submit-panel.is-form-open .form-section[data-post-requires-file]:not([hidden]) {
+    animation: none;
+  }
+}
+
 @media (max-width: 420px) {
   .metadata-candidate-panel {
     grid-template-areas:
@@ -1450,7 +1501,8 @@ button.difficulty-change-button {
 .difficulty-tab[aria-pressed="true"],
 .difficulty-chip[aria-pressed="true"] {
   background: var(--primary-soft);
-  border: 2px solid var(--primary);
+  border: 1px solid var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
   color: var(--text);
   font-weight: 750;
 }

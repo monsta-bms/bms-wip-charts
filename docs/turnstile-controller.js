@@ -15,6 +15,7 @@
   const sitekey = configuredSitekey || (isLocalhost ? testSitekey : "");
 
   let scriptPromise = null;
+  let widgetPromise = null;
   let widgetId = null;
   let token = "";
   let pendingChallenge = null;
@@ -133,49 +134,60 @@
     if (widgetId !== null) {
       return widgetId;
     }
+    if (widgetPromise) {
+      return widgetPromise;
+    }
 
-    const turnstile = await loadScript();
-    widgetId = turnstile.render(container, {
-      sitekey,
-      action,
-      theme: getWidgetTheme(),
-      size: "flexible",
-      appearance: "interaction-only",
-      execution: "execute",
-      callback(nextToken) {
-        token = typeof nextToken === "string" ? nextToken : "";
-        if (!token) {
+    widgetPromise = (async () => {
+      const turnstile = await loadScript();
+      if (widgetId !== null) {
+        return widgetId;
+      }
+      widgetId = turnstile.render(container, {
+        sitekey,
+        action,
+        theme: getWidgetTheme(),
+        size: "flexible",
+        appearance: "interaction-only",
+        execution: "execute",
+        callback(nextToken) {
+          token = typeof nextToken === "string" ? nextToken : "";
+          if (!token) {
+            settlePending(makeError(
+              "TURNSTILE_FAILED",
+              "Turnstile認証に失敗しました。再試行してください。"
+            ));
+            return;
+          }
+          setStatus();
+          settlePending(null, token);
+        },
+        "expired-callback"() {
+          token = "";
+          if (widgetId !== null && window.turnstile) {
+            window.turnstile.reset(widgetId);
+          }
           settlePending(makeError(
             "TURNSTILE_FAILED",
-            "Turnstile認証に失敗しました。再試行してください。"
+            "Turnstile認証の有効期限が切れました。再試行してください。"
           ));
-          return;
+        },
+        "error-callback"() {
+          token = "";
+          const error = makeError(
+            "TURNSTILE_FAILED",
+            "Turnstile認証を完了できませんでした。再試行してください。"
+          );
+          setStatus(error.message, { error: true, retryable: true });
+          settlePending(error);
         }
-        setStatus();
-        settlePending(null, token);
-      },
-      "expired-callback"() {
-        token = "";
-        if (widgetId !== null && window.turnstile) {
-          window.turnstile.reset(widgetId);
-        }
-        settlePending(makeError(
-          "TURNSTILE_FAILED",
-          "Turnstile認証の有効期限が切れました。再試行してください。"
-        ));
-      },
-      "error-callback"() {
-        token = "";
-        const error = makeError(
-          "TURNSTILE_FAILED",
-          "Turnstile認証を完了できませんでした。再試行してください。"
-        );
-        setStatus(error.message, { error: true, retryable: true });
-        settlePending(error);
-      }
+      });
+      return widgetId;
+    })().finally(() => {
+      widgetPromise = null;
     });
 
-    return widgetId;
+    return widgetPromise;
   }
 
   async function getToken() {

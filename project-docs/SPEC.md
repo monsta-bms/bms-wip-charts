@@ -1266,3 +1266,14 @@ RC★★変換:
 - 使い方は「このサイトでできること」「最短手順」「詳しい使い方」「投稿管理」「安全案内」の順とし、拡張子はbms・bme・bml・zipの小文字を維持する。更新履歴はdata-copy-entry付きの新しい順flat listを維持する。
 - RC★／RC★★ HTMLはトップへ戻る、表名、RC切替、テーマの順にheaderへ置く。「原曲」「DL」「コメント」を表示し、JSON取込リンクをdetailsへまとめる。JSON feed、ETag、HEAD、難易度分類は変更しない。
 - 公開UIはsystem fontとgreen accentを維持し、body 16px、主要文字14px以上、desktop操作40px以上、mobile操作44pxを基本とする。API schema、D1、R2、Secret、投稿状態logicは変更しない。
+
+## PUBLIC-UI-REFINEMENT-PATCH-02
+
+- トップheroは「全差分作者が求めていた」「没譜面・未完成譜面の専用投稿サイト」「追記機能・難易度表機能つき」の従来構成へ戻し、主要導線を「差分を投稿する」「投稿一覧を見る」「概要＆使い方」とする。
+- 公開版の操作名は「原曲」「DL」「追記投稿」「コメント」「削除」とし、「投稿操作」は使用しない。操作部は原曲／DL、追記投稿、コメント／削除の2列3段gridを基本とする。削除確認では実行をdanger、キャンセルをneutral surfaceとして区別する。
+- 独立投稿一覧でも5操作を表示する。追記投稿は対象版の詳細へ移動し、削除は共通削除確認dialogを使用する。完成済み副状態rowは非表示時も同じ高さを予約し、状態切替でviewport位置を変えない。
+- 使い方と更新履歴は共通の`114ch`上限を使用し、狭幅ではviewportへ収める。本文leadは`88ch`を上限とする。
+- 投稿フォームは初期状態で譜面ファイルsectionだけを表示し、ファイル選択時点で楽曲情報以降の5sectionを表示する。解析失敗時も選択が維持される限り後続入力を隠さない。resetまたはファイル解除時は再び隠す。
+- 投稿フォームのsection背景は共通surfaceへ統一し、section間は単一の下線だけで区切る。操作領域と内容確認だけを`surface-muted`とし、作者欄だけの背景・左線・全周枠を設けない。
+- 想定難易度pickerは選択前後とも常時展開し、compact summaryへ切り替えない。選択値は同じpicker内のpreviewだけを更新する。
+- RC★／RC★★の投稿者コメントは吹き出し記号`💬`で表示し、`aria-label="コメント"`、desktop 40px以上、mobile 44px以上、hover／focus／active状態を備える。API schema、JSON feed、D1、R2、Secret、投稿ロジックは変更しない。

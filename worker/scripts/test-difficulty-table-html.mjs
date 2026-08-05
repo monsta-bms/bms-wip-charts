@@ -621,10 +621,10 @@ async function runTests(fixtures) {
     assert.ok(!fallbackRow.includes("<details"));
   });
   await check("45 post comment adds native details", () => {
-    assert.match(starBody, /<details class="row-comment"><summary aria-label="コメントを見る">コメント<\/summary>/u);
+    assert.match(starBody, /<details class="row-comment"><summary aria-label="コメント" title="コメントを表示">💬<\/summary>/u);
   });
   await check("46 details uses native keyboard-operable summary without inline handlers", () => {
-    assert.match(starBody, /<details[^>]*><summary aria-label="コメントを見る">コメント<\/summary>/u);
+    assert.match(starBody, /<details[^>]*><summary aria-label="コメント" title="コメントを表示">💬<\/summary>/u);
     assert.ok(!starBody.includes("onclick="));
   });
   await check("47 comment newlines are preserved structurally", () => {
@@ -666,7 +666,8 @@ async function runTests(fixtures) {
   await check("58 title attributes remain fixed and cannot be injected", () => {
     const titles = [...starBody.matchAll(/\stitle="([^"]*)"/gu)].map((match) => match[1]);
     assert.ok(titles.length > 0);
-    assert.ok(titles.every((value) => value === "BMS-IRで譜面情報を開く"));
+    assert.ok(titles.every((value) => ["BMS-IRで譜面情報を開く", "コメントを表示"].includes(value)));
+    assert.ok(titles.includes("コメントを表示"));
   });
   await check("59 no executable script element is generated", () => {
     assert.equal(countMatches(starBody, /<script(?:\s|>)/giu), 0);
@@ -718,8 +719,8 @@ async function runTests(fixtures) {
     assert.ok(!starBody.includes('class="compact-link"'));
     assert.match(starBody, /\.action-link \{[\s\S]*border: 0;[\s\S]*background: none;/u);
   });
-  await check("69 compact comment summary keeps native details and a visible label", () => {
-    assert.match(starBody, /<div class="comment-summary"><span class="original-difficulty">元: ★2<\/span><details class="row-comment"><summary aria-label="コメントを見る">コメント<\/summary>/u);
+  await check("69 compact comment summary keeps native details and an accessible icon", () => {
+    assert.match(starBody, /<div class="comment-summary"><span class="original-difficulty">元: ★2<\/span><details class="row-comment"><summary aria-label="コメント" title="コメントを表示">💬<\/summary>/u);
     assert.match(starBody, /\.row-comment summary[\s\S]*min-width: 40px;[\s\S]*min-height: 40px;/u);
     assert.match(starBody, /\.comment-body \{[\s\S]*background: transparent;/u);
   });

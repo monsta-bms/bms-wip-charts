@@ -261,13 +261,13 @@ check("missing version id management is hidden", () => assert.equal(createManage
 check("management class and public action text remain stable", () => {
   const button = createManagementControl(model(), managementOptions());
   assert.equal(button.className, "secondary version-management-button");
-  assert.equal(button.textContent, "投稿操作");
+  assert.equal(button.textContent, "削除");
   assert.equal(button.type, "button");
 });
 check("management title and aria describe the public action", () => {
   const button = createManagementControl(model(), managementOptions());
-  assert.equal(button.title, "BASE の投稿後の操作を開く");
-  assert.equal(button.getAttribute("aria-label"), "BASE の投稿後の操作を開く");
+  assert.equal(button.title, "BASE の削除確認を開く");
+  assert.equal(button.getAttribute("aria-label"), "BASE の削除確認を開く");
 });
 check("management identity datasets remain compatible", () => {
   const button = createManagementControl(model(), managementOptions());

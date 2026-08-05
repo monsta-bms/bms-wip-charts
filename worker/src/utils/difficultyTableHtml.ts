@@ -199,12 +199,20 @@ h1 { margin: 0; font-size: clamp(1.4rem, 2.8vw, 2rem); line-height: 1.2; }
   min-width: 40px;
   min-height: 40px;
   padding: .25rem .5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
   color: var(--link);
   cursor: pointer;
+  font-size: 1.05rem;
   line-height: 1;
   list-style: none;
 }
 .row-comment summary::-webkit-details-marker { display: none; }
+.row-comment summary:hover { background: var(--row-hover); border-color: var(--link); }
+.row-comment summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.row-comment summary:active,
+.row-comment[open] summary { background: var(--row-hover); border-color: var(--link); }
 .comment-body {
   margin-top: .25rem;
   padding: .35rem .45rem;
@@ -434,7 +442,7 @@ function renderModelRow(model: DifficultyTableViewModel, request: Request): stri
     ? `<a class="action-link" href="${escapeHtml(downloadUrl)}" aria-label="${escapeHtml(`${displayTitle}の譜面ファイルをダウンロード`)}">DL</a>`
     : renderMissing();
   const commentDetails = model.postComment
-    ? `<details class="row-comment"><summary aria-label="コメントを見る">コメント</summary><div class="comment-body">${escapeHtml(model.postComment)}</div></details>`
+    ? `<details class="row-comment"><summary aria-label="コメント" title="コメントを表示">💬</summary><div class="comment-body">${escapeHtml(model.postComment)}</div></details>`
     : "";
   return `<tr class="chart-row" role="row">
           <td role="cell" class="cell-difficulty" data-label="難易度"><span class="mobile-label" aria-hidden="true">難易度</span>${escapeHtml(model.levelLabel)}</td>

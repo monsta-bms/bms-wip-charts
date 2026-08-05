@@ -454,7 +454,12 @@ a,
 }
 
 .form-section,
-.submit-panel.is-form-open .form-section,
+.submit-panel.is-form-open .form-section {
+  background-color: var(--surface);
+  border-color: var(--line);
+  color: var(--text);
+}
+
 .progress-map,
 .append-context,
 .compact-version-row:nth-child(even),
@@ -475,8 +480,8 @@ a,
 
 .submit-panel.is-form-open {
   --post-panel-bg: var(--surface);
-  --post-section-bg: var(--surface-muted);
-  --post-operation-bg: var(--surface-strong);
+  --post-section-bg: var(--surface);
+  --post-operation-bg: var(--surface-muted);
   --post-input-bg: var(--input-bg);
   --post-line: var(--line-strong);
   --post-line-soft: var(--line);

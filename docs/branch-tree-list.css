@@ -603,7 +603,7 @@ button.secondary.append-policy-disabled-button:disabled:active {
   display: none;
 }
 
-@media (max-width: 960px) {
+@media (max-width: 1100px) {
   .version-list {
     --version-grid-columns: var(--group-gutter-width) minmax(142px, 1.2fr) 58px minmax(82px, 0.72fr) 62px minmax(116px, 0.9fr) minmax(116px, 0.95fr) 112px;
     --version-tree-indent: 13px;
@@ -721,4 +721,35 @@ button.secondary.append-policy-disabled-button:disabled:active {
   .version-actions .secondary {
     min-height: 32px;
   }
+}
+
+/* PUBLIC-UI-REFINEMENT-PATCH-02: stable five-action grid. */
+.version-actions,
+.version-actions.actions-cell {
+  align-items: stretch;
+  display: grid;
+  gap: 6px;
+  grid-template-areas:
+    "origin download"
+    "append append"
+    "comment delete";
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.version-actions .version-origin-link { grid-area: origin; }
+.version-actions .version-download-control { grid-area: download; }
+.version-actions > .secondary:not(.version-comment-button):not(.version-management-button) { grid-area: append; }
+.version-actions .version-comment-button { grid-area: comment; }
+.version-actions .version-management-button { grid-area: delete; }
+
+.version-actions .version-origin-link,
+.version-actions .version-download-control,
+.version-actions > button {
+  min-width: 0;
+  width: 100%;
+}
+
+.version-actions .append-disabled-note {
+  grid-column: 1 / -1;
+  text-align: left;
 }

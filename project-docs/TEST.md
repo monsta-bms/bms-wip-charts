@@ -1693,3 +1693,11 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 既存のVersion Link UI、Version Action UI、submission status、comment、favorite、branch tree、progress map、difficulty table HTMLを再実行し、投稿／withdrawal／classification logicとDL linkが変わらないことを確認する。
 - 320、360、390、760、1024、1366、1920pxとwhite／default／darkで主要routeのhorizontal overflow、操作clip、duplicate ID、Console error／warningを確認する。主要acceptanceは390、760、1024、1366pxとする。
 - repository hygiene、canonical schema、CSS ownership、site-copy round-trip、changelog／guide editor、JavaScript構文、HTML重複ID、link、Worker typecheck、deploy:check、Wrangler dry-run、`git diff --check`を実行する。本番投稿、D1／R2／Secret操作は行わない。
+
+## PUBLIC-UI-REFINEMENT-PATCH-02 回帰
+
+- `node scripts/test-public-ui-refinement.mjs`で従来hero文言、削除ラベル、一覧5操作grid、完成済み副状態の予約高、段階表示、難易度picker常時展開、114ch本文幅、RC吹き出しとfocus状態を静的確認する。
+- `node scripts/test-version-action-ui.js`で削除controlの表示条件、ラベル、title、aria-label、既存dataset互換を直接確認する。
+- 390／760／1024／1366px、white／default／darkでtop、投稿フォーム初期・ファイル選択後・難易度選択前後、最近の投稿、独立一覧filter、guide、changelog、RC★、RC★★を確認する。horizontal overflow、clipping、操作重なり、Console error／warningは0とする。
+- 状態filterの完成済み選択前後で対象controlのviewport座標を比較し、上下ジャンプがないことを確認する。難易度選択前後はpicker外枠の幅・高さが変わらないことを確認する。
+- repository hygiene、canonical schema、CSS ownership、JavaScript構文、HTML重複ID、link、site-copy往復、Worker typecheck、deploy:check、Wrangler dry-run、`git diff --check`を実行する。D1／R2／Secret操作とproduction writeは行わない。

@@ -87,6 +87,12 @@
   border-bottom: 1px solid #e1e7e9;
 }
 
+.compact-finished-subtypes[hidden] {
+  display: grid !important;
+  pointer-events: none;
+  visibility: hidden;
+}
+
 .compact-filter-label {
   color: #50616b;
   font-size: 0.84rem;
@@ -853,7 +859,37 @@
 .compact-links button,
 .compact-links .compact-link-control { align-items: center; display: inline-flex; justify-content: center; min-height: 40px; padding-inline: 10px; }
 
-@media (max-width: 900px) {
+.compact-actions-cell {
+  align-items: stretch;
+  display: grid;
+  gap: 6px;
+  grid-template-areas:
+    "label label"
+    "origin download"
+    "append append"
+    "comment delete";
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.compact-actions-cell > .compact-field-label { grid-area: label; }
+.compact-actions-cell .compact-origin-link { grid-area: origin; }
+.compact-actions-cell .compact-download-link,
+.compact-actions-cell .compact-download-disabled { grid-area: download; }
+.compact-actions-cell > .append-version-button,
+.compact-actions-cell > .append-policy-disabled-button,
+.compact-actions-cell > .append-disabled-intermediate,
+.compact-actions-cell > .secondary:not(.version-comment-button):not(.version-management-button) { grid-area: append; }
+.compact-actions-cell .version-comment-button { grid-area: comment; }
+.compact-actions-cell .version-management-button { grid-area: delete; }
+
+.compact-actions-cell > a,
+.compact-actions-cell > button,
+.compact-actions-cell > .compact-link-control {
+  min-width: 0;
+  width: 100%;
+}
+
+@media (max-width: 1100px) {
   .compact-list-head { display: none; }
   .compact-version-list { border-top: 1px solid var(--line-strong); }
   .compact-version-row,
