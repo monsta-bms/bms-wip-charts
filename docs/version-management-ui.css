@@ -1,5 +1,6 @@
 .version-list {
-  --version-grid-columns: var(--group-gutter-width) minmax(216px, 1.08fr) 64px minmax(100px, 0.72fr) 70px minmax(270px, 1.32fr) minmax(178px, 1fr) 158px;
+  --group-gutter-width: 36px;
+  --version-grid-columns: var(--group-gutter-width) minmax(160px, 1.05fr) 54px minmax(80px, 0.55fr) 60px minmax(140px, 1fr) minmax(140px, 0.95fr) minmax(320px, 1.55fr);
 }
 
 .version-row.version-tree-row.is-withdrawn {
@@ -91,7 +92,7 @@
 
 button.secondary.version-management-button {
   align-items: center;
-  background: var(--danger-bg);
+  background: transparent;
   border: 1px solid var(--danger);
   color: var(--danger);
   display: inline-flex;
@@ -283,7 +284,7 @@ button.secondary.version-management-cancel-button:focus-visible {
 
 @media (max-width: 1100px) {
   .version-list {
-    --version-grid-columns: var(--group-gutter-width) minmax(142px, 1.2fr) 58px minmax(82px, .72fr) 62px minmax(116px, .9fr) minmax(116px, .95fr) 146px;
+    --version-grid-columns: var(--group-gutter-width) minmax(140px, 1.1fr) 48px minmax(70px, .62fr) 50px minmax(115px, .92fr) minmax(115px, .92fr) minmax(200px, 1.25fr);
   }
 }
 

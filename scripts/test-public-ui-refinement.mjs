@@ -19,6 +19,11 @@ const sources = {
   formUi: read("docs/post-form-ui.js"),
   app: read("docs/app.js"),
   listCss: read("docs/list.css"),
+  branchCss: read("docs/branch-tree-list.css"),
+  refreshCss: read("docs/list-ui-refresh.css"),
+  commentCss: read("docs/version-comment-ui.css"),
+  commentUi: read("docs/version-comment-ui.js"),
+  managementCss: read("docs/version-management-ui.css"),
   links: read("docs/version-link-ui.js"),
   actions: read("docs/version-action-ui.js"),
   management: read("docs/version-management-ui.js"),
@@ -140,7 +145,25 @@ check("list result header has five regions", () => {
 check("list row keeps DL in its action region", () => assert.match(sources.listJs, /compact-links compact-actions-cell[^\n]*\$\{originControl\}\$\{downloadControl\}/u));
 check("list row exposes the accepted five-action sequence", () => {
   assert.match(sources.listJs, /\$\{originControl\}\$\{downloadControl\}\$\{appendControl\}\$\{commentControl\}\$\{managementControl\}/u);
-  assert.match(sources.listCss, /grid-template-areas:[\s\S]*"origin download"[\s\S]*"append append"[\s\S]*"comment delete"/u);
+  assert.match(sources.listCss, /grid-template-areas:\s*"origin download append comment delete"/u);
+  assert.match(sources.branchCss, /grid-template-areas:\s*"origin download append comment delete"/u);
+  assert.match(sources.listCss, /@media \(max-width: 820px\)[\s\S]*"origin download"[\s\S]*"append append"[\s\S]*"comment delete"/u);
+});
+check("public list density keeps desktop height and responsive action limits", () => {
+  assert.match(sources.listCss, /PUBLIC-LIST-DENSITY-PATCH-01/u);
+  assert.match(sources.listCss, /\.compact-version-row \{[\s\S]*min-height: 88px;[\s\S]*padding: 10px 12px;/u);
+  assert.match(sources.refreshCss, /\.version-row\.version-tree-row \{[\s\S]*min-height: 88px;[\s\S]*padding: 10px 12px;[\s\S]*row-gap: 4px;/u);
+  assert.match(sources.branchCss, /@media \(min-width: 761px\) and \(max-width: 1179px\)[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/u);
+});
+check("comment previews use two plus one lines and remove empty regions", () => {
+  assert.match(sources.commentCss, /\.author-comment-preview-text \{[\s\S]*-webkit-line-clamp: 2;[\s\S]*max-height: 2\.8em;/u);
+  assert.match(sources.commentCss, /\.version-comment-latest-text \{[\s\S]*-webkit-line-clamp: 1;[\s\S]*max-height: 1\.35em;/u);
+  assert.match(sources.commentUi, /container\.hidden = !hasAuthorComment && !hasLatestComment/u);
+  assert.match(sources.commentUi, /const empty = createElement\("span", "author-comment-empty", "—"\);[\s\S]*empty\.hidden = true;/u);
+});
+check("list deletion remains outline until confirmation", () => {
+  assert.match(sources.managementCss, /button\.secondary\.version-management-button \{[\s\S]*background: transparent;[\s\S]*border: 1px solid var\(--danger\);/u);
+  assert.match(sources.managementCss, /button\.version-withdrawal-action-button \{[\s\S]*background: var\(--danger\);/u);
 });
 check("completed subtype row keeps reserved layout height", () => {
   assert.match(sources.listCss, /\.compact-finished-subtypes\[hidden\][\s\S]*display: grid !important;[\s\S]*visibility: hidden;/u);
@@ -172,6 +195,15 @@ check("changelog remains a flat article list", () => {
 check("changelog includes the 2026-08-05 form usability update", () => {
   assert.match(sources.changelog, /data-copy-entry="CHANGELOG_20260805"[\s\S]*進捗マップの小節・時間・ノーツ情報を、カーソルの近くへ表示するよう修正しました。/u);
   assert.match(sources.changelog, /data-copy-entry="CHANGELOG_20260805"[\s\S]*投稿状態の選択ボタンに左余白を加え、枠へ重ならないよう調整しました。/u);
+  assert.match(sources.changelog, /data-copy-entry="CHANGELOG_20260805"[\s\S]*トップページの投稿カードと投稿一覧を圧縮し、コメント・進捗・操作を保ったまま多くの投稿を見渡せるようにしました。/u);
+});
+check("density assets share a release cache key", () => {
+  for (const asset of ["branch-tree-list.css", "list-ui-refresh.css", "version-management-ui.css", "version-comment-ui.css", "version-comment-ui.js"]) {
+    assert.match(sources.index, new RegExp(`\\./${asset.replaceAll(".", "\\.")}\\?v=public-list-density-patch-01`, "u"));
+  }
+  for (const asset of ["list.css", "version-management-ui.css", "version-comment-ui.css", "version-comment-ui.js", "list.js"]) {
+    assert.match(sources.listHtml, new RegExp(`\\./${asset.replaceAll(".", "\\.")}\\?v=public-list-density-patch-01`, "u"));
+  }
 });
 check("guide and changelog share the widened content measure", () => assert.match(sources.headerCss, /\.content-page \{\s*max-width: min\(100%, 114ch\);/u));
 check("RC header has top, title, switch and theme", () => {

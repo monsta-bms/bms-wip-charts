@@ -31,11 +31,14 @@ body.version-comment-dialog-open {
   cursor: pointer;
   display: grid;
   font: inherit;
-  gap: 2px;
+  column-gap: 4px;
+  grid-template-columns: auto minmax(0, 1fr);
+  row-gap: 2px;
   max-width: 100%;
   min-height: 0;
   min-width: 0;
   padding: 2px;
+  position: relative;
   text-align: left;
   width: 100%;
 }
@@ -59,6 +62,11 @@ body.version-comment-dialog-open {
   font-weight: 800;
 }
 
+.author-comment-preview-label::after,
+.version-comment-latest-label::after {
+  content: ":";
+}
+
 .author-comment-preview-text,
 .version-comment-latest-text {
   overflow-wrap: anywhere;
@@ -68,23 +76,28 @@ body.version-comment-dialog-open {
 
 .author-comment-preview-text {
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   display: -webkit-box;
   line-height: 1.4;
-  max-height: 4.2em;
+  max-height: 2.8em;
   overflow: hidden;
 }
 
 .author-comment-full-button {
+  background: var(--surface-raised, #ffffff);
+  bottom: 2px;
   color: var(--primary-dark, #145d47);
   font-size: 0.72rem;
   font-weight: 800;
+  padding-inline-start: 6px;
+  position: absolute;
+  right: 3px;
 }
 
 .version-comment-latest-preview {
   border-top: 1px dashed color-mix(in srgb, var(--line, #d8e0e3) 85%, transparent);
-  margin-top: 5px;
-  padding-top: 5px;
+  margin-top: 2px;
+  padding-top: 2px;
 }
 
 .version-comment-latest-preview[hidden] {
@@ -93,15 +106,20 @@ body.version-comment-dialog-open {
 
 .version-comment-latest-text {
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   display: -webkit-box;
   line-height: 1.35;
-  max-height: 2.7em;
+  max-height: 1.35em;
   overflow: hidden;
 }
 
 .author-comment-empty {
-  color: var(--muted, #66727e);
+  display: none;
+}
+
+.comment-cell .meta-value[hidden],
+.compact-comment[hidden] {
+  display: none;
 }
 
 .version-comment-dialog {

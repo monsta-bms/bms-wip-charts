@@ -112,9 +112,11 @@ check("author comments preserve newlines and long words without HTML execution",
   assert.match(commentUi, /text\.textContent = body/);
   assert.doesNotMatch(commentUi, /authorComment[^\n]*innerHTML/);
 });
-check("author comments clamp to three lines and public previews to two", () => {
-  assert.match(commentCss, /\.author-comment-preview-text[\s\S]*-webkit-line-clamp:\s*3/);
-  assert.match(commentCss, /\.version-comment-latest-text[\s\S]*-webkit-line-clamp:\s*2/);
+check("author comments clamp to two lines and latest previews to one", () => {
+  assert.match(commentCss, /\.author-comment-preview-text[\s\S]*-webkit-line-clamp:\s*2/);
+  assert.match(commentCss, /\.version-comment-latest-text[\s\S]*-webkit-line-clamp:\s*1/);
+  assert.match(commentUi, /container\.hidden = !hasAuthorComment && !hasLatestComment/);
+  assert.match(commentUi, /const empty = createElement\("span", "author-comment-empty", "—"\);[\s\S]*empty\.hidden = true/);
   assert.match(commentUi, /scrollHeight > text\.clientHeight/);
 });
 check("tree and compact rerenders remount the same author-comment component", () => {

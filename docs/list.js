@@ -398,7 +398,8 @@
     const difficulty = String(item.difficulty || "未入力").trim();
     const author = String(item.author || "未入力").trim();
     const commentPreview = item.hasComment === true ? String(item.commentPreview || "") : "";
-    const hasComment = Boolean(commentPreview);
+    const latestComment = item.latestComment || item.latest_comment || null;
+    const hasComment = Boolean(commentPreview.trim() || String(latestComment?.body ?? commentPreview).trim());
     const rawProgress = Number(item.progress);
     const progress = Number.isFinite(rawProgress) ? Math.max(0, Math.min(100, Math.round(rawProgress))) : 0;
     const displayedAt = formatCreatedAt(state.sort === "updated" ? item.chartUpdatedAt : item.createdAt);

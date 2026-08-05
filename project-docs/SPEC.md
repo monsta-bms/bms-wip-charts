@@ -1238,7 +1238,7 @@ RC★★変換:
 
 ## VERSION-COMMENT-PROGRESS-01 公開版コメントと進捗ヒント
 
-- 公開中の各versionは投稿者コメント全文、公開コメント件数、最新公開コメントを表示できる。投稿者コメントは改行と長い連続文字を保持し、3行を超える場合だけ「全文を見る」から共通dialogを開く。公開コメントの最新previewは2行までとし、本文は常にplain textとして扱う。
+- 公開中の各versionは投稿者コメント全文、公開コメント件数、最新公開コメントを表示できる。一覧では投稿者コメントを最大2行、最新公開コメントを最大1行にまとめ、長文は小さな「全文を見る」表示を含む共通dialogから確認する。改行と長い連続文字を保持し、本文は常にplain textとして扱う。
 - 共通dialogは曲名、差分名、版、作者、投稿者コメント、公開コメントを表示する。公開コメントは古い順、20件単位で読み込み、500 Unicode code point以内の本文を二重送信なしで投稿する。成功時は再読込せず一覧、件数、最新previewを更新する。
 - `version_comments`はversion、本文、作成日時、version 2のIP／UA fingerprint、非表示状態だけを保持する。公開APIへfingerprint、hash version、非表示理由を返さない。versionの完全削除時は対応コメントも削除し、非表示コメントは件数、最新、一覧のすべてから除外する。
 - 公開コメント投稿は公開可否を書込み直前にも確認し、既存の`ABUSE_HASH_SECRET`によるfingerprint、active BAN、10分／1時間の短時間制限を適用する。設定不足やDB失敗はfail closedとし、本文、IP／UA、hash、Secretをログへ出さない。
@@ -1283,3 +1283,12 @@ RC★★変換:
 - 投稿フォームのファイル選択後sectionは160msの表示アニメーションを維持するが、終了後に`transform`を保持しない。進捗マップのtooltipと右クリックpopoverはviewport基準の`position: fixed`を維持し、小節・時間・ノーツ情報をpointerから12pxの近傍へ表示する。viewport端では既存どおり反転または10px margin内へ収める。
 - 投稿状態の「制作途中」「完成版」「完成済み没譜面」は、各選択labelへ`padding-inline-start: 5px`を付け、radioと選択row左端の間隔を確保する。rowのgrid、説明、badge、disabled条件、44px操作高は変更しない。
 - 公開更新履歴へ2026/08/05の投稿フォーム操作性改善を追加する。API schema、Worker処理、D1、R2、Secret、投稿状態ロジック、進捗マップ保存形式は変更しない。
+
+## PUBLIC-LIST-DENSITY-PATCH-01
+
+- トップページの最近の投稿、chart指定detail、お気に入り絞り込み、管理後の再描画、および`list.html`は、日時、譜面情報、難易度・作者、進捗・コメント、操作をdesktopで横方向に配置する。情報、状態badge、進捗thumbnail、favorite、操作を削除せず、技術IDは新たに表示しない。
+- 1180px以上では5操作を原則1段、1024pxでは最大2段とする。760px以下はcardへ移行し、390pxを含むmobileでは2列を基本として追記投稿だけを全幅にできる。desktop操作は40px以上、mobile操作は44px以上、`white-space: nowrap`、`min-width: 0`を維持する。
+- desktopの通常行はコメントなし108px以内、コメントあり132px以内、長文140px以内を原則とし、固定heightは使わない。row paddingは10～14px、列gapは12～18px、inner gapは3～7px、metadataとcommentのline-heightは1.35～1.5とする。
+- 投稿者コメントは最大2行、最新コメントは最大1行とし、どちらもない場合はcomment領域を非表示にする。全文とコメント一覧は既存dialogで確認し、in-place投稿後は空領域を復帰させず対象行だけを更新する。
+- 一覧上の削除はdanger outline、確認dialogの実行だけをdanger塗りつぶし、キャンセルをneutralとする。API、Worker、D1、R2、Secret、投稿・取り下げ・削除ロジック、progress map形式は変更しない。
+- 2026/08/05更新履歴には、進捗tooltip、投稿状態radio余白、投稿カード・一覧行の密度改善の3項目を掲載する。

@@ -131,11 +131,11 @@ check("branch sizing values and importance remain stable", () => {
   assert.doesNotMatch(branchRules[0].declarations["max-width"], /!important/i);
 });
 
-check("R4B2a is exactly the reviewed two-declaration removal", () => {
+check("R4B2a removal remains intact after the reviewed density patch", () => {
   const currentBlock = `.thumbnail-cell .progress-thumbnail,\n.progress-thumbnail-block .progress-thumbnail {\n  min-width: 0;\n}\n`;
   const beforeBlock = `.thumbnail-cell .progress-thumbnail,\r\n.progress-thumbnail-block .progress-thumbnail {\r\n  max-width: 100%;\r\n  min-width: 0;\r\n  width: 100%;\r\n}\r\n`;
   assert.ok(sources.refresh.includes(currentBlock));
-  assert.equal(sha256(sources.refresh.replace(currentBlock, beforeBlock)), "ac0a64bafe535c350302ffa166012f32d03280efe3fe82b6b6148d873ef0f708");
+  assert.equal(sha256(sources.refresh.replace(currentBlock, beforeBlock)), "b86d846dc28da3aa5e200f9e5acedb785eaeccae971e54f900788388d6e3cfad");
 });
 
 check("theme does not override thumbnail width", () => {
@@ -189,7 +189,7 @@ check("compact-list stylesheet order includes deletion and comment components", 
 });
 
 check("changed public UI, comment, and progress assets use their release cache keys", () => {
-  assert.match(sources.index, /\.\/branch-tree-list\.css\?v=public-ui-refinement-patch-02/);
+  assert.match(sources.index, /\.\/branch-tree-list\.css\?v=public-list-density-patch-01/);
   assert.match(sources.index, /\.\/chart-detail-link\.css\?v=detail-theme-r4b2e-01/);
   assert.equal((sources.index.match(/detail-theme-r4b2e-01/g) || []).length, 1);
   assert.match(sources.index, /\.\/theme\.css\?v=public-ui-refinement-patch-02/);
@@ -199,16 +199,17 @@ check("changed public UI, comment, and progress assets use their release cache k
   assert.equal((sources.index.match(/progress-style-r4b2f-01/g) || []).length, 2);
   assert.match(sources.index, /\.\/favorites-list\.css\?v=version-comment-progress-01/);
   assert.match(sources.index, /\.\/favorites-list\.js\?v=completed-parent-access-01/);
-  assert.match(sources.index, /\.\/list-ui-refresh\.css\?v=css-cleanup-r4b2a-01/);
-  assert.equal((sources.index.match(/css-cleanup-r4b2a-01/g) || []).length, 1);
+  assert.match(sources.index, /\.\/list-ui-refresh\.css\?v=public-list-density-patch-01/);
   assert.doesNotMatch(sources.listHtml, /progress-style-r4b2f-01|detail-theme-r4b2e-01|favorite-theme-r4b2d-01|css-cleanup-r4b2a-01/);
-  assert.equal((sources.index.match(/version-comment-progress-01/g) || []).length, 4);
+  assert.equal((sources.index.match(/version-comment-progress-01/g) || []).length, 2);
   assert.equal((sources.index.match(/completed-parent-access-01/g) || []).length, 2);
   assert.match(sources.index, /\.\/app\.js\?v=public-ui-refinement-patch-02/);
-  assert.equal((sources.listHtml.match(/version-comment-progress-01/g) || []).length, 2);
+  assert.equal((sources.listHtml.match(/version-comment-progress-01/g) || []).length, 0);
   assert.equal((sources.listHtml.match(/completed-parent-access-01/g) || []).length, 1);
   assert.ok((sources.index.match(/public-ui-refinement-patch-02/g) || []).length >= 8);
-  assert.ok((sources.listHtml.match(/public-ui-refinement-patch-02/g) || []).length >= 5);
+  assert.ok((sources.listHtml.match(/public-ui-refinement-patch-02/g) || []).length >= 3);
+  assert.equal((sources.index.match(/public-list-density-patch-01/g) || []).length, 5);
+  assert.equal((sources.listHtml.match(/public-list-density-patch-01/g) || []).length, 5);
 });
 
 check("favorite and progress runtime styles are completely removed", () => {
@@ -217,23 +218,24 @@ check("favorite and progress runtime styles are completely removed", () => {
   assert.doesNotMatch(productionJsAggregate, /favoriteListStyles|progress-image-thumbnail-style|createElement\(["']style["']\)|document\.head\.appendChild\(style\)/);
 });
 
-check("protected CSS hashes remain stable", () => {
+check("reviewed CSS hashes remain stable", () => {
   const expected = new Map([
     [sources.style, "e098f16d091b1f56e6ac6fac1a1c52e880d79c3d3f38eff746b6755f605e01db"],
-    [sources.list, "72283c6ccc037444e4e524dda3aa5aef4d9ea54d4fbbcd851dce100f4558b8db"],
+    [sources.list, "8c3ea0fe8aac1353de6de3bfcfe92e74db9644e0ad8375084f5bee8fa230026b"],
     [sources.treePolish, "e0d1cf234c249070294491982088d34812c602e92ccdca7377011d7292e9f4ad"],
     [sources.chartMiniview, "e92980af2dde81ce2051a9216d744d62ee9fbed18e8423f6461296f65791d49c"],
-    [sources.management, "6395a101c87a7f10bb167bf37fdf5efa2bbaea7267d825460108e0f599335b99"]
+    [sources.management, "3aee0089beb883940c4606974f13842bead6ca4d5e786920e77902e22d5274e2"],
+    [sources.commentCss, "677b0820dcf82e4943d4a0927f23e9abfd3a4a75d50656e8794f92af9fee5e3a"]
   ]);
   expected.forEach((hash, source) => assert.equal(sha256(source), hash));
 });
 
-check("branch CSS includes the reviewed comment-cell adjustment", () => {
-  assert.equal(sha256(sources.branch), "6004b912d18f9bd0eee031a6f9a38ae6bfc9422f58e51abca99a5adcf8f75b56");
+check("branch CSS includes the reviewed density action grid", () => {
+  assert.equal(sha256(sources.branch), "b95d8b4ea25ed7a76dd51fa19433524fd264b586bff30e60968701022bc2f06c");
 });
 
-check("list-ui-refresh has the reviewed R4B2a hash", () => {
-  assert.equal(sha256(sources.refresh), "f630206e0a7ce75150b2305414ff85c6657244bfa0d58965594e29fb372b1d81");
+check("list-ui-refresh has the reviewed density hash", () => {
+  assert.equal(sha256(sources.refresh), "b8da58683c9e52c20e0e01c27b070fbedf768c622be564dc7a42fa5dfd5a06ad");
 });
 
 check("grid column definitions remain stable", () => {
@@ -567,7 +569,7 @@ check("R4B2b does not use clipping or visual workarounds", () => {
 check("reviewed production JavaScript set includes public review, comment, and progress helpers", () => {
   assert.equal(productionJsFiles.length, 35);
   assert.equal(sha256(sources.progressThumbnail), "e2dbcee8975d7b95341875d1c4962fd2904a81873fd4cf7dbdbe757004a58bb6");
-  assert.equal(sha256(productionJsAggregate), "eb0daa7282ae3e974e9e51368e74d01a7c6c6daf080d8fe2385a855858ce6c45");
+  assert.equal(sha256(productionJsAggregate), "3e9dd13b1cac512b207e770d44d881ca79b4ba3369e49c240a21624db5965294");
 });
 
 check("all known CSS issues are documented as resolved", () => {

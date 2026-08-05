@@ -372,6 +372,10 @@
     document.querySelectorAll(".version-comment-latest-preview").forEach((preview) => {
       if (preview.dataset.versionId !== versionId) return;
       preview.hidden = false;
+      const container = preview.parentElement;
+      if (container) {
+        container.hidden = false;
+      }
       const text = preview.querySelector(".version-comment-latest-text");
       if (text) text.textContent = String(comment.body || "");
     });
@@ -434,9 +438,15 @@
   function mountAuthorComment(container, comment, context = {}) {
     if (!container) return null;
     const body = String(comment || "");
+    const latest = context.latestComment;
+    const hasAuthorComment = Boolean(body.trim());
+    const hasLatestComment = Boolean(String(latest?.body ?? body.slice(0, 0)).trim());
     container.replaceChildren();
-    if (!body.trim()) {
-      container.append(createElement("span", "author-comment-empty", "—"));
+    container.hidden = !hasAuthorComment && !hasLatestComment;
+    if (!hasAuthorComment) {
+      const empty = createElement("span", "author-comment-empty", "—");
+      empty.hidden = true;
+      container.append(empty);
     } else {
       const button = createElement("button", "author-comment-preview");
       button.type = "button";
@@ -457,10 +467,9 @@
       });
     }
 
-    const latest = context.latestComment;
     const latestPreview = createElement("button", "version-comment-latest-preview");
     latestPreview.type = "button";
-    latestPreview.hidden = !latest?.body;
+    latestPreview.hidden = !hasLatestComment;
     copyContextToDataset(latestPreview, { ...context, authorComment: body });
     latestPreview.dataset.versionId = String(context.versionId || "");
     latestPreview.setAttribute("aria-label", "最新の公開コメントとコメント一覧を開く");

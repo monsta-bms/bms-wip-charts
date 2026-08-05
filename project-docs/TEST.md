@@ -1707,3 +1707,11 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - `node scripts/test-public-ui-refinement.mjs`で後続sectionの表示アニメーションに`both`／`forwards`がなく、投稿状態labelの`padding-inline-start`が5px、変更したCSSのcache keyと2026/08/05更新履歴が一致することを確認する。
 - `node scripts/test-css-browser-regression.js`で実際の投稿フォームへBMS fixtureを読み込み、white／default／dark × 390／760／1024／1366pxの12条件を確認する。表示アニメーション完了後のprogress sectionは`transform: none`、tooltipはpointerの右下8～20px、radioはrow左端から5px以上、horizontal overflowは0件、Console error／warningは0／0とする。
 - 更新履歴は20 entry、新しい順、manifestとの順序・hash一致、site-copy export／validate／applyの往復差分0を確認する。repository hygiene、canonical schema、CSS ownership、JavaScript構文、HTML重複ID、link、Worker typecheck、deploy:check、Wrangler dry-run、`git diff --check`を実行する。
+
+## PUBLIC-LIST-DENSITY-PATCH-01 回帰
+
+- fixtureはコメント0件、投稿者コメントのみ、最新コメントのみ、長文、コメント件数1桁／2桁、原曲URLあり／なし、追記可能／不可、削除可能／不可、長い曲名／作者、NEW、没譜面、制作途中、完成を横断する。
+- `node scripts/test-css-browser-regression.js`でwhite／default／dark × 390／760／1024／1366／1920pxを確認する。1180px以上の操作は1段、1024pxは最大2段、mobileは2列を基本とし、削除buttonのはみ出し、horizontal overflow、clipping、Console error／warningを0件とする。
+- 1366／1920pxの通常行はコメントなし108px以内、コメントあり132px以内、長文140px以内を原則とする。投稿者コメント2行、最新コメント1行、空comment領域0件、「全文を見る」による独立行増加0件をgeometryとcomputed styleで確認する。
+- favorite-only、chart指定、通常reload、コメント追加後、append完了後、management refresh後も同じgrid、行高上限、操作段数を維持する。keyboard focus、comment dialog、進捗thumbnail、状態badge、DL／追記／削除の利用可否は既存回帰を再実行する。
+- 静的検査、repository hygiene、canonical schema、CSS ownership、site-copy往復、JavaScript構文、HTML重複ID、link、Worker typecheck、`deploy:check`、Wrangler dry-run、`git diff --check`を実行する。本番データ書込み、D1／R2／Secret操作は行わない。

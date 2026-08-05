@@ -54,9 +54,10 @@ for (const phrase of ["正式公開を開始しました", "公開終了の予�
 
 const latest = articles.find((entry) => entry.id === "CHANGELOG_20260805")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
 for (const phrase of [
-  "投稿フォームの操作性を改善",
+  "投稿フォームと一覧の操作性を改善",
   "進捗マップの小節・時間・ノーツ情報を、カーソルの近くへ表示するよう修正しました。",
-  "投稿状態の選択ボタンに左余白を加え、枠へ重ならないよう調整しました。"
+  "投稿状態の選択ボタンに左余白を加え、枠へ重ならないよう調整しました。",
+  "トップページの投稿カードと投稿一覧を圧縮し、コメント・進捗・操作を保ったまま多くの投稿を見渡せるようにしました。"
 ]) assert.ok(latest.includes(phrase), `最新entryに「${phrase}」を掲載すること`);
 const difficultyTableUpdate = articles.find((entry) => entry.id === "CHANGELOG_20260804")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
 assert.ok(difficultyTableUpdate.includes("RC★／RC★★の難易度表に完成版と没譜面が正しく掲載されるよう修正しました。"), "2026-08-04 entryに難易度表修正を掲載すること");

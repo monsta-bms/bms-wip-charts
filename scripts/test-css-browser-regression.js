@@ -11,7 +11,7 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const docsRoot = path.join(root, "docs");
 const themes = ["white", "default", "dark"];
-const widths = [390, 760, 1024, 1366];
+const widths = [390, 760, 1024, 1366, 1920];
 const apiPort = 8788;
 const tolerance = 0.25;
 const startedAt = process.hrtime.bigint();
@@ -228,6 +228,70 @@ const compactItems = [
     isNew: false,
     withdrawn: false,
     deleteRequested: true
+  },
+  {
+    ...versions[4],
+    chartId: "chart-audit",
+    title: "投稿者コメントだけの完成版",
+    subtitle: "",
+    chartName: "完成差分",
+    versionLabel: "v3",
+    progress: 100,
+    completedAt: "2026-07-25T03:00:00.000Z",
+    hasComment: true,
+    authorComment: "投稿者コメントだけを表示するfixtureです。",
+    commentPreview: "投稿者コメントだけを表示するfixtureです。",
+    commentCount: 12,
+    latestComment: null,
+    chartUpdatedAt: "2026-07-25T03:00:00.000Z",
+    isNew: false,
+    withdrawn: false,
+    deleteRequested: false
+  },
+  {
+    ...versions[5],
+    chartId: "chart-audit",
+    title: "最新コメントだけの没譜面",
+    subtitle: "",
+    chartName: "没譜面差分",
+    versionLabel: "v4",
+    progress: 100,
+    hasComment: false,
+    authorComment: "",
+    commentPreview: "",
+    commentCount: 1,
+    latestComment: {
+      body: "最新コメントだけを表示するfixtureです。",
+      createdAt: "2026-07-25T03:30:00.000Z"
+    },
+    chartUpdatedAt: "2026-07-25T03:30:00.000Z",
+    isNew: false,
+    isRejected: true,
+    originUrl: null,
+    withdrawn: false,
+    deleteRequested: false
+  },
+  {
+    ...versions[6],
+    chartId: "chart-audit",
+    title: "非常に長い曲名を持つ投稿一覧の折り返しと高さを確認するためのfixture title",
+    subtitle: "LONG SUBTITLE",
+    chartName: "非常に長い差分名を持つfixture chart name",
+    versionLabel: "v5-long",
+    author: "非常に長い作者名を持つfixture author name",
+    progress: 47,
+    hasComment: false,
+    authorComment: "",
+    commentPreview: "",
+    commentCount: 9,
+    latestComment: null,
+    chartUpdatedAt: "2026-07-25T04:00:00.000Z",
+    isNew: true,
+    allowAppend: false,
+    appendAvailable: false,
+    managementAvailable: false,
+    withdrawn: false,
+    deleteRequested: false
   }
 ];
 
@@ -1641,7 +1705,16 @@ async function captureDetailRerenderRegression(cdp, sessionId) {
   const before = await evaluate(cdp, sessionId, `({
     selection: window.BmsChartDetail.getSelection(),
     cardCount: document.querySelectorAll("#selectedChartCardSlot > .chart-group").length,
-    versionCount: document.querySelectorAll("#selectedChartCardSlot .version-row").length
+    versionCount: document.querySelectorAll("#selectedChartCardSlot .version-row").length,
+    activeLayout: (() => {
+      const row = document.querySelector('.version-row[data-version-id="version-active"]');
+      const actions = row?.querySelector('.version-actions');
+      return {
+        rowColumns: row ? getComputedStyle(row).gridTemplateColumns : "",
+        actionAreas: actions ? getComputedStyle(actions).gridTemplateAreas : "",
+        horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+      };
+    })()
   })`);
   const appendResult = await evaluate(cdp, sessionId, `window.BmsChartDetail.showCreatedVersion({
     chartId: "chart-audit",
@@ -1656,7 +1729,16 @@ async function captureDetailRerenderRegression(cdp, sessionId) {
     targetCount: document.querySelectorAll("#selectedChartCardSlot .is-detail-target").length,
     statusText: document.querySelector("#selectedChartStatus").textContent,
     statusSuccess: document.querySelector("#selectedChartStatus").classList.contains("is-success"),
-    renderedCount: window.__cssDetailRenderedCount
+    renderedCount: window.__cssDetailRenderedCount,
+    activeLayout: (() => {
+      const row = document.querySelector('.version-row[data-version-id="version-active"]');
+      const actions = row?.querySelector('.version-actions');
+      return {
+        rowColumns: row ? getComputedStyle(row).gridTemplateColumns : "",
+        actionAreas: actions ? getComputedStyle(actions).gridTemplateAreas : "",
+        horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+      };
+    })()
   })`);
   const managementResult = await evaluate(cdp, sessionId, `window.BmsChartDetail.refreshAfterManagement({
     chartId: "chart-audit",
@@ -1669,7 +1751,16 @@ async function captureDetailRerenderRegression(cdp, sessionId) {
     versionCount: document.querySelectorAll("#selectedChartCardSlot .version-row").length,
     targetCount: document.querySelectorAll("#selectedChartCardSlot .is-detail-target").length,
     renderedCount: window.__cssDetailRenderedCount,
-    horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+    horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    activeLayout: (() => {
+      const row = document.querySelector('.version-row[data-version-id="version-active"]');
+      const actions = row?.querySelector('.version-actions');
+      return {
+        rowColumns: row ? getComputedStyle(row).gridTemplateColumns : "",
+        actionAreas: actions ? getComputedStyle(actions).gridTemplateAreas : "",
+        horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+      };
+    })()
   })`);
   return { before, appendResult, afterAppend, managementResult, afterManagement };
 }
@@ -1828,10 +1919,61 @@ function captureExpression(pageKind) {
       compactLinks: ".compact-links",
       compactComments: ".compact-comment",
       commentPreviews: ".compact-comment .author-comment-preview",
+      latestCommentPreviews: ".compact-comment .version-comment-latest-preview:not([hidden])",
       originLinks: ".compact-origin-link",
       downloads: ".compact-download-link, .compact-download-disabled"
     })};
     const elements = Object.fromEntries(Object.entries(selectors).map(([name, selector]) => [name, inspect(selector)]));
+    const densityRows = [...document.querySelectorAll(${JSON.stringify(pageKind)} === "detail" ? ".version-row" : ".compact-version-row")]
+      .map((row, index) => {
+        const rowRect = row.getBoundingClientRect();
+        const actions = row.querySelector(${JSON.stringify(pageKind)} === "detail" ? ".version-actions" : ".compact-actions-cell");
+        const comment = row.querySelector(${JSON.stringify(pageKind)} === "detail" ? ".comment-cell .meta-value" : ".compact-comment");
+        const actionControls = actions
+          ? [...actions.querySelectorAll(":scope > a, :scope > button, :scope > .version-download-control, :scope > .compact-link-control")]
+            .filter((control) => {
+              const style = getComputedStyle(control);
+              return !control.hidden && style.display !== "none" && control.getClientRects().length > 0;
+            })
+          : [];
+        const actionRects = actionControls.map((control) => control.getBoundingClientRect());
+        const actionLineCount = new Set(actionRects.map((rect) => Math.round(rect.top))).size;
+        const management = actions?.querySelector(".version-management-button") || null;
+        const managementRect = management?.getBoundingClientRect?.() || null;
+        const commentText = String(comment?.textContent || "").trim();
+        return {
+          index,
+          versionId: row.dataset.versionId || "",
+          exceptionalState: row.matches(".is-withdrawal-pending, .is-withdrawal-processing, .is-withdrawal-tombstone, .is-intermediate-history"),
+          height: round(rowRect.height),
+          hasComment: Boolean(comment && !comment.hidden && getComputedStyle(comment).display !== "none" && commentText),
+          commentHidden: !comment || comment.hidden || getComputedStyle(comment).display === "none",
+          commentHeight: round(comment?.getBoundingClientRect?.().height || 0),
+          commentTextLength: commentText.length,
+          authorPreviewLines: comment?.querySelector(".author-comment-preview-text")
+            ? round(comment.querySelector(".author-comment-preview-text").getBoundingClientRect().height
+              / Number.parseFloat(getComputedStyle(comment.querySelector(".author-comment-preview-text")).lineHeight))
+            : 0,
+          latestPreviewLines: comment?.querySelector(".version-comment-latest-text")
+            ? round(comment.querySelector(".version-comment-latest-text").getBoundingClientRect().height
+              / Number.parseFloat(getComputedStyle(comment.querySelector(".version-comment-latest-text")).lineHeight))
+            : 0,
+          actionControlCount: actionControls.length,
+          actionLineCount,
+          actionGridColumns: actions ? getComputedStyle(actions).gridTemplateColumns : "",
+          actionGridAreas: actions ? getComputedStyle(actions).gridTemplateAreas : "",
+          actionsContained: actionRects.every((rect) => (
+            rect.left >= rowRect.left - 1
+            && rect.right <= rowRect.right + 1
+            && rect.top >= rowRect.top - 1
+            && rect.bottom <= rowRect.bottom + 1
+          )),
+          managementContained: !managementRect || (
+            managementRect.left >= rowRect.left - 1
+            && managementRect.right <= rowRect.right + 1
+          )
+        };
+      });
     const controls = ${pageKind === "detail"
       ? `Object.fromEntries(Object.entries(${JSON.stringify(detailControlSelectors)}).map(([name, selector]) => [name, describe(document.querySelector(selector))]))`
       : "{}"};
@@ -1952,6 +2094,7 @@ function captureExpression(pageKind) {
       },
       counts: Object.fromEntries(Object.entries(elements).map(([name, items]) => [name, items.length])),
       elements,
+      densityRows,
       controls,
       lifecycleGeometry,
       focusVisible,
@@ -2030,7 +2173,7 @@ const untouchedControlColors = {
     appendUnavailable: ["rgb(238, 243, 241)", "rgb(130, 145, 141)", "rgb(207, 216, 213)"],
     appendLegacy: ["rgb(238, 243, 241)", "rgb(130, 145, 141)", "rgb(207, 216, 213)"],
     appendIntermediate: ["rgb(238, 243, 241)", "rgb(130, 145, 141)", "rgb(207, 216, 213)"],
-    management: ["rgb(253, 235, 234)", "rgb(165, 55, 50)", "rgb(165, 55, 50)"],
+    management: ["rgba(0, 0, 0, 0)", "rgb(165, 55, 50)", "rgb(165, 55, 50)"],
     downloadUnavailable: ["rgb(227, 233, 231)", "rgb(111, 123, 119)", "rgb(207, 216, 213)"],
     genericSecondaryDisabled: ["rgb(238, 243, 241)", "rgb(130, 145, 141)", "rgb(207, 216, 213)"],
     withdrawalActionDisabled: ["rgb(227, 233, 231)", "rgb(111, 123, 119)", "rgb(207, 216, 213)"]
@@ -2040,7 +2183,7 @@ const untouchedControlColors = {
     appendUnavailable: ["rgb(238, 243, 241)", "rgb(130, 145, 141)", "rgb(170, 185, 180)"],
     appendLegacy: ["rgb(238, 243, 241)", "rgb(130, 145, 141)", "rgb(170, 185, 180)"],
     appendIntermediate: ["rgb(238, 243, 241)", "rgb(130, 145, 141)", "rgb(170, 185, 180)"],
-    management: ["rgb(244, 222, 218)", "rgb(159, 56, 51)", "rgb(159, 56, 51)"],
+    management: ["rgba(0, 0, 0, 0)", "rgb(159, 56, 51)", "rgb(159, 56, 51)"],
     downloadUnavailable: ["rgb(198, 208, 205)", "rgb(101, 114, 110)", "rgb(170, 185, 180)"],
     genericSecondaryDisabled: ["rgb(238, 243, 241)", "rgb(130, 145, 141)", "rgb(170, 185, 180)"],
     withdrawalActionDisabled: ["rgb(198, 208, 205)", "rgb(101, 114, 110)", "rgb(170, 185, 180)"]
@@ -2050,7 +2193,7 @@ const untouchedControlColors = {
     appendUnavailable: ["rgb(238, 243, 241)", "rgb(130, 145, 141)", "rgb(70, 92, 84)"],
     appendLegacy: ["rgb(238, 243, 241)", "rgb(130, 145, 141)", "rgb(70, 92, 84)"],
     appendIntermediate: ["rgb(238, 243, 241)", "rgb(130, 145, 141)", "rgb(70, 92, 84)"],
-    management: ["rgb(68, 37, 34)", "rgb(255, 170, 164)", "rgb(255, 170, 164)"],
+    management: ["rgba(0, 0, 0, 0)", "rgb(255, 170, 164)", "rgb(255, 170, 164)"],
     downloadUnavailable: ["rgb(43, 57, 52)", "rgb(156, 170, 165)", "rgb(70, 92, 84)"],
     genericSecondaryDisabled: ["rgb(238, 243, 241)", "rgb(130, 145, 141)", "rgb(70, 92, 84)"],
     withdrawalActionDisabled: ["rgb(43, 57, 52)", "rgb(156, 170, 165)", "rgb(70, 92, 84)"]
@@ -2191,6 +2334,23 @@ function assertPageInvariants(snapshot, consoleMessages) {
     assert.ok(Number.parseFloat(entry.focusVisible?.outlineWidth || "0") >= 1, `focus-visible outline is too thin at ${entry.requestedTheme} ${entry.requestedWidth}px`);
     assert.deepEqual(entry.counts, detailCounts, `detail control counts changed at ${entry.requestedTheme} ${entry.requestedWidth}px`);
     assert.deepEqual(Object.keys(entry.controls), Object.keys(detailControlSelectors));
+    for (const row of entry.densityRows) {
+      assert.equal(row.actionsContained, true, `detail actions escape row at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
+      assert.equal(row.managementContained, true, `detail delete button escapes row at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
+      assert.ok(row.authorPreviewLines <= 2.1, `detail author comment exceeds two lines at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
+      assert.ok(row.latestPreviewLines <= 1.1, `detail latest comment exceeds one line at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
+      if (entry.requestedWidth >= 1180) {
+        assert.ok(row.actionLineCount <= 1, `detail actions exceed one line at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
+      } else if (entry.requestedWidth === 1024) {
+        assert.ok(row.actionLineCount <= 2, `detail actions exceed two lines at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
+      } else {
+        assert.ok(row.actionLineCount <= 3, `detail mobile actions exceed three lines at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
+      }
+      if (entry.requestedWidth >= 1366 && row.commentTextLength > 0 && !row.exceptionalState) {
+        const maximumHeight = row.commentTextLength > 100 ? 140 : 132;
+        assert.ok(row.height <= maximumHeight, `detail row height ${row.height}px exceeds ${maximumHeight}px at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
+      }
+    }
     const detail = entry.detailPresentation;
     const expectedDetail = detailPresentationColors[entry.requestedTheme];
     assert.equal(detail.section.backgroundColor, expectedDetail.sectionBackground);
@@ -2551,11 +2711,10 @@ function assertPageInvariants(snapshot, consoleMessages) {
   }
   const detailRerender = snapshot.detailRerender;
   const expectedSelection = { chartId: "chart-audit", versionId: "version-active" };
-  assert.deepEqual(detailRerender.before, {
-    selection: expectedSelection,
-    cardCount: 1,
-    versionCount: versions.length
-  });
+  assert.deepEqual(detailRerender.before.selection, expectedSelection);
+  assert.equal(detailRerender.before.cardCount, 1);
+  assert.equal(detailRerender.before.versionCount, versions.length);
+  assert.equal(detailRerender.before.activeLayout.horizontalOverflow, false);
   assert.equal(detailRerender.appendResult, true);
   assert.deepEqual(detailRerender.afterAppend.selection, expectedSelection);
   assert.equal(detailRerender.afterAppend.cardCount, 1);
@@ -2564,6 +2723,7 @@ function assertPageInvariants(snapshot, consoleMessages) {
   assert.equal(detailRerender.afterAppend.statusText, "\u6295\u7a3f\u3057\u307e\u3057\u305f\u3002");
   assert.equal(detailRerender.afterAppend.statusSuccess, true);
   assert.equal(detailRerender.afterAppend.renderedCount, 1);
+  assert.deepEqual(detailRerender.afterAppend.activeLayout, detailRerender.before.activeLayout);
   assert.equal(detailRerender.managementResult, true);
   assert.deepEqual(detailRerender.afterManagement.selection, expectedSelection);
   assert.equal(detailRerender.afterManagement.cardCount, 1);
@@ -2571,6 +2731,7 @@ function assertPageInvariants(snapshot, consoleMessages) {
   assert.equal(detailRerender.afterManagement.targetCount, 1);
   assert.equal(detailRerender.afterManagement.renderedCount, 2);
   assert.equal(detailRerender.afterManagement.horizontalOverflow, false);
+  assert.deepEqual(detailRerender.afterManagement.activeLayout, detailRerender.before.activeLayout);
   for (const value of [detailRerender.afterAppend.url, detailRerender.afterManagement.url]) {
     const url = new URL(value);
     assert.equal(url.pathname, "/index.html");
@@ -2582,8 +2743,9 @@ function assertPageInvariants(snapshot, consoleMessages) {
     assert.equal(entry.counts.compactRows, compactItems.length);
     assert.equal(entry.counts.compactLinks, compactItems.length);
     assert.equal(entry.counts.compactComments, compactItems.length);
-    assert.equal(entry.counts.commentPreviews, 1);
-    assert.equal(entry.counts.originLinks, compactItems.length);
+    assert.equal(entry.counts.commentPreviews, 2);
+    assert.equal(entry.counts.latestCommentPreviews, 2);
+    assert.ok(entry.counts.originLinks > 0 && entry.counts.originLinks < compactItems.length);
     assert.equal(entry.counts.downloads, compactItems.length);
     for (const row of entry.elements.compactRows) {
       assert.ok(row.scrollWidth <= row.clientWidth + 1, `compact row overflows at ${entry.requestedTheme} ${entry.requestedWidth}px`);
@@ -2593,6 +2755,26 @@ function assertPageInvariants(snapshot, consoleMessages) {
     }
     for (const preview of entry.elements.commentPreviews) {
       assert.ok(preview.parentClip.left <= 1 && preview.parentClip.right <= 1, `compact comment preview escapes its column at ${entry.requestedTheme} ${entry.requestedWidth}px`);
+    }
+    const hiddenCommentRows = entry.densityRows.filter((row) => row.commentHidden);
+    assert.equal(hiddenCommentRows.length, 2, `compact empty comment regions changed at ${entry.requestedTheme} ${entry.requestedWidth}px`);
+    assert.ok(hiddenCommentRows.every((row) => row.commentHeight === 0), `compact empty comments retain height at ${entry.requestedTheme} ${entry.requestedWidth}px`);
+    for (const row of entry.densityRows) {
+      assert.equal(row.actionsContained, true, `compact actions escape row at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
+      assert.equal(row.managementContained, true, `compact delete button escapes row at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
+      assert.ok(row.authorPreviewLines <= 2.1, `compact author comment exceeds two lines at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
+      assert.ok(row.latestPreviewLines <= 1.1, `compact latest comment exceeds one line at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
+      if (entry.requestedWidth >= 1180) {
+        assert.ok(row.actionLineCount <= 1, `compact actions exceed one line at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
+      } else if (entry.requestedWidth === 1024) {
+        assert.ok(row.actionLineCount <= 2, `compact actions exceed two lines at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
+      } else {
+        assert.ok(row.actionLineCount <= 3, `compact mobile actions exceed three lines at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
+      }
+      if (entry.requestedWidth >= 1366) {
+        const maximumHeight = row.commentTextLength > 100 ? 140 : (row.hasComment ? 132 : 108);
+        assert.ok(row.height <= maximumHeight, `compact row height ${row.height}px exceeds ${maximumHeight}px at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
+      }
     }
   }
   const errors = consoleMessages.filter((message) => message.type === "error" || message.type === "exception");

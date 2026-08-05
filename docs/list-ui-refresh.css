@@ -22,7 +22,13 @@
 }
 
 .version-row.version-tree-row {
-  min-height: 82px;
+  min-height: 88px;
+  padding: 10px 12px;
+  row-gap: 4px;
+}
+
+.chart-title-row {
+  padding: 12px 14px;
 }
 
 .chart-heading-main {
@@ -398,6 +404,8 @@
 @media (max-width: 760px) {
   .version-row.version-tree-row {
     min-height: 0;
+    padding: 12px 10px;
+    row-gap: 8px;
   }
 
   .version-tree-tag {

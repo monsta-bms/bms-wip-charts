@@ -925,3 +925,143 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* PUBLIC-LIST-DENSITY-PATCH-01 */
+.compact-list-head,
+.compact-version-row {
+  grid-template-columns: 90px minmax(240px, 1.25fr) minmax(100px, .58fr) minmax(220px, 1fr) minmax(340px, 1.35fr);
+  column-gap: 12px;
+}
+
+.compact-version-row {
+  align-items: center;
+  margin: 6px 0;
+  min-height: 88px;
+  padding: 10px 12px;
+}
+
+.compact-date-cell {
+  gap: 2px;
+  line-height: 1.35;
+}
+
+.compact-version-title {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 3px 12px;
+  line-height: 1.4;
+}
+
+.compact-version-detail {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.compact-meta-cell,
+.compact-activity-cell {
+  gap: 4px;
+  line-height: 1.4;
+}
+
+.compact-progress {
+  text-align: left;
+}
+
+.compact-comment {
+  line-height: 1.4;
+}
+
+.compact-actions-cell {
+  align-items: stretch;
+  display: grid;
+  gap: 6px;
+  grid-template-areas: "origin download append comment delete";
+  grid-template-columns: .82fr .72fr 1.28fr 1.08fr .82fr;
+}
+
+.compact-actions-cell > a,
+.compact-actions-cell > button,
+.compact-actions-cell > .compact-link-control {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  width: 100%;
+}
+
+@media (max-width: 1179px) {
+  .compact-list-head {
+    display: none;
+  }
+
+  .compact-version-row,
+  .compact-version-row.has-comment {
+    grid-template-areas:
+      "date sheet meta activity"
+      "actions actions actions actions";
+    grid-template-columns: 90px minmax(220px, 1fr) minmax(110px, .55fr) minmax(220px, 1fr);
+    row-gap: 8px;
+  }
+
+  .compact-date-cell { grid-area: date; }
+  .compact-sheet-cell { grid-area: sheet; }
+  .compact-meta-cell { grid-area: meta; }
+  .compact-activity-cell { grid-area: activity; }
+  .compact-actions-cell { grid-area: actions; }
+}
+
+@media (max-width: 820px) {
+  .compact-version-row,
+  .compact-version-row.has-comment {
+    grid-template-areas:
+      "sheet sheet"
+      "meta date"
+      "activity activity"
+      "actions actions";
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    min-height: 0;
+    padding: 12px 10px;
+  }
+
+  .compact-date-cell {
+    align-items: flex-end;
+    justify-self: end;
+  }
+
+  .compact-actions-cell {
+    grid-template-areas:
+      "origin download"
+      "append append"
+      "comment delete";
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .compact-actions-cell > a,
+  .compact-actions-cell > button,
+  .compact-actions-cell > .compact-link-control {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 520px) {
+  .compact-version-row,
+  .compact-version-row.has-comment {
+    grid-template-areas:
+      "sheet"
+      "meta"
+      "date"
+      "activity"
+      "actions";
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .compact-date-cell {
+    align-items: center;
+    flex-direction: row;
+    justify-self: start;
+  }
+
+  .compact-version-title {
+    flex-wrap: wrap;
+  }
+}

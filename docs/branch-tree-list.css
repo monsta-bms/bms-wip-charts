@@ -723,17 +723,15 @@ button.secondary.append-policy-disabled-button:disabled:active {
   }
 }
 
-/* PUBLIC-UI-REFINEMENT-PATCH-02: stable five-action grid. */
+/* PUBLIC-LIST-DENSITY-PATCH-01: keep all five actions compact on desktop. */
 .version-actions,
 .version-actions.actions-cell {
   align-items: stretch;
   display: grid;
   gap: 6px;
   grid-template-areas:
-    "origin download"
-    "append append"
-    "comment delete";
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+    "origin download append comment delete";
+  grid-template-columns: .82fr .72fr 1.28fr 1.08fr .82fr;
 }
 
 .version-actions .version-origin-link { grid-area: origin; }
@@ -752,4 +750,25 @@ button.secondary.append-policy-disabled-button:disabled:active {
 .version-actions .append-disabled-note {
   grid-column: 1 / -1;
   text-align: left;
+}
+
+@media (min-width: 761px) and (max-width: 1179px) {
+  .version-actions,
+  .version-actions.actions-cell {
+    grid-template-areas:
+      "origin download append"
+      "comment delete .";
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .version-actions,
+  .version-actions.actions-cell {
+    grid-template-areas:
+      "origin download"
+      "append append"
+      "comment delete";
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
