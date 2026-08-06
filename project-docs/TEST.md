@@ -1715,3 +1715,10 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 1366／1920pxの通常行はコメントなし108px以内、コメントあり132px以内、長文140px以内を原則とする。投稿者コメント2行、最新コメント1行、空comment領域0件、「全文を見る」による独立行増加0件をgeometryとcomputed styleで確認する。
 - favorite-only、chart指定、通常reload、コメント追加後、append完了後、management refresh後も同じgrid、行高上限、操作段数を維持する。keyboard focus、comment dialog、進捗thumbnail、状態badge、DL／追記／削除の利用可否は既存回帰を再実行する。
 - 静的検査、repository hygiene、canonical schema、CSS ownership、site-copy往復、JavaScript構文、HTML重複ID、link、Worker typecheck、`deploy:check`、Wrangler dry-run、`git diff --check`を実行する。本番データ書込み、D1／R2／Secret操作は行わない。
+
+## PUBLIC-COMMENT-ACTION-BALANCE-01 回帰
+
+- `node scripts/test-version-action-ui.js`で利用可能な追記表示が「追記」、aria-labelが「追記投稿を開始」、コメント表示が`💬`＋0件／1件／2桁件数、aria-labelが正式な件数表現であることを直接確認する。
+- `node scripts/test-css-browser-regression.js`でwhite／default／dark × 390／760／1024／1366px以上を確認する。投稿者本文15px・line-height 1.5～1.6・最大2行、ラベル12～13px、最新本文13～14px・最大1行、「全文を見る」が本文直下の小さいinline linkであることをcomputed styleで確認する。
+- 1024px以上ではコメント列280px以上、1366px以上ではさらに操作列より広く、5操作が原則1段、各操作が32～34px高・内容幅であることを確認する。1024pxでは最大2段、760px以下では44px以上の2列gridとなり、0件／1件／2桁件数、削除outline、in-place再描画でもはみ出さないことを確認する。
+- 390／760／1024／1366pxのhorizontal overflow、clipping、Console error／warningを0件とし、repository hygiene、canonical schema、CSS ownership、JavaScript構文、HTML重複ID、link、`git diff --check`を実行する。本番deploy、D1／R2／Secret操作、production write、pushは行わない。

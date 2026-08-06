@@ -56,7 +56,7 @@
     if (options.placeholder === true) {
       const placeholder = createDisabledAppend(
         targetDocument,
-        model?.canShowActions === true ? "追記投稿" : "追記不可"
+        model?.canShowActions === true ? "追記" : "追記不可"
       );
       placeholder.removeAttribute("aria-disabled");
       return placeholder;
@@ -108,7 +108,8 @@
     button.type = "button";
     button.dataset.chartId = chartId;
     button.dataset.parentVersionId = parentVersionId;
-    button.textContent = "追記投稿";
+    button.textContent = "追記";
+    button.setAttribute("aria-label", "追記投稿を開始");
     return markCreated(button);
   }
 
@@ -181,10 +182,11 @@
       button.dataset.latestComment = model.comments.latest.body;
       button.dataset.latestCommentCreatedAt = model.comments.latest.createdAt;
     }
-    button.setAttribute("aria-label", `${versionLabel} のコメント ${count}件を開く`);
+    button.setAttribute("aria-label", `コメントを開く、${count}件（${versionLabel}）`);
     const label = targetDocument.createElement("span");
     label.className = "version-comment-button-label";
-    label.textContent = "コメント";
+    label.textContent = "💬";
+    label.setAttribute("aria-hidden", "true");
     const countElement = targetDocument.createElement("span");
     countElement.className = "version-comment-count";
     countElement.textContent = String(count);

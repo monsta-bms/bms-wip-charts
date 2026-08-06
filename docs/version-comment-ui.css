@@ -58,8 +58,9 @@ body.version-comment-dialog-open {
 .author-comment-preview-label,
 .version-comment-latest-label {
   color: var(--muted, #66727e);
-  font-size: 0.68rem;
+  font-size: 0.78rem;
   font-weight: 800;
+  line-height: 1.4;
 }
 
 .author-comment-preview-label::after,
@@ -78,20 +79,23 @@ body.version-comment-dialog-open {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   display: -webkit-box;
-  line-height: 1.4;
-  max-height: 2.8em;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  max-height: 3.1em;
   overflow: hidden;
 }
 
 .author-comment-full-button {
-  background: var(--surface-raised, #ffffff);
-  bottom: 2px;
   color: var(--primary-dark, #145d47);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 800;
-  padding-inline-start: 6px;
-  position: absolute;
-  right: 3px;
+  grid-column: 2;
+  justify-self: end;
+  line-height: 1.25;
+  margin-top: -1px;
+  position: static;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .version-comment-latest-preview {
@@ -108,8 +112,9 @@ body.version-comment-dialog-open {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 1;
   display: -webkit-box;
-  line-height: 1.35;
-  max-height: 1.35em;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  max-height: 1.45em;
   overflow: hidden;
 }
 

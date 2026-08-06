@@ -1929,6 +1929,11 @@ function captureExpression(pageKind) {
         const rowRect = row.getBoundingClientRect();
         const actions = row.querySelector(${JSON.stringify(pageKind)} === "detail" ? ".version-actions" : ".compact-actions-cell");
         const comment = row.querySelector(${JSON.stringify(pageKind)} === "detail" ? ".comment-cell .meta-value" : ".compact-comment");
+        const commentColumn = row.querySelector(${JSON.stringify(pageKind)} === "detail" ? ".comment-cell" : ".compact-activity-cell");
+        const authorText = comment?.querySelector(".author-comment-preview-text") || null;
+        const authorLabel = comment?.querySelector(".author-comment-preview-label") || null;
+        const latestText = comment?.querySelector(".version-comment-latest-text") || null;
+        const fullLink = comment?.querySelector(".author-comment-full-button:not([hidden])") || null;
         const actionControls = actions
           ? [...actions.querySelectorAll(":scope > a, :scope > button, :scope > .version-download-control, :scope > .compact-link-control")]
             .filter((control) => {
@@ -1937,6 +1942,7 @@ function captureExpression(pageKind) {
             })
           : [];
         const actionRects = actionControls.map((control) => control.getBoundingClientRect());
+        const actionStyles = actionControls.map((control) => getComputedStyle(control));
         const actionLineCount = new Set(actionRects.map((rect) => Math.round(rect.top))).size;
         const management = actions?.querySelector(".version-management-button") || null;
         const managementRect = management?.getBoundingClientRect?.() || null;
@@ -1950,15 +1956,33 @@ function captureExpression(pageKind) {
           commentHidden: !comment || comment.hidden || getComputedStyle(comment).display === "none",
           commentHeight: round(comment?.getBoundingClientRect?.().height || 0),
           commentTextLength: commentText.length,
-          authorPreviewLines: comment?.querySelector(".author-comment-preview-text")
-            ? round(comment.querySelector(".author-comment-preview-text").getBoundingClientRect().height
-              / Number.parseFloat(getComputedStyle(comment.querySelector(".author-comment-preview-text")).lineHeight))
+          commentColumnWidth: round(commentColumn?.getBoundingClientRect?.().width || 0),
+          actionsWidth: round(actions?.getBoundingClientRect?.().width || 0),
+          authorPreviewLines: authorText
+            ? round(authorText.getBoundingClientRect().height
+              / Number.parseFloat(getComputedStyle(authorText).lineHeight))
             : 0,
-          latestPreviewLines: comment?.querySelector(".version-comment-latest-text")
-            ? round(comment.querySelector(".version-comment-latest-text").getBoundingClientRect().height
-              / Number.parseFloat(getComputedStyle(comment.querySelector(".version-comment-latest-text")).lineHeight))
+          authorFontSize: authorText ? Number.parseFloat(getComputedStyle(authorText).fontSize) : 0,
+          authorLineHeightRatio: authorText
+            ? round(Number.parseFloat(getComputedStyle(authorText).lineHeight) / Number.parseFloat(getComputedStyle(authorText).fontSize))
             : 0,
+          authorLabelFontSize: authorLabel ? Number.parseFloat(getComputedStyle(authorLabel).fontSize) : 0,
+          latestPreviewLines: latestText
+            ? round(latestText.getBoundingClientRect().height
+              / Number.parseFloat(getComputedStyle(latestText).lineHeight))
+            : 0,
+          latestFontSize: latestText ? Number.parseFloat(getComputedStyle(latestText).fontSize) : 0,
+          fullLinkPosition: fullLink ? getComputedStyle(fullLink).position : "",
+          fullLinkFontSize: fullLink ? Number.parseFloat(getComputedStyle(fullLink).fontSize) : 0,
           actionControlCount: actionControls.length,
+          actionControls: actionControls.map((control, controlIndex) => ({
+            text: String(control.textContent || "").trim(),
+            ariaLabel: control.getAttribute("aria-label") || "",
+            height: round(actionRects[controlIndex].height),
+            width: round(actionRects[controlIndex].width),
+            fontSize: Number.parseFloat(actionStyles[controlIndex].fontSize),
+            borderRadius: Number.parseFloat(actionStyles[controlIndex].borderRadius)
+          })),
           actionLineCount,
           actionGridColumns: actions ? getComputedStyle(actions).gridTemplateColumns : "",
           actionGridAreas: actions ? getComputedStyle(actions).gridTemplateAreas : "",
@@ -2134,6 +2158,7 @@ async function captureMatrix(cdp, sessionId, pageKind) {
   for (const theme of themes) {
     await setTheme(cdp, sessionId, theme);
     for (const width of widths) {
+      console.log(`css browser phase: ${pageKind} ${theme} ${width}px`);
       await cdp.send("Emulation.setDeviceMetricsOverride", {
         width,
         height: 900,
@@ -2310,6 +2335,39 @@ function controlColorTuple(control) {
 }
 
 function assertPageInvariants(snapshot, consoleMessages) {
+  const assertCommentAndActionBalance = (entry, row) => {
+    const location = `${entry.pageKind} ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`;
+    if (row.authorPreviewLines > 0) {
+      assert.ok(row.authorFontSize >= 14.9 && row.authorFontSize <= 15.1, `author comment font is not 15px at ${location}`);
+      assert.ok(row.authorLineHeightRatio >= 1.5 && row.authorLineHeightRatio <= 1.6, `author comment line-height is outside 1.5-1.6 at ${location}`);
+      assert.ok(row.authorLabelFontSize >= 12 && row.authorLabelFontSize <= 13, `author comment label is outside 12-13px at ${location}`);
+    }
+    if (row.latestPreviewLines > 0) {
+      assert.ok(row.latestFontSize >= 13 && row.latestFontSize <= 14, `latest comment font is outside 13-14px at ${location}`);
+    }
+    if (row.fullLinkPosition) {
+      assert.equal(row.fullLinkPosition, "static", `full comment link overlays text at ${location}`);
+      assert.ok(row.fullLinkFontSize <= 12, `full comment link is too large at ${location}`);
+    }
+    if (entry.requestedWidth >= 1024) {
+      assert.ok(row.commentColumnWidth >= 280, `comment column is narrower than 280px at ${location}`);
+    }
+    if (entry.requestedWidth >= 1366) {
+      assert.ok(row.commentColumnWidth > row.actionsWidth, `comment column is not wider than actions at ${location}`);
+    }
+    for (const control of row.actionControls) {
+      if (entry.requestedWidth >= 1024) {
+        assert.ok(control.height >= 32 && control.height <= 34, `desktop action height ${control.height}px is outside 32-34px at ${location}`);
+        assert.ok(control.width <= 120, `desktop action width ${control.width}px is excessive at ${location}`);
+        assert.ok(control.fontSize >= 13 && control.fontSize <= 14, `desktop action font is outside 13-14px at ${location}`);
+        assert.ok(control.borderRadius >= 5 && control.borderRadius <= 6, `desktop action radius is outside 5-6px at ${location}`);
+      } else {
+        assert.ok(control.height >= 44, `mobile action height is below 44px at ${location}`);
+      }
+      if (control.text === "追記") assert.equal(control.ariaLabel, "追記投稿を開始", `append accessible name changed at ${location}`);
+      if (control.text.startsWith("💬")) assert.match(control.ariaLabel, /^コメントを開く、\d+件（.+）$/u, `comment accessible name changed at ${location}`);
+    }
+  };
   const lifecycleExpectations = new Map([
     ["version-grace", ["withdrawal-pending-badge", "DL停止・自動削除待ち"]],
     ["version-manual", ["withdrawal-pending-badge", "DL停止・管理者確認待ち"]],
@@ -2335,6 +2393,7 @@ function assertPageInvariants(snapshot, consoleMessages) {
     assert.deepEqual(entry.counts, detailCounts, `detail control counts changed at ${entry.requestedTheme} ${entry.requestedWidth}px`);
     assert.deepEqual(Object.keys(entry.controls), Object.keys(detailControlSelectors));
     for (const row of entry.densityRows) {
+      assertCommentAndActionBalance(entry, row);
       assert.equal(row.actionsContained, true, `detail actions escape row at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
       assert.equal(row.managementContained, true, `detail delete button escapes row at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
       assert.ok(row.authorPreviewLines <= 2.1, `detail author comment exceeds two lines at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
@@ -2760,6 +2819,7 @@ function assertPageInvariants(snapshot, consoleMessages) {
     assert.equal(hiddenCommentRows.length, 2, `compact empty comment regions changed at ${entry.requestedTheme} ${entry.requestedWidth}px`);
     assert.ok(hiddenCommentRows.every((row) => row.commentHeight === 0), `compact empty comments retain height at ${entry.requestedTheme} ${entry.requestedWidth}px`);
     for (const row of entry.densityRows) {
+      assertCommentAndActionBalance(entry, row);
       assert.equal(row.actionsContained, true, `compact actions escape row at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
       assert.equal(row.managementContained, true, `compact delete button escapes row at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
       assert.ok(row.authorPreviewLines <= 2.1, `compact author comment exceeds two lines at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
@@ -2969,17 +3029,24 @@ async function run() {
       && !document.querySelector("#favoriteListStyles")
       && [...document.styleSheets].some((sheet) => sheet.href && new URL(sheet.href).pathname.endsWith("/favorites-list.css"))
       && [...document.styleSheets].some((sheet) => sheet.href && new URL(sheet.href).pathname.endsWith("/progress-thumbnail-list.css"))`, "detail fixture");
+    console.log("css browser phase: detail fixture ready");
     await installControlFixtures(cdp, sessionId);
     const detailNavigationMs = Number(process.hrtime.bigint() - navigationStart) / 1e6;
     const detail = await captureMatrix(cdp, sessionId, "detail");
+    console.log("css browser phase: detail matrix complete");
     const progressDragHint = await captureProgressDragHintInteractions(cdp, sessionId);
+    console.log("css browser phase: progress drag hint complete");
     const versionComments = await captureVersionCommentInteractions(cdp, sessionId);
+    console.log("css browser phase: version comments complete");
     const detailRerender = await captureDetailRerenderRegression(cdp, sessionId);
+    console.log("css browser phase: detail rerender complete");
     const postFormPointerUi = await capturePostFormPointerUi(cdp, sessionId);
+    console.log("css browser phase: post form matrix complete");
 
     const compactNavigationStart = process.hrtime.bigint();
     await cdp.send("Page.navigate", { url: `http://127.0.0.1:${staticPort}/list.html` }, sessionId);
     await waitFor(cdp, sessionId, `document.querySelectorAll(".compact-version-row").length === ${compactItems.length}`, "compact fixture");
+    console.log("css browser phase: compact fixture ready");
     const compactNavigationMs = Number(process.hrtime.bigint() - compactNavigationStart) / 1e6;
     const compact = await captureMatrix(cdp, sessionId, "compact");
 

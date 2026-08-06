@@ -723,52 +723,68 @@ button.secondary.append-policy-disabled-button:disabled:active {
   }
 }
 
-/* PUBLIC-LIST-DENSITY-PATCH-01: keep all five actions compact on desktop. */
+/* PUBLIC-COMMENT-ACTION-BALANCE-01: give comments width and keep actions intrinsic. */
 .version-actions,
 .version-actions.actions-cell {
-  align-items: stretch;
-  display: grid;
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
   gap: 6px;
-  grid-template-areas:
-    "origin download append comment delete";
-  grid-template-columns: .82fr .72fr 1.28fr 1.08fr .82fr;
+  justify-content: flex-end;
+  justify-self: end;
+  max-width: 100%;
+  width: max-content;
 }
-
-.version-actions .version-origin-link { grid-area: origin; }
-.version-actions .version-download-control { grid-area: download; }
-.version-actions > .secondary:not(.version-comment-button):not(.version-management-button) { grid-area: append; }
-.version-actions .version-comment-button { grid-area: comment; }
-.version-actions .version-management-button { grid-area: delete; }
 
 .version-actions .version-origin-link,
 .version-actions .version-download-control,
-.version-actions > button {
+.version-actions > button.secondary {
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  min-height: 32px;
   min-width: 0;
-  width: 100%;
+  padding: 5px 9px;
+  width: auto;
 }
 
 .version-actions .append-disabled-note {
-  grid-column: 1 / -1;
+  flex-basis: 100%;
   text-align: left;
 }
 
 @media (min-width: 761px) and (max-width: 1179px) {
   .version-actions,
   .version-actions.actions-cell {
-    grid-template-areas:
-      "origin download append"
-      "comment delete .";
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    justify-self: stretch;
+    width: 100%;
   }
 }
 
 @media (max-width: 760px) {
   .version-actions,
   .version-actions.actions-cell {
+    align-items: stretch;
+    display: grid;
     grid-template-areas:
       "origin download"
       "append append"
       "comment delete";
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-self: stretch;
+    width: 100%;
+  }
+
+  .version-actions .version-origin-link { grid-area: origin; }
+  .version-actions .version-download-control { grid-area: download; }
+  .version-actions > .secondary:not(.version-comment-button):not(.version-management-button) { grid-area: append; }
+  .version-actions .version-comment-button { grid-area: comment; }
+  .version-actions .version-management-button { grid-area: delete; }
+
+  .version-actions .version-origin-link,
+  .version-actions .version-download-control,
+  .version-actions > button.secondary {
+    font-size: 0.875rem;
+    min-height: 44px;
+    width: 100%;
   }
 }

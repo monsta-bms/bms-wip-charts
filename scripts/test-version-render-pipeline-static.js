@@ -57,7 +57,7 @@ check("model, link, action, pipeline, and app load in contract order", () => {
   const ordered = [
     "./version-ui-model.js?v=completed-parent-access-01",
     "./version-link-ui.js?v=public-ui-refinement-01",
-    "./version-action-ui.js?v=public-ui-refinement-patch-02",
+    "./version-action-ui.js?v=comment-action-balance-01",
     "./chart-render-pipeline.js?v=chart-render-pipeline-r4a-01",
     "./app.js?v=public-ui-refinement-patch-02"
   ].map((src) => indexSources.indexOf(src));
@@ -67,7 +67,7 @@ check("model, link, action, pipeline, and app load in contract order", () => {
 check("version model loads before compact list", () => {
   const modelIndex = listSources.indexOf("./version-ui-model.js?v=completed-parent-access-01");
   const linkIndex = listSources.indexOf("./version-link-ui.js?v=public-ui-refinement-01");
-  const actionIndex = listSources.indexOf("./version-action-ui.js?v=public-ui-refinement-patch-02");
+  const actionIndex = listSources.indexOf("./version-action-ui.js?v=comment-action-balance-01");
   const commentIndex = listSources.indexOf("./version-comment-ui.js?v=public-list-density-patch-01");
   assert.equal(linkIndex, modelIndex + 1);
   assert.equal(actionIndex, linkIndex + 1);
@@ -77,7 +77,7 @@ check("version model loads before compact list", () => {
 check("model, link UI, and Action UI precede every index renderer consumer", () => {
   const modelIndex = indexSources.indexOf("./version-ui-model.js?v=completed-parent-access-01");
   const linkIndex = indexSources.indexOf("./version-link-ui.js?v=public-ui-refinement-01");
-  const actionIndex = indexSources.indexOf("./version-action-ui.js?v=public-ui-refinement-patch-02");
+  const actionIndex = indexSources.indexOf("./version-action-ui.js?v=comment-action-balance-01");
   const consumers = [
     "./chart-render-pipeline.js?v=chart-render-pipeline-r4a-01",
     "./app.js?v=public-ui-refinement-patch-02",
@@ -315,16 +315,19 @@ check("changed scripts use their reviewed release cache keys", () => {
   assert.ok(indexSources.includes("./version-comment-ui.js?v=public-list-density-patch-01"), "version-comment-ui.js cache key mismatch");
   assert.ok(indexSources.includes("./progress-map-drag-hint.js?v=version-comment-progress-01"), "progress-map-drag-hint.js cache key mismatch");
   assert.ok(indexSources.includes("./version-link-ui.js?v=public-ui-refinement-01"), "version-link-ui.js cache key mismatch");
-  ["version-action-ui.js", "app.js", "branch-append-ui.js", "branch-tree-list.js", "version-management-ui.js"].forEach((name) => {
+  ["app.js", "branch-append-ui.js", "branch-tree-list.js", "version-management-ui.js"].forEach((name) => {
     assert.ok(indexSources.includes(`./${name}?v=public-ui-refinement-patch-02`), `${name} cache key mismatch`);
   });
+  assert.ok(indexSources.includes("./version-action-ui.js?v=comment-action-balance-01"), "version-action-ui.js cache key mismatch");
   ["version-ui-model.js", "favorites-list.js"].forEach((name) => {
     assert.ok(indexSources.includes(`./${name}?v=completed-parent-access-01`), `${name} cache key mismatch`);
   });
   ["version-ui-model.js", "version-link-ui.js", "version-action-ui.js", "version-comment-ui.js", "list.js", "version-management-ui.js"].forEach((name) => {
     const cacheKey = name === "version-ui-model.js"
         ? "completed-parent-access-01"
-        : name === "version-comment-ui.js" || name === "list.js"
+        : name === "version-action-ui.js"
+          ? "comment-action-balance-01"
+          : name === "version-comment-ui.js" || name === "list.js"
           ? "public-list-density-patch-01"
           : name === "version-link-ui.js"
             ? "public-ui-refinement-01"
@@ -335,9 +338,9 @@ check("changed scripts use their reviewed release cache keys", () => {
 check("CSS files match the reviewed public UI state", () => {
   const expected = new Map([
     ["docs/style.css", "e098f16d091b1f56e6ac6fac1a1c52e880d79c3d3f38eff746b6755f605e01db"],
-    ["docs/branch-tree-list.css", "b95d8b4ea25ed7a76dd51fa19433524fd264b586bff30e60968701022bc2f06c"],
+    ["docs/branch-tree-list.css", "623dd6df5c53a019af46c52f696b8104eaa877a099ae0ed4067203b51e8bd769"],
     ["docs/list-ui-refresh.css", "b8da58683c9e52c20e0e01c27b070fbedf768c622be564dc7a42fa5dfd5a06ad"],
-    ["docs/list.css", "8c3ea0fe8aac1353de6de3bfcfe92e74db9644e0ad8375084f5bee8fa230026b"],
+    ["docs/list.css", "9a2e31ba56eab9275aa2505b93060a9687548782d848832b01c31823a4759942"],
     ["docs/theme.css", "83bc78944b289b21d22131af91c7e78deaa04808f1c62628221194566ba1ef34"],
     ["docs/chart-detail-link.css", "c45722a66d547ecb51825e67dc3e65cc31413f7820a5d34db8b45eb23dbe0882"],
     ["docs/favorites-list.css", "f9498bc2128e06da0a1de3a41e19949a3ee8afebfc46f266600026288d20cf7b"],
@@ -370,7 +373,8 @@ check("R4A keeps DOM traversal growth bounded", () => {
   assert.ok(traversalCount(compactList) <= 12);
 });
 check("normal action strings remain unchanged", () => {
-  assert.match(actionSource, /button\.textContent = "追記投稿"/);
+  assert.match(actionSource, /button\.textContent = "追記"/);
+  assert.match(actionSource, /button\.setAttribute\("aria-label", "追記投稿を開始"\)/);
   assert.match(actionSource, /"追記停止"/);
   assert.match(actionSource, /"旧形式"/);
   assert.match(actionSource, /"追記不可"/);

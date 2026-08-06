@@ -175,8 +175,9 @@ check("public comment control is available even when the count is zero", () => {
   assert.ok(control);
   assert.equal(control.className, "secondary version-comment-button");
   assert.equal(control.dataset.commentCount, "0");
-  assert.equal(control.textContent, "コメント0");
-  assert.equal(control.getAttribute("aria-label"), "BASE のコメント 0件を開く");
+  assert.equal(control.textContent, "💬0");
+  assert.equal(control.children[0]?.getAttribute("aria-hidden"), "true");
+  assert.equal(control.getAttribute("aria-label"), "コメントを開く、0件（BASE）");
 });
 
 check("comment control carries only public display context", () => {
@@ -210,6 +211,20 @@ check("comment control carries only public display context", () => {
     latestCommentCreatedAt: "2026-08-03 00:00:00"
   });
   assert.doesNotMatch(control.outerHTML, /hash|token|password/i);
+  assert.equal(control.textContent, "💬2");
+  assert.equal(control.getAttribute("aria-label"), "コメントを開く、2件（1-2）");
+});
+
+check("comment control keeps a two-digit count compact", () => {
+  const control = createCommentControl(model({ commentCount: 12 }), domOptions({ versionLabel: "BASE" }));
+  assert.equal(control.textContent, "💬12");
+  assert.equal(control.getAttribute("aria-label"), "コメントを開く、12件（BASE）");
+});
+
+check("comment control keeps a one-digit count compact", () => {
+  const control = createCommentControl(model({ commentCount: 1 }), domOptions({ versionLabel: "1" }));
+  assert.equal(control.textContent, "💬1");
+  assert.equal(control.getAttribute("aria-label"), "コメントを開く、1件（1）");
 });
 
 check("redacted version has no comment control", () => {
@@ -221,7 +236,8 @@ check("redacted version has no comment control", () => {
 });
 
 check("available append is a button", () => assert.equal(createAppendControl(model(), domOptions()).tagName, "BUTTON"));
-check("available append text remains 追記投稿", () => assert.equal(createAppendControl(model(), domOptions()).textContent, "追記投稿"));
+check("available append text is compact", () => assert.equal(createAppendControl(model(), domOptions()).textContent, "追記"));
+check("available append keeps its formal accessible name", () => assert.equal(createAppendControl(model(), domOptions()).getAttribute("aria-label"), "追記投稿を開始"));
 check("available append class remains stable", () => assert.equal(createAppendControl(model(), domOptions()).className, "secondary append-version-button"));
 check("available append keeps chart dataset", () => assert.equal(createAppendControl(model(), domOptions()).dataset.chartId, "chart_01"));
 check("available append keeps parent dataset", () => assert.equal(createAppendControl(model(), domOptions()).dataset.parentVersionId, "version_01"));
@@ -231,7 +247,7 @@ check("append disabled policy class remains stable", () => assert.equal(createAp
 check("append disabled policy keeps aria description", () => assert.equal(createAppendControl(model({ allowAppend: false }), domOptions()).getAttribute("aria-describedby"), "append-policy-description-version_01"));
 check("legacy append text remains 旧形式", () => assert.equal(createAppendControl(model({}, { hasProgressMap: false }), domOptions()).textContent, "旧形式"));
 check("legacy append is disabled", () => assert.equal(createAppendControl(model({}, { hasProgressMap: false }), domOptions()).disabled, true));
-check("completed-child option does not disable append", () => assert.equal(createAppendControl(model({}, { isSupersededIntermediate: true }), domOptions()).textContent, "追記投稿"));
+check("completed-child option does not disable append", () => assert.equal(createAppendControl(model({}, { isSupersededIntermediate: true }), domOptions()).textContent, "追記"));
 check("completed-child option keeps available append class", () => assert.equal(createAppendControl(model({}, { isSupersededIntermediate: true }), domOptions()).className, "secondary append-version-button"));
 check("completed-child option keeps append enabled", () => assert.equal(createAppendControl(model({}, { isSupersededIntermediate: true }), domOptions()).disabled, false));
 check("legacy completion collapse keeps append available", () => assert.equal(createAppendControl(model({
@@ -244,7 +260,7 @@ check("unknown append is hidden", () => assert.equal(createAppendControl(model({
 check("null model append is hidden", () => assert.equal(createAppendControl(null, domOptions()), null));
 check("missing chart id fails closed", () => assert.equal(createAppendControl(model(), domOptions({ chartId: "" })).textContent, "追記不可"));
 check("generic invalid append has aria-disabled", () => assert.equal(createAppendControl({ canShowActions: true, versionId: "v", append: {} }, domOptions()).getAttribute("aria-disabled"), "true"));
-check("placeholder keeps the old valid label", () => assert.equal(createAppendControl(model(), domOptions({ placeholder: true })).textContent, "追記投稿"));
+check("placeholder keeps the compact valid label", () => assert.equal(createAppendControl(model(), domOptions({ placeholder: true })).textContent, "追記"));
 check("placeholder keeps the old disabled shape", () => assert.equal(createAppendControl(model(), domOptions({ placeholder: true })).getAttribute("aria-disabled"), null));
 check("append creation installs no listener", () => assert.doesNotThrow(() => createAppendControl(model(), domOptions())));
 

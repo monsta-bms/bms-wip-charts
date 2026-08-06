@@ -1,6 +1,6 @@
 .version-list {
   --group-gutter-width: 36px;
-  --version-grid-columns: var(--group-gutter-width) minmax(160px, 1.05fr) 54px minmax(80px, 0.55fr) 60px minmax(140px, 1fr) minmax(140px, 0.95fr) minmax(320px, 1.55fr);
+  --version-grid-columns: var(--group-gutter-width) minmax(160px, 1.05fr) 54px minmax(80px, 0.55fr) 60px minmax(140px, 1fr) minmax(300px, 1.5fr) max-content;
 }
 
 .version-row.version-tree-row.is-withdrawn {
@@ -96,12 +96,13 @@ button.secondary.version-management-button {
   border: 1px solid var(--danger);
   color: var(--danger);
   display: inline-flex;
-  font-size: 0.8rem;
+  border-radius: 6px;
+  font-size: 0.8125rem;
   height: auto;
   justify-content: center;
   line-height: 1.2;
-  min-height: 40px;
-  padding: 5px 10px;
+  min-height: 32px;
+  padding: 5px 9px;
   width: auto;
 }
 
@@ -284,7 +285,14 @@ button.secondary.version-management-cancel-button:focus-visible {
 
 @media (max-width: 1100px) {
   .version-list {
-    --version-grid-columns: var(--group-gutter-width) minmax(140px, 1.1fr) 48px minmax(70px, .62fr) 50px minmax(115px, .92fr) minmax(115px, .92fr) minmax(200px, 1.25fr);
+    --version-grid-columns: var(--group-gutter-width) minmax(80px, 1fr) 44px minmax(52px, .58fr) 44px minmax(100px, .82fr) minmax(280px, 1.35fr) minmax(190px, .9fr);
+  }
+}
+
+@media (max-width: 760px) {
+  button.secondary.version-management-button {
+    min-height: 44px;
+    width: 100%;
   }
 }
 
