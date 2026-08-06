@@ -1711,7 +1711,7 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 ## PUBLIC-LIST-DENSITY-PATCH-01 回帰
 
 - fixtureはコメント0件、投稿者コメントのみ、最新コメントのみ、長文、コメント件数1桁／2桁、原曲URLあり／なし、追記可能／不可、削除可能／不可、長い曲名／作者、NEW、没譜面、制作途中、完成を横断する。
-- `node scripts/test-css-browser-regression.js`でwhite／default／dark × 390／760／1024／1366／1920pxを確認する。1180px以上の操作は1段、1024pxは最大2段、mobileは2列を基本とし、削除buttonのはみ出し、horizontal overflow、clipping、Console error／warningを0件とする。
+- `node scripts/test-css-browser-regression.js`でwhite／default／dark × 390／760／1024／1366／1920pxを確認する。desktopの版操作は固定2段、mobileは2列を基本とし、削除buttonのはみ出し、horizontal overflow、clipping、Console error／warningを0件とする。
 - 1366／1920pxの通常行はコメントなし108px以内、コメントあり132px以内、長文140px以内を原則とする。投稿者コメント2行、最新コメント1行、空comment領域0件、「全文を見る」による独立行増加0件をgeometryとcomputed styleで確認する。
 - favorite-only、chart指定、通常reload、コメント追加後、append完了後、management refresh後も同じgrid、行高上限、操作段数を維持する。keyboard focus、comment dialog、進捗thumbnail、状態badge、DL／追記／削除の利用可否は既存回帰を再実行する。
 - 静的検査、repository hygiene、canonical schema、CSS ownership、site-copy往復、JavaScript構文、HTML重複ID、link、Worker typecheck、`deploy:check`、Wrangler dry-run、`git diff --check`を実行する。本番データ書込み、D1／R2／Secret操作は行わない。
@@ -1720,5 +1720,13 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 
 - `node scripts/test-version-action-ui.js`で利用可能な追記表示が「追記」、aria-labelが「追記投稿を開始」、コメント表示が`💬`＋0件／1件／2桁件数、aria-labelが正式な件数表現であることを直接確認する。
 - `node scripts/test-css-browser-regression.js`でwhite／default／dark × 390／760／1024／1366px以上を確認する。投稿者本文15px・line-height 1.5～1.6・最大2行、ラベル12～13px、最新本文13～14px・最大1行、「全文を見る」が本文直下の小さいinline linkであることをcomputed styleで確認する。
-- 1024px以上ではコメント列280px以上、1366px以上ではさらに操作列より広く、5操作が原則1段、各操作が32～34px高・内容幅であることを確認する。1024pxでは最大2段、760px以下では44px以上かつcomputed `grid-template-columns`が明示的な2列だけとなり、「操作」field labelによる暗黙列が0件であることを確認する。0件／1件／2桁件数、削除outline、in-place再描画でもはみ出さないことを確認する。
+- 1024px以上ではコメント列220px以上、1366px以上ではさらに操作列より広く、5操作が固定2段、各操作が32～34px高・内容幅であることを確認する。760px以下では44px以上かつcomputed `grid-template-columns`が明示的な2列だけとなり、「操作」field labelによる暗黙列が0件であることを確認する。0件／1件／2桁件数、削除outline、in-place再描画でもはみ出さないことを確認する。
 - 390／760／1024／1366pxのhorizontal overflow、clipping、Console error／warningを0件とし、repository hygiene、canonical schema、CSS ownership、JavaScript構文、HTML重複ID、link、`git diff --check`を実行する。本番deploy、D1／R2／Secret操作、production write、pushは行わない。
+
+## VERSION-ROW-LAYOUT-PATCH-02 回帰
+
+- `node scripts/test-version-row-layout-patch.js`で見出し7件の明示class、desktop操作の固定2段grid、mobileの2列3段grid、投稿者／最新コメントの可視ラベル削除、`visually-hidden`種別名、`aria-hidden`装飾記号、cache keyを静的に確認する。
+- index、chart指定表示、`list.html`でBASEのみ、BASE＋child、投稿者のみ、最新のみ、両方、長文、コメント0／1／2桁、原曲あり／なし、DLあり、追記可／不可、削除可、制作途中、完成、没譜面を確認する。通常reloadとin-place再描画後で同じDOM classと配置を維持する。
+- defaultは390／760／1024／1366px、darkは390／1366px、whiteは1366pxを確認する。desktop操作のy座標は常に2種類、mobileは44px以上、投稿者コメント15px・最大2行、最新コメント13～14px・最大1行、可視種別ラベル0件、visually-hidden種別名2件を必須とする。
+- 1366px付近でサムネイル210～260px、コメント280～360px、操作185～215px、1024px付近でサムネイル170px以上、コメント220px以上を確認する。難易度、作者、進捗、サムネイル、コメント、操作の見出しと先頭data cellのx差は8px以内、BASEはtree connector考慮後12px以内、headerとrowの列幅差は2px以内とする。
+- horizontal overflow、clipping、操作はみ出し、Console error／warningを0件とし、keyboardでコメント全文dialogを開けることを確認する。関連静的回帰、repository hygiene、canonical schema、CSS ownership、site-copy、JavaScript構文、HTML重複ID、link、`git diff --check`を実行し、Worker deploy、D1／R2／Secret操作、production writeを行わない。

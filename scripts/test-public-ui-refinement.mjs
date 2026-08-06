@@ -145,8 +145,8 @@ check("list result header has five regions", () => {
 check("list row keeps DL in its action region", () => assert.match(sources.listJs, /compact-links compact-actions-cell[^\n]*\$\{originControl\}\$\{downloadControl\}/u));
 check("list row exposes the accepted five-action sequence", () => {
   assert.match(sources.listJs, /\$\{originControl\}\$\{downloadControl\}\$\{appendControl\}\$\{commentControl\}\$\{managementControl\}/u);
-  assert.match(sources.listCss, /PUBLIC-COMMENT-ACTION-BALANCE-01[\s\S]*display: flex;[\s\S]*flex-wrap: wrap;[\s\S]*width: max-content;/u);
-  assert.match(sources.branchCss, /PUBLIC-COMMENT-ACTION-BALANCE-01[\s\S]*display: flex;[\s\S]*flex-wrap: wrap;[\s\S]*width: max-content;/u);
+  assert.match(sources.listCss, /PUBLIC-COMMENT-ACTION-BALANCE-01[\s\S]*display: grid;[\s\S]*"origin download append"[\s\S]*"comment comment delete"[\s\S]*repeat\(2, 32px\)/u);
+  assert.match(sources.branchCss, /VERSION-ROW-LAYOUT-PATCH-02[\s\S]*display: grid;[\s\S]*"origin download append"[\s\S]*"comment comment delete"[\s\S]*repeat\(2, 32px\)/u);
   assert.match(sources.listCss, /@media \(max-width: 820px\)[\s\S]*"origin download"[\s\S]*"append append"[\s\S]*"comment delete"/u);
   assert.match(sources.listCss, /@media \(max-width: 820px\)[\s\S]*\.compact-actions-cell > \.compact-field-label \{[\s\S]*display: none;/u);
 });
@@ -164,8 +164,8 @@ check("comment previews use two plus one lines and remove empty regions", () => 
   assert.match(sources.commentUi, /const empty = createElement\("span", "author-comment-empty", "—"\);[\s\S]*empty\.hidden = true;/u);
 });
 check("comment width and intrinsic desktop actions are balanced", () => {
-  assert.match(sources.managementCss, /minmax\(300px, 1\.5fr\) max-content/u);
-  assert.match(sources.listCss, /minmax\(300px, 1\.5fr\) max-content/u);
+  assert.match(sources.managementCss, /minmax\(280px, 1\.55fr\) minmax\(185px, 0\.8fr\)/u);
+  assert.match(sources.listCss, /minmax\(300px, 1\.5fr\) minmax\(185px, 215px\)/u);
   assert.match(sources.actions, /button\.textContent = "追記";[\s\S]*aria-label", "追記投稿を開始"/u);
   assert.match(sources.actions, /label\.textContent = "💬";[\s\S]*label\.setAttribute\("aria-hidden", "true"\)/u);
   assert.match(sources.actions, /`コメントを開く、\$\{count\}件（\$\{versionLabel\}）`/u);
@@ -207,13 +207,15 @@ check("changelog includes the 2026-08-05 form usability update", () => {
   assert.match(sources.changelog, /data-copy-entry="CHANGELOG_20260805"[\s\S]*トップページの投稿カードと投稿一覧を圧縮し、コメント・進捗・操作を保ったまま多くの投稿を見渡せるようにしました。/u);
 });
 check("comment and action assets share a release cache key", () => {
-  for (const asset of ["branch-tree-list.css", "version-management-ui.css", "version-comment-ui.css", "version-action-ui.js"]) {
-    assert.match(sources.index, new RegExp(`\\./${asset.replaceAll(".", "\\.")}\\?v=comment-action-balance-01`, "u"));
+  for (const asset of ["branch-tree-list.css", "version-management-ui.css", "version-comment-ui.css"]) {
+    assert.match(sources.index, new RegExp(`\\./${asset.replaceAll(".", "\\.")}\\?v=version-row-layout-patch-02`, "u"));
   }
-  assert.match(sources.listHtml, /\.\/list\.css\?v=comment-action-balance-02/u);
-  for (const asset of ["version-management-ui.css", "version-comment-ui.css", "version-action-ui.js"]) {
-    assert.match(sources.listHtml, new RegExp(`\\./${asset.replaceAll(".", "\\.")}\\?v=comment-action-balance-01`, "u"));
+  assert.match(sources.index, /\.\/version-action-ui\.js\?v=comment-action-balance-01/u);
+  assert.match(sources.listHtml, /\.\/list\.css\?v=version-row-layout-patch-02/u);
+  for (const asset of ["version-management-ui.css", "version-comment-ui.css"]) {
+    assert.match(sources.listHtml, new RegExp(`\\./${asset.replaceAll(".", "\\.")}\\?v=version-row-layout-patch-02`, "u"));
   }
+  assert.match(sources.listHtml, /\.\/version-action-ui\.js\?v=comment-action-balance-01/u);
   assert.match(sources.index, /\.\/list-ui-refresh\.css\?v=public-list-density-patch-01/u);
   assert.match(sources.listHtml, /\.\/list\.js\?v=public-list-density-patch-01/u);
 });

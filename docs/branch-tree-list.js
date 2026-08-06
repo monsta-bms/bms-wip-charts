@@ -1021,13 +1021,13 @@
     header.setAttribute("aria-hidden", "true");
     header.innerHTML = `
       <span class="group-gutter-header" title="中間履歴の開閉"></span>
-      <span>版</span>
-      <span>難易度</span>
-      <span>作者</span>
-      <span>進捗</span>
-      <span>進捗サムネイル</span>
-      <span>コメント</span>
-      <span>操作</span>
+      <span class="version-list-heading-version">版</span>
+      <span class="version-list-heading-difficulty">難易度</span>
+      <span class="version-list-heading-author">作者</span>
+      <span class="version-list-heading-progress">進捗</span>
+      <span class="version-list-heading-thumbnail">進捗サムネイル</span>
+      <span class="version-list-heading-comment">コメント</span>
+      <span class="version-list-heading-actions">操作</span>
     `;
     return header;
   }

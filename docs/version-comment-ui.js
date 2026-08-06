@@ -452,12 +452,14 @@
       button.type = "button";
       copyContextToDataset(button, { ...context, authorComment: body });
       button.setAttribute("aria-label", "投稿者コメントの全文と版コメントを開く");
-      const label = createElement("span", "author-comment-preview-label", "投稿者コメント");
+      const quote = createElement("span", "author-comment-preview-icon", "“");
+      quote.setAttribute("aria-hidden", "true");
+      const label = createElement("span", "author-comment-preview-label visually-hidden", "投稿者コメント");
       const text = createElement("span", "author-comment-preview-text");
       text.textContent = body;
       const more = createElement("span", "author-comment-full-button", "全文を見る");
       more.hidden = true;
-      button.append(label, text, more);
+      button.append(quote, label, text, more);
       container.append(button);
       requestAnimationFrame(() => {
         if (!text.isConnected) return;
@@ -473,10 +475,12 @@
     copyContextToDataset(latestPreview, { ...context, authorComment: body });
     latestPreview.dataset.versionId = String(context.versionId || "");
     latestPreview.setAttribute("aria-label", "最新の公開コメントとコメント一覧を開く");
-    const latestLabel = createElement("span", "version-comment-latest-label", "最新コメント");
+    const latestIcon = createElement("span", "version-comment-latest-icon", "💬");
+    latestIcon.setAttribute("aria-hidden", "true");
+    const latestLabel = createElement("span", "version-comment-latest-label visually-hidden", "最新コメント");
     const latestText = createElement("span", "version-comment-latest-text");
     latestText.textContent = String(latest?.body || "");
-    latestPreview.append(latestLabel, latestText);
+    latestPreview.append(latestIcon, latestLabel, latestText);
     container.append(latestPreview);
     return container;
   }

@@ -24,20 +24,20 @@ body.version-comment-dialog-open {
 
 .author-comment-preview,
 .version-comment-latest-preview {
-  background: transparent;
+  background: color-mix(in srgb, var(--primary-soft, #edf8f2) 58%, transparent);
   border: 0;
   border-radius: 5px;
   color: inherit;
   cursor: pointer;
   display: grid;
   font: inherit;
-  column-gap: 4px;
+  column-gap: 7px;
   grid-template-columns: auto minmax(0, 1fr);
-  row-gap: 2px;
+  row-gap: 1px;
   max-width: 100%;
   min-height: 0;
   min-width: 0;
-  padding: 2px;
+  padding: 2px 6px;
   position: relative;
   text-align: left;
   width: 100%;
@@ -55,17 +55,18 @@ body.version-comment-dialog-open {
   outline-offset: 2px;
 }
 
-.author-comment-preview-label,
-.version-comment-latest-label {
-  color: var(--muted, #66727e);
-  font-size: 0.78rem;
-  font-weight: 800;
-  line-height: 1.4;
+.author-comment-preview {
+  border-left: 3px solid color-mix(in srgb, var(--primary, #256f5d) 72%, transparent);
 }
 
-.author-comment-preview-label::after,
-.version-comment-latest-label::after {
-  content: ":";
+.author-comment-preview-icon {
+  align-self: start;
+  color: var(--primary, #256f5d);
+  font-family: Georgia, serif;
+  font-size: 1.25rem;
+  font-weight: 800;
+  line-height: 1;
+  margin-top: 1px;
 }
 
 .author-comment-preview-text,
@@ -80,6 +81,8 @@ body.version-comment-dialog-open {
   -webkit-line-clamp: 2;
   display: -webkit-box;
   font-size: 0.9375rem;
+  font-weight: 600;
+  grid-column: 2;
   line-height: 1.55;
   max-height: 3.1em;
   overflow: hidden;
@@ -99,9 +102,10 @@ body.version-comment-dialog-open {
 }
 
 .version-comment-latest-preview {
-  border-top: 1px dashed color-mix(in srgb, var(--line, #d8e0e3) 85%, transparent);
+  background: transparent;
+  border-top: 1px solid color-mix(in srgb, var(--line, #d8e0e3) 82%, transparent);
   margin-top: 2px;
-  padding-top: 2px;
+  padding: 2px 6px 1px;
 }
 
 .version-comment-latest-preview[hidden] {
@@ -116,6 +120,13 @@ body.version-comment-dialog-open {
   line-height: 1.45;
   max-height: 1.45em;
   overflow: hidden;
+}
+
+.version-comment-latest-icon {
+  align-self: center;
+  color: var(--muted, #66727e);
+  font-size: 0.72rem;
+  line-height: 1;
 }
 
 .author-comment-empty {

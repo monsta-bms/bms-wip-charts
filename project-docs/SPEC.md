@@ -1287,7 +1287,7 @@ RC★★変換:
 ## PUBLIC-LIST-DENSITY-PATCH-01
 
 - トップページの最近の投稿、chart指定detail、お気に入り絞り込み、管理後の再描画、および`list.html`は、日時、譜面情報、難易度・作者、進捗・コメント、操作をdesktopで横方向に配置する。情報、状態badge、進捗thumbnail、favorite、操作を削除せず、技術IDは新たに表示しない。
-- 1180px以上では5操作を原則1段、1024pxでは最大2段とする。760px以下はcardへ移行し、390pxを含むmobileでは2列を基本として追記投稿だけを全幅にできる。desktop操作は40px以上、mobile操作は44px以上、`white-space: nowrap`、`min-width: 0`を維持する。
+- 760px以下はcardへ移行し、390pxを含むmobileでは2列を基本として追記投稿だけを全幅にできる。desktopの版操作は`VERSION-ROW-LAYOUT-PATCH-02`に従って固定2段、mobile操作は44px以上、`white-space: nowrap`、`min-width: 0`を維持する。
 - desktopの通常行はコメントなし108px以内、コメントあり132px以内、長文140px以内を原則とし、固定heightは使わない。row paddingは10～14px、列gapは12～18px、inner gapは3～7px、metadataとcommentのline-heightは1.35～1.5とする。
 - 投稿者コメントは最大2行、最新コメントは最大1行とし、どちらもない場合はcomment領域を非表示にする。全文とコメント一覧は既存dialogで確認し、in-place投稿後は空領域を復帰させず対象行だけを更新する。
 - 一覧上の削除はdanger outline、確認dialogの実行だけをdanger塗りつぶし、キャンセルをneutralとする。API、Worker、D1、R2、Secret、投稿・取り下げ・削除ロジック、progress map形式は変更しない。
@@ -1297,5 +1297,13 @@ RC★★変換:
 
 - トップページの投稿カード、chart指定detail、favorite／management後の再描画、および`list.html`では、desktopのコメント領域を`minmax(300px, 1.5fr)`相当、操作領域を内容幅とし、1366px以上でコメント領域を操作領域より広くする。1024px付近でもコメントを280px以上確保しつつ操作列の最小幅を190pxまで縮め、操作を最大2段まで折り返し、進捗thumbnail幅は維持する。
 - 投稿者コメント本文は15px、line-height 1.55、最大2行、ラベルは12.5px相当とする。最新コメント本文は13.6px相当、line-height 1.45、最大1行とし、長い連続文字は`overflow-wrap:anywhere`で処理する。「全文を見る」は独立した大きな行やabsolute overlayにせず、本文直下の小さいinline linkとして表示する。
-- desktop操作は`flex`、`flex-wrap:wrap`、右寄せ、gap 6px、内容幅とする。原曲↗、DL、追記、💬と件数、削除を32～34px高、13～14px、左右padding 8～11px、角丸5～6pxで表示し、各操作へ`width:100%`を指定しない。追記のaccessible nameは「追記投稿を開始」、コメントは件数を含む「コメントを開く」表現を維持する。
+- desktop操作は固定2段grid、gap 6px、button内容幅とする。原曲↗、DL、追記、💬と件数、削除を32～34px高、13～14px、左右padding 8～11px、角丸5～6pxで表示し、各操作へ`width:100%`を指定しない。追記のaccessible nameは「追記投稿を開始」、コメントは件数を含む「コメントを開く」表現を維持する。
 - 760px以下は2列を基本とするgridへ切り替え、操作高44px以上と`width:100%`を適用する。独立一覧の「操作」field labelはgrid itemにせず非表示とし、`origin / download`、`append`、`comment / delete`の明示的な2列だけを生成する。削除は一覧でdanger outline、確認dialog実行時だけdanger塗りつぶしを維持する。API、Worker、D1、R2、Secret、投稿・コメント・削除処理は変更しない。
+
+## VERSION-ROW-LAYOUT-PATCH-02
+
+- desktopの版一覧は、ツリー余白、版、難易度、作者、進捗、進捗サムネイル、コメント、操作の8列を見出しと各行で共有する。見出しは各列の明示classで配置し、`nth-child`へ依存しない。見出しと行は同じ列定義、column gap、左右padding、box sizingを使用する。
+- desktopの操作は`origin / download / append`と`comment / delete`の固定2段gridとし、1段や3段へ自動変形させない。操作列は185～215px相当、操作高32～34px、gap 6pxとする。原曲がない場合もDL、追記、コメント、削除のgrid areaを維持する。760px以下は44px以上の2列card操作を維持する。
+- 投稿者コメントの可視ラベルは表示せず、左accentと引用記号を備えた15px・最大2行のquote表現とする。最新コメントも可視ラベルを表示せず、区切り線と`aria-hidden`の吹き出し記号を備えた13～14px・最大1行のreply表現とする。両方の種別名は`visually-hidden`要素とbuttonのaccessible nameで保持する。
+- 1366px付近では進捗サムネイルを210～260px、コメントを280～360px、操作を185～215pxの目安とし、コメント列を操作列より広くする。1024px付近でもサムネイル170px以上、コメント220px以上を確保し、各grid子へ`min-width:0`を適用して横overflowを出さない。
+- コメントmodal、投稿後のin-place更新、favorite、lifecycle、DL、追記、削除の可否、API、Worker、D1、R2、Secret、投稿データは変更しない。

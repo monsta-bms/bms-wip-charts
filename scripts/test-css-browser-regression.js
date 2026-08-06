@@ -1933,6 +1933,7 @@ function captureExpression(pageKind) {
         const authorText = comment?.querySelector(".author-comment-preview-text") || null;
         const authorLabel = comment?.querySelector(".author-comment-preview-label") || null;
         const latestText = comment?.querySelector(".version-comment-latest-text") || null;
+        const latestLabel = comment?.querySelector(".version-comment-latest-label") || null;
         const fullLink = comment?.querySelector(".author-comment-full-button:not([hidden])") || null;
         const actionControls = actions
           ? [...actions.querySelectorAll(":scope > a, :scope > button, :scope > .version-download-control, :scope > .compact-link-control")]
@@ -1966,12 +1967,15 @@ function captureExpression(pageKind) {
           authorLineHeightRatio: authorText
             ? round(Number.parseFloat(getComputedStyle(authorText).lineHeight) / Number.parseFloat(getComputedStyle(authorText).fontSize))
             : 0,
-          authorLabelFontSize: authorLabel ? Number.parseFloat(getComputedStyle(authorLabel).fontSize) : 0,
+          authorLabelVisible: Boolean(authorLabel && authorLabel.getBoundingClientRect().width > 1 && authorLabel.getBoundingClientRect().height > 1),
+          authorLabelVisuallyHidden: Boolean(authorLabel?.classList.contains("visually-hidden")),
           latestPreviewLines: latestText
             ? round(latestText.getBoundingClientRect().height
               / Number.parseFloat(getComputedStyle(latestText).lineHeight))
             : 0,
           latestFontSize: latestText ? Number.parseFloat(getComputedStyle(latestText).fontSize) : 0,
+          latestLabelVisible: Boolean(latestLabel && latestLabel.getBoundingClientRect().width > 1 && latestLabel.getBoundingClientRect().height > 1),
+          latestLabelVisuallyHidden: Boolean(latestLabel?.classList.contains("visually-hidden")),
           fullLinkPosition: fullLink ? getComputedStyle(fullLink).position : "",
           fullLinkFontSize: fullLink ? Number.parseFloat(getComputedStyle(fullLink).fontSize) : 0,
           actionControlCount: actionControls.length,
@@ -2096,6 +2100,32 @@ function captureExpression(pageKind) {
       ? getComputedStyle(document.querySelector(".favorite-version-button"))
       : null;
     const navigation = performance.getEntriesByType("navigation")[0];
+    const columnAlignment = ${JSON.stringify(pageKind)} === "detail" && innerWidth > 760 ? (() => {
+      const header = document.querySelector(".version-list-header");
+      const row = document.querySelector(".version-row.version-tree-row");
+      const pairs = [
+        ["version", ".version-list-heading-version", ".version-tree-cell"],
+        ["difficulty", ".version-list-heading-difficulty", ".difficulty-cell"],
+        ["author", ".version-list-heading-author", ".author-cell"],
+        ["progress", ".version-list-heading-progress", ".progress-cell"],
+        ["thumbnail", ".version-list-heading-thumbnail", ".thumbnail-cell"],
+        ["comment", ".version-list-heading-comment", ".comment-cell"],
+        ["actions", ".version-list-heading-actions", ".actions-cell"]
+      ];
+      return Object.fromEntries(pairs.map(([name, headingSelector, cellSelector]) => {
+        const heading = header?.querySelector(headingSelector);
+        const cell = row?.querySelector(cellSelector);
+        if (!heading || !cell) return [name, null];
+        const headingRect = heading.getBoundingClientRect();
+        const cellRect = cell.getBoundingClientRect();
+        return [name, {
+          xDifference: round(Math.abs(headingRect.left - cellRect.left)),
+          widthDifference: round(Math.abs(headingRect.width - cellRect.width)),
+          headingWidth: round(headingRect.width),
+          cellWidth: round(cellRect.width)
+        }];
+      }));
+    })() : null;
     return {
       pageKind: ${JSON.stringify(pageKind)},
       theme: document.documentElement.dataset.theme,
@@ -2119,6 +2149,7 @@ function captureExpression(pageKind) {
       counts: Object.fromEntries(Object.entries(elements).map(([name, items]) => [name, items.length])),
       elements,
       densityRows,
+      columnAlignment,
       controls,
       lifecycleGeometry,
       focusVisible,
@@ -2340,17 +2371,20 @@ function assertPageInvariants(snapshot, consoleMessages) {
     if (row.authorPreviewLines > 0) {
       assert.ok(row.authorFontSize >= 14.9 && row.authorFontSize <= 15.1, `author comment font is not 15px at ${location}`);
       assert.ok(row.authorLineHeightRatio >= 1.5 && row.authorLineHeightRatio <= 1.6, `author comment line-height is outside 1.5-1.6 at ${location}`);
-      assert.ok(row.authorLabelFontSize >= 12 && row.authorLabelFontSize <= 13, `author comment label is outside 12-13px at ${location}`);
+      assert.equal(row.authorLabelVisible, false, `author comment label is visible at ${location}`);
+      assert.equal(row.authorLabelVisuallyHidden, true, `author comment label is not preserved for assistive technology at ${location}`);
     }
     if (row.latestPreviewLines > 0) {
       assert.ok(row.latestFontSize >= 13 && row.latestFontSize <= 14, `latest comment font is outside 13-14px at ${location}`);
+      assert.equal(row.latestLabelVisible, false, `latest comment label is visible at ${location}`);
+      assert.equal(row.latestLabelVisuallyHidden, true, `latest comment label is not preserved for assistive technology at ${location}`);
     }
     if (row.fullLinkPosition) {
       assert.equal(row.fullLinkPosition, "static", `full comment link overlays text at ${location}`);
       assert.ok(row.fullLinkFontSize <= 12, `full comment link is too large at ${location}`);
     }
     if (entry.requestedWidth >= 1024) {
-      assert.ok(row.commentColumnWidth >= 280, `comment column is narrower than 280px at ${location}`);
+      assert.ok(row.commentColumnWidth >= 220, `comment column is narrower than 220px at ${location}`);
     }
     if (entry.requestedWidth >= 1366) {
       assert.ok(row.commentColumnWidth > row.actionsWidth, `comment column is not wider than actions at ${location}`);
@@ -2362,7 +2396,7 @@ function assertPageInvariants(snapshot, consoleMessages) {
     for (const control of row.actionControls) {
       if (entry.requestedWidth >= 1024) {
         assert.ok(control.height >= 32 && control.height <= 34, `desktop action height ${control.height}px is outside 32-34px at ${location}`);
-        assert.ok(control.width <= 120, `desktop action width ${control.width}px is excessive at ${location}`);
+        assert.ok(control.width <= 140, `desktop action width ${control.width}px is excessive at ${location}`);
         assert.ok(control.fontSize >= 13 && control.fontSize <= 14, `desktop action font is outside 13-14px at ${location}`);
         assert.ok(control.borderRadius >= 5 && control.borderRadius <= 6, `desktop action radius is outside 5-6px at ${location}`);
       } else {
@@ -2396,16 +2430,21 @@ function assertPageInvariants(snapshot, consoleMessages) {
     assert.ok(Number.parseFloat(entry.focusVisible?.outlineWidth || "0") >= 1, `focus-visible outline is too thin at ${entry.requestedTheme} ${entry.requestedWidth}px`);
     assert.deepEqual(entry.counts, detailCounts, `detail control counts changed at ${entry.requestedTheme} ${entry.requestedWidth}px`);
     assert.deepEqual(Object.keys(entry.controls), Object.keys(detailControlSelectors));
+    if (entry.requestedWidth > 760) {
+      for (const [name, alignment] of Object.entries(entry.columnAlignment || {})) {
+        assert.ok(alignment, `${name} alignment is missing at ${entry.requestedTheme} ${entry.requestedWidth}px`);
+        assert.ok(alignment.xDifference <= (name === "version" ? 12 : 8), `${name} heading x differs by ${alignment.xDifference}px at ${entry.requestedTheme} ${entry.requestedWidth}px`);
+        assert.ok(alignment.widthDifference <= 2, `${name} heading width differs by ${alignment.widthDifference}px at ${entry.requestedTheme} ${entry.requestedWidth}px: ${JSON.stringify(entry.columnAlignment)}`);
+      }
+    }
     for (const row of entry.densityRows) {
       assertCommentAndActionBalance(entry, row);
       assert.equal(row.actionsContained, true, `detail actions escape row at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
       assert.equal(row.managementContained, true, `detail delete button escapes row at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
       assert.ok(row.authorPreviewLines <= 2.1, `detail author comment exceeds two lines at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
       assert.ok(row.latestPreviewLines <= 1.1, `detail latest comment exceeds one line at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
-      if (entry.requestedWidth >= 1180) {
-        assert.ok(row.actionLineCount <= 1, `detail actions exceed one line at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
-      } else if (entry.requestedWidth === 1024) {
-        assert.ok(row.actionLineCount <= 2, `detail actions exceed two lines at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
+      if (entry.requestedWidth >= 1024 && row.actionControlCount >= 2) {
+        assert.equal(row.actionLineCount, 2, `detail actions are not exactly two lines at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
       } else {
         assert.ok(row.actionLineCount <= 3, `detail mobile actions exceed three lines at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
       }
@@ -2828,10 +2867,8 @@ function assertPageInvariants(snapshot, consoleMessages) {
       assert.equal(row.managementContained, true, `compact delete button escapes row at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
       assert.ok(row.authorPreviewLines <= 2.1, `compact author comment exceeds two lines at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
       assert.ok(row.latestPreviewLines <= 1.1, `compact latest comment exceeds one line at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
-      if (entry.requestedWidth >= 1180) {
-        assert.ok(row.actionLineCount <= 1, `compact actions exceed one line at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
-      } else if (entry.requestedWidth === 1024) {
-        assert.ok(row.actionLineCount <= 2, `compact actions exceed two lines at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
+      if (entry.requestedWidth >= 1024 && row.actionControlCount >= 2) {
+        assert.equal(row.actionLineCount, 2, `compact actions are not exactly two lines at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
       } else {
         assert.ok(row.actionLineCount <= 3, `compact mobile actions exceed three lines at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
       }
