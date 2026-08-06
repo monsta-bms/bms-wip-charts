@@ -1298,4 +1298,4 @@ RC★★変換:
 - トップページの投稿カード、chart指定detail、favorite／management後の再描画、および`list.html`では、desktopのコメント領域を`minmax(300px, 1.5fr)`相当、操作領域を内容幅とし、1366px以上でコメント領域を操作領域より広くする。1024px付近でもコメントを280px以上確保しつつ操作列の最小幅を190pxまで縮め、操作を最大2段まで折り返し、進捗thumbnail幅は維持する。
 - 投稿者コメント本文は15px、line-height 1.55、最大2行、ラベルは12.5px相当とする。最新コメント本文は13.6px相当、line-height 1.45、最大1行とし、長い連続文字は`overflow-wrap:anywhere`で処理する。「全文を見る」は独立した大きな行やabsolute overlayにせず、本文直下の小さいinline linkとして表示する。
 - desktop操作は`flex`、`flex-wrap:wrap`、右寄せ、gap 6px、内容幅とする。原曲↗、DL、追記、💬と件数、削除を32～34px高、13～14px、左右padding 8～11px、角丸5～6pxで表示し、各操作へ`width:100%`を指定しない。追記のaccessible nameは「追記投稿を開始」、コメントは件数を含む「コメントを開く」表現を維持する。
-- 760px以下は2列を基本とするgridへ切り替え、操作高44px以上と`width:100%`を適用する。削除は一覧でdanger outline、確認dialog実行時だけdanger塗りつぶしを維持する。API、Worker、D1、R2、Secret、投稿・コメント・削除処理は変更しない。
+- 760px以下は2列を基本とするgridへ切り替え、操作高44px以上と`width:100%`を適用する。独立一覧の「操作」field labelはgrid itemにせず非表示とし、`origin / download`、`append`、`comment / delete`の明示的な2列だけを生成する。削除は一覧でdanger outline、確認dialog実行時だけdanger塗りつぶしを維持する。API、Worker、D1、R2、Secret、投稿・コメント・削除処理は変更しない。

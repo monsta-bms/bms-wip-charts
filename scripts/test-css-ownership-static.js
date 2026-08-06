@@ -203,7 +203,7 @@ check("changed public UI, comment, and progress assets use their release cache k
   assert.match(sources.index, /\.\/version-management-ui\.css\?v=comment-action-balance-01/);
   assert.match(sources.index, /\.\/version-comment-ui\.css\?v=comment-action-balance-01/);
   assert.match(sources.index, /\.\/version-action-ui\.js\?v=comment-action-balance-01/);
-  assert.match(sources.listHtml, /\.\/list\.css\?v=comment-action-balance-01/);
+  assert.match(sources.listHtml, /\.\/list\.css\?v=comment-action-balance-02/);
   assert.match(sources.listHtml, /\.\/version-management-ui\.css\?v=comment-action-balance-01/);
   assert.match(sources.listHtml, /\.\/version-comment-ui\.css\?v=comment-action-balance-01/);
   assert.match(sources.listHtml, /\.\/version-action-ui\.js\?v=comment-action-balance-01/);
@@ -216,7 +216,8 @@ check("changed public UI, comment, and progress assets use their release cache k
   assert.ok((sources.index.match(/public-ui-refinement-patch-02/g) || []).length >= 8);
   assert.ok((sources.listHtml.match(/public-ui-refinement-patch-02/g) || []).length >= 2);
   assert.equal((sources.index.match(/comment-action-balance-01/g) || []).length, 4);
-  assert.equal((sources.listHtml.match(/comment-action-balance-01/g) || []).length, 4);
+  assert.equal((sources.listHtml.match(/comment-action-balance-01/g) || []).length, 3);
+  assert.equal((sources.listHtml.match(/comment-action-balance-02/g) || []).length, 1);
   assert.equal((sources.index.match(/public-list-density-patch-01/g) || []).length, 2);
   assert.equal((sources.listHtml.match(/public-list-density-patch-01/g) || []).length, 2);
 });
@@ -230,7 +231,7 @@ check("favorite and progress runtime styles are completely removed", () => {
 check("reviewed CSS hashes remain stable", () => {
   const expected = new Map([
     [sources.style, "e098f16d091b1f56e6ac6fac1a1c52e880d79c3d3f38eff746b6755f605e01db"],
-    [sources.list, "9a2e31ba56eab9275aa2505b93060a9687548782d848832b01c31823a4759942"],
+    [sources.list, "8971044f9df7d5a819bedb2bfb582d4fbe0e2db4fe6ea503ccf03d8657b22878"],
     [sources.treePolish, "e0d1cf234c249070294491982088d34812c602e92ccdca7377011d7292e9f4ad"],
     [sources.chartMiniview, "e92980af2dde81ce2051a9216d744d62ee9fbed18e8423f6461296f65791d49c"],
     [sources.management, "dcfbdcf506cf75120d60327a8cb6f2a44b474c2fefbc0fe4c0621739afc08ecf"],

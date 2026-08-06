@@ -148,6 +148,7 @@ check("list row exposes the accepted five-action sequence", () => {
   assert.match(sources.listCss, /PUBLIC-COMMENT-ACTION-BALANCE-01[\s\S]*display: flex;[\s\S]*flex-wrap: wrap;[\s\S]*width: max-content;/u);
   assert.match(sources.branchCss, /PUBLIC-COMMENT-ACTION-BALANCE-01[\s\S]*display: flex;[\s\S]*flex-wrap: wrap;[\s\S]*width: max-content;/u);
   assert.match(sources.listCss, /@media \(max-width: 820px\)[\s\S]*"origin download"[\s\S]*"append append"[\s\S]*"comment delete"/u);
+  assert.match(sources.listCss, /@media \(max-width: 820px\)[\s\S]*\.compact-actions-cell > \.compact-field-label \{[\s\S]*display: none;/u);
 });
 check("public list density keeps desktop height and responsive action limits", () => {
   assert.match(sources.listCss, /PUBLIC-COMMENT-ACTION-BALANCE-01/u);
@@ -209,7 +210,8 @@ check("comment and action assets share a release cache key", () => {
   for (const asset of ["branch-tree-list.css", "version-management-ui.css", "version-comment-ui.css", "version-action-ui.js"]) {
     assert.match(sources.index, new RegExp(`\\./${asset.replaceAll(".", "\\.")}\\?v=comment-action-balance-01`, "u"));
   }
-  for (const asset of ["list.css", "version-management-ui.css", "version-comment-ui.css", "version-action-ui.js"]) {
+  assert.match(sources.listHtml, /\.\/list\.css\?v=comment-action-balance-02/u);
+  for (const asset of ["version-management-ui.css", "version-comment-ui.css", "version-action-ui.js"]) {
     assert.match(sources.listHtml, new RegExp(`\\./${asset.replaceAll(".", "\\.")}\\?v=comment-action-balance-01`, "u"));
   }
   assert.match(sources.index, /\.\/list-ui-refresh\.css\?v=public-list-density-patch-01/u);

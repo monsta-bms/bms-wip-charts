@@ -1051,6 +1051,10 @@
     width: 100%;
   }
 
+  .compact-actions-cell > .compact-field-label {
+    display: none;
+  }
+
   .compact-actions-cell .compact-origin-link { grid-area: origin; }
   .compact-actions-cell .compact-download-link,
   .compact-actions-cell .compact-download-disabled { grid-area: download; }

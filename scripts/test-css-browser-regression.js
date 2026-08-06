@@ -2355,6 +2355,10 @@ function assertPageInvariants(snapshot, consoleMessages) {
     if (entry.requestedWidth >= 1366) {
       assert.ok(row.commentColumnWidth > row.actionsWidth, `comment column is not wider than actions at ${location}`);
     }
+    if (entry.requestedWidth <= 760) {
+      assert.equal(row.actionGridColumns.trim().split(/\s+/u).length, 2, `mobile actions create implicit grid columns at ${location}`);
+      assert.doesNotMatch(row.actionGridAreas, /label/u, `mobile action label remains a grid item at ${location}`);
+    }
     for (const control of row.actionControls) {
       if (entry.requestedWidth >= 1024) {
         assert.ok(control.height >= 32 && control.height <= 34, `desktop action height ${control.height}px is outside 32-34px at ${location}`);

@@ -340,7 +340,7 @@ check("CSS files match the reviewed public UI state", () => {
     ["docs/style.css", "e098f16d091b1f56e6ac6fac1a1c52e880d79c3d3f38eff746b6755f605e01db"],
     ["docs/branch-tree-list.css", "623dd6df5c53a019af46c52f696b8104eaa877a099ae0ed4067203b51e8bd769"],
     ["docs/list-ui-refresh.css", "b8da58683c9e52c20e0e01c27b070fbedf768c622be564dc7a42fa5dfd5a06ad"],
-    ["docs/list.css", "9a2e31ba56eab9275aa2505b93060a9687548782d848832b01c31823a4759942"],
+    ["docs/list.css", "8971044f9df7d5a819bedb2bfb582d4fbe0e2db4fe6ea503ccf03d8657b22878"],
     ["docs/theme.css", "83bc78944b289b21d22131af91c7e78deaa04808f1c62628221194566ba1ef34"],
     ["docs/chart-detail-link.css", "c45722a66d547ecb51825e67dc3e65cc31413f7820a5d34db8b45eb23dbe0882"],
     ["docs/favorites-list.css", "f9498bc2128e06da0a1de3a41e19949a3ee8afebfc46f266600026288d20cf7b"],
