@@ -1262,7 +1262,7 @@ RC★★変換:
 - 内容確認にはファイル名、曲名、差分名、作者、難易度、投稿状態、進捗、追記受付、管理パスワードの設定有無だけを表示する。パスワード本文は表示しない。変更操作は対象fieldを表示してfocusする。validationは上部summaryとinline errorを併用し、summaryから対象fieldへ移動できる。
 - 公開版の操作名は「原曲」「DL」「追記投稿」「コメント」「投稿操作」とする。投稿操作dialogの見出しは「投稿後の操作」とし、管理者用機能と区別する。DL表記とリンクは維持する。
 - 独立投稿一覧は検索、3段階の主状態、完成済み選択時だけ表示する3種の副状態、並び順、お気に入りを常時表示し、期間はdetailsへ置く。既存status parameter 5値とURL互換を維持し、適用中条件は個別解除と一括解除ができるchipで示す。
-- 独立投稿一覧の結果は投稿日、譜面、難易度・作者、進捗・コメント、操作の5領域とする。件数summaryは「件」に統一し、操作領域にDLを直接表示する。
+- 独立投稿一覧の結果は投稿日、譜面、難易度・作者、進捗、コメント、操作の6領域とする。件数summaryは「件」に統一し、操作領域にDLを直接表示する。
 - 使い方は「このサイトでできること」「最短手順」「詳しい使い方」「投稿管理」「安全案内」の順とし、拡張子はbms・bme・bml・zipの小文字を維持する。更新履歴はdata-copy-entry付きの新しい順flat listを維持する。
 - RC★／RC★★ HTMLはトップへ戻る、表名、RC切替、テーマの順にheaderへ置く。「原曲」「DL」「コメント」を表示し、JSON取込リンクをdetailsへまとめる。JSON feed、ETag、HEAD、難易度分類は変更しない。
 - 公開UIはsystem fontとgreen accentを維持し、body 16px、主要文字14px以上、desktop操作40px以上、mobile操作44pxを基本とする。API schema、D1、R2、Secret、投稿状態logicは変更しない。
@@ -1286,7 +1286,7 @@ RC★★変換:
 
 ## PUBLIC-LIST-DENSITY-PATCH-01
 
-- トップページの最近の投稿、chart指定detail、お気に入り絞り込み、管理後の再描画、および`list.html`は、日時、譜面情報、難易度・作者、進捗・コメント、操作をdesktopで横方向に配置する。情報、状態badge、進捗thumbnail、favorite、操作を削除せず、技術IDは新たに表示しない。
+- トップページの最近の投稿、chart指定detail、お気に入り絞り込み、管理後の再描画、および`list.html`は、日時、譜面情報、難易度・作者、進捗、コメント、操作をdesktopで横方向に配置する。進捗とコメントは別columnとし、情報、状態badge、進捗thumbnail、favorite、操作を削除せず、技術IDは新たに表示しない。
 - 760px以下はcardへ移行し、390pxを含むmobileでは2列を基本として追記投稿だけを全幅にできる。desktopの版操作は`VERSION-ROW-LAYOUT-PATCH-02`に従って固定2段、mobile操作は44px以上、`white-space: nowrap`、`min-width: 0`を維持する。
 - desktopの通常行はコメントなし108px以内、コメントあり132px以内、長文140px以内を原則とし、固定heightは使わない。row paddingは10～14px、列gapは12～18px、inner gapは3～7px、metadataとcommentのline-heightは1.35～1.5とする。
 - 投稿者コメントは最大2行、最新コメントは最大1行とし、どちらもない場合はcomment領域を非表示にする。全文とコメント一覧は既存dialogで確認し、in-place投稿後は空領域を復帰させず対象行だけを更新する。
@@ -1315,3 +1315,11 @@ RC★★変換:
 - 版一覧のheaderとrowは同じ明示的grid列を維持する。進捗見出しはpill中央へ合わせ、操作見出しは右側へ32pxの内側余白を設けて固定2段button groupの視覚中心へ合わせる。版、難易度、作者、サムネイル、コメントの実データ位置は変更せず、`nth-child`へ依存しない。
 - 独立投稿一覧のdesktopはコメント列を`minmax(320px, 1.75fr)`、操作列を`max-content`とし、操作cellも内容幅へ縮める。5操作の固定2段、32px高、gap 6pxを維持し、820px以下は2列・44px以上・全幅へ戻す。
 - 公開更新履歴へ2026/08/07のコメント・進捗・一覧表示改善を追加する。2026/08/05には未記載だった投稿フォームの段階表示を追記し、既存の公開内容や運用トラブルを重複掲載しない。Worker、API、D1、R2、Secret、production dataは変更しない。
+
+## PUBLIC-UI-TOUCHUP-AND-CHANGELOG-03-PATCH1
+
+- 独立投稿一覧は投稿日、譜面、難易度・作者、進捗、コメント、操作の6列をheaderとrowで共有し、進捗badgeとcomment blockを兄弟要素として別columnへ配置する。表示順は常に進捗、コメントとする。top／chart detailの版、難易度、作者、進捗、進捗サムネイル、コメント、操作の既存順序も維持する。
+- 進捗badgeは0～99%を灰緑系のsubdued色、100%かつ`completed`または`rejected_completed`を黄色系の完了色とする。99%は完成fieldがあっても完了色にせず、状態未確定の100%も通常色とする。没譜面は別の状態badgeで補助し、進捗色の判定は共通Version UI Modelへ集約する。
+- 独立一覧のheaderとrowは同じCSS grid変数と明示的な`list-heading-*` classを使用する。投稿日、譜面、難易度・作者、コメントは内容開始位置へ、進捗はpill中央へ、操作は2段button groupの視覚中心へ合わせる。branch treeもheaderとrowの左右paddingおよびgrid定義を一致させ、1024pxではコメントを230px以上確保する。
+- desktop一覧は進捗へ70px、コメントへ`minmax(360px, 2.1fr)`、操作へ`minmax(154px, max-content)`を割り当てる。操作列の最小幅を実button群に合わせることでheader／data rowの列幅を一致させ、余白は最小限にする。1180px未満は進捗を独立行領域、コメントを広い領域として維持し、820px以下では進捗、コメント、操作の順でstackする。コメント2行／最新1行、操作2段、mobile 44px以上を維持する。
+- Worker、API、D1、R2、Secret、production data、投稿・管理処理は変更しない。

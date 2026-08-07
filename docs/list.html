@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <script src="./theme-init.js?v=site-theme-14"></script>
     <title>投稿一覧 | リサイクルセンター</title>
-    <link rel="stylesheet" href="./style.css?v=public-ui-touchup-03">
+    <link rel="stylesheet" href="./style.css?v=public-ui-touchup-03-patch1">
     <link rel="stylesheet" href="./site-header.css?v=public-ui-refinement-patch-02">
-  <link rel="stylesheet" href="./list.css?v=public-ui-touchup-03">
-  <link rel="stylesheet" href="./version-management-ui.css?v=version-row-layout-patch-02">
+  <link rel="stylesheet" href="./list.css?v=public-ui-touchup-03-patch1">
+  <link rel="stylesheet" href="./version-management-ui.css?v=public-ui-touchup-03-patch1">
     <link rel="stylesheet" href="./theme.css?v=public-ui-refinement-01">
-  <link rel="stylesheet" href="./version-comment-ui.css?v=public-ui-touchup-03">
+  <link rel="stylesheet" href="./version-comment-ui.css?v=public-ui-touchup-03-patch1">
   </head>
   <body id="top">
     <div class="page-shell">
@@ -118,11 +118,12 @@
         <section class="compact-results" aria-labelledby="compactResultsHeading">
           <h2 id="compactResultsHeading" class="visually-hidden">検索結果</h2>
           <div class="compact-list-head" aria-hidden="true">
-            <span id="compactDateHeading">投稿日</span>
-            <span>譜面</span>
-            <span>難易度・作者</span>
-            <span>進捗・コメント</span>
-            <span>操作</span>
+            <span id="compactDateHeading" class="list-heading-date">投稿日</span>
+            <span class="list-heading-chart">譜面</span>
+            <span class="list-heading-meta">難易度・作者</span>
+            <span class="list-heading-progress">進捗</span>
+            <span class="list-heading-comment">コメント</span>
+            <span class="list-heading-actions">操作</span>
           </div>
           <div id="compactVersionList" class="compact-version-list" aria-busy="true">
             <p class="compact-list-state" data-copy-key="list-loading">読み込み中...</p>
@@ -181,11 +182,11 @@
 
     <script src="./theme-controller.js?v=public-ui-refinement-01"></script>
     <script src="./site-header.js?v=public-ui-refinement-01"></script>
-    <script src="./version-ui-model.js?v=public-ui-touchup-03"></script>
+    <script src="./version-ui-model.js?v=public-ui-touchup-03-patch1"></script>
     <script src="./version-link-ui.js?v=public-ui-refinement-01"></script>
   <script src="./version-action-ui.js?v=comment-action-balance-01"></script>
-    <script src="./version-comment-ui.js?v=public-ui-touchup-03"></script>
-    <script src="./list.js?v=public-ui-touchup-03"></script>
+    <script src="./version-comment-ui.js?v=public-ui-touchup-03-patch1"></script>
+    <script src="./list.js?v=public-ui-touchup-03-patch1"></script>
     <script src="./version-management-ui.js?v=public-ui-refinement-patch-02"></script>
   </body>
 </html>

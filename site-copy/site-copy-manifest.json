@@ -1113,7 +1113,7 @@
           "deploymentTarget": "PAGES",
           "blockId": "EMPTY_AND_LOAD_FAILURES",
           "locator": {
-            "stringOrdinal": 230,
+            "stringOrdinal": 229,
             "beforeAnchorSha256": "3ce5cbdc0bea9cab57fce9dac204d5ab5829fb23eff10b4a4e166c0698be247d",
             "afterAnchorSha256": "04d214d4c44a02acb3ff359f7824c3f3ab2c1c79f99dddc9708b294cc7dafaeb"
           },
@@ -1128,7 +1128,7 @@
           "deploymentTarget": "PAGES",
           "blockId": "EMPTY_AND_LOAD_FAILURES",
           "locator": {
-            "stringOrdinal": 233,
+            "stringOrdinal": 232,
             "beforeAnchorSha256": "9c5bfdc18bcfe2e1aab6fe0c3efeda231b6d4ef4453d9b635bfb7f49fb280cc9",
             "afterAnchorSha256": "91ee1445cf014d57a17c82d51f6da632b6e04480790212ed85e0ea4d945a51df"
           },
@@ -1143,7 +1143,7 @@
           "deploymentTarget": "PAGES",
           "blockId": "EMPTY_AND_LOAD_FAILURES",
           "locator": {
-            "stringOrdinal": 235,
+            "stringOrdinal": 234,
             "beforeAnchorSha256": "1cb921f1c12b92904f10ad212152ffc3817408b2a9a26384ad73fabd102abc15",
             "afterAnchorSha256": "0d658ac1d399e86706ba0cee08a76ac9ca323a78cd6bdc41debfc81efac4109e"
           },
@@ -1158,7 +1158,7 @@
           "deploymentTarget": "PAGES",
           "blockId": "EMPTY_AND_LOAD_FAILURES",
           "locator": {
-            "stringOrdinal": 236,
+            "stringOrdinal": 235,
             "beforeAnchorSha256": "2269fc61af778c3717a077625419d0fcfcceb9e1d46ea211b71b33ab42b82a99",
             "afterAnchorSha256": "9d0eaf0801a27fd83864d225c200035c44fb7211a4709795d25a024dbf843b93"
           },
@@ -1173,7 +1173,7 @@
           "deploymentTarget": "PAGES",
           "blockId": "EMPTY_AND_LOAD_FAILURES",
           "locator": {
-            "stringOrdinal": 331,
+            "stringOrdinal": 330,
             "beforeAnchorSha256": "a4a10b05d153dbd4c89c23d488fa02a1f4c53f7b505949dc645201505cab11bb",
             "afterAnchorSha256": "2df9c6f54e0d5196623a01e500d32d22624580b720616fe35afeb3cee8ff4421"
           },

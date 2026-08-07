@@ -1,7 +1,7 @@
 .version-list {
   --group-gutter-width: 44px;
   --version-tree-indent: 16px;
-  --version-grid-columns: var(--group-gutter-width) minmax(155px, 1.05fr) 54px minmax(80px, 0.55fr) 60px minmax(210px, 1.25fr) minmax(280px, 1.55fr) minmax(185px, 0.8fr);
+  --version-grid-columns: var(--group-gutter-width) minmax(155px, 1.05fr) 54px minmax(80px, 0.55fr) 60px minmax(200px, 1.15fr) minmax(300px, 1.7fr) minmax(185px, 0.8fr);
 }
 
 .version-list-header,
@@ -76,6 +76,12 @@
 
 .version-list-heading-progress {
   text-align: center;
+}
+
+.version-list-heading-difficulty,
+.version-list-heading-author,
+.version-list-heading-comment {
+  text-align: left;
 }
 
 .version-row.version-tree-row {
@@ -607,8 +613,8 @@ button.secondary.append-policy-disabled-button:disabled:active {
 
 @media (max-width: 1100px) {
   .version-list {
-    --group-gutter-width: 29px;
-    --version-grid-columns: var(--group-gutter-width) minmax(94px, 1fr) 44px minmax(52px, 0.58fr) 44px minmax(170px, 0.9fr) minmax(220px, 1.35fr) minmax(185px, 0.9fr);
+    --group-gutter-width: 25px;
+    --version-grid-columns: var(--group-gutter-width) minmax(94px, 1fr) 42px minmax(46px, 0.58fr) 56px minmax(160px, 0.82fr) minmax(230px, 1.45fr) minmax(175px, 0.9fr);
     --version-tree-indent: 13px;
   }
 

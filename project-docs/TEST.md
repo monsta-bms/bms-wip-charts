@@ -1738,3 +1738,11 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - changelogは2026/08/07 entryと2026/08/05の投稿フォーム段階表示追記を含む21件とし、manifest順序・hash、site-copy export／validate／applyの往復差分0、重複やPages運用トラブルの記載0件を確認する。
 - browserはindex、chart指定、list、changelogをdefault 390／760／1024／1366px、dark 390／1366px、white 1366pxで確認する。投稿者コメントのcomputed font、99%／完成100%／没100%の色、見出し位置、コメント／操作列幅、操作2段、overflow、clipping、Console error／warningを測定する。
 - Action UI、Comment UI、Public UI、layout／branch tree／render pipeline、CSS ownership、JavaScript構文、HTML重複ID、site-copy、repository hygiene、canonical schema、`git diff --check`を実行する。Worker deploy、D1／R2／Secret操作、production writeは行わない。
+
+## PUBLIC-UI-TOUCHUP-AND-CHANGELOG-03-PATCH1 回帰
+
+- `node scripts/test-public-ui-touchup.js`で独立一覧の6見出しclass、進捗とコメントの兄弟column、70px進捗track、360px以上のcomment track、154px以上の共有action track、共通UI modelの99%通常／完成100%完了／没100%完了／未確定100%通常を確認する。
+- `node scripts/test-css-browser-regression.js`でdefault 390／760／1024／1366px、dark 390／1366px、white 1366pxのtop、chart指定、独立一覧を確認する。desktopはheader cellと先頭data cellのx差・幅差を2px以内、進捗badge／comment開始／操作button groupとの視覚差を8px以内とする。
+- 1024px以上のコメント列は独立一覧360px以上、branch tree 230px以上とし、操作列より広いこと、投稿者コメント2行、最新コメント1行、desktop操作2段32～34px、mobile操作44px以上を確認する。進捗はコメントより前の別column／areaとする。
+- 100%完了色と99%以下のsubdued色が異なり、top／chart detail／独立一覧で完成版と完成済み没譜面の100%が同一色になることをcomputed styleで確認する。horizontal overflow、clipping、Console error／warningは0件とする。
+- Public UI、layout／branch tree／render pipeline、Comment UI、Action UI、CSS ownership、JavaScript構文、HTML重複ID、repository hygiene、canonical schema、`git diff --check`を実行する。Worker deploy、D1／R2／Secret操作、production writeは行わない。

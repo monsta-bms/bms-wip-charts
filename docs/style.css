@@ -959,10 +959,10 @@ textarea[aria-invalid="true"] {
 }
 
 .progress-pill {
-  background: var(--warning-bg);
-  border: 1px solid rgba(138, 90, 0, 0.22);
+  background: color-mix(in srgb, var(--primary) 7%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--primary) 18%, transparent);
   border-radius: 999px;
-  color: var(--warning);
+  color: var(--muted);
   display: inline-flex;
   font-weight: 800;
   justify-content: center;
@@ -971,9 +971,9 @@ textarea[aria-invalid="true"] {
 }
 
 .progress-pill.is-completed {
-  background: color-mix(in srgb, var(--primary) 16%, var(--surface));
-  border-color: color-mix(in srgb, var(--primary) 34%, transparent);
-  color: var(--primary-dark);
+  background: var(--warning-bg);
+  border-color: rgba(138, 90, 0, 0.28);
+  color: var(--warning);
 }
 
 .rejected-badge {

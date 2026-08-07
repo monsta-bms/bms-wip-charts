@@ -55,7 +55,7 @@ const listSources = listScripts.map((item) => item.src);
 
 check("model, link, action, pipeline, and app load in contract order", () => {
   const ordered = [
-    "./version-ui-model.js?v=public-ui-touchup-03",
+    "./version-ui-model.js?v=public-ui-touchup-03-patch1",
     "./version-link-ui.js?v=public-ui-refinement-01",
     "./version-action-ui.js?v=comment-action-balance-01",
     "./chart-render-pipeline.js?v=chart-render-pipeline-r4a-01",
@@ -65,17 +65,17 @@ check("model, link, action, pipeline, and app load in contract order", () => {
   assert.deepEqual(ordered, [...ordered].sort((left, right) => left - right));
 });
 check("version model loads before compact list", () => {
-  const modelIndex = listSources.indexOf("./version-ui-model.js?v=public-ui-touchup-03");
+  const modelIndex = listSources.indexOf("./version-ui-model.js?v=public-ui-touchup-03-patch1");
   const linkIndex = listSources.indexOf("./version-link-ui.js?v=public-ui-refinement-01");
   const actionIndex = listSources.indexOf("./version-action-ui.js?v=comment-action-balance-01");
-  const commentIndex = listSources.indexOf("./version-comment-ui.js?v=public-ui-touchup-03");
+  const commentIndex = listSources.indexOf("./version-comment-ui.js?v=public-ui-touchup-03-patch1");
   assert.equal(linkIndex, modelIndex + 1);
   assert.equal(actionIndex, linkIndex + 1);
   assert.equal(commentIndex, actionIndex + 1);
-  assert.ok(commentIndex < listSources.indexOf("./list.js?v=public-ui-touchup-03"));
+  assert.ok(commentIndex < listSources.indexOf("./list.js?v=public-ui-touchup-03-patch1"));
 });
 check("model, link UI, and Action UI precede every index renderer consumer", () => {
-  const modelIndex = indexSources.indexOf("./version-ui-model.js?v=public-ui-touchup-03");
+  const modelIndex = indexSources.indexOf("./version-ui-model.js?v=public-ui-touchup-03-patch1");
   const linkIndex = indexSources.indexOf("./version-link-ui.js?v=public-ui-refinement-01");
   const actionIndex = indexSources.indexOf("./version-action-ui.js?v=comment-action-balance-01");
   const consumers = [
@@ -83,7 +83,7 @@ check("model, link UI, and Action UI precede every index renderer consumer", () 
     "./app.js?v=public-ui-refinement-patch-02",
     "./progress-thumbnail-list.js?v=progress-style-r4b2f-01",
     "./branch-append-ui.js?v=public-ui-refinement-patch-02",
-    "./branch-tree-list.js?v=public-ui-touchup-03",
+    "./branch-tree-list.js?v=public-ui-touchup-03-patch1",
     "./favorites-list.js?v=completed-parent-access-01",
     "./version-management-ui.js?v=public-ui-refinement-patch-02",
     "./chart-detail-link.js?v=chart-render-pipeline-r4a-01"
@@ -312,25 +312,25 @@ check("changed scripts use their reviewed release cache keys", () => {
   unchangedR4aScripts.forEach((name) => {
     assert.ok(indexSources.includes(`./${name}?v=chart-render-pipeline-r4a-01`), `${name} cache key mismatch`);
   });
-  assert.ok(indexSources.includes("./version-comment-ui.js?v=public-ui-touchup-03"), "version-comment-ui.js cache key mismatch");
+  assert.ok(indexSources.includes("./version-comment-ui.js?v=public-ui-touchup-03-patch1"), "version-comment-ui.js cache key mismatch");
   assert.ok(indexSources.includes("./progress-map-drag-hint.js?v=version-comment-progress-01"), "progress-map-drag-hint.js cache key mismatch");
   assert.ok(indexSources.includes("./version-link-ui.js?v=public-ui-refinement-01"), "version-link-ui.js cache key mismatch");
   ["app.js", "branch-append-ui.js", "version-management-ui.js"].forEach((name) => {
     assert.ok(indexSources.includes(`./${name}?v=public-ui-refinement-patch-02`), `${name} cache key mismatch`);
   });
-  assert.ok(indexSources.includes("./branch-tree-list.js?v=public-ui-touchup-03"), "branch-tree-list.js cache key mismatch");
+  assert.ok(indexSources.includes("./branch-tree-list.js?v=public-ui-touchup-03-patch1"), "branch-tree-list.js cache key mismatch");
   assert.ok(indexSources.includes("./version-action-ui.js?v=comment-action-balance-01"), "version-action-ui.js cache key mismatch");
-  assert.ok(indexSources.includes("./version-ui-model.js?v=public-ui-touchup-03"), "version-ui-model.js cache key mismatch");
+  assert.ok(indexSources.includes("./version-ui-model.js?v=public-ui-touchup-03-patch1"), "version-ui-model.js cache key mismatch");
   assert.ok(indexSources.includes("./favorites-list.js?v=completed-parent-access-01"), "favorites-list.js cache key mismatch");
   ["version-ui-model.js", "version-link-ui.js", "version-action-ui.js", "version-comment-ui.js", "list.js", "version-management-ui.js"].forEach((name) => {
     const cacheKey = name === "version-ui-model.js"
-        ? "public-ui-touchup-03"
+        ? "public-ui-touchup-03-patch1"
         : name === "version-action-ui.js"
           ? "comment-action-balance-01"
           : name === "version-comment-ui.js"
-          ? "public-ui-touchup-03"
+          ? "public-ui-touchup-03-patch1"
           : name === "list.js"
-            ? "public-ui-touchup-03"
+            ? "public-ui-touchup-03-patch1"
           : name === "version-link-ui.js"
             ? "public-ui-refinement-01"
             : "public-ui-refinement-patch-02";
@@ -339,10 +339,10 @@ check("changed scripts use their reviewed release cache keys", () => {
 });
 check("CSS files match the reviewed public UI state", () => {
   const expected = new Map([
-    ["docs/style.css", "a29dc585e17980cb55cac981270648be607068fc6306f7c8dc9d8b2c7d80e4bc"],
-    ["docs/branch-tree-list.css", "b521a9169e343f7cd223f0a7754fa7977e1fa99e7211148504d16cc4304d925b"],
+    ["docs/style.css", "74615a4a8df249d09f3880e29561e939cd98af66c8810439363492259e9df727"],
+    ["docs/branch-tree-list.css", "81efc5e0f8ee0cab09e3ee3440cbe32755a0ecbe165d5c9ce645a66b2bdeebed"],
     ["docs/list-ui-refresh.css", "b8da58683c9e52c20e0e01c27b070fbedf768c622be564dc7a42fa5dfd5a06ad"],
-    ["docs/list.css", "deec7215dd945df71a51067729a372ae8596efc516b9756f0fe6bd47708cd593"],
+    ["docs/list.css", "e8851f3565529ccb0c0d864bdc2b43e9350dd70fb9b3f59edebc14b26da5bd6c"],
     ["docs/theme.css", "83bc78944b289b21d22131af91c7e78deaa04808f1c62628221194566ba1ef34"],
     ["docs/chart-detail-link.css", "c45722a66d547ecb51825e67dc3e65cc31413f7820a5d34db8b45eb23dbe0882"],
     ["docs/favorites-list.css", "f9498bc2128e06da0a1de3a41e19949a3ee8afebfc46f266600026288d20cf7b"],

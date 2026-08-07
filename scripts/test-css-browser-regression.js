@@ -1932,7 +1932,7 @@ function captureExpression(pageKind) {
         const rowRect = row.getBoundingClientRect();
         const actions = row.querySelector(${JSON.stringify(pageKind)} === "detail" ? ".version-actions" : ".compact-actions-cell");
         const comment = row.querySelector(${JSON.stringify(pageKind)} === "detail" ? ".comment-cell .meta-value" : ".compact-comment");
-        const commentColumn = row.querySelector(${JSON.stringify(pageKind)} === "detail" ? ".comment-cell" : ".compact-activity-cell");
+        const commentColumn = row.querySelector(${JSON.stringify(pageKind)} === "detail" ? ".comment-cell" : ".compact-comment");
         const authorText = comment?.querySelector(".author-comment-preview-text") || null;
         const authorLabel = comment?.querySelector(".author-comment-preview-label") || null;
         const latestText = comment?.querySelector(".version-comment-latest-text") || null;
@@ -2108,29 +2108,65 @@ function captureExpression(pageKind) {
       ? getComputedStyle(document.querySelector(".favorite-version-button"))
       : null;
     const navigation = performance.getEntriesByType("navigation")[0];
-    const columnAlignment = ${JSON.stringify(pageKind)} === "detail" && innerWidth > 760 ? (() => {
-      const header = document.querySelector(".version-list-header");
-      const row = document.querySelector(".version-row.version-tree-row");
-      const pairs = [
-        ["version", ".version-list-heading-version", ".version-tree-cell"],
-        ["difficulty", ".version-list-heading-difficulty", ".difficulty-cell"],
-        ["author", ".version-list-heading-author", ".author-cell"],
-        ["progress", ".version-list-heading-progress", ".progress-cell"],
-        ["thumbnail", ".version-list-heading-thumbnail", ".thumbnail-cell"],
-        ["comment", ".version-list-heading-comment", ".comment-cell"],
-        ["actions", ".version-list-heading-actions", ".actions-cell"]
-      ];
+    const detailLayout = ${JSON.stringify(pageKind)} === "detail";
+    const columnAlignment = innerWidth > (detailLayout ? 760 : 1179) ? (() => {
+      const header = document.querySelector(detailLayout ? ".version-list-header" : ".compact-list-head");
+      const row = document.querySelector(detailLayout ? ".version-row.version-tree-row" : ".compact-version-row");
+      const pairs = detailLayout
+        ? [
+            ["version", ".version-list-heading-version", ".version-tree-cell"],
+            ["difficulty", ".version-list-heading-difficulty", ".difficulty-cell"],
+            ["author", ".version-list-heading-author", ".author-cell"],
+            ["progress", ".version-list-heading-progress", ".progress-cell"],
+            ["thumbnail", ".version-list-heading-thumbnail", ".thumbnail-cell"],
+            ["comment", ".version-list-heading-comment", ".comment-cell"],
+            ["actions", ".version-list-heading-actions", ".actions-cell"]
+          ]
+        : [
+            ["date", ".list-heading-date", ".compact-date-cell"],
+            ["chart", ".list-heading-chart", ".compact-sheet-cell"],
+            ["meta", ".list-heading-meta", ".compact-meta-cell"],
+            ["progress", ".list-heading-progress", ".compact-progress"],
+            ["comment", ".list-heading-comment", ".compact-comment"],
+            ["actions", ".list-heading-actions", ".compact-actions-cell"]
+          ];
       return Object.fromEntries(pairs.map(([name, headingSelector, cellSelector]) => {
         const heading = header?.querySelector(headingSelector);
         const cell = row?.querySelector(cellSelector);
         if (!heading || !cell) return [name, null];
         const headingRect = heading.getBoundingClientRect();
         const cellRect = cell.getBoundingClientRect();
+        const textRange = document.createRange();
+        textRange.selectNodeContents(heading);
+        const headingTextRect = textRange.getBoundingClientRect();
+        const visualElements = name === "actions"
+          ? [...cell.querySelectorAll(":scope > a, :scope > button, :scope > .version-download-control, :scope > .compact-link-control")]
+          : name === "progress"
+            ? [cell.querySelector(".progress-pill")].filter(Boolean)
+            : name === "comment"
+              ? [cell.querySelector(".author-comment-preview, .version-comment-latest-preview")].filter(Boolean)
+              : name === "meta" || name === "difficulty" || name === "author"
+                ? [...cell.querySelectorAll(".compact-difficulty, .compact-author, .meta-value")]
+                : [];
+        const visualRects = visualElements
+          .filter((element) => !element.hidden && getComputedStyle(element).display !== "none")
+          .map((element) => element.getBoundingClientRect())
+          .filter((rect) => rect.width > 0 && rect.height > 0);
+        const visualRect = visualRects.length > 0
+          ? {
+              left: Math.min(...visualRects.map((rect) => rect.left)),
+              right: Math.max(...visualRects.map((rect) => rect.right))
+            }
+          : { left: cellRect.left, right: cellRect.right };
+        const visualDifference = name === "progress" || name === "actions"
+          ? Math.abs((headingTextRect.left + (headingTextRect.width / 2)) - ((visualRect.left + visualRect.right) / 2))
+          : Math.abs(headingTextRect.left - visualRect.left);
         return [name, {
           xDifference: round(Math.abs(headingRect.left - cellRect.left)),
           widthDifference: round(Math.abs(headingRect.width - cellRect.width)),
           headingWidth: round(headingRect.width),
-          cellWidth: round(cellRect.width)
+          cellWidth: round(cellRect.width),
+          visualDifference: round(visualDifference)
         }];
       }));
     })() : null;
@@ -2391,11 +2427,11 @@ function assertPageInvariants(snapshot, consoleMessages) {
       assert.equal(row.fullLinkPosition, "static", `full comment link overlays text at ${location}`);
       assert.ok(row.fullLinkFontSize <= 12, `full comment link is too large at ${location}`);
     }
-    if (entry.requestedWidth >= 1024) {
-      const minimumCommentWidth = entry.pageKind === "compact" ? 280 : 220;
+    if (entry.requestedWidth >= 1024 && (entry.pageKind !== "compact" || row.hasComment)) {
+      const minimumCommentWidth = entry.pageKind === "compact" ? 360 : 230;
       assert.ok(row.commentColumnWidth >= minimumCommentWidth, `comment column is narrower than ${minimumCommentWidth}px at ${location}`);
     }
-    if (entry.requestedWidth >= 1366) {
+    if (entry.requestedWidth >= 1366 && (entry.pageKind !== "compact" || row.hasComment)) {
       assert.ok(row.commentColumnWidth > row.actionsWidth, `comment column is not wider than actions at ${location}`);
     }
     if (entry.requestedWidth <= 760) {
@@ -2444,6 +2480,9 @@ function assertPageInvariants(snapshot, consoleMessages) {
         assert.ok(alignment, `${name} alignment is missing at ${entry.requestedTheme} ${entry.requestedWidth}px`);
         assert.ok(alignment.xDifference <= (name === "version" ? 12 : 8), `${name} heading x differs by ${alignment.xDifference}px at ${entry.requestedTheme} ${entry.requestedWidth}px`);
         assert.ok(alignment.widthDifference <= 2, `${name} heading width differs by ${alignment.widthDifference}px at ${entry.requestedTheme} ${entry.requestedWidth}px: ${JSON.stringify(entry.columnAlignment)}`);
+        if (["difficulty", "author", "progress", "comment", "actions"].includes(name)) {
+          assert.ok(alignment.visualDifference <= 8, `${name} heading visual alignment differs by ${alignment.visualDifference}px at ${entry.requestedTheme} ${entry.requestedWidth}px`);
+        }
       }
     }
     for (const row of entry.densityRows) {
@@ -2858,6 +2897,16 @@ function assertPageInvariants(snapshot, consoleMessages) {
     assert.equal(entry.counts.latestCommentPreviews, 2);
     assert.ok(entry.counts.originLinks > 0 && entry.counts.originLinks < compactItems.length);
     assert.equal(entry.counts.downloads, compactItems.length);
+    if (entry.requestedWidth >= 1180) {
+      for (const [name, alignment] of Object.entries(entry.columnAlignment || {})) {
+        assert.ok(alignment, `${name} compact alignment is missing at ${entry.requestedTheme} ${entry.requestedWidth}px`);
+        assert.ok(alignment.xDifference <= 2, `${name} compact heading x differs by ${alignment.xDifference}px at ${entry.requestedTheme} ${entry.requestedWidth}px`);
+        assert.ok(alignment.widthDifference <= 2, `${name} compact heading width differs by ${alignment.widthDifference}px at ${entry.requestedTheme} ${entry.requestedWidth}px`);
+        if (["meta", "progress", "comment", "actions"].includes(name)) {
+          assert.ok(alignment.visualDifference <= 8, `${name} compact heading visual alignment differs by ${alignment.visualDifference}px at ${entry.requestedTheme} ${entry.requestedWidth}px`);
+        }
+      }
+    }
     for (const row of entry.elements.compactRows) {
       assert.ok(row.scrollWidth <= row.clientWidth + 1, `compact row overflows at ${entry.requestedTheme} ${entry.requestedWidth}px`);
     }

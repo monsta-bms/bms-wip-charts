@@ -25,7 +25,7 @@ function check(name, action) {
 }
 
 const desktopActions = branchCss.slice(branchCss.indexOf("/* VERSION-ROW-LAYOUT-PATCH-02"));
-const compactActions = listCss.slice(listCss.indexOf("/* PUBLIC-COMMENT-ACTION-BALANCE-01 */"));
+const compactActions = listCss.slice(listCss.indexOf("/* PUBLIC-UI-TOUCHUP-AND-CHANGELOG-03-PATCH1 */"));
 
 check("version headings use seven explicit semantic classes", () => {
   for (const suffix of ["version", "difficulty", "author", "progress", "thumbnail", "comment", "actions"]) {
@@ -60,7 +60,7 @@ check("desktop action track has a stable minimum instead of max-content", () => 
 });
 
 check("1024 layout reserves thumbnail and comment width", () => {
-  assert.match(managementCss, /minmax\(94px, 1fr\) 44px minmax\(52px, \.58fr\) 44px minmax\(170px, \.9fr\) minmax\(220px, 1\.35fr\) minmax\(185px, \.9fr\)/);
+  assert.match(managementCss, /minmax\(94px, 1fr\) 42px minmax\(46px, \.58fr\) 56px minmax\(160px, \.82fr\) minmax\(230px, 1\.45fr\) minmax\(175px, \.9fr\)/);
 });
 
 check("mobile version actions retain the explicit two-column card grid", () => {
@@ -74,9 +74,9 @@ check("compact desktop actions also use the fixed two-row grid", () => {
   assert.match(compactActions, /grid-template-rows:\s*repeat\(2, 32px\);/);
 });
 
-check("compact action column shrink-wraps while the comment column expands", () => {
-  assert.match(compactActions, /minmax\(320px, 1\.75fr\) max-content/);
-  assert.match(compactActions, /width:\s*max-content;/);
+check("compact action column keeps a narrow shared track while the comment column expands", () => {
+  assert.match(compactActions, /70px minmax\(360px, 2\.1fr\) minmax\(154px, max-content\)/);
+  assert.match(compactActions, /max-width:\s*100%;\s*\n\s*width:\s*100%;/);
   assert.match(compactActions, /> \.compact-field-label \{ display: none; \}/);
 });
 
@@ -117,16 +117,16 @@ check("empty comment regions remain collapsed", () => {
 
 check("changed index assets share the patch cache key", () => {
   for (const asset of ["style.css", "branch-tree-list.css", "version-comment-ui.css", "version-ui-model.js", "version-comment-ui.js", "branch-tree-list.js"]) {
-    assert.match(indexHtml, new RegExp(`\\./${asset.replaceAll(".", "\\.")}\\?v=public-ui-touchup-03`));
+    assert.match(indexHtml, new RegExp(`\\./${asset.replaceAll(".", "\\.")}\\?v=public-ui-touchup-03-patch1`));
   }
-  assert.match(indexHtml, /\.\/version-management-ui\.css\?v=version-row-layout-patch-02/);
+  assert.match(indexHtml, /\.\/version-management-ui\.css\?v=public-ui-touchup-03-patch1/);
 });
 
 check("changed list assets share the patch cache key", () => {
   for (const asset of ["style.css", "list.css", "version-comment-ui.css", "version-ui-model.js", "version-comment-ui.js", "list.js"]) {
-    assert.match(listHtml, new RegExp(`\\./${asset.replaceAll(".", "\\.")}\\?v=public-ui-touchup-03`));
+    assert.match(listHtml, new RegExp(`\\./${asset.replaceAll(".", "\\.")}\\?v=public-ui-touchup-03-patch1`));
   }
-  assert.match(listHtml, /\.\/version-management-ui\.css\?v=version-row-layout-patch-02/);
+  assert.match(listHtml, /\.\/version-management-ui\.css\?v=public-ui-touchup-03-patch1/);
 });
 
 check("specification and test plan record the layout patch", () => {

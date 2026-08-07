@@ -926,11 +926,40 @@
   }
 }
 
-/* PUBLIC-COMMENT-ACTION-BALANCE-01 */
+/* PUBLIC-UI-TOUCHUP-AND-CHANGELOG-03-PATCH1 */
+.compact-results {
+  --compact-version-grid-columns: 90px minmax(230px, 1.05fr) minmax(100px, .5fr) 70px minmax(360px, 2.1fr) minmax(154px, max-content);
+}
+
 .compact-list-head,
 .compact-version-row {
-  grid-template-columns: 90px minmax(230px, 1.15fr) minmax(100px, .5fr) minmax(320px, 1.75fr) max-content;
+  grid-template-columns: var(--compact-version-grid-columns);
   column-gap: 12px;
+}
+
+.list-heading-date,
+.compact-date-cell { grid-column: 1; }
+.list-heading-chart,
+.compact-sheet-cell { grid-column: 2; }
+.list-heading-meta,
+.compact-meta-cell { grid-column: 3; }
+.list-heading-progress,
+.compact-progress { grid-column: 4; }
+.list-heading-comment,
+.compact-comment { grid-column: 5; }
+.list-heading-actions,
+.compact-actions-cell { grid-column: 6; }
+
+.list-heading-date,
+.list-heading-chart,
+.list-heading-meta,
+.list-heading-comment {
+  text-align: left;
+}
+
+.list-heading-progress,
+.list-heading-actions {
+  text-align: center;
 }
 
 .compact-version-row {
@@ -958,14 +987,17 @@
   gap: 3px;
 }
 
-.compact-meta-cell,
-.compact-activity-cell {
+.compact-meta-cell {
   gap: 3px;
   line-height: 1.4;
 }
 
 .compact-progress {
-  text-align: left;
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+  text-align: center;
 }
 
 .compact-comment {
@@ -983,7 +1015,7 @@
   grid-template-rows: repeat(2, 32px);
   justify-self: end;
   max-width: 100%;
-  width: max-content;
+  width: 100%;
 }
 
 .compact-actions-cell > .compact-field-label { display: none; }
@@ -1019,16 +1051,17 @@
   .compact-version-row,
   .compact-version-row.has-comment {
     grid-template-areas:
-      "date sheet meta activity"
-      "actions actions actions actions";
-    grid-template-columns: 90px minmax(210px, 1fr) minmax(100px, .5fr) minmax(280px, 1.5fr);
+      "date sheet meta progress"
+      "comment comment actions actions";
+    grid-template-columns: 90px minmax(210px, 1fr) minmax(100px, .5fr) 70px;
     row-gap: 8px;
   }
 
   .compact-date-cell { grid-area: date; }
   .compact-sheet-cell { grid-area: sheet; }
   .compact-meta-cell { grid-area: meta; }
-  .compact-activity-cell { grid-area: activity; }
+  .compact-progress { grid-area: progress; }
+  .compact-comment { grid-area: comment; }
   .compact-actions-cell { grid-area: actions; }
   .compact-actions-cell {
     justify-self: end;
@@ -1042,7 +1075,8 @@
     grid-template-areas:
       "sheet sheet"
       "meta date"
-      "activity activity"
+      "progress progress"
+      "comment comment"
       "actions actions";
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     min-height: 0;
@@ -1095,7 +1129,8 @@
       "sheet"
       "meta"
       "date"
-      "activity"
+      "progress"
+      "comment"
       "actions";
     grid-template-columns: minmax(0, 1fr);
   }

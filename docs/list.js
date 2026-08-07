@@ -484,10 +484,8 @@
           <div class="compact-difficulty"><span class="compact-field-label">難易度</span><span>${escapeHtml(difficulty)}</span></div>
           <div class="compact-author"><span class="compact-field-label">作者</span><span title="${escapeHtml(author)}">${escapeHtml(author)}</span></div>
         </div>
-        <div class="compact-activity-cell">
-          <div class="compact-progress"><span class="compact-field-label">進捗</span><span class="progress-pill${completedProgressTone ? " is-completed" : ""}">${escapeHtml(progress)}%</span></div>
-          <div class="compact-comment"></div>
-        </div>
+        <div class="compact-progress"><span class="compact-field-label">進捗</span><span class="progress-pill${completedProgressTone ? " is-completed" : ""}">${escapeHtml(progress)}%</span></div>
+        <div class="compact-comment"></div>
         <div class="compact-links compact-actions-cell"><span class="compact-field-label">操作</span>${originControl}${downloadControl}${appendControl}${commentControl}${managementControl}</div>
       </article>
     `;
