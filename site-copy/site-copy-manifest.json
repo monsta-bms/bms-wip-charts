@@ -1461,11 +1461,18 @@
   ],
   "changelogEntries": [
     {
+      "id": "CHANGELOG_20260807",
+      "sourcePath": "docs/changelog.html",
+      "deploymentTarget": "PAGES",
+      "allowEmpty": false,
+      "sourceValueSha256": "5e770a6e9cc8c0b0e70d822a8191e914f0fb4ee55054a41b5e111a4a44379c3d"
+    },
+    {
       "id": "CHANGELOG_20260805",
       "sourcePath": "docs/changelog.html",
       "deploymentTarget": "PAGES",
       "allowEmpty": false,
-      "sourceValueSha256": "f902877dcbae3c70dc0fce3651afef18fe148dd9d01e5a4d9c9c1278d78aac25"
+      "sourceValueSha256": "cf07edb8dfbffa7d0880fe25fa145d97cf744052a1c1573a7580d25a6cca01e3"
     },
     {
       "id": "CHANGELOG_20260804",

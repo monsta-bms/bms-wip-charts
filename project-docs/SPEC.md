@@ -1307,3 +1307,11 @@ RC★★変換:
 - 投稿者コメントの可視ラベルは表示せず、左accentと引用記号を備えた15px・最大2行のquote表現とする。最新コメントも可視ラベルを表示せず、区切り線と`aria-hidden`の吹き出し記号を備えた13～14px・最大1行のreply表現とする。両方の種別名は`visually-hidden`要素とbuttonのaccessible nameで保持する。
 - 1366px付近では進捗サムネイルを210～260px、コメントを280～360px、操作を185～215pxの目安とし、コメント列を操作列より広くする。1024px付近でもサムネイル170px以上、コメント220px以上を確保し、各grid子へ`min-width:0`を適用して横overflowを出さない。
 - コメントmodal、投稿後のin-place更新、favorite、lifecycle、DL、追記、削除の可否、API、Worker、D1、R2、Secret、投稿データは変更しない。
+
+## PUBLIC-UI-TOUCHUP-AND-CHANGELOG-03
+
+- 投稿者コメント本文は14px、font-weight 500、line-height 1.5、最大2行とする。最新コメントの13～14px・最大1行との差を維持しつつ、左accentを2pxへ抑え、本文が一覧全体で強くなりすぎない表示にする。全文表示dialogとplain text処理は変更しない。
+- 進捗表示は共通Version UI Modelが`progress`、完成状態、没譜面状態から`incomplete`、`completed`、`rejected_completed`を決定する。0～99%は状態にかかわらず通常進捗色、100%かつ`completed`または`rejected_completed`だけを完了色とする。没譜面は進捗色とは別の状態badgeを維持し、top／chart detail／独立投稿一覧で同じ判定を使用する。
+- 版一覧のheaderとrowは同じ明示的grid列を維持する。進捗見出しはpill中央へ合わせ、操作見出しは右側へ32pxの内側余白を設けて固定2段button groupの視覚中心へ合わせる。版、難易度、作者、サムネイル、コメントの実データ位置は変更せず、`nth-child`へ依存しない。
+- 独立投稿一覧のdesktopはコメント列を`minmax(320px, 1.75fr)`、操作列を`max-content`とし、操作cellも内容幅へ縮める。5操作の固定2段、32px高、gap 6pxを維持し、820px以下は2列・44px以上・全幅へ戻す。
+- 公開更新履歴へ2026/08/07のコメント・進捗・一覧表示改善を追加する。2026/08/05には未記載だった投稿フォームの段階表示を追記し、既存の公開内容や運用トラブルを重複掲載しない。Worker、API、D1、R2、Secret、production dataは変更しない。

@@ -1706,7 +1706,7 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 
 - `node scripts/test-public-ui-refinement.mjs`で後続sectionの表示アニメーションに`both`／`forwards`がなく、投稿状態labelの`padding-inline-start`が5px、変更したCSSのcache keyと2026/08/05更新履歴が一致することを確認する。
 - `node scripts/test-css-browser-regression.js`で実際の投稿フォームへBMS fixtureを読み込み、white／default／dark × 390／760／1024／1366pxの12条件を確認する。表示アニメーション完了後のprogress sectionは`transform: none`、tooltipはpointerの右下8～20px、radioはrow左端から5px以上、horizontal overflowは0件、Console error／warningは0／0とする。
-- 更新履歴は20 entry、新しい順、manifestとの順序・hash一致、site-copy export／validate／applyの往復差分0を確認する。repository hygiene、canonical schema、CSS ownership、JavaScript構文、HTML重複ID、link、Worker typecheck、deploy:check、Wrangler dry-run、`git diff --check`を実行する。
+- 更新履歴は21 entry、新しい順、manifestとの順序・hash一致、site-copy export／validate／applyの往復差分0を確認する。repository hygiene、canonical schema、CSS ownership、JavaScript構文、HTML重複ID、link、Worker typecheck、deploy:check、Wrangler dry-run、`git diff --check`を実行する。
 
 ## PUBLIC-LIST-DENSITY-PATCH-01 回帰
 
@@ -1730,3 +1730,11 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - defaultは390／760／1024／1366px、darkは390／1366px、whiteは1366pxを確認する。desktop操作のy座標は常に2種類、mobileは44px以上、投稿者コメント15px・最大2行、最新コメント13～14px・最大1行、可視種別ラベル0件、visually-hidden種別名2件を必須とする。
 - 1366px付近でサムネイル210～260px、コメント280～360px、操作185～215px、1024px付近でサムネイル170px以上、コメント220px以上を確認する。難易度、作者、進捗、サムネイル、コメント、操作の見出しと先頭data cellのx差は8px以内、BASEはtree connector考慮後12px以内、headerとrowの列幅差は2px以内とする。
 - horizontal overflow、clipping、操作はみ出し、Console error／warningを0件とし、keyboardでコメント全文dialogを開けることを確認する。関連静的回帰、repository hygiene、canonical schema、CSS ownership、site-copy、JavaScript構文、HTML重複ID、link、`git diff --check`を実行し、Worker deploy、D1／R2／Secret操作、production writeを行わない。
+
+## PUBLIC-UI-TOUCHUP-AND-CHANGELOG-03 回帰
+
+- `node scripts/test-public-ui-touchup.js`と`node scripts/test-version-ui-model.js`で、投稿者コメント14px／weight 500／2行、99%通常色、完成100%完了色、没譜面100%完了色＋別badge、未確定100%通常色を確認する。topと独立一覧は共通modelの`progress.completedTone`を使用し、共通`.progress-pill.is-completed` classへ収束させる。
+- `node scripts/test-version-row-layout-patch.js`で、見出しの明示classと共有gridを保ったまま進捗見出しを中央、操作見出しを32pxの内側余白でbutton groupの視覚中心へ補正すること、独立一覧のコメント列が320px以上のflex track、操作列が`max-content`であることを確認する。desktop操作は2段32px、820px以下は2列44px以上を維持する。
+- changelogは2026/08/07 entryと2026/08/05の投稿フォーム段階表示追記を含む21件とし、manifest順序・hash、site-copy export／validate／applyの往復差分0、重複やPages運用トラブルの記載0件を確認する。
+- browserはindex、chart指定、list、changelogをdefault 390／760／1024／1366px、dark 390／1366px、white 1366pxで確認する。投稿者コメントのcomputed font、99%／完成100%／没100%の色、見出し位置、コメント／操作列幅、操作2段、overflow、clipping、Console error／warningを測定する。
+- Action UI、Comment UI、Public UI、layout／branch tree／render pipeline、CSS ownership、JavaScript構文、HTML重複ID、site-copy、repository hygiene、canonical schema、`git diff --check`を実行する。Worker deploy、D1／R2／Secret操作、production writeは行わない。

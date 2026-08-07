@@ -70,7 +70,12 @@
 }
 
 .version-list-heading-actions {
-  text-align: right;
+  padding-inline-end: 32px;
+  text-align: center;
+}
+
+.version-list-heading-progress {
+  text-align: center;
 }
 
 .version-row.version-tree-row {
@@ -459,12 +464,6 @@
 
 .progress-pill {
   white-space: nowrap;
-}
-
-.progress-pill.is-completed {
-  background: #e4f8ed;
-  border-color: rgba(37, 111, 93, 0.22);
-  color: var(--primary-dark);
 }
 
 .comment-cell .meta-value {

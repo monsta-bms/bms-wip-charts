@@ -192,6 +192,31 @@
     });
   }
 
+  function getProgressPresentation(version) {
+    const rawProgress = Number(version?.progress);
+    const progress = Number.isFinite(rawProgress)
+      ? Math.max(0, Math.min(100, Math.round(rawProgress)))
+      : 0;
+    const rejected = readBooleanAliases(version, ["isRejected", "is_rejected"], { strict: true });
+    const completed = readBooleanAliases(version, ["completed"], { strict: true });
+    const completedAt = readStringAliases(version, ["completedAt", "completed_at"], { nullAsMissing: true });
+    const rejectedState = rejected.valid && rejected.value;
+    const completedState = !rejectedState
+      && ((completed.valid && completed.value) || (completedAt.valid && Boolean(completedAt.value)));
+    const state = rejectedState
+      ? "rejected_completed"
+      : completedState
+        ? "completed"
+        : "incomplete";
+    const completedTone = progress === 100 && (state === "completed" || state === "rejected_completed");
+
+    return freezeRecord({
+      value: progress,
+      state,
+      completedTone
+    });
+  }
+
   function resolveActionState(version, versionId, lifecycle) {
     const hidden = readBooleanAliases(version, ["hidden", "isHidden", "is_hidden"]);
     const redacted = readBooleanAliases(version, ["publicDataRedacted", "public_data_redacted"]);
@@ -224,6 +249,7 @@
     const source = version && typeof version === "object" ? version : {};
     const versionId = getVersionId(source);
     const lifecycle = getLifecycle(source);
+    const progress = getProgressPresentation(source);
     let actionState = resolveActionState(source, versionId, lifecycle);
 
     const downloadBlocked = readBooleanAliases(source, ["downloadBlocked", "download_blocked"], { required: true });
@@ -372,6 +398,7 @@
       originLink,
       download,
       append,
+      progress,
       lifecycle,
       management,
       favorite,

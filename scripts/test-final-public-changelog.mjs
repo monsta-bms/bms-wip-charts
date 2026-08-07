@@ -9,7 +9,7 @@ const articles = [...html.matchAll(/<article\b[^>]*\bdata-copy-entry="([A-Z0-9_]
   .map((match) => ({ id: match[1], html: match[2] }));
 const manifestEntries = manifest.changelogEntries ?? [];
 
-assert.equal(articles.length, 20, "公開changelogは20 entryであること");
+assert.equal(articles.length, 21, "公開changelogは21 entryであること");
 assert.equal(manifestEntries.length, articles.length, "manifest entry数が一致すること");
 assert.equal(new Set(articles.map((entry) => entry.id)).size, articles.length, "ENTRY IDが重複しないこと");
 assert.deepEqual(manifestEntries.map((entry) => entry.id), articles.map((entry) => entry.id), "manifestとHTMLのENTRY順が一致すること");
@@ -52,13 +52,21 @@ for (const phrase of ["正式公開を開始しました", "公開終了の予�
   assert.ok(launch.includes(phrase), `正式公開entryに「${phrase}」が含まれること`);
 }
 
-const latest = articles.find((entry) => entry.id === "CHANGELOG_20260805")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
+const latest = articles.find((entry) => entry.id === "CHANGELOG_20260807")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
+for (const phrase of [
+  "コメント・進捗・一覧表示を整えました",
+  "投稿者コメントを読みやすさを保ちつつ落ち着いた表示",
+  "進捗率の色を投稿状態と揃え",
+  "投稿一覧ではコメントを広く、操作をコンパクトに表示"
+]) assert.ok(latest.includes(phrase), `最新entryに「${phrase}」を掲載すること`);
+const formUsability = articles.find((entry) => entry.id === "CHANGELOG_20260805")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
 for (const phrase of [
   "投稿フォームと一覧の操作性を改善",
   "進捗マップの小節・時間・ノーツ情報を、カーソルの近くへ表示するよう修正しました。",
   "投稿状態の選択ボタンに左余白を加え、枠へ重ならないよう調整しました。",
+  "投稿フォームを入力内容ごとの段階に整理し、必要な項目を追いやすくしました。",
   "トップページの投稿カードと投稿一覧を圧縮し、コメント・進捗・操作を保ったまま多くの投稿を見渡せるようにしました。"
-]) assert.ok(latest.includes(phrase), `最新entryに「${phrase}」を掲載すること`);
+]) assert.ok(formUsability.includes(phrase), `2026-08-05 entryに「${phrase}」を掲載すること`);
 const difficultyTableUpdate = articles.find((entry) => entry.id === "CHANGELOG_20260804")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
 assert.ok(difficultyTableUpdate.includes("RC★／RC★★の難易度表に完成版と没譜面が正しく掲載されるよう修正しました。"), "2026-08-04 entryに難易度表修正を掲載すること");
 for (const removed of [

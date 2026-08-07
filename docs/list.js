@@ -400,14 +400,14 @@
     const commentPreview = item.hasComment === true ? String(item.commentPreview || "") : "";
     const latestComment = item.latestComment || item.latest_comment || null;
     const hasComment = Boolean(commentPreview.trim() || String(latestComment?.body ?? commentPreview).trim());
-    const rawProgress = Number(item.progress);
-    const progress = Number.isFinite(rawProgress) ? Math.max(0, Math.min(100, Math.round(rawProgress))) : 0;
     const displayedAt = formatCreatedAt(state.sort === "updated" ? item.chartUpdatedAt : item.createdAt);
     const relativeTimeBadge = renderRelativeTimeBadge(item.createdAt);
     const stateBadges = buildStateBadges(item);
     const versionChartName = formatVersionChartName(chartName);
     const fullLabel = `${fullTitle} / 差分名: ${versionChartName} / 版: ${versionLabel}`;
     const uiModel = buildSharedVersionUiModel(item, { hasProgressMap: true });
+    const progress = uiModel?.progress?.value ?? 0;
+    const completedProgressTone = uiModel?.progress?.completedTone === true;
     const linkUi = window.BmsVersionLinkUi;
     const canBuildLinks = typeof linkUi?.createOriginLink === "function"
       && typeof linkUi?.createDownloadControl === "function"
@@ -485,7 +485,7 @@
           <div class="compact-author"><span class="compact-field-label">作者</span><span title="${escapeHtml(author)}">${escapeHtml(author)}</span></div>
         </div>
         <div class="compact-activity-cell">
-          <div class="compact-progress"><span class="compact-field-label">進捗</span><span>${escapeHtml(progress)}%</span></div>
+          <div class="compact-progress"><span class="compact-field-label">進捗</span><span class="progress-pill${completedProgressTone ? " is-completed" : ""}">${escapeHtml(progress)}%</span></div>
           <div class="compact-comment"></div>
         </div>
         <div class="compact-links compact-actions-cell"><span class="compact-field-label">操作</span>${originControl}${downloadControl}${appendControl}${commentControl}${managementControl}</div>

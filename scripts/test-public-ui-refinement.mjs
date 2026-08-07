@@ -157,7 +157,7 @@ check("public list density keeps desktop height and responsive action limits", (
   assert.match(sources.branchCss, /@media \(min-width: 761px\) and \(max-width: 1179px\)[\s\S]*width: 100%;/u);
 });
 check("comment previews use two plus one lines and remove empty regions", () => {
-  assert.match(sources.commentCss, /\.author-comment-preview-text \{[\s\S]*-webkit-line-clamp: 2;[\s\S]*font-size: 0\.9375rem;[\s\S]*line-height: 1\.55;[\s\S]*max-height: 3\.1em;/u);
+  assert.match(sources.commentCss, /\.author-comment-preview-text \{[\s\S]*-webkit-line-clamp: 2;[\s\S]*font-size: 0\.875rem;[\s\S]*font-weight: 500;[\s\S]*line-height: 1\.5;[\s\S]*max-height: 3em;/u);
   assert.match(sources.commentCss, /\.version-comment-latest-text \{[\s\S]*-webkit-line-clamp: 1;[\s\S]*font-size: 0\.85rem;[\s\S]*line-height: 1\.45;[\s\S]*max-height: 1\.45em;/u);
   assert.match(sources.commentCss, /\.author-comment-full-button \{[\s\S]*grid-column: 2;[\s\S]*position: static;[\s\S]*text-decoration: underline;/u);
   assert.match(sources.commentUi, /container\.hidden = !hasAuthorComment && !hasLatestComment/u);
@@ -165,7 +165,7 @@ check("comment previews use two plus one lines and remove empty regions", () => 
 });
 check("comment width and intrinsic desktop actions are balanced", () => {
   assert.match(sources.managementCss, /minmax\(280px, 1\.55fr\) minmax\(185px, 0\.8fr\)/u);
-  assert.match(sources.listCss, /minmax\(300px, 1\.5fr\) minmax\(185px, 215px\)/u);
+  assert.match(sources.listCss, /minmax\(320px, 1\.75fr\) max-content/u);
   assert.match(sources.actions, /button\.textContent = "追記";[\s\S]*aria-label", "追記投稿を開始"/u);
   assert.match(sources.actions, /label\.textContent = "💬";[\s\S]*label\.setAttribute\("aria-hidden", "true"\)/u);
   assert.match(sources.actions, /`コメントを開く、\$\{count\}件（\$\{versionLabel\}）`/u);
@@ -207,17 +207,18 @@ check("changelog includes the 2026-08-05 form usability update", () => {
   assert.match(sources.changelog, /data-copy-entry="CHANGELOG_20260805"[\s\S]*トップページの投稿カードと投稿一覧を圧縮し、コメント・進捗・操作を保ったまま多くの投稿を見渡せるようにしました。/u);
 });
 check("comment and action assets share a release cache key", () => {
-  for (const asset of ["branch-tree-list.css", "version-management-ui.css", "version-comment-ui.css"]) {
-    assert.match(sources.index, new RegExp(`\\./${asset.replaceAll(".", "\\.")}\\?v=version-row-layout-patch-02`, "u"));
+  for (const asset of ["style.css", "branch-tree-list.css", "version-comment-ui.css"]) {
+    assert.match(sources.index, new RegExp(`\\./${asset.replaceAll(".", "\\.")}\\?v=public-ui-touchup-03`, "u"));
   }
+  assert.match(sources.index, /\.\/version-management-ui\.css\?v=version-row-layout-patch-02/u);
   assert.match(sources.index, /\.\/version-action-ui\.js\?v=comment-action-balance-01/u);
-  assert.match(sources.listHtml, /\.\/list\.css\?v=version-row-layout-patch-02/u);
-  for (const asset of ["version-management-ui.css", "version-comment-ui.css"]) {
-    assert.match(sources.listHtml, new RegExp(`\\./${asset.replaceAll(".", "\\.")}\\?v=version-row-layout-patch-02`, "u"));
+  for (const asset of ["style.css", "list.css", "version-comment-ui.css"]) {
+    assert.match(sources.listHtml, new RegExp(`\\./${asset.replaceAll(".", "\\.")}\\?v=public-ui-touchup-03`, "u"));
   }
+  assert.match(sources.listHtml, /\.\/version-management-ui\.css\?v=version-row-layout-patch-02/u);
   assert.match(sources.listHtml, /\.\/version-action-ui\.js\?v=comment-action-balance-01/u);
   assert.match(sources.index, /\.\/list-ui-refresh\.css\?v=public-list-density-patch-01/u);
-  assert.match(sources.listHtml, /\.\/list\.js\?v=public-list-density-patch-01/u);
+  assert.match(sources.listHtml, /\.\/list\.js\?v=public-ui-touchup-03/u);
 });
 check("guide and changelog share the widened content measure", () => assert.match(sources.headerCss, /\.content-page \{\s*max-width: min\(100%, 114ch\);/u));
 check("RC header has top, title, switch and theme", () => {

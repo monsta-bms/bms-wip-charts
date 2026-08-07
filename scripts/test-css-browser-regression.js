@@ -106,7 +106,10 @@ const versions = [
     progress: 70
   }),
   ...Array.from({ length: 7 }, (_, index) => createVersion(`version-depth-${index + 1}`, {
-    progress: 40 + index
+    progress: index === 0 ? 99 : index === 1 || index === 2 ? 100 : 40 + index,
+    completed: index === 1,
+    completedAt: index === 1 ? "2026-07-25T03:00:00.000Z" : null,
+    isRejected: index === 2
   })),
   createVersion("version-grace", {
     lifecycleStatus: "withdrawal_pending",
@@ -1947,6 +1950,8 @@ function captureExpression(pageKind) {
         const actionLineCount = new Set(actionRects.map((rect) => Math.round(rect.top))).size;
         const management = actions?.querySelector(".version-management-button") || null;
         const managementRect = management?.getBoundingClientRect?.() || null;
+        const progressPill = row.querySelector(".progress-pill");
+        const progressStyle = progressPill ? getComputedStyle(progressPill) : null;
         const commentText = String(comment?.textContent || "").trim();
         return {
           index,
@@ -1959,6 +1964,9 @@ function captureExpression(pageKind) {
           commentTextLength: commentText.length,
           commentColumnWidth: round(commentColumn?.getBoundingClientRect?.().width || 0),
           actionsWidth: round(actions?.getBoundingClientRect?.().width || 0),
+          progressText: String(progressPill?.textContent || "").trim(),
+          progressCompletedTone: Boolean(progressPill?.classList.contains("is-completed")),
+          progressBackgroundColor: progressStyle?.backgroundColor || "",
           authorPreviewLines: authorText
             ? round(authorText.getBoundingClientRect().height
               / Number.parseFloat(getComputedStyle(authorText).lineHeight))
@@ -2369,8 +2377,8 @@ function assertPageInvariants(snapshot, consoleMessages) {
   const assertCommentAndActionBalance = (entry, row) => {
     const location = `${entry.pageKind} ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`;
     if (row.authorPreviewLines > 0) {
-      assert.ok(row.authorFontSize >= 14.9 && row.authorFontSize <= 15.1, `author comment font is not 15px at ${location}`);
-      assert.ok(row.authorLineHeightRatio >= 1.5 && row.authorLineHeightRatio <= 1.6, `author comment line-height is outside 1.5-1.6 at ${location}`);
+      assert.ok(row.authorFontSize >= 13.9 && row.authorFontSize <= 14.1, `author comment font is not 14px at ${location}`);
+      assert.ok(row.authorLineHeightRatio >= 1.45 && row.authorLineHeightRatio <= 1.55, `author comment line-height is outside 1.45-1.55 at ${location}`);
       assert.equal(row.authorLabelVisible, false, `author comment label is visible at ${location}`);
       assert.equal(row.authorLabelVisuallyHidden, true, `author comment label is not preserved for assistive technology at ${location}`);
     }
@@ -2384,7 +2392,8 @@ function assertPageInvariants(snapshot, consoleMessages) {
       assert.ok(row.fullLinkFontSize <= 12, `full comment link is too large at ${location}`);
     }
     if (entry.requestedWidth >= 1024) {
-      assert.ok(row.commentColumnWidth >= 220, `comment column is narrower than 220px at ${location}`);
+      const minimumCommentWidth = entry.pageKind === "compact" ? 280 : 220;
+      assert.ok(row.commentColumnWidth >= minimumCommentWidth, `comment column is narrower than ${minimumCommentWidth}px at ${location}`);
     }
     if (entry.requestedWidth >= 1366) {
       assert.ok(row.commentColumnWidth > row.actionsWidth, `comment column is not wider than actions at ${location}`);
@@ -2877,6 +2886,28 @@ function assertPageInvariants(snapshot, consoleMessages) {
         assert.ok(row.height <= maximumHeight, `compact row height ${row.height}px exceeds ${maximumHeight}px at ${entry.requestedTheme} ${entry.requestedWidth}px ${row.versionId}`);
       }
     }
+  }
+  for (const detailEntry of snapshot.detail.matrix) {
+    const compactEntry = snapshot.compact.matrix.find((entry) => entry.requestedTheme === detailEntry.requestedTheme
+      && entry.requestedWidth === detailEntry.requestedWidth);
+    assert.ok(compactEntry, `matching compact matrix entry is missing for ${detailEntry.requestedTheme} ${detailEntry.requestedWidth}px`);
+    const detailRows = new Map(detailEntry.densityRows.map((row) => [row.versionId, row]));
+    const compactRows = new Map(compactEntry.densityRows.map((row) => [row.versionId, row]));
+    const progress99 = detailRows.get("version-depth-1");
+    const completedDetail = detailRows.get("version-depth-2");
+    const rejectedDetail = detailRows.get("version-depth-3");
+    const completedCompact = compactRows.get("version-depth-2");
+    const rejectedCompact = compactRows.get("version-depth-3");
+    assert.equal(progress99?.progressText, "99%");
+    assert.equal(progress99?.progressCompletedTone, false, `99% received completed tone at ${detailEntry.requestedTheme} ${detailEntry.requestedWidth}px`);
+    for (const row of [completedDetail, rejectedDetail, completedCompact, rejectedCompact]) {
+      assert.equal(row?.progressText, "100%");
+      assert.equal(row?.progressCompletedTone, true, `confirmed 100% missed completed tone at ${detailEntry.requestedTheme} ${detailEntry.requestedWidth}px`);
+    }
+    assert.equal(completedDetail.progressBackgroundColor, rejectedDetail.progressBackgroundColor);
+    assert.equal(completedCompact.progressBackgroundColor, rejectedCompact.progressBackgroundColor);
+    assert.equal(completedDetail.progressBackgroundColor, completedCompact.progressBackgroundColor);
+    assert.notEqual(progress99.progressBackgroundColor, completedDetail.progressBackgroundColor);
   }
   const errors = consoleMessages.filter((message) => message.type === "error" || message.type === "exception");
   const warnings = consoleMessages.filter((message) => message.type === "warning");

@@ -970,6 +970,12 @@ textarea[aria-invalid="true"] {
   padding: 2px 9px;
 }
 
+.progress-pill.is-completed {
+  background: color-mix(in srgb, var(--primary) 16%, var(--surface));
+  border-color: color-mix(in srgb, var(--primary) 34%, transparent);
+  color: var(--primary-dark);
+}
+
 .rejected-badge {
   background: var(--danger-bg);
   border: 1px solid rgba(180, 35, 24, 0.22);

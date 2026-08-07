@@ -929,7 +929,7 @@
 /* PUBLIC-COMMENT-ACTION-BALANCE-01 */
 .compact-list-head,
 .compact-version-row {
-  grid-template-columns: 90px minmax(230px, 1.2fr) minmax(100px, .55fr) minmax(300px, 1.5fr) minmax(185px, 215px);
+  grid-template-columns: 90px minmax(230px, 1.15fr) minmax(100px, .5fr) minmax(320px, 1.75fr) max-content;
   column-gap: 12px;
 }
 
@@ -983,7 +983,7 @@
   grid-template-rows: repeat(2, 32px);
   justify-self: end;
   max-width: 100%;
-  width: 100%;
+  width: max-content;
 }
 
 .compact-actions-cell > .compact-field-label { display: none; }
@@ -1032,7 +1032,7 @@
   .compact-actions-cell { grid-area: actions; }
   .compact-actions-cell {
     justify-self: end;
-    width: min(100%, 215px);
+    width: max-content;
   }
 }
 

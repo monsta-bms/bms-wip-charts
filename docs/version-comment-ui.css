@@ -56,14 +56,14 @@ body.version-comment-dialog-open {
 }
 
 .author-comment-preview {
-  border-left: 3px solid color-mix(in srgb, var(--primary, #256f5d) 72%, transparent);
+  border-left: 2px solid color-mix(in srgb, var(--primary, #256f5d) 58%, transparent);
 }
 
 .author-comment-preview-icon {
   align-self: start;
   color: var(--primary, #256f5d);
   font-family: Georgia, serif;
-  font-size: 1.25rem;
+  font-size: 1.125rem;
   font-weight: 800;
   line-height: 1;
   margin-top: 1px;
@@ -80,11 +80,11 @@ body.version-comment-dialog-open {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   display: -webkit-box;
-  font-size: 0.9375rem;
-  font-weight: 600;
+  font-size: 0.875rem;
+  font-weight: 500;
   grid-column: 2;
-  line-height: 1.55;
-  max-height: 3.1em;
+  line-height: 1.5;
+  max-height: 3em;
   overflow: hidden;
 }
 

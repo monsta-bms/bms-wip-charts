@@ -362,9 +362,26 @@ check("returned model and nested records are frozen", () => {
   assert.equal(Object.isFrozen(result.originLink), true);
   assert.equal(Object.isFrozen(result.download), true);
   assert.equal(Object.isFrozen(result.append), true);
+  assert.equal(Object.isFrozen(result.progress), true);
   assert.equal(Object.isFrozen(result.lifecycle), true);
   assert.equal(Object.isFrozen(result.management), true);
   assert.equal(Object.isFrozen(result.favorite), true);
+});
+check("progress below 100 always uses the incomplete tone", () => {
+  const result = model({ progress: 99, completed: true, completedAt: "2026-08-07T00:00:00.000Z" });
+  assert.deepEqual(result.progress, { value: 99, state: "completed", completedTone: false });
+});
+check("completed progress at 100 uses the completed tone", () => {
+  const result = model({ progress: 100, completed: true, completedAt: "2026-08-07T00:00:00.000Z" });
+  assert.deepEqual(result.progress, { value: 100, state: "completed", completedTone: true });
+});
+check("rejected progress at 100 keeps its own state and uses the completed tone", () => {
+  const result = model({ progress: 100, completed: false, completedAt: null, isRejected: true });
+  assert.deepEqual(result.progress, { value: 100, state: "rejected_completed", completedTone: true });
+});
+check("unconfirmed progress at 100 does not use the completed tone", () => {
+  const result = model({ progress: 100, completed: false, completedAt: null, isRejected: false });
+  assert.deepEqual(result.progress, { value: 100, state: "incomplete", completedTone: false });
 });
 check("same input produces the same model", () => {
   assert.deepEqual(model(), model());

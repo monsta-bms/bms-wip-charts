@@ -74,8 +74,9 @@ check("compact desktop actions also use the fixed two-row grid", () => {
   assert.match(compactActions, /grid-template-rows:\s*repeat\(2, 32px\);/);
 });
 
-check("compact action column is bounded and its field label is removed", () => {
-  assert.match(compactActions, /minmax\(185px, 215px\)/);
+check("compact action column shrink-wraps while the comment column expands", () => {
+  assert.match(compactActions, /minmax\(320px, 1\.75fr\) max-content/);
+  assert.match(compactActions, /width:\s*max-content;/);
   assert.match(compactActions, /> \.compact-field-label \{ display: none; \}/);
 });
 
@@ -98,9 +99,9 @@ check("comment decorations are explicitly hidden from assistive technology", () 
   assert.match(commentUi, /version-comment-latest-icon[\s\S]*latestIcon\.setAttribute\("aria-hidden", "true"\)/);
 });
 
-check("author comment uses quote styling with two fifteen-pixel lines", () => {
-  assert.match(commentCss, /\.author-comment-preview\s*\{[\s\S]*border-left:\s*3px solid/);
-  assert.match(commentCss, /\.author-comment-preview-text\s*\{[\s\S]*-webkit-line-clamp:\s*2;[\s\S]*font-size:\s*0\.9375rem;[\s\S]*line-height:\s*1\.55;/);
+check("author comment uses a calm quote style with two fourteen-pixel lines", () => {
+  assert.match(commentCss, /\.author-comment-preview\s*\{[\s\S]*border-left:\s*2px solid/);
+  assert.match(commentCss, /\.author-comment-preview-text\s*\{[\s\S]*-webkit-line-clamp:\s*2;[\s\S]*font-size:\s*0\.875rem;[\s\S]*font-weight:\s*500;[\s\S]*line-height:\s*1\.5;/);
 });
 
 check("latest comment uses a bubble and one muted line", () => {
@@ -115,15 +116,17 @@ check("empty comment regions remain collapsed", () => {
 });
 
 check("changed index assets share the patch cache key", () => {
-  for (const asset of ["branch-tree-list.css", "version-management-ui.css", "version-comment-ui.css", "version-comment-ui.js", "branch-tree-list.js"]) {
-    assert.match(indexHtml, new RegExp(`\\./${asset.replaceAll(".", "\\.")}\\?v=version-row-layout-patch-02`));
+  for (const asset of ["style.css", "branch-tree-list.css", "version-comment-ui.css", "version-ui-model.js", "version-comment-ui.js", "branch-tree-list.js"]) {
+    assert.match(indexHtml, new RegExp(`\\./${asset.replaceAll(".", "\\.")}\\?v=public-ui-touchup-03`));
   }
+  assert.match(indexHtml, /\.\/version-management-ui\.css\?v=version-row-layout-patch-02/);
 });
 
 check("changed list assets share the patch cache key", () => {
-  for (const asset of ["list.css", "version-management-ui.css", "version-comment-ui.css", "version-comment-ui.js"]) {
-    assert.match(listHtml, new RegExp(`\\./${asset.replaceAll(".", "\\.")}\\?v=version-row-layout-patch-02`));
+  for (const asset of ["style.css", "list.css", "version-comment-ui.css", "version-ui-model.js", "version-comment-ui.js", "list.js"]) {
+    assert.match(listHtml, new RegExp(`\\./${asset.replaceAll(".", "\\.")}\\?v=public-ui-touchup-03`));
   }
+  assert.match(listHtml, /\.\/version-management-ui\.css\?v=version-row-layout-patch-02/);
 });
 
 check("specification and test plan record the layout patch", () => {

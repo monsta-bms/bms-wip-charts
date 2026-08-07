@@ -876,18 +876,19 @@
     const displayVersionLabel = buildVersionPathLabel(branchPath);
     const versionChartName = getVersionChartName(version, options.entry);
     const parentText = buildFromLabel(node.parent);
-    const progress = getProgress(version);
+    const supersededIntermediate = isSupersededIntermediateNode(node);
+    const uiModel = makeVersionUiModel(version, {
+      hasProgressMap: true,
+      isSupersededIntermediate: supersededIntermediate
+    });
+    const progress = uiModel?.progress?.value ?? getProgress(version);
     const completed = isCompleted(version, progress);
     const rejected = isRejected(version);
     const collapsed = isCollapsedByCompletion(version);
     const deleteRequested = isDeleteRequested(version);
     const withdrawn = isWithdrawn(version);
     const hidden = isHiddenVersion(version);
-    const supersededIntermediate = isSupersededIntermediateNode(node);
-    const uiModel = makeVersionUiModel(version, {
-      hasProgressMap: true,
-      isSupersededIntermediate: supersededIntermediate
-    });
+    const completedProgressTone = uiModel?.progress?.completedTone === true;
     const lifecycleIndicators = buildLifecycleIndicators(version, uiModel);
     const secondaryBadgeLimit = lifecycleIndicators.badgeHtml ? 1 : 2;
     const lifecycleStatus = getLifecycleStatus(version, uiModel);
@@ -1003,7 +1004,7 @@
     if (progressBlock) {
       const progressPill = progressBlock.querySelector(".progress-pill");
       if (progressPill) {
-        progressPill.classList.toggle("is-completed", completed);
+        progressPill.classList.toggle("is-completed", completedProgressTone);
       }
 
       const oldBadges = progressBlock.querySelectorAll(".completed-badge, .rejected-badge");
