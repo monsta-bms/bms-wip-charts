@@ -1584,12 +1584,11 @@
     submitAppendVersion();
   }, true);
 
-  fileInput?.addEventListener("change", (event) => {
+  fileInput?.addEventListener("change", () => {
     if (!appendState.active) {
       return;
     }
 
-    event.stopImmediatePropagation();
     handleAppendFileChange(fileInput.files?.[0]);
   }, true);
 

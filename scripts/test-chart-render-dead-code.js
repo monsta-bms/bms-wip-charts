@@ -143,7 +143,7 @@ check("modified scripts keep their order and reviewed cache keys", () => {
   const appIndex = indexHtml.indexOf("./app.js?v=public-ui-refinement-patch-02");
   const progressIndex = indexHtml.indexOf("./progress-thumbnail-list.js?v=progress-style-r4b2f-01");
   const pipelineIndex = indexHtml.indexOf("./chart-render-pipeline.js?v=chart-render-pipeline-r4a-01");
-  const branchAppendIndex = indexHtml.indexOf("./branch-append-ui.js?v=public-ui-refinement-patch-02");
+  const branchAppendIndex = indexHtml.indexOf("./branch-append-ui.js?v=append-drop-form-reveal-01");
   assert.ok(pipelineIndex >= 0 && pipelineIndex < appIndex);
   assert.ok(appIndex < progressIndex && progressIndex < branchAppendIndex);
   assert.ok(indexHtml.includes("./favorites-list.js?v=completed-parent-access-01"));

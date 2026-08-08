@@ -1746,3 +1746,9 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 1024px以上のコメント列は独立一覧360px以上、branch tree 230px以上とし、操作列より広いこと、投稿者コメント2行、最新コメント1行、desktop操作2段32～34px、mobile操作44px以上を確認する。進捗はコメントより前の別column／areaとする。
 - 100%完了色と99%以下のsubdued色が異なり、top／chart detail／独立一覧で完成版と完成済み没譜面の100%が同一色になることをcomputed styleで確認する。horizontal overflow、clipping、Console error／warningは0件とする。
 - Public UI、layout／branch tree／render pipeline、Comment UI、Action UI、CSS ownership、JavaScript構文、HTML重複ID、repository hygiene、canonical schema、`git diff --check`を実行する。Worker deploy、D1／R2／Secret操作、production writeは行わない。
+
+## APPEND-DROP-FORM-REVEAL-01 回帰
+
+- `node scripts/test-css-browser-regression.js`で実際の追記buttonから追記modeへ入り、`#chartFileDropZone`へBMS fixtureを`drop`する。file inputが1件を保持し、`data-post-requires-file`の5sectionが5/5表示、差分情報と進捗sectionが表示、formへ`has-selected-chart-file`が付与されることを確認する。
+- `node scripts/test-public-ui-refinement.mjs`で追記file change listenerが`handleAppendFileChange`を実行しつつ、`stopImmediatePropagation`で共通section reveal handlerを遮断しないことを確認する。
+- 新規投稿のfile change、追記解析、取消cleanup、45条件の既存browser matrix、Console error／warning 0／0、horizontal overflow 0を確認する。Public UI、render pipeline、site-copy、repository hygiene、canonical schema、JavaScript構文、HTML重複ID、`git diff --check`を実行する。Worker deploy、D1／R2／Secret操作、production writeは行わない。

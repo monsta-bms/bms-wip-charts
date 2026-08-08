@@ -219,9 +219,10 @@ check("changed public UI, comment, and progress assets use their release cache k
   assert.equal((sources.index.match(/version-comment-progress-01/g) || []).length, 2);
   assert.equal((sources.index.match(/completed-parent-access-01/g) || []).length, 1);
   assert.match(sources.index, /\.\/app\.js\?v=public-ui-refinement-patch-02/);
+  assert.match(sources.index, /\.\/branch-append-ui\.js\?v=append-drop-form-reveal-01/);
   assert.equal((sources.listHtml.match(/version-comment-progress-01/g) || []).length, 0);
   assert.equal((sources.listHtml.match(/completed-parent-access-01/g) || []).length, 0);
-  assert.ok((sources.index.match(/public-ui-refinement-patch-02/g) || []).length >= 8);
+  assert.ok((sources.index.match(/public-ui-refinement-patch-02/g) || []).length >= 7);
   assert.ok((sources.listHtml.match(/public-ui-refinement-patch-02/g) || []).length >= 2);
   assert.equal((sources.index.match(/version-row-layout-patch-02/g) || []).length, 0);
   assert.equal((sources.listHtml.match(/version-row-layout-patch-02/g) || []).length, 0);
@@ -592,7 +593,7 @@ check("R4B2b does not use clipping or visual workarounds", () => {
 check("reviewed production JavaScript set includes public review, comment, and progress helpers", () => {
   assert.equal(productionJsFiles.length, 35);
   assert.equal(sha256(sources.progressThumbnail), "e2dbcee8975d7b95341875d1c4962fd2904a81873fd4cf7dbdbe757004a58bb6");
-  assert.equal(sha256(productionJsAggregate), "adfdd6b94e667422fd36fd752a50c3e864592c04aaf332143a7841e977b01995");
+  assert.equal(sha256(productionJsAggregate), "737f9f792c463309589383818b345dc5299ec6349a718d4bc722156fe2cfd856");
 });
 
 check("all known CSS issues are documented as resolved", () => {

@@ -1522,6 +1522,54 @@ async function capturePostFormPointerUi(cdp, sessionId) {
   return { matrix };
 }
 
+async function captureAppendDropFileRevealRegression(cdp, sessionId) {
+  await setTheme(cdp, sessionId, "default");
+  await cdp.send("Emulation.setDeviceMetricsOverride", {
+    width: 1366,
+    height: 900,
+    deviceScaleFactor: 1,
+    mobile: false
+  }, sessionId);
+  await evaluate(cdp, sessionId, `document.querySelector(${JSON.stringify(detailControlSelectors.appendAvailable)})?.click()`);
+  await waitFor(cdp, sessionId, `document.querySelector(".submit-panel")?.classList.contains("is-append-mode")
+    && !document.querySelector("#postFormBody")?.hidden`, "append form open before file drop");
+  await evaluate(cdp, sessionId, `(() => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([${JSON.stringify(progressFormFixture)}], "append-drop-regression.bms", { type: "text/plain" }));
+    document.querySelector("#chartFileDropZone")?.dispatchEvent(new DragEvent("drop", {
+      bubbles: true,
+      cancelable: true,
+      dataTransfer: transfer
+    }));
+  })()`);
+  await waitFor(cdp, sessionId, `document.querySelector("#chartFile")?.files?.length === 1`, "append drop file assignment");
+  const result = await evaluate(cdp, sessionId, `(() => {
+    const deferred = [...document.querySelectorAll("[data-post-requires-file]")];
+    return {
+      appendMode: document.querySelector(".submit-panel")?.classList.contains("is-append-mode"),
+      fileCount: document.querySelector("#chartFile")?.files?.length || 0,
+      deferredCount: deferred.length,
+      visibleDeferredCount: deferred.filter((section) => !section.hidden).length,
+      diffVisible: !document.querySelector(".diff-info-section")?.hidden,
+      progressVisible: !document.querySelector(".progress-section")?.hidden,
+      formHasFileClass: document.querySelector("#chartForm")?.classList.contains("has-selected-chart-file"),
+      horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+    };
+  })()`);
+  assert.equal(result.appendMode, true);
+  assert.equal(result.fileCount, 1);
+  assert.equal(result.deferredCount, 5);
+  assert.equal(result.visibleDeferredCount, result.deferredCount, "append drop must reveal every file-dependent section");
+  assert.equal(result.diffVisible, true, "append drop must reveal diff information");
+  assert.equal(result.progressVisible, true, "append drop must reveal progress controls");
+  assert.equal(result.formHasFileClass, true);
+  assert.equal(result.horizontalOverflow, false);
+  await evaluate(cdp, sessionId, `document.querySelector("#cancelAppendButton")?.click()`);
+  await waitFor(cdp, sessionId, `!document.querySelector(".submit-panel")?.classList.contains("is-append-mode")
+    && !document.querySelector("#chartFile")?.files?.length`, "append drop fixture cleanup");
+  return result;
+}
+
 async function captureVersionCommentInteractions(cdp, sessionId) {
   await setTheme(cdp, sessionId, "default");
   await cdp.send("Emulation.setDeviceMetricsOverride", {
@@ -3161,6 +3209,8 @@ async function run() {
     console.log("css browser phase: version comments complete");
     const detailRerender = await captureDetailRerenderRegression(cdp, sessionId);
     console.log("css browser phase: detail rerender complete");
+    const appendDropFileReveal = await captureAppendDropFileRevealRegression(cdp, sessionId);
+    console.log("css browser phase: append drop file reveal complete");
     const postFormPointerUi = await capturePostFormPointerUi(cdp, sessionId);
     console.log("css browser phase: post form matrix complete");
 
@@ -3178,6 +3228,7 @@ async function run() {
       progressDragHint,
       versionComments,
       detailRerender,
+      appendDropFileReveal,
       postFormPointerUi,
       compact: compact.matrix
     };
@@ -3207,7 +3258,7 @@ async function run() {
         max: Number(Math.max(...values).toFixed(1))
       };
     };
-    console.log(`css browser regression: ${detail.matrix.length} detail + ${compact.matrix.length} compact + ${postFormPointerUi.matrix.length} post-form theme/width conditions and version comment interactions passed`);
+    console.log(`css browser regression: ${detail.matrix.length} detail + ${compact.matrix.length} compact + ${postFormPointerUi.matrix.length} post-form theme/width conditions, append drop reveal, and version comment interactions passed`);
     console.log(JSON.stringify({
       detailNavigationMs: Number(detailNavigationMs.toFixed(1)),
       compactNavigationMs: Number(compactNavigationMs.toFixed(1)),

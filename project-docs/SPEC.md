@@ -1323,3 +1323,9 @@ RC★★変換:
 - 独立一覧のheaderとrowは同じCSS grid変数と明示的な`list-heading-*` classを使用する。投稿日、譜面、難易度・作者、コメントは内容開始位置へ、進捗はpill中央へ、操作は2段button groupの視覚中心へ合わせる。branch treeもheaderとrowの左右paddingおよびgrid定義を一致させ、1024pxではコメントを230px以上確保する。
 - desktop一覧は進捗へ70px、コメントへ`minmax(360px, 2.1fr)`、操作へ`minmax(154px, max-content)`を割り当てる。操作列の最小幅を実button群に合わせることでheader／data rowの列幅を一致させ、余白は最小限にする。1180px未満は進捗を独立行領域、コメントを広い領域として維持し、820px以下では進捗、コメント、操作の順でstackする。コメント2行／最新1行、操作2段、mobile 44px以上を維持する。
 - Worker、API、D1、R2、Secret、production data、投稿・管理処理は変更しない。
+
+## APPEND-DROP-FORM-REVEAL-01
+
+- 追記投稿中にドロップゾーンへ有効な譜面ファイルを1件投下した場合、追記用ファイル解析と共通投稿フォームのfile change処理を両方実行する。追記側のlistenerは同一要素に登録された後続listenerを遮断しない。
+- 共通投稿フォームはfile inputへファイルが設定されたchangeで、`data-post-requires-file`を持つ楽曲情報、差分情報、進捗と投稿状態、投稿後の管理、内容確認の5sectionをすべて表示し、`has-selected-chart-file`をformへ付与する。クリック選択とdrop選択、新規投稿と追記投稿で同じ表示規則を使う。
+- 追記用BMS解析、進捗map互換性検証、親version引継ぎ、append submit interceptionは維持する。Worker、API、D1、R2、Secret、production dataは変更しない。

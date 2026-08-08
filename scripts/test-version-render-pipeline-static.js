@@ -82,7 +82,7 @@ check("model, link UI, and Action UI precede every index renderer consumer", () 
     "./chart-render-pipeline.js?v=chart-render-pipeline-r4a-01",
     "./app.js?v=public-ui-refinement-patch-02",
     "./progress-thumbnail-list.js?v=progress-style-r4b2f-01",
-    "./branch-append-ui.js?v=public-ui-refinement-patch-02",
+    "./branch-append-ui.js?v=append-drop-form-reveal-01",
     "./branch-tree-list.js?v=public-ui-touchup-03-patch1",
     "./favorites-list.js?v=completed-parent-access-01",
     "./version-management-ui.js?v=public-ui-refinement-patch-02",
@@ -315,9 +315,10 @@ check("changed scripts use their reviewed release cache keys", () => {
   assert.ok(indexSources.includes("./version-comment-ui.js?v=public-ui-touchup-03-patch1"), "version-comment-ui.js cache key mismatch");
   assert.ok(indexSources.includes("./progress-map-drag-hint.js?v=version-comment-progress-01"), "progress-map-drag-hint.js cache key mismatch");
   assert.ok(indexSources.includes("./version-link-ui.js?v=public-ui-refinement-01"), "version-link-ui.js cache key mismatch");
-  ["app.js", "branch-append-ui.js", "version-management-ui.js"].forEach((name) => {
+  ["app.js", "version-management-ui.js"].forEach((name) => {
     assert.ok(indexSources.includes(`./${name}?v=public-ui-refinement-patch-02`), `${name} cache key mismatch`);
   });
+  assert.ok(indexSources.includes("./branch-append-ui.js?v=append-drop-form-reveal-01"), "branch-append-ui.js cache key mismatch");
   assert.ok(indexSources.includes("./branch-tree-list.js?v=public-ui-touchup-03-patch1"), "branch-tree-list.js cache key mismatch");
   assert.ok(indexSources.includes("./version-action-ui.js?v=comment-action-balance-01"), "version-action-ui.js cache key mismatch");
   assert.ok(indexSources.includes("./version-ui-model.js?v=public-ui-touchup-03-patch1"), "version-ui-model.js cache key mismatch");

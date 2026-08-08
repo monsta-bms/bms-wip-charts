@@ -17,6 +17,7 @@ const sources = {
   formReview: read("docs/post-form-review-ui.js"),
   formCss: read("docs/post-form-ui.css"),
   formUi: read("docs/post-form-ui.js"),
+  branchAppend: read("docs/branch-append-ui.js"),
   app: read("docs/app.js"),
   listCss: read("docs/list.css"),
   branchCss: read("docs/branch-tree-list.css"),
@@ -82,6 +83,11 @@ check("post form reveals later sections only after file selection", () => {
   assert.equal((sources.index.match(/data-post-requires-file hidden/gu) || []).length, 5);
   assert.match(sources.formUi, /function syncDeferredSections\(\)/u);
   assert.match(sources.formUi, /section\.hidden = !hasSelectedFile/u);
+});
+check("append file change reaches the shared section reveal handler", () => {
+  const handler = sources.branchAppend.match(/fileInput\?\.addEventListener\("change", \(\) => \{[\s\S]*?\n  \}, true\);/u)?.[0] || "";
+  assert.match(handler, /handleAppendFileChange\(fileInput\.files\?\.\[0\]\)/u);
+  assert.doesNotMatch(handler, /stopImmediatePropagation/u);
 });
 check("post form tooltip keeps viewport positioning after section reveal", () => {
   assert.match(sources.formCss, /\.form-section\[data-post-requires-file\]:not\(\[hidden\]\) \{\s*animation: post-section-reveal 160ms ease-out;\s*\}/u);
