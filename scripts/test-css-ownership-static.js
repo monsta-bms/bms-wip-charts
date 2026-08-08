@@ -218,11 +218,13 @@ check("changed public UI, comment, and progress assets use their release cache k
   assert.doesNotMatch(sources.listHtml, /progress-style-r4b2f-01|detail-theme-r4b2e-01|favorite-theme-r4b2d-01|css-cleanup-r4b2a-01/);
   assert.equal((sources.index.match(/version-comment-progress-01/g) || []).length, 2);
   assert.equal((sources.index.match(/completed-parent-access-01/g) || []).length, 1);
-  assert.match(sources.index, /\.\/app\.js\?v=public-ui-refinement-patch-02/);
-  assert.match(sources.index, /\.\/branch-append-ui\.js\?v=append-drop-form-reveal-01/);
+  assert.match(sources.index, /\.\/app\.js\?v=append-completion-radio-01/);
+  assert.match(sources.index, /\.\/submission-status-ui\.js\?v=append-completion-radio-01/);
+  assert.match(sources.index, /\.\/branch-append-ui\.js\?v=append-completion-radio-01/);
   assert.equal((sources.listHtml.match(/version-comment-progress-01/g) || []).length, 0);
   assert.equal((sources.listHtml.match(/completed-parent-access-01/g) || []).length, 0);
-  assert.ok((sources.index.match(/public-ui-refinement-patch-02/g) || []).length >= 7);
+  assert.ok((sources.index.match(/public-ui-refinement-patch-02/g) || []).length >= 6);
+  assert.equal((sources.index.match(/append-completion-radio-01/g) || []).length, 3);
   assert.ok((sources.listHtml.match(/public-ui-refinement-patch-02/g) || []).length >= 2);
   assert.equal((sources.index.match(/version-row-layout-patch-02/g) || []).length, 0);
   assert.equal((sources.listHtml.match(/version-row-layout-patch-02/g) || []).length, 0);
@@ -593,7 +595,7 @@ check("R4B2b does not use clipping or visual workarounds", () => {
 check("reviewed production JavaScript set includes public review, comment, and progress helpers", () => {
   assert.equal(productionJsFiles.length, 35);
   assert.equal(sha256(sources.progressThumbnail), "e2dbcee8975d7b95341875d1c4962fd2904a81873fd4cf7dbdbe757004a58bb6");
-  assert.equal(sha256(productionJsAggregate), "737f9f792c463309589383818b345dc5299ec6349a718d4bc722156fe2cfd856");
+  assert.equal(sha256(productionJsAggregate), "ea6233c0a38ebc1cdef7b43377b1d0219496828d1d48f4965792a497334a9ee9");
 });
 
 check("all known CSS issues are documented as resolved", () => {

@@ -40,7 +40,6 @@ const progressMapLabels = document.querySelector("#progressMapLabels");
 const progressMapSummary = document.querySelector("#progressMapSummary");
 const progressMapTooltip = document.querySelector("#progressMapTooltip");
 const progressMapPopover = document.querySelector("#progressMapPopover");
-const completeProgressButton = document.querySelector("#completeProgressButton");
 const completionStateBadge = document.querySelector("#completionStateBadge");
 const completionStateDescription = document.querySelector("#completionStateDescription");
 const completionEditNotice = document.querySelector("#completionEditNotice");
@@ -184,7 +183,7 @@ function showError(error) {
     APPEND_POLICY_LOCKED_FOR_INCOMPLETE: "未完成版では追記受付を停止できません。",
     INITIAL_COMPLETION_NOT_ALLOWED: "初回投稿では完成版にできません。追記投稿から完成版にしてください。",
     FOLLOWUP_REJECTED_NOT_ALLOWED: "追記投稿では没譜面にできません。",
-    COMPLETION_PROGRESS_TOO_LOW: "完成版にするには、進捗度を80%以上にしてください。",
+    COMPLETION_PROGRESS_TOO_LOW: "完成版の進捗情報を確認できません。もう一度ファイルを選択してください。",
     COMPLETION_ACTION_REQUIRED: "完成版にする操作を使用してください。",
     PARENT_APPEND_DISABLED: "この版からの追記受付は停止されています。ページを再読み込みして、別の版を選択してください。",
     PARENT_APPEND_CONFLICT: "親版の状態が更新されたため追記できませんでした。ページを再読み込みして、もう一度確認してください。"
@@ -245,23 +244,14 @@ function getPostStateSnapshot() {
   };
 }
 
-function updatePostStateUi({ progress = Number(progressInput?.value) } = {}) {
+function updatePostStateUi() {
   const state = getPostStateSnapshot();
-  const numericProgress = Number.isFinite(Number(progress)) ? Number(progress) : 0;
 
   if (isRejectedInput) {
     if (state.isAppend) isRejectedInput.checked = false;
     setControlDisabled(isRejectedInput, state.isAppend);
   }
 
-  if (completeProgressButton) {
-    const completionAvailable = state.hasValidAppendFile
-      && (state.isCompleted || (numericProgress >= 80 && numericProgress <= 100));
-    setControlDisabled(completeProgressButton, !completionAvailable);
-    completeProgressButton.hidden = false;
-    completeProgressButton.textContent = state.isCompleted ? "完成版を解除" : "完成版にする";
-    completeProgressButton.setAttribute("aria-pressed", state.isCompleted ? "true" : "false");
-  }
   if (completionEditNotice) {
     completionEditNotice.hidden = !state.isCompleted;
   }
@@ -281,12 +271,9 @@ function updatePostStateUi({ progress = Number(progressInput?.value) } = {}) {
   } else if (state.appendReadiness.analysisStatus === "error" || state.appendReadiness.hasAnalysisError || !state.appendReadiness.hasProgressMap) {
     setPostStateBadge(completionStateBadge, "解析失敗", "unavailable");
     if (completionStateDescription) completionStateDescription.textContent = "譜面を解析できないため、完成版を設定できません。";
-  } else if (numericProgress < 80) {
-    setPostStateBadge(completionStateBadge, "進捗不足", "unavailable");
-    if (completionStateDescription) completionStateDescription.textContent = "完成版にするには、進捗度を80%以上にしてください。";
   } else {
-    setPostStateBadge(completionStateBadge, "設定可能", "configurable");
-    if (completionStateDescription) completionStateDescription.textContent = "透明部分を塗りつぶし、進捗度100%の完成版として投稿します。";
+    setPostStateBadge(completionStateBadge, "操作可能", "configurable");
+    if (completionStateDescription) completionStateDescription.textContent = "選択すると未塗り部分を自動で塗りつぶし、進捗度100%の完成版として投稿します。";
   }
 
   if (state.isAppend) {
@@ -2650,10 +2637,6 @@ progressMapBlocks.addEventListener("contextmenu", (event) => {
   event.preventDefault();
   hideProgressMapTooltip();
   showProgressMapPopover(block, event);
-});
-
-completeProgressButton.addEventListener("click", () => {
-  paintAllProgressBlocks("completion_fill");
 });
 
 window.addEventListener("resize", () => {

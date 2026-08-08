@@ -522,21 +522,6 @@
           "sourceValueSha256": "2b9d1e1474017a00c2d349cffb0cfddfab3202b3fa04bfcd0d8df33fc50ecb3d"
         },
         {
-          "key": "COMPLETE_BUTTON",
-          "label": "完成版ボタン",
-          "sourcePath": "docs/index.html",
-          "sourceType": "HTML_TEXT",
-          "locator": {
-            "elementId": "completeProgressButton",
-            "mode": "INNER_TEXT",
-            "textIndex": 1
-          },
-          "allowEmpty": false,
-          "deploymentTarget": "PAGES",
-          "blockId": "POST_PROGRESS_STATE",
-          "sourceValueSha256": "94cc1755638540f58f7adee4962d6945de7a171bab20abf0ca5286336fba38ef"
-        },
-        {
           "key": "COMPLETE_DESCRIPTION",
           "label": "完成版説明",
           "sourcePath": "docs/index.html",
@@ -597,7 +582,7 @@
           "sourceValueSha256": "c46d615332969f074bb7af30197b002695d77378166a142c8268998bfcbb10fe"
         }
       ],
-      "sourceValueSha256": "fa1c0552d08b0783d616a3ef02a90bf9d0f7b1517866f9d412720000e1c606f6"
+      "sourceValueSha256": "69073e65e307c78606fbfa29962a75461bb283f7333e9c299d5008428e289f34"
     },
     {
       "id": "POST_ACTIONS",
@@ -1083,7 +1068,7 @@
           "deploymentTarget": "PAGES",
           "blockId": "EMPTY_AND_LOAD_FAILURES",
           "locator": {
-            "stringOrdinal": 492,
+            "stringOrdinal": 483,
             "beforeAnchorSha256": "1282c367df4cfce330bd5397a54d014a65149c5a3fa2f2bc4df020f3903658ed",
             "afterAnchorSha256": "ba1eea43775b9cd64f8a1ccf8e1ae4f61331321c31a476c0745a2246cba3fa5e"
           },
@@ -1098,7 +1083,7 @@
           "deploymentTarget": "PAGES",
           "blockId": "EMPTY_AND_LOAD_FAILURES",
           "locator": {
-            "stringOrdinal": 493,
+            "stringOrdinal": 484,
             "beforeAnchorSha256": "2651636928bbb30a81a71fa30edbfab32853352c281b07944972c54dc99a7305",
             "afterAnchorSha256": "c6e2e533a5eeb818bab22be7dcd5611de9c599509c4a894864d8984f3ab102aa"
           },
@@ -1306,7 +1291,7 @@
           "deploymentTarget": "PAGES",
           "blockId": "MANAGEMENT_CONFIRMATIONS",
           "locator": {
-            "stringOrdinal": 201,
+            "stringOrdinal": 207,
             "beforeAnchorSha256": "017a666af7ac8323f76ec55c38affb05e093d982e404b29c63e74db20ca1f305",
             "afterAnchorSha256": "f5df3d5d74d54c7fd586db34cc0339391d36f4db7865682b006d547fe30eb479"
           },

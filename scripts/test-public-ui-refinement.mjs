@@ -89,6 +89,13 @@ check("append file change reaches the shared section reveal handler", () => {
   assert.match(handler, /handleAppendFileChange\(fileInput\.files\?\.\[0\]\)/u);
   assert.doesNotMatch(handler, /stopImmediatePropagation/u);
 });
+check("append mode offers incomplete and completed status radios without a completion button", () => {
+  assert.match(sources.index, /id="submissionStateIncomplete"[^>]*type="radio"/u);
+  assert.match(sources.index, /id="submissionStateCompleted"[^>]*type="radio"/u);
+  assert.doesNotMatch(sources.index, /id="completeProgressButton"/u);
+  assert.match(sources.branchAppend, /submissionStateIncomplete\?\.addEventListener\("change"/u);
+  assert.match(sources.branchAppend, /submissionStateCompleted\?\.addEventListener\("change"/u);
+});
 check("post form tooltip keeps viewport positioning after section reveal", () => {
   assert.match(sources.formCss, /\.form-section\[data-post-requires-file\]:not\(\[hidden\]\) \{\s*animation: post-section-reveal 160ms ease-out;\s*\}/u);
   assert.doesNotMatch(sources.formCss, /animation: post-section-reveal[^;]*(?:both|forwards)/u);

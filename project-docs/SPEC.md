@@ -38,7 +38,7 @@
 
 差分情報は「譜面情報」と「作者情報」へ分ける。譜面情報には想定難易度と差分名、作者情報には差分作者を置き、「一覧に表示する作者名です。別名義でも構いません。」と補足する。PCではおおむね68:32の2領域、760px以下では譜面情報、作者情報の順に1列表示する。既存の難易度縮小・変更・手入力・reset・追記初期値・validationは維持する。
 
-進捗度inputは密度グラフ・進捗レール・小節ラベルの直下へ置き、完成版・没譜面・追記受付はその下の投稿状態パネルへまとめる。完成版ボタンは常時表示し、初回投稿では常にdisabled、追記投稿では進捗80%未満をdisabled、80%以上の未指定時だけ有効とする。進捗概要、block塗り、drag、親layer、miniView、PNG生成は変更しない。
+進捗度inputは密度グラフ・進捗レール・小節ラベルの直下へ置き、完成版・没譜面・追記受付はその下の投稿状態パネルへまとめる。初回投稿では制作途中と完成済み没譜面を選択でき、完成版はdisabledとする。追記投稿では制作途中と完成版を直接選択でき、完成済み没譜面はdisabledとする。進捗概要、block塗り、drag、親layer、miniView、PNG生成は維持する。
 
 フォーム全体は白、入力セクションは`#f3f7f6`、ファイル・進捗の操作面は`#eaf2ef`、inputとtextareaは白として明度差を付ける。左アクセント線は`#9ebbb3`を使用し、全周枠やshadowを増やさない。
 
@@ -58,7 +58,7 @@
 
 ファイル欄は空、ドラッグ中、解析中、解析済み、エラーの状態を持つ。解析済みでは外側ファイル名、ZIPの場合は既存ローカル解析が返した内部譜面名、ブロック数を表示する。ZIPを表示用に再展開しない。変更・解除・初回/追記切替・追記キャンセル・投稿成功後resetでは、既存revision管理とともに古いファイル表示、進捗マップ、ローカルminiViewを破棄する。
 
-進捗欄はファイル未選択時に案内文だけを表示し、解析中は短い状態文、解析成功後だけ密度グラフ、編集ブロック、進捗度と投稿状態パネルを表示する。完成操作はパネル内へ常時表示し、初回投稿、没譜面、追記80%未満ではdisabled、追記80〜100%では未指定時に有効とする。公開フォーム内の進捗PNG確認UIは表示しないが、`BmsProgressImage`のCanvas/Blob/進捗マップ生成関数とFormDataへの`progressImage`添付は維持する。
+進捗欄はファイル未選択時に案内文だけを表示し、解析中は短い状態文、解析成功後だけ密度グラフ、編集ブロック、進捗度と投稿状態パネルを表示する。追記モードでは制作途中と完成版のradioを常時選択可能にし、完成版を選んだ状態で解析が完了したら未塗り範囲を自動で埋める。公開フォーム内の進捗PNG確認UIは表示しないが、`BmsProgressImage`のCanvas/Blob/進捗マップ生成関数とFormDataへの`progressImage`添付は維持する。
 
 フォームは「譜面ファイル」「楽曲情報」「差分情報」「進捗」「管理・コメント・投稿」の5区分とする。`originUrl`は楽曲情報へ置き、追記時のWorker継承、ID/name、送信仕様は変えない。ネイティブfile inputはFormData、required、既存イベントのためDOMに保持し、見える操作はキーボード対応buttonのドロップゾーンへ集約する。
 
@@ -283,16 +283,16 @@ round(塗られた標準化ブロック数のunion / 標準化ブロック総数
 
 初回投稿では単一layerを送る。追記投稿では親versionまでのlayerを維持し、最後に今回追記分のlayerを追加して送る。
 
-### 完成版にするボタン
+### 追記投稿の完成版選択
 
-- 初回投稿では常にdisabledとし、初回通常版を完成版として保存しない。
-- 追記対象と譜面ファイルが選択され、ファイル解析が完了し、利用可能なprogressMapがあり、解析エラーがなく、現在のmap計算結果が `progress >= 80` かつ `progress <= 100` で、没譜面ではない場合だけ有効化する。初回投稿、ファイル未選択、解析中、解析失敗、progressMap未生成、80%未満、追記対象なし、フォームを閉じた状態、没譜面ではdisabled属性と `aria-disabled=true` を付ける。
-- 未指定時は `完成版にする` / `aria-pressed=false`、指定中は `完成版を解除` / `aria-pressed=true` とする。指定中もファイルとprogressMapが有効ならボタンを有効に保ち、解除操作を可能にする。
-- 指定時は押下直前のprogressMap全体、layers/ranges、色と透明ブロック、進捗度、編集中layer状態をメモリ上のdeep copyとして保持してから、未塗りブロックをすべて塗り、`progress=100` にする。snapshotはlocalStorage、FormData、D1、R2、生成PNGへ保存しない。
-- 指定中は進捗ブロック編集を無効化し、解除が必要であることを常時表示する。解除時はsnapshotから色、ranges、透明ブロック、進捗度、編集状態を指定直前と同一の状態へ戻してCanvasを再描画し、snapshotを破棄する。
-- ファイル変更/解除、追記対象変更、追記キャンセル、form reset、投稿成功では、完成版指定とsnapshotを破棄し、新しいフォーム状態から判定し直す。
-- 追記投稿では今回追記layerを `completion_fill` とし、押下直前のrangesを検証用 `completionBaseRanges` として送る。Workerは親layerとのunionが80%以上であることを検証し、保存するprogressMapから一時検証値を除外する。
-- 送信直前にも、追記モード、選択ファイル、解析完了、有効なprogressMap、snapshot、`progress=100`、非没譜面を再確認する。不整合時はAPIへ送信せず、ファイルの再選択を案内する。Pages側の追加検証はWorker側の既存検証を代替しない。
+- 初回投稿では完成版radioをdisabledとし、初回通常版を完成版として保存しない。
+- 追記投稿では制作途中と完成版の2つのradioを選択可能にし、完成済み没譜面radioをdisabledとする。独立した「完成版にする」ボタンは表示しない。
+- 完成版を選択した時点で譜面解析が完了していれば、選択直前のprogressMap全体、layers/ranges、色と透明ブロック、進捗度、編集中layer状態をメモリ上のdeep copyとして保持し、未塗りブロックをすべて塗って `progress=100` にする。手動の塗り範囲や選択前進捗の下限は要求しない。
+- ファイル解析前に完成版を選んだ場合は選択を維持し、解析成功後に同じ自動全塗り処理を適用する。解析中・解析失敗の状態では投稿を許可しない。
+- 完成版指定中は進捗ブロック編集を無効化し、制作途中へ戻す必要があることを常時表示する。制作途中を選ぶとsnapshotから色、ranges、透明ブロック、進捗度、編集状態を選択直前と同一の状態へ戻してCanvasを再描画し、snapshotを破棄する。
+- ファイル変更/解除、追記対象変更、追記キャンセル、form reset、投稿成功では、完成版指定用snapshotを破棄し、新しいフォーム状態から判定し直す。
+- 追記投稿では今回追記layerを `completion_fill` とし、選択直前の今回layer rangesを検証用 `completionBaseRanges` として送る。Workerはflat ranges、親mapとの格子一致、全layerのunionが100%であることを検証し、保存するprogressMapから一時検証値を除外する。
+- 送信直前にも、追記モード、選択ファイル、解析完了、有効なprogressMap、snapshot、`progress=100`、非没譜面を再確認する。不整合時はAPIへ送信せず、ファイルの再選択を案内する。Pages側の追加検証はWorker側の検証を代替しない。
 - 完成版指定を経由せず、未完成親から送られた `progress=100` は完成版として保存しない。
 
 ### 没譜面との連動
@@ -311,7 +311,7 @@ round(塗られた標準化ブロック数のunion / 標準化ブロック総数
 
 `versions.allow_append` はversion単位のbooleanで、DBでは `0/1`、公開APIでは `allowAppend` のbooleanとして扱う。利用者がON/OFFできるのは、初回投稿の没譜面と、追記投稿で明示的に完成版指定した場合だけである。初回通常版と追記の未完成版は `allowAppend=true` に固定し、falseはWorkerが `APPEND_POLICY_LOCKED_FOR_INCOMPLETE` で拒否する。追記投稿の没譜面は `FOLLOWUP_REJECTED_NOT_ALLOWED`、初回通常版の完成状態は `INITIAL_COMPLETION_NOT_ALLOWED` で拒否する。
 
-投稿フォームの進捗欄には「投稿状態」パネルを置き、完成版・没譜面・追記受付を同じ3列構造で表示する。初回の完成版ボタンと追記80%未満の完成版ボタン、追記時の没譜面、未完成時の追記受付には実際のdisabled属性、`aria-disabled`、状態バッジ、常時表示の理由文を付ける。
+投稿フォームの進捗欄には「投稿状態」パネルを置き、制作途中・完成版・完成済み没譜面・追記受付を同じ3列構造で表示する。初回の完成版radio、追記時の完成済み没譜面radio、未完成時の追記受付には実際のdisabled属性、`aria-disabled`、状態バッジ、常時表示の理由文を付ける。追記時の制作途中radioと完成版radioはどちらもenabledとする。
 
 初回没譜面を初めて選択した時の追記受付はOFF、追記完成版を初めて指定した時はONを初期値とする。同じフォーム内で状態を往復した場合は利用者の選択を保持し、form reset、投稿成功、追記対象変更、追記キャンセルでは破棄する。追記受付設定はlocalStorageへ保存しない。
 
@@ -379,7 +379,7 @@ Workerはmultipart解析後かつファイルhash・BMS解析より前に親を�
 - 初回投稿では1layerでよい。
 - 追記投稿では親versionまでのlayerを維持し、今回追記分を最後のlayerとして保存する。
 - Workerは追記投稿保存時、最後のlayerの `versionId` を今回作成したversion IDへ置き換える。
-- 追記投稿では、未完成の親versionについてunionが同じ塗り範囲のままなら `PROGRESS_MAP_UNCHANGED` で拒否する。完成済みの親versionは新しい子レイヤーが1区間以上あれば、unionが100%のままでも追記できる。
+- 追記投稿では、未完成の親versionについて通常の`followup` layerでunionが同じ塗り範囲のままなら `PROGRESS_MAP_UNCHANGED` で拒否する。完成済みの親versionへの通常子も新しい子layerが1区間以上必要とする。明示的な`completion_fill`は自動全塗りを表すため、選択前の手動rangesが0件でも受け付ける。
 
 layerの `kind` 候補:
 
@@ -1247,7 +1247,7 @@ RC★★変換:
 ## SUBMISSION-STATUS-ADMIN-CORRECTION-01
 
 - 初回投稿の投稿状態は「制作途中」「完成版（初回は選択不可）」「完成済み没譜面」の3行で表示する。制作途中は `is_rejected=0`、`completed_at=NULL`、`progress=0～99`、`allow_append=1` とする。完成済み没譜面は `is_rejected=1`、`completed_at=NULL`、`progress=100` とし、追記受付を選択できる。
-- 初回の通常完成版は拒否し、通常完成版は追記投稿からのみ作成する。追記投稿では没譜面を拒否する。完成済み没譜面から制作途中へ戻す際は、選択前の進捗マップsnapshotを復元する。
+- 初回の通常完成版は拒否し、通常完成版は追記投稿からのみ作成する。追記投稿では制作途中と完成版を選択可能にし、没譜面を拒否する。完成版から制作途中へ戻す際と、初回の完成済み没譜面から制作途中へ戻す際は、選択前の進捗マップsnapshotを復元する。
 - 管理ページは認証済み管理者へversionの投稿状態確認一覧を提供し、制作途中・完成版・完成済み没譜面への手動補正を許可する。hidden、file削除済み、withdrawal pending、processing、tombstoned、deletedは補正不可とする。
 - 管理補正は `expectedUpdatedAt` で競合を検出し、対象version、共通progress map正規化、chart全体のcompletion collapse再計算、chart更新時刻、`admin_logs`を単一D1 batch transactionで更新する。失敗時は部分更新を残さない。
 - 要確認候補は、rejectedとmap進捗、未完成と100%、完成と100%未満、rejectedとcompletedの重複、rejectedと100%未満、保存progressとmap算出progressの大幅差をread-onlyで判定する。旧形式・解析不能mapは判定不可として断定しない。

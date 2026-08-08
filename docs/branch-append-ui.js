@@ -42,7 +42,8 @@
   const progressMapSummary = document.querySelector("#progressMapSummary");
   const progressMapTooltip = document.querySelector("#progressMapTooltip");
   const progressMapPopover = document.querySelector("#progressMapPopover");
-  const completeProgressButton = document.querySelector("#completeProgressButton");
+  const submissionStateIncomplete = document.querySelector("#submissionStateIncomplete");
+  const submissionStateCompleted = document.querySelector("#submissionStateCompleted");
   const commentInput = document.querySelector("#comment");
   const isRejectedInput = document.querySelector("#isRejected");
   const allowAppendControl = document.querySelector("#allowAppendControl");
@@ -228,6 +229,7 @@
     appendState.dragAnchorIndex = null;
     appendState.dragMode = null;
     appendState.originalCurrentPainted = null;
+    window.BmsSubmissionStatusUi?.setState?.("incomplete");
     window.BmsAppendPolicy?.setCompletionRequested?.(false, { progress: calculateProgress() });
   }
 
@@ -794,19 +796,26 @@
     }
   }
 
-  function toggleAppendCompletion() {
-    if (!appendState.active || isRejectedInput?.checked || !appendState.blocks.length) {
-      return;
+  function setAppendCompletion(requested) {
+    if (!appendState.active) return false;
+
+    if (!requested) {
+      const restored = appendState.layerKind !== "completion_fill" || restoreCompletionSnapshot();
+      if (restored) {
+        window.BmsSubmissionStatusUi?.setState?.("incomplete");
+        window.BmsAppendPolicy?.setCompletionRequested?.(false, { progress: calculateProgress() });
+      }
+      return restored;
     }
 
-    if (appendState.layerKind === "completion_fill") {
-      restoreCompletionSnapshot();
-      return;
-    }
+    if (isRejectedInput?.checked || !appendState.blocks.length) return false;
 
     const policyState = window.BmsAppendPolicy?.snapshot?.();
-    if (!policyState?.hasValidAppendFile || calculateProgress() < 80) {
-      return;
+    if (!policyState?.hasValidAppendFile) return false;
+
+    if (appendState.layerKind === "completion_fill") {
+      window.BmsSubmissionStatusUi?.setState?.("completed");
+      return true;
     }
 
     appendState.completionRestoreSnapshot = createCompletionRestoreSnapshot();
@@ -822,6 +831,8 @@
     window.BmsPostErrorUi?.clearField?.("completion");
     window.BmsPostErrorUi?.clearField?.("progressMap");
     clearMessage();
+    window.BmsSubmissionStatusUi?.setState?.("completed");
+    return true;
   }
 
   function setAppendSubmitting(nextValue) {
@@ -1155,6 +1166,9 @@
         progress: calculateProgress()
       });
       renderAppendProgressMap();
+      if (submissionStateCompleted?.checked) {
+        setAppendCompletion(true);
+      }
       if (localAnalysis.miniView?.status === "ready") {
         window.BmsFormMiniView?.setAnalysis(localAnalysis.miniView, analyzedBlocks);
       } else {
@@ -1266,7 +1280,7 @@
       }
     }
 
-    if (appendState.currentPainted.size === 0) {
+    if (appendState.currentPainted.size === 0 && appendState.layerKind !== "completion_fill") {
       addError("progressMap", "追記範囲が追加されていません。", "PROGRESS_MAP_UNCHANGED");
     }
     if (appendState.fileGridMismatch) {
@@ -1678,15 +1692,17 @@
     showAppendPopover(block, event);
   }, true);
 
-  completeProgressButton?.addEventListener("click", (event) => {
-    if (!appendState.active) {
-      return;
+  submissionStateIncomplete?.addEventListener("change", () => {
+    if (appendState.active && submissionStateIncomplete.checked) {
+      setAppendCompletion(false);
     }
+  });
 
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    toggleAppendCompletion();
-  }, true);
+  submissionStateCompleted?.addEventListener("change", () => {
+    if (appendState.active && submissionStateCompleted.checked) {
+      setAppendCompletion(true);
+    }
+  });
 
   window.addEventListener("resize", () => {
     if (!appendState.active) {

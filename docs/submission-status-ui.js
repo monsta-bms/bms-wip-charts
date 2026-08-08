@@ -22,6 +22,7 @@
   }
 
   function selectedState() {
+    if (completed.checked && isAppendMode()) return "completed";
     if (rejected.checked && !isAppendMode()) return "rejected_completed";
     return "incomplete";
   }
@@ -46,25 +47,41 @@
 
   function syncMode() {
     const append = isAppendMode();
-    incomplete.disabled = append;
+    incomplete.disabled = false;
     rejected.disabled = append;
-    incomplete.setAttribute("aria-disabled", String(append));
+    incomplete.setAttribute("aria-disabled", "false");
     rejected.setAttribute("aria-disabled", String(append));
-    completed.disabled = true;
-    completed.setAttribute("aria-disabled", "true");
+    completed.disabled = !append;
+    completed.setAttribute("aria-disabled", String(!append));
     if (append) {
-      incomplete.checked = true;
       rejected.checked = false;
+      if (!completed.checked) incomplete.checked = true;
     } else if (rejectedField.checked) {
       rejected.checked = true;
-    } else if (!incomplete.checked && !rejected.checked) {
+      completed.checked = false;
+    } else {
       incomplete.checked = true;
+      completed.checked = false;
     }
     syncCompatibilityField({ notify: false });
   }
 
+  function setState(state, { notify = false } = {}) {
+    if (state === "completed" && isAppendMode()) {
+      completed.checked = true;
+    } else if (state === "rejected_completed" && !isAppendMode()) {
+      rejected.checked = true;
+    } else {
+      incomplete.checked = true;
+    }
+    syncCompatibilityField({ notify });
+  }
+
   incomplete.addEventListener("change", () => {
     if (incomplete.checked) syncCompatibilityField();
+  });
+  completed.addEventListener("change", () => {
+    if (completed.checked) syncCompatibilityField();
   });
   rejected.addEventListener("change", () => {
     if (rejected.checked) syncCompatibilityField();
@@ -80,6 +97,12 @@
   new MutationObserver(syncMode).observe(panel, {
     attributes: true,
     attributeFilter: ["class"]
+  });
+
+  window.BmsSubmissionStatusUi = Object.freeze({
+    selectedState,
+    setState,
+    syncMode
   });
 
   syncMode();

@@ -448,7 +448,7 @@ test("repository manifest resolves UI, guide, and changelog definitions", () => 
   const root = path.resolve(import.meta.dirname, "..");
   const manifest = loadManifest(path.join(root, "site-copy", "site-copy-manifest.json"));
   assert.equal(manifest.uiBlocks.length, 15);
-  assert.equal(manifest.uiBlocks.reduce((sum, block) => sum + block.fields.length, 0), 86);
+  assert.equal(manifest.uiBlocks.reduce((sum, block) => sum + block.fields.length, 0), 85);
   assert.equal(manifest.guideSections.length, 8);
   assert.ok(Array.isArray(manifest.changelogEntries));
   assert.equal(manifest.manualReview.length, 0);

@@ -59,7 +59,7 @@ check("model, link, action, pipeline, and app load in contract order", () => {
     "./version-link-ui.js?v=public-ui-refinement-01",
     "./version-action-ui.js?v=comment-action-balance-01",
     "./chart-render-pipeline.js?v=chart-render-pipeline-r4a-01",
-    "./app.js?v=public-ui-refinement-patch-02"
+    "./app.js?v=append-completion-radio-01"
   ].map((src) => indexSources.indexOf(src));
   assert.ok(ordered.every((index) => index >= 0));
   assert.deepEqual(ordered, [...ordered].sort((left, right) => left - right));
@@ -80,9 +80,9 @@ check("model, link UI, and Action UI precede every index renderer consumer", () 
   const actionIndex = indexSources.indexOf("./version-action-ui.js?v=comment-action-balance-01");
   const consumers = [
     "./chart-render-pipeline.js?v=chart-render-pipeline-r4a-01",
-    "./app.js?v=public-ui-refinement-patch-02",
+    "./app.js?v=append-completion-radio-01",
     "./progress-thumbnail-list.js?v=progress-style-r4b2f-01",
-    "./branch-append-ui.js?v=append-drop-form-reveal-01",
+    "./branch-append-ui.js?v=append-completion-radio-01",
     "./branch-tree-list.js?v=public-ui-touchup-03-patch1",
     "./favorites-list.js?v=completed-parent-access-01",
     "./version-management-ui.js?v=public-ui-refinement-patch-02",
@@ -143,8 +143,8 @@ check("mount, observer, and animation scheduling remain", () => {
 });
 check("delegated listeners and observers remain at the R3 counts", () => {
   const expectedListeners = new Map([
-    [app, 27],
-    [branchAppend, 13],
+    [app, 26],
+    [branchAppend, 14],
     [branchTree, 1],
     [favorites, 2],
     [progressThumbnail, 3],
@@ -303,7 +303,7 @@ check("HTML IDs remain unique", () => {
   assert.deepEqual(duplicateIds(listHtml), []);
 });
 check("changed scripts use their reviewed release cache keys", () => {
-  assert.ok(indexSources.includes("./app.js?v=public-ui-refinement-patch-02"), "app.js cache key mismatch");
+  assert.ok(indexSources.includes("./app.js?v=append-completion-radio-01"), "app.js cache key mismatch");
   assert.ok(indexSources.includes("./progress-thumbnail-list.js?v=progress-style-r4b2f-01"), "progress-thumbnail-list.js cache key mismatch");
   const unchangedR4aScripts = [
     "chart-render-pipeline.js",
@@ -315,10 +315,9 @@ check("changed scripts use their reviewed release cache keys", () => {
   assert.ok(indexSources.includes("./version-comment-ui.js?v=public-ui-touchup-03-patch1"), "version-comment-ui.js cache key mismatch");
   assert.ok(indexSources.includes("./progress-map-drag-hint.js?v=version-comment-progress-01"), "progress-map-drag-hint.js cache key mismatch");
   assert.ok(indexSources.includes("./version-link-ui.js?v=public-ui-refinement-01"), "version-link-ui.js cache key mismatch");
-  ["app.js", "version-management-ui.js"].forEach((name) => {
-    assert.ok(indexSources.includes(`./${name}?v=public-ui-refinement-patch-02`), `${name} cache key mismatch`);
-  });
-  assert.ok(indexSources.includes("./branch-append-ui.js?v=append-drop-form-reveal-01"), "branch-append-ui.js cache key mismatch");
+  assert.ok(indexSources.includes("./version-management-ui.js?v=public-ui-refinement-patch-02"), "version-management-ui.js cache key mismatch");
+  assert.ok(indexSources.includes("./submission-status-ui.js?v=append-completion-radio-01"), "submission-status-ui.js cache key mismatch");
+  assert.ok(indexSources.includes("./branch-append-ui.js?v=append-completion-radio-01"), "branch-append-ui.js cache key mismatch");
   assert.ok(indexSources.includes("./branch-tree-list.js?v=public-ui-touchup-03-patch1"), "branch-tree-list.js cache key mismatch");
   assert.ok(indexSources.includes("./version-action-ui.js?v=comment-action-balance-01"), "version-action-ui.js cache key mismatch");
   assert.ok(indexSources.includes("./version-ui-model.js?v=public-ui-touchup-03-patch1"), "version-ui-model.js cache key mismatch");
@@ -363,7 +362,7 @@ check("favorite and progress runtime styles are removed", () => {
 check("R4A keeps DOM traversal growth bounded", () => {
   const r1Baseline = new Map([
     [app, 69],
-    [branchAppend, 60],
+    [branchAppend, 61],
     [progressThumbnail, 24],
     [branchTree, 44],
     [favorites, 18],

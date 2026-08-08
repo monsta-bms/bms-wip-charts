@@ -105,7 +105,7 @@ function failure(
     ZIP_PROGRESS_MAP_MISMATCH: "ZIP内譜面と進捗マップが一致しません。",
     ZIP_BMS_ANALYSIS_FAILED: "ZIP内譜面を解析できないため進捗マップを確認できません。",
     PROGRESS_MAP_UNCHANGED: "進捗マップに変更がありません。",
-    COMPLETION_PROGRESS_TOO_LOW: "完成版にするには、進捗度を80%以上にしてください。"
+    COMPLETION_PROGRESS_TOO_LOW: "完成版の進捗情報を確認できません。"
   };
 
   return {
@@ -862,8 +862,6 @@ function normalizeAppendProgressMap(
 
   const childLayerIndex = normalizedLayers.layers.length - 1;
   const childLayer = normalizedLayers.layers[childLayerIndex];
-  let completionBaseRangeCount: number | null = null;
-
   if (isRejected) {
     if (!childLayer) {
       return {
@@ -907,7 +905,7 @@ function normalizeAppendProgressMap(
       return {
         ok: false,
         failure: failure(
-          "COMPLETION_PROGRESS_TOO_LOW",
+          "INVALID_PROGRESS_MAP",
           "completion_fill requires completionBaseRanges from before the fill operation."
         )
       };
@@ -920,25 +918,6 @@ function normalizeAppendProgressMap(
     );
     if (!normalizedCompletionBase.ok) {
       return normalizedCompletionBase;
-    }
-    completionBaseRangeCount = normalizedCompletionBase.ranges.length;
-
-    const completionBasePainted = new Set<number>();
-    for (const layer of normalizedLayers.layers.slice(0, childLayerIndex)) {
-      for (const index of collectRangeIndexes(layer.ranges)) completionBasePainted.add(index);
-    }
-    for (const index of collectRangeIndexes(normalizedCompletionBase.ranges)) completionBasePainted.add(index);
-    const completionBaseProgress = layout.targetBlockCount === 0
-      ? 0
-      : Math.round((completionBasePainted.size / layout.targetBlockCount) * 100);
-    if (completionBaseProgress < 80) {
-      return {
-        ok: false,
-        failure: failure(
-          "COMPLETION_PROGRESS_TOO_LOW",
-          `completion_fill was requested at ${completionBaseProgress}%; at least 80% is required.`
-        )
-      };
     }
   }
 
@@ -955,9 +934,7 @@ function normalizeAppendProgressMap(
     && parentSignature === completeSignature
     && (
       !childLayer
-      || (childLayer.kind === "completion_fill"
-        ? completionBaseRangeCount === 0
-        : childLayer.ranges.length === 0)
+      || (childLayer.kind !== "completion_fill" && childLayer.ranges.length === 0)
     )
   ) {
     return {

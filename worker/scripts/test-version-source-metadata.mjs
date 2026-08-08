@@ -728,15 +728,8 @@ async function testAppendSubmissions() {
     const parent = await seedAppendParent(completionBytes);
     const blockCount = parent.analyzed.analysis.standardBlocks.length;
     assert.ok(blockCount >= 5);
-    const parentMap = progressMapFromAnalysis(parent.analyzed.analysis, parent.versionId);
-    parentMap.layers[0].ranges = [[0, blockCount - 2]];
-    parentMap.progress = Math.round(((blockCount - 1) / blockCount) * 100);
-    assert.ok(parentMap.progress >= 80 && parentMap.progress < 100);
-    await env.DB.prepare(`
-      UPDATE versions
-      SET progress = ?, progress_map_json = ?
-      WHERE id = ?
-    `).bind(parentMap.progress, JSON.stringify(parentMap), parent.versionId).run();
+    const parentMap = parent.parentMap;
+    assert.ok(parentMap.progress < 80);
     const completionMap = {
       ...parentMap,
       layers: [
@@ -745,7 +738,7 @@ async function testAppendSubmissions() {
           versionId: "client-completion-placeholder",
           color: "#2468a2",
           kind: "completion_fill",
-          ranges: [[blockCount - 1, blockCount - 1]]
+          ranges: [[1, blockCount - 1]]
         }
       ],
       completionBaseRanges: [],
@@ -841,6 +834,56 @@ async function testAppendSubmissions() {
       parent.chartId
     );
     assert.equal(siblingResponse.status, 201, await siblingResponse.text());
+  });
+
+  await check("completed append may explicitly remain completed without manual child painting", async () => {
+    const completionBytes = Buffer.from([
+      "#PLAYER 1",
+      "#TITLE Append Song",
+      "#ARTIST Append Artist",
+      "#BPM 120",
+      "#00111:01",
+      "#00611:01",
+      `#COMMENT completed-parent-${++sequence}`
+    ].join("\r\n"), "utf8");
+    const parent = await seedAppendParent(completionBytes);
+    const blockCount = parent.analyzed.analysis.standardBlocks.length;
+    const parentMap = progressMapFromAnalysis(parent.analyzed.analysis, parent.versionId);
+    parentMap.layers[0].ranges = [[0, blockCount - 1]];
+    parentMap.progress = 100;
+    await env.DB.prepare(`
+      UPDATE versions
+      SET progress = 100,
+          progress_map_json = ?,
+          completed_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).bind(JSON.stringify(parentMap), parent.versionId).run();
+
+    const completionMap = {
+      ...parentMap,
+      layers: [
+        ...parentMap.layers,
+        {
+          versionId: "client-completion-placeholder",
+          color: "#2468a2",
+          kind: "completion_fill",
+          ranges: []
+        }
+      ],
+      completionBaseRanges: [],
+      progress: 100
+    };
+    const response = await chartVersionsModule.handleChartVersionsRoute(
+      makeAppendRequest(parent, completionBytes, { progressMap: completionMap }),
+      env,
+      parent.chartId
+    );
+    const body = await response.json();
+    assert.equal(response.status, 201, JSON.stringify(body));
+    assert.equal(body.completed, true);
+    const child = await first("SELECT progress, completed_at FROM versions WHERE id = ?", body.versionId);
+    assert.equal(child.progress, 100);
+    assert.notEqual(child.completed_at, null);
   });
 
   await check("append-disabled parent rejects before creating version or metadata", async () => {

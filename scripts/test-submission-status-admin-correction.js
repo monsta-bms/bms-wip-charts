@@ -10,6 +10,7 @@ const files = {
   index: read("docs/index.html"),
   app: read("docs/app.js"),
   submission: read("docs/submission-status-ui.js"),
+  branchAppend: read("docs/branch-append-ui.js"),
   postCss: read("docs/post-form-ui.css"),
   admin: read("docs/admin.html"),
   adminJs: read("docs/admin-status.js"),
@@ -64,6 +65,22 @@ check("初回没譜面はWorkerでprogress100", () => assert.match(files.charts,
 check("初回没譜面allowAppendを指定可能", () => assert.match(files.charts, /parseAllowAppend\(form, !isRejected\)/u));
 check("追記没譜面を拒否", () => assert.match(files.chartVersions, /FOLLOWUP_REJECTED_NOT_ALLOWED/u));
 check("追記完成指定を維持", () => assert.match(files.chartVersions, /completionRequested/u));
+check("append mode enables incomplete and completed radio choices", () => {
+  assert.match(files.submission, /incomplete\.disabled = false/u);
+  assert.match(files.submission, /completed\.disabled = !append/u);
+  assert.match(files.submission, /rejected\.disabled = append/u);
+  assert.match(files.submission, /if \(completed\.checked && isAppendMode\(\)\) return "completed"/u);
+});
+check("append completion uses the completed radio instead of a separate button", () => {
+  assert.doesNotMatch(`${files.index}\n${files.app}\n${files.branchAppend}`, /completeProgressButton/u);
+  assert.match(files.branchAppend, /submissionStateCompleted\?\.addEventListener\("change"/u);
+  assert.match(files.branchAppend, /setAppendCompletion\(true\)/u);
+});
+check("completed radio fills every unpainted append block without an 80 percent gate", () => {
+  assert.match(files.branchAppend, /appendState\.layerKind = "completion_fill"[\s\S]*appendState\.currentPainted\.add\(block\.index\)/u);
+  assert.doesNotMatch(files.branchAppend, /calculateProgress\(\)\s*<\s*80/u);
+  assert.doesNotMatch(files.progressMap, /completionBaseProgress\s*<\s*80/u);
+});
 
 check("管理画面sectionを追加", () => assert.ok(files.admin.includes("投稿状態の修正")));
 check("要確認のみ初期ON", () => assert.match(files.admin, /id="adminVersionStatusSuspiciousOnly"[^>]*checked/u));

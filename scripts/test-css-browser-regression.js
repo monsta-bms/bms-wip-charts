@@ -52,6 +52,28 @@ function createProgressMap(progress = 50) {
   };
 }
 
+function createAppendCompletionParentMap() {
+  return {
+    schemaVersion: 2,
+    blockMode: "standardized_measure",
+    firstMeasure: 1,
+    lastMeasure: 1,
+    targetBlockCount: 1,
+    blocks: [{
+      index: 0,
+      startMeasure: 1,
+      endMeasure: 1,
+      startPosition: null,
+      endPosition: null,
+      startTimeSec: null,
+      endTimeSec: null,
+      playNotes: 1
+    }],
+    layers: [{ kind: "initial", versionId: "version-active", color: "#27896b", ranges: [] }],
+    progress: 0
+  };
+}
+
 function createVersion(id, overrides = {}) {
   return {
     id,
@@ -96,7 +118,8 @@ const versions = [
     latestComment: {
       body: "Existing latest public comment",
       createdAt: "2026-07-25T02:30:00.000Z"
-    }
+    },
+    progressMap: createAppendCompletionParentMap()
   }),
   createVersion("version-append-off", { allowAppend: false, appendAvailable: false, progress: 62 }),
   createVersion("version-download-blocked", {
@@ -1543,6 +1566,7 @@ async function captureAppendDropFileRevealRegression(cdp, sessionId) {
     }));
   })()`);
   await waitFor(cdp, sessionId, `document.querySelector("#chartFile")?.files?.length === 1`, "append drop file assignment");
+  await waitFor(cdp, sessionId, `window.BmsAppendPolicy?.snapshot?.().hasValidAppendFile === true`, "append drop analysis readiness");
   const result = await evaluate(cdp, sessionId, `(() => {
     const deferred = [...document.querySelectorAll("[data-post-requires-file]")];
     return {
@@ -1553,6 +1577,14 @@ async function captureAppendDropFileRevealRegression(cdp, sessionId) {
       diffVisible: !document.querySelector(".diff-info-section")?.hidden,
       progressVisible: !document.querySelector(".progress-section")?.hidden,
       formHasFileClass: document.querySelector("#chartForm")?.classList.contains("has-selected-chart-file"),
+      stateControls: {
+        incompleteChecked: document.querySelector("#submissionStateIncomplete")?.checked,
+        incompleteDisabled: document.querySelector("#submissionStateIncomplete")?.disabled,
+        completedChecked: document.querySelector("#submissionStateCompleted")?.checked,
+        completedDisabled: document.querySelector("#submissionStateCompleted")?.disabled,
+        rejectedDisabled: document.querySelector("#submissionStateRejected")?.disabled,
+        completionButtonCount: document.querySelectorAll("#completeProgressButton").length
+      },
       horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
     };
   })()`);
@@ -1563,11 +1595,66 @@ async function captureAppendDropFileRevealRegression(cdp, sessionId) {
   assert.equal(result.diffVisible, true, "append drop must reveal diff information");
   assert.equal(result.progressVisible, true, "append drop must reveal progress controls");
   assert.equal(result.formHasFileClass, true);
+  assert.deepEqual(result.stateControls, {
+    incompleteChecked: true,
+    incompleteDisabled: false,
+    completedChecked: false,
+    completedDisabled: false,
+    rejectedDisabled: true,
+    completionButtonCount: 0
+  });
   assert.equal(result.horizontalOverflow, false);
+
+  await evaluate(cdp, sessionId, `document.querySelector("#submissionStateCompleted")?.click()`);
+  await waitFor(cdp, sessionId, `document.querySelector("#progress")?.value === "100"
+    && window.BmsAppendPolicy?.snapshot?.().isCompleted === true`, "append completion radio auto fill");
+  const completed = await evaluate(cdp, sessionId, `(() => {
+    const blocks = [...document.querySelectorAll("#progressMapBlocks .progress-map-block")];
+    return {
+      incompleteChecked: document.querySelector("#submissionStateIncomplete")?.checked,
+      completedChecked: document.querySelector("#submissionStateCompleted")?.checked,
+      progress: document.querySelector("#progress")?.value,
+      blockCount: blocks.length,
+      paintedCount: blocks.filter((block) => block.getAttribute("aria-pressed") === "true").length,
+      lockedCount: blocks.filter((block) => block.disabled).length,
+      completionLocked: document.querySelector("#progressMap")?.classList.contains("is-completion-locked")
+    };
+  })()`);
+  assert.equal(completed.incompleteChecked, false);
+  assert.equal(completed.completedChecked, true);
+  assert.equal(completed.progress, "100");
+  assert.ok(completed.blockCount > 0);
+  assert.equal(completed.paintedCount, completed.blockCount, "completed radio must fill every progress block");
+  assert.equal(completed.lockedCount, completed.blockCount, "completed radio must lock manual painting");
+  assert.equal(completed.completionLocked, true);
+
+  await evaluate(cdp, sessionId, `document.querySelector("#submissionStateIncomplete")?.click()`);
+  await waitFor(cdp, sessionId, `document.querySelector("#progress")?.value === "0"
+    && window.BmsAppendPolicy?.snapshot?.().isCompleted === false`, "append incomplete radio restore");
+  const restored = await evaluate(cdp, sessionId, `(() => {
+    const blocks = [...document.querySelectorAll("#progressMapBlocks .progress-map-block")];
+    return {
+      incompleteChecked: document.querySelector("#submissionStateIncomplete")?.checked,
+      completedChecked: document.querySelector("#submissionStateCompleted")?.checked,
+      progress: document.querySelector("#progress")?.value,
+      paintedCount: blocks.filter((block) => block.getAttribute("aria-pressed") === "true").length,
+      lockedCount: blocks.filter((block) => block.disabled).length
+    };
+  })()`);
+  assert.deepEqual(restored, {
+    incompleteChecked: true,
+    completedChecked: false,
+    progress: "0",
+    paintedCount: 0,
+    lockedCount: 0
+  });
+
+  await evaluate(cdp, sessionId, `document.querySelector("#submissionStateCompleted")?.click()`);
+  await waitFor(cdp, sessionId, `document.querySelector("#progress")?.value === "100"`, "append completion radio reselection");
   await evaluate(cdp, sessionId, `document.querySelector("#cancelAppendButton")?.click()`);
   await waitFor(cdp, sessionId, `!document.querySelector(".submit-panel")?.classList.contains("is-append-mode")
     && !document.querySelector("#chartFile")?.files?.length`, "append drop fixture cleanup");
-  return result;
+  return { ...result, completed, restored };
 }
 
 async function captureVersionCommentInteractions(cdp, sessionId) {
