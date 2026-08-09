@@ -16,6 +16,7 @@ const apiPort = 8788;
 const tolerance = 0.25;
 const startedAt = process.hrtime.bigint();
 const progressFormFixture = fs.readFileSync(path.join(root, "scripts", "fixtures", "chart-metadata-extract-utf8.bms"), "utf8");
+const appendCompletionFixture = `${progressFormFixture}\n#00411:01`;
 const detailControlSelectors = {
   appendAvailable: '.version-row[data-version-id="version-active"] .append-version-button',
   appendStopped: ".append-policy-disabled-button",
@@ -57,20 +58,20 @@ function createAppendCompletionParentMap() {
     schemaVersion: 2,
     blockMode: "standardized_measure",
     firstMeasure: 1,
-    lastMeasure: 1,
-    targetBlockCount: 1,
-    blocks: [{
-      index: 0,
-      startMeasure: 1,
-      endMeasure: 1,
-      startPosition: null,
-      endPosition: null,
-      startTimeSec: null,
-      endTimeSec: null,
-      playNotes: 1
-    }],
-    layers: [{ kind: "initial", versionId: "version-active", color: "#27896b", ranges: [] }],
-    progress: 0
+    lastMeasure: 4,
+    targetBlockCount: 4,
+    blocks: Array.from({ length: 4 }, (_, index) => ({
+      index,
+      startMeasure: index + 1,
+      endMeasure: index + 1,
+      startPosition: index + 1,
+      endPosition: index + 2,
+      startTimeSec: index * 2,
+      endTimeSec: index === 3 ? 6 : (index + 1) * 2,
+      playNotes: index === 0 || index === 3 ? 1 : 0
+    })),
+    layers: [{ kind: "initial", versionId: "version-active", color: "#27896b", ranges: [[0, 1]] }],
+    progress: 50
   };
 }
 
@@ -1558,7 +1559,7 @@ async function captureAppendDropFileRevealRegression(cdp, sessionId) {
     && !document.querySelector("#postFormBody")?.hidden`, "append form open before file drop");
   await evaluate(cdp, sessionId, `(() => {
     const transfer = new DataTransfer();
-    transfer.items.add(new File([${JSON.stringify(progressFormFixture)}], "append-drop-regression.bms", { type: "text/plain" }));
+    transfer.items.add(new File([${JSON.stringify(appendCompletionFixture)}], "append-drop-regression.bms", { type: "text/plain" }));
     document.querySelector("#chartFileDropZone")?.dispatchEvent(new DragEvent("drop", {
       bubbles: true,
       cancelable: true,
@@ -1605,6 +1606,31 @@ async function captureAppendDropFileRevealRegression(cdp, sessionId) {
   });
   assert.equal(result.horizontalOverflow, false);
 
+  await evaluate(cdp, sessionId, `document.querySelector("#progressMapBlocks")?.scrollIntoView({ block: "center" })`);
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  const manualPaintPoints = await evaluate(cdp, sessionId, `(() => {
+    const blocks = [...document.querySelectorAll("#progressMapBlocks .progress-map-block")];
+    return [0, 2].map((index) => {
+      const rect = blocks[index].getBoundingClientRect();
+      return { x: rect.left + (rect.width / 2), y: rect.top + (rect.height / 2) };
+    });
+  })()`);
+  for (const point of manualPaintPoints) {
+    await cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", x: point.x, y: point.y, button: "left", clickCount: 1 }, sessionId);
+    await cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: point.x, y: point.y, button: "left", clickCount: 1 }, sessionId);
+  }
+  await waitFor(cdp, sessionId, `document.querySelector("#progress")?.value === "75"`, "append manual layer paint");
+  const manual = await evaluate(cdp, sessionId, `(() => {
+    const blocks = [...document.querySelectorAll("#progressMapBlocks .progress-map-block")];
+    return {
+      progress: document.querySelector("#progress")?.value,
+      parent: blocks.map((block, index) => block.classList.contains("is-parent-painted") ? index : null).filter(Number.isInteger),
+      current: blocks.map((block, index) => block.classList.contains("is-current-painted") ? index : null).filter(Number.isInteger),
+      completion: blocks.map((block, index) => block.classList.contains("is-completion-painted") ? index : null).filter(Number.isInteger)
+    };
+  })()`);
+  assert.deepEqual(manual, { progress: "75", parent: [0, 1], current: [0, 2], completion: [] });
+
   await evaluate(cdp, sessionId, `document.querySelector("#submissionStateCompleted")?.click()`);
   await waitFor(cdp, sessionId, `document.querySelector("#progress")?.value === "100"
     && window.BmsAppendPolicy?.snapshot?.().isCompleted === true`, "append completion radio auto fill");
@@ -1617,7 +1643,16 @@ async function captureAppendDropFileRevealRegression(cdp, sessionId) {
       blockCount: blocks.length,
       paintedCount: blocks.filter((block) => block.getAttribute("aria-pressed") === "true").length,
       lockedCount: blocks.filter((block) => block.disabled).length,
-      completionLocked: document.querySelector("#progressMap")?.classList.contains("is-completion-locked")
+      completionLocked: document.querySelector("#progressMap")?.classList.contains("is-completion-locked"),
+      parent: blocks.map((block, index) => block.classList.contains("is-parent-painted") ? index : null).filter(Number.isInteger),
+      current: blocks.map((block, index) => block.classList.contains("is-current-painted") ? index : null).filter(Number.isInteger),
+      completion: blocks.map((block, index) => block.classList.contains("is-completion-painted") ? index : null).filter(Number.isInteger),
+      preview: window.BmsProgressImage?.buildProgressMapFromVisibleEditor?.(),
+      priorities: {
+        manual: window.BmsProgressLayerColors?.getLayerPaintPriority?.({ kind: "followup" }),
+        parent: window.BmsProgressLayerColors?.getLayerPaintPriority?.({ kind: "initial" }),
+        completion: window.BmsProgressLayerColors?.getLayerPaintPriority?.({ kind: "completion_fill" })
+      }
     };
   })()`);
   assert.equal(completed.incompleteChecked, false);
@@ -1627,9 +1662,18 @@ async function captureAppendDropFileRevealRegression(cdp, sessionId) {
   assert.equal(completed.paintedCount, completed.blockCount, "completed radio must fill every progress block");
   assert.equal(completed.lockedCount, completed.blockCount, "completed radio must lock manual painting");
   assert.equal(completed.completionLocked, true);
+  assert.deepEqual(completed.parent, [0, 1]);
+  assert.deepEqual(completed.current, [0, 2]);
+  assert.deepEqual(completed.completion, [3]);
+  assert.deepEqual(completed.preview.layers.map((layer) => ({ kind: layer.kind, ranges: layer.ranges })), [
+    { kind: "parent_preview", ranges: [[0, 1]] },
+    { kind: "followup", ranges: [[0, 0], [2, 2]] },
+    { kind: "completion_fill", ranges: [[3, 3]] }
+  ]);
+  assert.deepEqual(completed.priorities, { manual: 3, parent: 2, completion: 1 });
 
   await evaluate(cdp, sessionId, `document.querySelector("#submissionStateIncomplete")?.click()`);
-  await waitFor(cdp, sessionId, `document.querySelector("#progress")?.value === "0"
+  await waitFor(cdp, sessionId, `document.querySelector("#progress")?.value === "75"
     && window.BmsAppendPolicy?.snapshot?.().isCompleted === false`, "append incomplete radio restore");
   const restored = await evaluate(cdp, sessionId, `(() => {
     const blocks = [...document.querySelectorAll("#progressMapBlocks .progress-map-block")];
@@ -1638,15 +1682,21 @@ async function captureAppendDropFileRevealRegression(cdp, sessionId) {
       completedChecked: document.querySelector("#submissionStateCompleted")?.checked,
       progress: document.querySelector("#progress")?.value,
       paintedCount: blocks.filter((block) => block.getAttribute("aria-pressed") === "true").length,
-      lockedCount: blocks.filter((block) => block.disabled).length
+      lockedCount: blocks.filter((block) => block.disabled).length,
+      parent: blocks.map((block, index) => block.classList.contains("is-parent-painted") ? index : null).filter(Number.isInteger),
+      current: blocks.map((block, index) => block.classList.contains("is-current-painted") ? index : null).filter(Number.isInteger),
+      completion: blocks.map((block, index) => block.classList.contains("is-completion-painted") ? index : null).filter(Number.isInteger)
     };
   })()`);
   assert.deepEqual(restored, {
     incompleteChecked: true,
     completedChecked: false,
-    progress: "0",
-    paintedCount: 0,
-    lockedCount: 0
+    progress: "75",
+    paintedCount: 3,
+    lockedCount: 0,
+    parent: [0, 1],
+    current: [0, 2],
+    completion: []
   });
 
   await evaluate(cdp, sessionId, `document.querySelector("#submissionStateCompleted")?.click()`);
@@ -1654,7 +1704,7 @@ async function captureAppendDropFileRevealRegression(cdp, sessionId) {
   await evaluate(cdp, sessionId, `document.querySelector("#cancelAppendButton")?.click()`);
   await waitFor(cdp, sessionId, `!document.querySelector(".submit-panel")?.classList.contains("is-append-mode")
     && !document.querySelector("#chartFile")?.files?.length`, "append drop fixture cleanup");
-  return { ...result, completed, restored };
+  return { ...result, manual, completed, restored };
 }
 
 async function captureVersionCommentInteractions(cdp, sessionId) {

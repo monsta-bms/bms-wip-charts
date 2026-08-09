@@ -597,6 +597,36 @@ function normalizeFollowupLayers(
   return { ok: true, layers, paintedIndexes };
 }
 
+function normalizeAuthoritativeParentLayers(
+  rawProgressMap: string | null,
+  childLayout: ProgressMapLayout,
+  mismatchCode: "ZIP_PROGRESS_MAP_MISMATCH" | "PROGRESS_MAP_BLOCK_COUNT_MISMATCH"
+): { ok: true; layers: ProgressMapLayer[]; paintedIndexes: Set<number> } | { ok: false; failure: ProgressMapFailure } {
+  if (!rawProgressMap?.trim()) {
+    return { ok: false, failure: failure("INVALID_PROGRESS_MAP", "Parent progressMap is missing.") };
+  }
+
+  const parsed = parseProgressMap(rawProgressMap);
+  if (!parsed.ok || !isRecord(parsed.value)) {
+    return { ok: false, failure: failure("INVALID_PROGRESS_MAP", "Parent progressMap is invalid.") };
+  }
+
+  const parentLayout = normalizeLayout(parsed.value, null);
+  if (!parentLayout.ok || !layoutsShareGrid(parentLayout, childLayout)) {
+    return {
+      ok: false,
+      failure: failure(mismatchCode, "Parent progressMap grid does not match the uploaded BMS analysis.")
+    };
+  }
+
+  const rawLayers = Array.isArray(parsed.value.layers) ? parsed.value.layers : [];
+  const rawLastLayer = rawLayers.length > 0 && isRecord(rawLayers[rawLayers.length - 1])
+    ? rawLayers[rawLayers.length - 1]
+    : null;
+  const parentVersionId = normalizeVersionId(rawLastLayer?.versionId, "stored-parent-version");
+  return normalizeFollowupLayers(parsed.value, parentLayout.targetBlockCount, parentVersionId);
+}
+
 function buildProgressMapJson(
   versionId: string,
   layout: ProgressMapLayout,
@@ -832,32 +862,18 @@ function normalizeAppendProgressMap(
     return { ok: false, failure: failure("INVALID_PROGRESS_MAP", "progressMap must be an object.") };
   }
 
-  if (isZip) {
-    if (!parentProgressMapJson?.trim()) {
-      return {
-        ok: false,
-        failure: failure("ZIP_PROGRESS_MAP_MISMATCH", "Parent progressMap is missing.")
-      };
-    }
-    const parentParsed = parseProgressMap(parentProgressMapJson);
-    if (!parentParsed.ok) {
-      return {
-        ok: false,
-        failure: failure("ZIP_PROGRESS_MAP_MISMATCH", "Parent progressMap is invalid.")
-      };
-    }
-    const parentLayout = normalizeLayout(parentParsed.value, null);
-    if (!parentLayout.ok || !layoutsShareGrid(parentLayout, layout)) {
-      return {
-        ok: false,
-        failure: failure("ZIP_PROGRESS_MAP_MISMATCH", "Parent progressMap grid does not match the ZIP BMS analysis.")
-      };
-    }
-  }
-
   const normalizedLayers = normalizeFollowupLayers(parsed.value, layout.targetBlockCount, versionId);
   if (!normalizedLayers.ok) {
     return normalizedLayers;
+  }
+
+  const parentLayers = normalizeAuthoritativeParentLayers(
+    parentProgressMapJson,
+    layout,
+    isZip ? "ZIP_PROGRESS_MAP_MISMATCH" : "PROGRESS_MAP_BLOCK_COUNT_MISMATCH"
+  );
+  if (!parentLayers.ok) {
+    return parentLayers;
   }
 
   const childLayerIndex = normalizedLayers.layers.length - 1;
@@ -873,13 +889,13 @@ function normalizeAppendProgressMap(
     const fullRanges: Array<[number, number]> = layout.targetBlockCount > 0
       ? [[0, layout.targetBlockCount - 1]]
       : [];
-    const layers = normalizedLayers.layers.slice();
-    layers[childLayerIndex] = {
-      ...childLayer,
+    const layers = parentLayers.layers.slice();
+    layers.push({
       versionId,
+      color: childLayer.color,
       kind: "rejected_auto_fill",
       ranges: fullRanges
-    };
+    });
 
     const progressMap: ProgressMapJson = {
       schemaVersion: 2,
@@ -900,6 +916,9 @@ function normalizeAppendProgressMap(
     };
   }
 
+  let manualRanges: Array<[number, number]>;
+  let completionRanges: Array<[number, number]> | null = null;
+  let manualColor = childLayer?.color ?? PROGRESS_MAP_COLOR;
   if (childLayer?.kind === "completion_fill") {
     if (!Array.isArray(parsed.value.completionBaseRanges)) {
       return {
@@ -919,12 +938,49 @@ function normalizeAppendProgressMap(
     if (!normalizedCompletionBase.ok) {
       return normalizedCompletionBase;
     }
+
+    const clientProgress = layout.targetBlockCount === 0
+      ? 0
+      : Math.round((normalizedLayers.paintedIndexes.size / layout.targetBlockCount) * 100);
+    if (clientProgress !== 100) {
+      return {
+        ok: false,
+        failure: failure("INVALID_PROGRESS_MAP", "completion_fill must cover every progressMap block.")
+      };
+    }
+
+    manualRanges = normalizedCompletionBase.ranges;
+    const clientManualLayer = normalizedLayers.layers
+      .slice(parentLayers.layers.length, -1)
+      .reverse()
+      .find((layer) => layer.kind === "followup");
+    manualColor = clientManualLayer?.color ?? childLayer.color;
+    const resolvedIndexes = new Set([
+      ...parentLayers.paintedIndexes,
+      ...collectRangeIndexes(manualRanges)
+    ]);
+    const completionIndexes = new Set<number>();
+    for (let index = 0; index < layout.targetBlockCount; index += 1) {
+      if (!resolvedIndexes.has(index)) {
+        completionIndexes.add(index);
+      }
+    }
+    completionRanges = compressBlockIndexesToRanges(completionIndexes);
+  } else {
+    manualRanges = childLayer?.ranges ?? [];
   }
 
+  const manualIndexes = collectRangeIndexes(manualRanges);
+  const paintedIndexes = new Set([...parentLayers.paintedIndexes, ...manualIndexes]);
+  if (completionRanges) {
+    for (const index of collectRangeIndexes(completionRanges)) {
+      paintedIndexes.add(index);
+    }
+  }
   const progress = layout.targetBlockCount === 0
     ? 0
-    : Math.round((normalizedLayers.paintedIndexes.size / layout.targetBlockCount) * 100);
-  const nextSignature = buildPaintedSignature(layout.targetBlockCount, normalizedLayers.paintedIndexes);
+    : Math.round((paintedIndexes.size / layout.targetBlockCount) * 100);
+  const nextSignature = buildPaintedSignature(layout.targetBlockCount, paintedIndexes);
   const parentSignature = buildStoredProgressMapSignature(parentProgressMapJson);
   const completeSignature = layout.targetBlockCount > 0
     ? `${layout.targetBlockCount}:0-${layout.targetBlockCount - 1}`
@@ -934,7 +990,7 @@ function normalizeAppendProgressMap(
     && parentSignature === completeSignature
     && (
       !childLayer
-      || (childLayer.kind !== "completion_fill" && childLayer.ranges.length === 0)
+      || (childLayer.kind !== "completion_fill" && manualRanges.length === 0)
     )
   ) {
     return {
@@ -963,6 +1019,24 @@ function normalizeAppendProgressMap(
     };
   }
 
+  const layers: ProgressMapLayer[] = [
+    ...parentLayers.layers,
+    {
+      versionId,
+      color: manualColor,
+      kind: "followup",
+      ranges: manualRanges
+    }
+  ];
+  if (completionRanges) {
+    layers.push({
+      versionId,
+      color: PROGRESS_MAP_COLOR,
+      kind: "completion_fill",
+      ranges: completionRanges
+    });
+  }
+
   const progressMap: ProgressMapJson = {
     schemaVersion: 2,
     blockMode: "standardized_measure",
@@ -970,7 +1044,7 @@ function normalizeAppendProgressMap(
     lastMeasure: layout.lastMeasure,
     targetBlockCount: layout.targetBlockCount,
     blocks: layout.blocks,
-    layers: normalizedLayers.layers,
+    layers,
     progress
   };
 

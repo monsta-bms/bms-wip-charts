@@ -1,6 +1,7 @@
 (() => {
   const appendLayerColor = "#2563eb";
   const parentLayerColor = "#1f7a5c";
+  const completionLayerColor = "#1f7a5c";
   const thumbnailMaxCells = 96;
   const allowedExtensions = new Set([".bms", ".bme", ".bml", ".zip"]);
 
@@ -72,6 +73,7 @@
     blocks: [],
     parentPainted: new Set(),
     currentPainted: new Set(),
+    completionPainted: new Set(),
     completionBasePainted: null,
     completionRestoreSnapshot: null,
     layerKind: "followup",
@@ -224,6 +226,7 @@
   function discardCompletionState() {
     appendState.completionRestoreSnapshot = null;
     appendState.completionBasePainted = null;
+    appendState.completionPainted = new Set();
     appendState.layerKind = "followup";
     appendState.isDragging = false;
     appendState.dragAnchorIndex = null;
@@ -332,7 +335,11 @@
   }
 
   function collectUnionPainted() {
-    return new Set([...appendState.parentPainted, ...appendState.currentPainted]);
+    return new Set([
+      ...appendState.parentPainted,
+      ...appendState.currentPainted,
+      ...appendState.completionPainted
+    ]);
   }
 
   function compressRanges(indexes) {
@@ -546,9 +553,11 @@
       const index = Number(block.dataset.blockIndex);
       const parentPainted = appendState.parentPainted.has(index);
       const currentPainted = appendState.currentPainted.has(index);
+      const completionPainted = appendState.completionPainted.has(index);
       const painted = union.has(index);
       block.classList.toggle("is-parent-painted", parentPainted);
       block.classList.toggle("is-current-painted", currentPainted);
+      block.classList.toggle("is-completion-painted", completionPainted);
       block.classList.toggle("is-painted", painted);
       block.setAttribute("aria-pressed", painted ? "true" : "false");
       const disabled = Boolean(isRejectedInput?.checked) || completionLocked;
@@ -624,6 +633,7 @@
     appendState.blocks = blocks;
     appendState.parentPainted = collectPaintedIndexes(parentLayers, blocks.length);
     appendState.currentPainted = new Set();
+    appendState.completionPainted = new Set();
     appendState.completionBasePainted = null;
     appendState.completionRestoreSnapshot = null;
     appendState.layerKind = "followup";
@@ -640,20 +650,26 @@
 
   function buildAppendProgressMapPayload() {
     const parentMap = cloneJson(appendState.parentMap);
-    const currentLayer = {
-      versionId: "pending",
-      color: appendLayerColor,
-      kind: appendState.layerKind,
-      ranges: compressRanges(appendState.currentPainted)
-    };
-
     const layers = appendState.parentLayers.map((layer) => ({
       versionId: layer.versionId,
       color: layer.color || parentLayerColor,
       kind: layer.kind || "initial",
       ranges: layer.ranges.map((range) => [range[0], range[1]])
     }));
-    layers.push(currentLayer);
+    layers.push({
+      versionId: "pending",
+      color: appendLayerColor,
+      kind: "followup",
+      ranges: compressRanges(appendState.currentPainted)
+    });
+    if (appendState.layerKind === "completion_fill") {
+      layers.push({
+        versionId: "pending",
+        color: completionLayerColor,
+        kind: "completion_fill",
+        ranges: compressRanges(appendState.completionPainted)
+      });
+    }
 
     const payload = {
       ...parentMap,
@@ -679,6 +695,7 @@
       parentLayers: appendState.parentLayers,
       parentPainted: [...appendState.parentPainted],
       currentPainted: [...appendState.currentPainted],
+      completionPainted: [...appendState.completionPainted],
       uiState: {
         layerKind: appendState.layerKind,
         fileGridMismatch: appendState.fileGridMismatch,
@@ -714,6 +731,7 @@
     appendState.blocks = cloneJson(snapshot.progressMap.blocks).map(normalizeBlock);
     appendState.parentPainted = new Set(snapshot.parentPainted);
     appendState.currentPainted = new Set(snapshot.currentPainted);
+    appendState.completionPainted = new Set(snapshot.completionPainted || []);
     appendState.completionBasePainted = null;
     appendState.layerKind = snapshot.uiState?.layerKind || "followup";
     appendState.fileGridMismatch = Boolean(snapshot.uiState?.fileGridMismatch);
@@ -820,10 +838,14 @@
 
     appendState.completionRestoreSnapshot = createCompletionRestoreSnapshot();
     appendState.completionBasePainted = new Set(appendState.currentPainted);
+    appendState.completionPainted = new Set();
     appendState.layerKind = "completion_fill";
     for (const block of appendState.blocks) {
-      if (!appendState.parentPainted.has(block.index)) {
-        appendState.currentPainted.add(block.index);
+      if (
+        !appendState.currentPainted.has(block.index)
+        && !appendState.parentPainted.has(block.index)
+      ) {
+        appendState.completionPainted.add(block.index);
       }
     }
     updateAppendBlockClasses();
@@ -1021,6 +1043,7 @@
     appendState.blocks = [];
     appendState.parentPainted = new Set();
     appendState.currentPainted = new Set();
+    appendState.completionPainted = new Set();
     appendState.completionBasePainted = null;
     appendState.completionRestoreSnapshot = null;
     appendState.layerKind = "followup";

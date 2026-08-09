@@ -175,7 +175,7 @@ check("index stylesheet order remains stable", () => {
   const themeIndex = sources.index.indexOf("./theme.css?v=public-ui-refinement-patch-02");
   const favoriteCssIndex = sources.index.indexOf("./favorites-list.css?v=version-comment-progress-01");
   const progressCssIndex = sources.index.indexOf("./progress-thumbnail-list.css?v=progress-style-r4b2f-01");
-  const progressScriptIndex = sources.index.indexOf("./progress-thumbnail-list.js?v=progress-style-r4b2f-01");
+  const progressScriptIndex = sources.index.indexOf("./progress-thumbnail-list.js?v=append-paint-priority-01");
   const favoriteScriptIndex = sources.index.indexOf("./favorites-list.js?v=completed-parent-access-01");
   assert.ok(themeIndex >= 0 && themeIndex < favoriteCssIndex);
   assert.ok(favoriteCssIndex < progressCssIndex);
@@ -196,8 +196,8 @@ check("changed public UI, comment, and progress assets use their release cache k
   assert.match(sources.index, /\.\/theme\.css\?v=public-ui-refinement-patch-02/);
   assert.match(sources.index, /\.\/post-form-ui\.css\?v=progress-tooltip-radio-inset-01/);
   assert.match(sources.index, /\.\/progress-thumbnail-list\.css\?v=progress-style-r4b2f-01/);
-  assert.match(sources.index, /\.\/progress-thumbnail-list\.js\?v=progress-style-r4b2f-01/);
-  assert.equal((sources.index.match(/progress-style-r4b2f-01/g) || []).length, 2);
+  assert.match(sources.index, /\.\/progress-thumbnail-list\.js\?v=append-paint-priority-01/);
+  assert.equal((sources.index.match(/progress-style-r4b2f-01/g) || []).length, 1);
   assert.match(sources.index, /\.\/favorites-list\.css\?v=version-comment-progress-01/);
   assert.match(sources.index, /\.\/favorites-list\.js\?v=completed-parent-access-01/);
   assert.match(sources.index, /\.\/list-ui-refresh\.css\?v=public-list-density-patch-01/);
@@ -220,11 +220,12 @@ check("changed public UI, comment, and progress assets use their release cache k
   assert.equal((sources.index.match(/completed-parent-access-01/g) || []).length, 1);
   assert.match(sources.index, /\.\/app\.js\?v=append-completion-radio-01/);
   assert.match(sources.index, /\.\/submission-status-ui\.js\?v=append-completion-radio-01/);
-  assert.match(sources.index, /\.\/branch-append-ui\.js\?v=append-completion-radio-01/);
+  assert.match(sources.index, /\.\/branch-append-ui\.js\?v=append-paint-priority-01/);
   assert.equal((sources.listHtml.match(/version-comment-progress-01/g) || []).length, 0);
   assert.equal((sources.listHtml.match(/completed-parent-access-01/g) || []).length, 0);
   assert.ok((sources.index.match(/public-ui-refinement-patch-02/g) || []).length >= 6);
-  assert.equal((sources.index.match(/append-completion-radio-01/g) || []).length, 3);
+  assert.equal((sources.index.match(/append-completion-radio-01/g) || []).length, 2);
+  assert.equal((sources.index.match(/append-paint-priority-01/g) || []).length, 4);
   assert.ok((sources.listHtml.match(/public-ui-refinement-patch-02/g) || []).length >= 2);
   assert.equal((sources.index.match(/version-row-layout-patch-02/g) || []).length, 0);
   assert.equal((sources.listHtml.match(/version-row-layout-patch-02/g) || []).length, 0);
@@ -594,8 +595,8 @@ check("R4B2b does not use clipping or visual workarounds", () => {
 
 check("reviewed production JavaScript set includes public review, comment, and progress helpers", () => {
   assert.equal(productionJsFiles.length, 35);
-  assert.equal(sha256(sources.progressThumbnail), "e2dbcee8975d7b95341875d1c4962fd2904a81873fd4cf7dbdbe757004a58bb6");
-  assert.equal(sha256(productionJsAggregate), "ea6233c0a38ebc1cdef7b43377b1d0219496828d1d48f4965792a497334a9ee9");
+  assert.equal(sha256(sources.progressThumbnail), "a7df901c196e98b6aab3fd3b71fbcda61e78a6f29fa97fefa361494767762353");
+  assert.equal(sha256(productionJsAggregate), "4421d8294cba7819b93e2c7645dd1c2cec56ea726d5c4bbdb1525f90497e57d9");
 });
 
 check("all known CSS issues are documented as resolved", () => {

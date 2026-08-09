@@ -287,11 +287,11 @@ round(塗られた標準化ブロック数のunion / 標準化ブロック総数
 
 - 初回投稿では完成版radioをdisabledとし、初回通常版を完成版として保存しない。
 - 追記投稿では制作途中と完成版の2つのradioを選択可能にし、完成済み没譜面radioをdisabledとする。独立した「完成版にする」ボタンは表示しない。
-- 完成版を選択した時点で譜面解析が完了していれば、選択直前のprogressMap全体、layers/ranges、色と透明ブロック、進捗度、編集中layer状態をメモリ上のdeep copyとして保持し、未塗りブロックをすべて塗って `progress=100` にする。手動の塗り範囲や選択前進捗の下限は要求しない。
+- 完成版を選択した時点で譜面解析が完了していれば、選択直前のprogressMap全体、layers/ranges、色と透明ブロック、進捗度、編集中layer状態をメモリ上のdeep copyとして保持する。今回の手動塗りは`followup` layerのまま維持し、親にも手動にも含まれない未作成ブロックだけを別の`completion_fill` layerで補完して `progress=100` にする。手動の塗り範囲や選択前進捗の下限は要求しない。
 - ファイル解析前に完成版を選んだ場合は選択を維持し、解析成功後に同じ自動全塗り処理を適用する。解析中・解析失敗の状態では投稿を許可しない。
 - 完成版指定中は進捗ブロック編集を無効化し、制作途中へ戻す必要があることを常時表示する。制作途中を選ぶとsnapshotから色、ranges、透明ブロック、進捗度、編集状態を選択直前と同一の状態へ戻してCanvasを再描画し、snapshotを破棄する。
 - ファイル変更/解除、追記対象変更、追記キャンセル、form reset、投稿成功では、完成版指定用snapshotを破棄し、新しいフォーム状態から判定し直す。
-- 追記投稿では今回追記layerを `completion_fill` とし、選択直前の今回layer rangesを検証用 `completionBaseRanges` として送る。Workerはflat ranges、親mapとの格子一致、全layerのunionが100%であることを検証し、保存するprogressMapから一時検証値を除外する。
+- 追記投稿で完成版を選択した場合は、今回の手動`followup` layerを先に、未作成箇所だけの`completion_fill` layerを最後に送る。選択直前の手動rangesは検証用`completionBaseRanges`としても送る。WorkerはDB上の親mapを正本として親layerを復元し、flat ranges、親mapとの格子一致、送信layerのunionが100%であることを検証したうえで、手動`followup`、自動`completion_fill`を分離して保存し、一時検証値を除外する。旧Pagesが手動分と自動補完分を1つの`completion_fill`へまとめて送った場合も、`completionBaseRanges`から同じ保存形へ正規化する。
 - 送信直前にも、追記モード、選択ファイル、解析完了、有効なprogressMap、snapshot、`progress=100`、非没譜面を再確認する。不整合時はAPIへ送信せず、ファイルの再選択を案内する。Pages側の追加検証はWorker側の検証を代替しない。
 - 完成版指定を経由せず、未完成親から送られた `progress=100` は完成版として保存しない。
 
@@ -379,6 +379,7 @@ Workerはmultipart解析後かつファイルhash・BMS解析より前に親を�
 - 初回投稿では1layerでよい。
 - 追記投稿では親versionまでのlayerを維持し、今回追記分を最後のlayerとして保存する。
 - Workerは追記投稿保存時、最後のlayerの `versionId` を今回作成したversion IDへ置き換える。
+- 完成版の追記だけは、今回の手動`followup`と完成時自動補完`completion_fill`の2layerを末尾へ保存し、両方の`versionId`を今回version IDとする。自動補完rangesは親・今回手動のunionに含まれないブロックだけとし、重複させない。
 - 追記投稿では、未完成の親versionについて通常の`followup` layerでunionが同じ塗り範囲のままなら `PROGRESS_MAP_UNCHANGED` で拒否する。完成済みの親versionへの通常子も新しい子layerが1区間以上必要とする。明示的な`completion_fill`は自動全塗りを表すため、選択前の手動rangesが0件でも受け付ける。
 
 layerの `kind` 候補:
@@ -387,6 +388,8 @@ layerの `kind` 候補:
 - `followup`
 - `completion_fill`
 - `rejected_auto_fill`
+
+色の反映順はlayer配列の単純な後勝ちではなく、意味上の優先順位を使用する。`followup`の手動塗りを最優先、親versionまでの`initial`／`followup`を次点、`completion_fill`を最低優先とする。同じ優先度では後のlayerを優先する。これにより親で塗られたブロックも今回の手動色へ変更でき、完成指定は親にも今回手動にも含まれない箇所だけを補完する。`rejected_auto_fill`は没譜面の全体表現として最優先とする。
 
 ## progressImage PNG
 

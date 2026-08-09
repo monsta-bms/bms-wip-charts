@@ -738,10 +738,10 @@ async function testAppendSubmissions() {
           versionId: "client-completion-placeholder",
           color: "#2468a2",
           kind: "completion_fill",
-          ranges: [[1, blockCount - 1]]
+          ranges: [[0, blockCount - 1]]
         }
       ],
-      completionBaseRanges: [],
+      completionBaseRanges: [[0, 1]],
       progress: 100
     };
     const response = await chartVersionsModule.handleChartVersionsRoute(
@@ -752,9 +752,31 @@ async function testAppendSubmissions() {
     const body = await response.json();
     assert.equal(response.status, 201, JSON.stringify(body));
     assert.equal(body.completed, true);
-    const child = await first("SELECT progress, completed_at FROM versions WHERE id = ?", body.versionId);
+    const child = await first("SELECT progress, progress_map_json, completed_at FROM versions WHERE id = ?", body.versionId);
     assert.equal(child.progress, 100);
     assert.notEqual(child.completed_at, null);
+    const storedCompletionMap = JSON.parse(child.progress_map_json);
+    assert.deepEqual(storedCompletionMap.layers, [
+      {
+        versionId: parent.versionId,
+        color: "#1f7a5c",
+        kind: "initial",
+        ranges: [[0, 0]]
+      },
+      {
+        versionId: body.versionId,
+        color: "#2468a2",
+        kind: "followup",
+        ranges: [[0, 1]]
+      },
+      {
+        versionId: body.versionId,
+        color: "#1f7a5c",
+        kind: "completion_fill",
+        ranges: [[2, blockCount - 1]]
+      }
+    ], "manual child paint must remain above parent paint and completion fill must cover only unresolved blocks");
+    assert.equal("completionBaseRanges" in storedCompletionMap, false);
     const metadata = await metadataFor(body.versionId);
     assert.equal(metadata.source_subtitle, "Completion Raw Subtitle");
     assert.equal(metadata.status, "succeeded");

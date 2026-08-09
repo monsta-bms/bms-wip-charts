@@ -412,6 +412,7 @@
       contributorLabel: "未着手",
       colorLabel: "未着手",
       layerIndex: null,
+      paintPriority: -1,
       painted: false
     }));
     const paintedIndexes = new Set();
@@ -426,6 +427,7 @@
       const colorLabel = getLayerColorLabel(layer, layerIndex);
       const contributorLabel = getLayerContributorLabel(layer, layerIndex, context);
       const fill = resolveLayerFill(layer, layerIndex, { versionId, role: layer?.kind || "list" });
+      const paintPriority = window.BmsProgressLayerColors?.getLayerPaintPriority?.(layer) ?? 2;
       let layerTouched = false;
 
       for (const [rangeIndex, range] of layer.ranges.entries()) {
@@ -451,6 +453,9 @@
         layerTouched = true;
         for (let index = safeStart; index <= safeEnd; index += 1) {
           paintedIndexes.add(index);
+          if (paintPriority < blockStates[index].paintPriority) {
+            continue;
+          }
           blockStates[index] = {
             ...blockStates[index],
             fill,
@@ -458,6 +463,7 @@
             contributorLabel,
             colorLabel,
             layerIndex,
+            paintPriority,
             painted: true
           };
         }

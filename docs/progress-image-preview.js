@@ -82,9 +82,12 @@
 
   function resolveLayerRole(layer, layerIndex, layerCount, contextMode) {
     if (contextMode === "visible-append" || contextMode === "append") {
-      return layerIndex === layerCount - 1 && String(layer?.kind || "") !== "parent_preview"
-        ? "current"
-        : "parent";
+      const kind = String(layer?.kind || "");
+      const versionId = String(layer?.versionId || "");
+      if (kind === "completion_fill") return "";
+      if (kind === "parent_preview") return "parent";
+      if (kind === "followup" && (versionId === "pending" || versionId === "preview-current")) return "current";
+      return layerIndex === layerCount - 1 ? "current" : "parent";
     }
 
     return "";
@@ -133,6 +136,7 @@
   function collectLayerPaint(progressMap, totalBlocks, contextMode) {
     const paintedIndexes = new Set();
     const blockColorByIndex = new Map();
+    const blockPriorityByIndex = new Map();
 
     if (!Array.isArray(progressMap.layers)) {
       throw new Error("progressMap.layers is missing.");
@@ -145,6 +149,7 @@
       }
 
       const fillColor = getLayerFillColor(layer, layerIndex, progressMap.layers.length, contextMode);
+      const paintPriority = window.BmsProgressLayerColors?.getLayerPaintPriority?.(layer) ?? 2;
       layer.ranges.forEach((range, rangeIndex) => {
         const normalizedRange = normalizeRange(range);
         if (!normalizedRange) {
@@ -157,7 +162,11 @@
         const safeEnd = Math.min(totalBlocks - 1, end);
         for (let index = safeStart; index <= safeEnd; index += 1) {
           paintedIndexes.add(index);
+          if (paintPriority < (blockPriorityByIndex.get(index) ?? -1)) {
+            continue;
+          }
           blockColorByIndex.set(index, fillColor);
+          blockPriorityByIndex.set(index, paintPriority);
         }
       });
     });
@@ -525,8 +534,10 @@
     const blocks = blockElements.map(blockFromElement);
     const parentIndexes = new Set();
     const currentIndexes = new Set();
+    const completionIndexes = new Set();
     const initialIndexes = new Set();
     const appendMode = document.querySelector(".submit-panel")?.classList.contains("is-append-mode");
+    const completionRequested = appendMode && Boolean(document.querySelector("#submissionStateCompleted")?.checked);
     const rejected = Boolean(document.querySelector("#isRejected")?.checked);
     const followupIndex = appendMode ? getCurrentAppendFollowupIndex() : 0;
 
@@ -536,6 +547,7 @@
         : fallbackIndex;
       const parentPainted = blockElement.classList.contains("is-parent-painted");
       const currentPainted = blockElement.classList.contains("is-current-painted");
+      const completionPainted = blockElement.classList.contains("is-completion-painted");
       const painted = blockElement.classList.contains("is-painted");
 
       if (appendMode) {
@@ -544,6 +556,9 @@
         }
         if (currentPainted) {
           currentIndexes.add(index);
+        }
+        if (completionPainted) {
+          completionIndexes.add(index);
         }
         return;
       }
@@ -568,6 +583,14 @@
         kind: "followup",
         ranges: compressRanges(currentIndexes)
       });
+      if (completionRequested) {
+        layers.push({
+          versionId: "preview-completion",
+          color: getLayerStorageColor({ kind: "completion_fill" }, 2, {}),
+          kind: "completion_fill",
+          ranges: compressRanges(completionIndexes)
+        });
+      }
     } else {
       const layerKind = rejected ? "rejected_auto_fill" : "initial";
       layers.push({
@@ -579,7 +602,7 @@
     }
 
     const progressInput = document.querySelector("#progress");
-    const union = new Set([...parentIndexes, ...currentIndexes, ...initialIndexes]);
+    const union = new Set([...parentIndexes, ...currentIndexes, ...completionIndexes, ...initialIndexes]);
     const progress = Number.isFinite(Number(progressInput?.value))
       ? Number(progressInput.value)
       : Math.round((union.size / blockElements.length) * 100);

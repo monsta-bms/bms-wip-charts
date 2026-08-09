@@ -1084,7 +1084,7 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 初回没譜面はprogress=100でも`completed=false`, `completedAt=null`であり、完成版と混同しないこと。
 - 追記の`isRejected=true`は`FOLLOWUP_REJECTED_NOT_ALLOWED`で拒否し、追記フォームのcheckboxもdisabled・未選択であること。
 - 完成済み親への通常子で`ranges=[]`は`PROGRESS_MAP_UNCHANGED`となり、「追記する進捗範囲を1つ以上選択してください。」と表示されること。
-- 完成済み親から`completion_fill`を送る場合も、押下前の正規化済み`completionBaseRanges`が空なら`PROGRESS_MAP_UNCHANGED`で拒否されること。
+- 完成済み親から明示的な`completion_fill`を送る場合は、押下前の正規化済み`completionBaseRanges`が空でも完成状態の維持として受け付け、手動空layerと自動補完空layerを保持すること。
 - 完成済み親への通常子は、正規化後の子レイヤーに有効なrangeが1件以上あればunionが100%のままでも追記できること。
 - 完成済み親への通常子で逆転、範囲外、不正形式のrangeだけを送った場合は既存の進捗mapエラーで拒否されること。現行rangeは両端を含むブロック番号のため`[n,n]`は1ブロックの有効rangeとして維持すること。
 - 初回没譜面は`rejected_auto_fill`で全区間へ正規化される既存挙動を維持すること。
@@ -1111,13 +1111,15 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 初回の完成版radioは常にdisabledで、通常初回のprogress=100は`INITIAL_COMPLETION_NOT_ALLOWED`になること。
 - 追記時は制作途中と完成版radioがともにenabled、完成済み没譜面radioがdisabledとなり、独立した完成版buttonがDOMに存在しないこと。
 - ファイル未選択または解析中に完成版を選択してもradio選択を維持し、解析成功後に自動全塗りを適用すること。解析失敗時は送信できないこと。
-- 完成版選択時に選択直前のprogressMap、layers/ranges、contributor色、透明ブロック、進捗度、編集中layer状態をメモリ上のdeep copyへ保持し、手動塗り0件・選択前進捗80%未満を含めて未塗りを`completion_fill`で埋め、progress=100にすること。snapshotがlocalStorage、FormData、D1、R2、生成PNGへ含まれないこと。
+- 完成版選択時に選択直前のprogressMap、layers/ranges、contributor色、透明ブロック、進捗度、編集中layer状態をメモリ上のdeep copyへ保持し、手動塗り0件・選択前進捗80%未満を含めて、親にも今回手動にも含まれない未作成箇所だけを`completion_fill`で埋め、progress=100にすること。親と重なる今回手動範囲も`followup`として保持し、手動 > 親 > 完成自動補完の色優先順位になること。snapshotがlocalStorage、FormData、D1、R2、生成PNGへ含まれないこと。
+- 完成版の送信では今回手動`followup`と自動`completion_fill`が別layerになり、Worker保存後も両layerのversionIdが新version ID、手動rangesが維持、自動rangesが親・手動と重複0であること。旧Pagesの単一`completion_fill`送信も`completionBaseRanges`から同じ形へ正規化されること。
+- 一覧サムネイルと進捗PNGはlayer順に依存せず、`followup`手動 > 親layer > `completion_fill`の優先順位で同じブロック色を決定すること。同優先度は後layerを優先し、没譜面の`rejected_auto_fill`は全体色を維持すること。
 - 完成版選択中は進捗ブロックを編集できず、制作途中へ戻す案内が表示されること。制作途中radioへ切り替えると色、ranges、透明ブロック、進捗度、編集状態が選択直前と同一に復元され、snapshotが破棄されること。
 - 完成版指定中のファイル変更/解除、追記対象変更、追記キャンセル、form reset、投稿成功で指定状態とsnapshotが破棄され、古いsnapshotが新しいファイルや対象へ適用されないこと。
 - ファイル未選択、解析中、解析失敗、設定可能、完成版指定中で状態バッジと説明文が動的に切り替わり、`aria-live=polite`でフォーカスを奪わないこと。
 - 完成版指定中の送信直前に、追記モード、選択ファイル、解析完了、有効なprogressMap、snapshot、progress=100、非没譜面を再検証し、不整合時はAPIへ送信せず「完成版の状態を確認できません。譜面ファイルを選択し直してください。」と表示すること。
 - 完成版指定の解除後は未完成扱いへ戻り、追記受付がchecked・disabled・trueへ戻ること。同一フォーム内で再度完成版を指定した場合だけ、完成版用の追記受付選択を再利用できること。
-- 追記の選択前進捗0%・79%・80%・100%で完成版radioを選ぶと、`completion_fill`と選択前の今回rangesを表す`completionBaseRanges`を送り、Worker再計算progress=100で保存できること。
+- 追記の選択前進捗0%・79%・80%・100%で完成版radioを選ぶと、今回手動`followup`、未作成箇所だけの`completion_fill`、選択前の今回rangesを表す`completionBaseRanges`を送り、Worker再計算progress=100で保存できること。
 - `completionBaseRanges`が配列でない場合やmap構造が不正なら`INVALID_PROGRESS_MAP`、未完成親から完成版選択なしで100%なら`COMPLETION_ACTION_REQUIRED`になること。
 - 初回通常版と追記未完成版の追記受付はchecked・disabled・true、初回没譜面は初回OFF、追記完成版は初回ONで設定可能になること。
 - 初回没譜面または追記完成版で利用者が選んだ値は同一フォーム内の状態往復で復元され、フォーム初期化、明示reset、投稿成功、追記対象切替、追記キャンセルで破棄されること。

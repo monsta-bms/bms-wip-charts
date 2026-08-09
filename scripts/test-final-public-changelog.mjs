@@ -9,7 +9,7 @@ const articles = [...html.matchAll(/<article\b[^>]*\bdata-copy-entry="([A-Z0-9_]
   .map((match) => ({ id: match[1], html: match[2] }));
 const manifestEntries = manifest.changelogEntries ?? [];
 
-assert.equal(articles.length, 21, "公開changelogは21 entryであること");
+assert.equal(articles.length, 22, "公開changelogは22 entryであること");
 assert.equal(manifestEntries.length, articles.length, "manifest entry数が一致すること");
 assert.equal(new Set(articles.map((entry) => entry.id)).size, articles.length, "ENTRY IDが重複しないこと");
 assert.deepEqual(manifestEntries.map((entry) => entry.id), articles.map((entry) => entry.id), "manifestとHTMLのENTRY順が一致すること");
@@ -52,13 +52,20 @@ for (const phrase of ["正式公開を開始しました", "公開終了の予�
   assert.ok(launch.includes(phrase), `正式公開entryに「${phrase}」が含まれること`);
 }
 
-const latest = articles.find((entry) => entry.id === "CHANGELOG_20260807")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
+const latest = articles.find((entry) => entry.id === "CHANGELOG_20260809")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
+for (const phrase of [
+  "追記投稿の入力と進捗色を修正しました",
+  "ファイルをドロップしたあと、差分情報以降の入力欄が開かない不具合を修正",
+  "制作途中・完成版を直接選べるようにし",
+  "今回手動で塗った箇所の色を保ち"
+]) assert.ok(latest.includes(phrase), `最新entryに「${phrase}」を掲載すること`);
+const publicUiTouchup = articles.find((entry) => entry.id === "CHANGELOG_20260807")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
 for (const phrase of [
   "コメント・進捗・一覧表示を整えました",
   "投稿者コメントを読みやすさを保ちつつ落ち着いた表示",
   "進捗率の色を投稿状態と揃え",
   "投稿一覧ではコメントを広く、操作をコンパクトに表示"
-]) assert.ok(latest.includes(phrase), `最新entryに「${phrase}」を掲載すること`);
+]) assert.ok(publicUiTouchup.includes(phrase), `2026-08-07 entryに「${phrase}」を掲載すること`);
 const formUsability = articles.find((entry) => entry.id === "CHANGELOG_20260805")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
 for (const phrase of [
   "投稿フォームと一覧の操作性を改善",

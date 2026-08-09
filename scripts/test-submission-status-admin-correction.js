@@ -19,6 +19,9 @@ const files = {
   chartVersions: read("worker/src/routes/chartVersions.ts"),
   adminRoute: read("worker/src/routes/adminVersionStatus.ts"),
   progressMap: read("worker/src/utils/progressMap.ts"),
+  progressColors: read("docs/progress-layer-colors.js"),
+  progressThumbnail: read("docs/progress-thumbnail-list.js"),
+  progressPreview: read("docs/progress-image-preview.js"),
   difficultyHtml: read("worker/src/utils/difficultyTableHtml.ts"),
   guide: read("docs/guide.html"),
   changelog: read("docs/changelog.html")
@@ -77,9 +80,15 @@ check("append completion uses the completed radio instead of a separate button",
   assert.match(files.branchAppend, /setAppendCompletion\(true\)/u);
 });
 check("completed radio fills every unpainted append block without an 80 percent gate", () => {
-  assert.match(files.branchAppend, /appendState\.layerKind = "completion_fill"[\s\S]*appendState\.currentPainted\.add\(block\.index\)/u);
+  assert.match(files.branchAppend, /appendState\.layerKind = "completion_fill"[\s\S]*!appendState\.currentPainted\.has\(block\.index\)[\s\S]*!appendState\.parentPainted\.has\(block\.index\)[\s\S]*appendState\.completionPainted\.add\(block\.index\)/u);
+  assert.match(files.branchAppend, /kind: "followup"[\s\S]*ranges: compressRanges\(appendState\.currentPainted\)[\s\S]*kind: "completion_fill"[\s\S]*ranges: compressRanges\(appendState\.completionPainted\)/u);
   assert.doesNotMatch(files.branchAppend, /calculateProgress\(\)\s*<\s*80/u);
   assert.doesNotMatch(files.progressMap, /completionBaseProgress\s*<\s*80/u);
+});
+check("manual paint outranks parent and completion fill in every public renderer", () => {
+  assert.match(files.progressColors, /kind === "followup"\) return 3[\s\S]*kind === "completion_fill"\) return 1/u);
+  assert.match(files.progressThumbnail, /getLayerPaintPriority[\s\S]*paintPriority < blockStates\[index\]\.paintPriority/u);
+  assert.match(files.progressPreview, /getLayerPaintPriority[\s\S]*paintPriority < \(blockPriorityByIndex\.get\(index\)/u);
 });
 
 check("管理画面sectionを追加", () => assert.ok(files.admin.includes("投稿状態の修正")));

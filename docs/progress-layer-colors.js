@@ -41,6 +41,14 @@
     return kind === "followup" || color === "#2563eb" || color === "#4a90e2";
   }
 
+  function getLayerPaintPriority(layer = {}) {
+    const kind = String(layer?.kind || "").toLowerCase();
+    if (kind === "rejected_auto_fill") return 4;
+    if (kind === "followup") return 3;
+    if (kind === "completion_fill") return 1;
+    return 2;
+  }
+
   function getFollowupIndex(layer, index, context) {
     if (Number.isInteger(Number(context?.followupIndex))) {
       return Math.max(0, Number(context.followupIndex));
@@ -123,6 +131,7 @@
   window.BmsProgressLayerColors = {
     PROGRESS_LAYER_COLORS,
     getFollowupColor,
+    getLayerPaintPriority,
     resolveProgressLayerStyle,
     getLayerStorageColor,
     getLayerFillColor,

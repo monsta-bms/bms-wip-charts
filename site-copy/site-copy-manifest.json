@@ -1291,7 +1291,7 @@
           "deploymentTarget": "PAGES",
           "blockId": "MANAGEMENT_CONFIRMATIONS",
           "locator": {
-            "stringOrdinal": 207,
+            "stringOrdinal": 213,
             "beforeAnchorSha256": "017a666af7ac8323f76ec55c38affb05e093d982e404b29c63e74db20ca1f305",
             "afterAnchorSha256": "f5df3d5d74d54c7fd586db34cc0339391d36f4db7865682b006d547fe30eb479"
           },
@@ -1445,6 +1445,13 @@
     }
   ],
   "changelogEntries": [
+    {
+      "id": "CHANGELOG_20260809",
+      "sourcePath": "docs/changelog.html",
+      "deploymentTarget": "PAGES",
+      "allowEmpty": false,
+      "sourceValueSha256": "9ebce2d156d98b2e373b95e52a4e35b99f2ec7bcf315c922ed8529fef2194466"
+    },
     {
       "id": "CHANGELOG_20260807",
       "sourcePath": "docs/changelog.html",
