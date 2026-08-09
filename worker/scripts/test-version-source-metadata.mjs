@@ -553,7 +553,7 @@ function progressMapFromAnalysis(analysis, parentVersionId, childRange = null) {
   assert.ok(analysis.standardBlocks.length >= 2);
   const layers = [{
     versionId: parentVersionId,
-    color: "#1f7a5c",
+    color: "#2E8B57",
     kind: "initial",
     ranges: [[0, 0]]
   }];
@@ -696,6 +696,62 @@ async function testAppendSubmissions() {
     assert.equal(version.subartist, parent.displaySubartist);
     assert.notEqual(await env.FILES.head(version.r2_key), null);
     assert.equal((await first("SELECT COUNT(*) AS count FROM post_logs WHERE version_id = ? AND result = 'accepted'", body.versionId)).count, 1);
+    const storedMap = JSON.parse((await first("SELECT progress_map_json FROM versions WHERE id = ?", body.versionId)).progress_map_json);
+    assert.equal(storedMap.layers.at(-1).color, "#E39D3C");
+  });
+
+  await check("follow-up layer color advances from orange to blue by append depth", async () => {
+    const childBytes = Buffer.from([
+      "#PLAYER 1",
+      "#TITLE Append Song",
+      "#ARTIST Append Artist",
+      "#BPM 120",
+      "#00111:01",
+      "#00611:01",
+      `#COMMENT color-sequence-${++sequence}`
+    ].join("\r\n"), "utf8");
+    const parent = await seedAppendParent(childBytes);
+    const firstResponse = await chartVersionsModule.handleChartVersionsRoute(
+      makeAppendRequest(parent, childBytes),
+      env,
+      parent.chartId
+    );
+    const firstBody = await firstResponse.json();
+    assert.equal(firstResponse.status, 201, JSON.stringify(firstBody));
+    const firstStoredMap = JSON.parse((await first(
+      "SELECT progress_map_json FROM versions WHERE id = ?",
+      firstBody.versionId
+    )).progress_map_json);
+    assert.equal(firstStoredMap.layers.at(-1).color, "#E39D3C");
+
+    const secondMap = {
+      ...firstStoredMap,
+      layers: [
+        ...firstStoredMap.layers,
+        {
+          versionId: "client-second-child-placeholder",
+          color: "#000000",
+          kind: "followup",
+          ranges: [[2, 2]]
+        }
+      ]
+    };
+    const secondBytes = Buffer.concat([
+      childBytes,
+      Buffer.from(`\r\n#COMMENT color-sequence-second-${++sequence}`, "utf8")
+    ]);
+    const secondResponse = await chartVersionsModule.handleChartVersionsRoute(
+      makeAppendRequest({ ...parent, versionId: firstBody.versionId }, secondBytes, { progressMap: secondMap }),
+      env,
+      parent.chartId
+    );
+    const secondBody = await secondResponse.json();
+    assert.equal(secondResponse.status, 201, JSON.stringify(secondBody));
+    const secondStoredMap = JSON.parse((await first(
+      "SELECT progress_map_json FROM versions WHERE id = ?",
+      secondBody.versionId
+    )).progress_map_json);
+    assert.equal(secondStoredMap.layers.at(-1).color, "#4A90E2");
   });
 
   await check("ZIP append stores metadata parsed from the uploaded ZIP child", async () => {
@@ -759,19 +815,19 @@ async function testAppendSubmissions() {
     assert.deepEqual(storedCompletionMap.layers, [
       {
         versionId: parent.versionId,
-        color: "#1f7a5c",
+        color: "#2E8B57",
         kind: "initial",
         ranges: [[0, 0]]
       },
       {
         versionId: body.versionId,
-        color: "#2468a2",
+        color: "#E39D3C",
         kind: "followup",
         ranges: [[0, 1]]
       },
       {
         versionId: body.versionId,
-        color: "#1f7a5c",
+        color: "#E39D3C",
         kind: "completion_fill",
         ranges: [[2, blockCount - 1]]
       }
@@ -856,6 +912,47 @@ async function testAppendSubmissions() {
       parent.chartId
     );
     assert.equal(siblingResponse.status, 201, await siblingResponse.text());
+  });
+
+  await check("manual 100 percent append is stored as completed without completion_fill", async () => {
+    const completionBytes = Buffer.from([
+      "#PLAYER 1",
+      "#TITLE Append Song",
+      "#ARTIST Append Artist",
+      "#BPM 120",
+      "#00111:01",
+      "#00611:01",
+      `#COMMENT manual-completion-${++sequence}`
+    ].join("\r\n"), "utf8");
+    const parent = await seedAppendParent(completionBytes);
+    const blockCount = parent.analyzed.analysis.standardBlocks.length;
+    const manualCompletionMap = {
+      ...parent.parentMap,
+      layers: [
+        ...parent.parentMap.layers,
+        {
+          versionId: "client-manual-completion-placeholder",
+          color: "#000000",
+          kind: "followup",
+          ranges: [[0, blockCount - 1]]
+        }
+      ],
+      progress: 100
+    };
+    const response = await chartVersionsModule.handleChartVersionsRoute(
+      makeAppendRequest(parent, completionBytes, { progressMap: manualCompletionMap }),
+      env,
+      parent.chartId
+    );
+    const body = await response.json();
+    assert.equal(response.status, 201, JSON.stringify(body));
+    assert.equal(body.completed, true);
+    const child = await first("SELECT progress, progress_map_json, completed_at FROM versions WHERE id = ?", body.versionId);
+    assert.equal(child.progress, 100);
+    assert.notEqual(child.completed_at, null);
+    const storedMap = JSON.parse(child.progress_map_json);
+    assert.equal(storedMap.layers.at(-1).kind, "followup");
+    assert.equal(storedMap.layers.at(-1).color, "#E39D3C");
   });
 
   await check("completed append may explicitly remain completed without manual child painting", async () => {

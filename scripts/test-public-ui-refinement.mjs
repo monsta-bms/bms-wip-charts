@@ -99,7 +99,7 @@ check("append mode offers incomplete and completed status radios without a compl
 check("post form tooltip keeps viewport positioning after section reveal", () => {
   assert.match(sources.formCss, /\.form-section\[data-post-requires-file\]:not\(\[hidden\]\) \{\s*animation: post-section-reveal 160ms ease-out;\s*\}/u);
   assert.doesNotMatch(sources.formCss, /animation: post-section-reveal[^;]*(?:both|forwards)/u);
-  assert.match(sources.index, /\.\/post-form-ui\.css\?v=progress-tooltip-radio-inset-01/u);
+  assert.match(sources.index, /\.\/post-form-ui\.css\?v=progress-layer-sequence-01/u);
 });
 check("submission state choices keep a five pixel inline inset", () => {
   assert.match(sources.formCss, /\.submission-state-choice \{[^}]*padding-inline-start: 5px;/su);

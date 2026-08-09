@@ -140,10 +140,10 @@ check("render lifecycle events remain", () => {
 });
 
 check("modified scripts keep their order and reviewed cache keys", () => {
-  const appIndex = indexHtml.indexOf("./app.js?v=append-completion-radio-01");
-  const progressIndex = indexHtml.indexOf("./progress-thumbnail-list.js?v=append-paint-priority-01");
+  const appIndex = indexHtml.indexOf("./app.js?v=progress-layer-sequence-01");
+  const progressIndex = indexHtml.indexOf("./progress-thumbnail-list.js?v=progress-layer-sequence-01");
   const pipelineIndex = indexHtml.indexOf("./chart-render-pipeline.js?v=chart-render-pipeline-r4a-01");
-  const branchAppendIndex = indexHtml.indexOf("./branch-append-ui.js?v=append-paint-priority-01");
+  const branchAppendIndex = indexHtml.indexOf("./branch-append-ui.js?v=progress-layer-sequence-01");
   assert.ok(pipelineIndex >= 0 && pipelineIndex < appIndex);
   assert.ok(appIndex < progressIndex && progressIndex < branchAppendIndex);
   assert.ok(indexHtml.includes("./favorites-list.js?v=completed-parent-access-01"));

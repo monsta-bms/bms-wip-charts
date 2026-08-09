@@ -607,7 +607,7 @@ WHERE file_deleted_at IS NOT NULL;
 - 未着手blockが薄い緑/ミントで見えること。
 - 0ノーツblockでも最低高さが表示されること。
 - 塗り済み0ノーツblockは未着手0ノーツblockより見分けやすいこと。
-- 複数投稿者のlayerが緑、青、紫、橙、赤系の色で区別できること。
+- 複数投稿者のlayerが初回緑、追記1回目オレンジ、以後青、赤、紫の順で区別できること。初回没譜面の自動全塗りは初回手動塗りと同じ緑であること。
 - サムネイルhoverで、進捗、作成済みblock数、参加者数が確認できること。
 - サムネイルhoverで、色と投稿者/追記者の対応が確認できること。
 - `progressMap.layers[].versionId` と同じchart内のversion authorが対応付けられること。
@@ -1111,7 +1111,7 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 初回の完成版radioは常にdisabledで、通常初回のprogress=100は`INITIAL_COMPLETION_NOT_ALLOWED`になること。
 - 追記時は制作途中と完成版radioがともにenabled、完成済み没譜面radioがdisabledとなり、独立した完成版buttonがDOMに存在しないこと。
 - ファイル未選択または解析中に完成版を選択してもradio選択を維持し、解析成功後に自動全塗りを適用すること。解析失敗時は送信できないこと。
-- 完成版選択時に選択直前のprogressMap、layers/ranges、contributor色、透明ブロック、進捗度、編集中layer状態をメモリ上のdeep copyへ保持し、手動塗り0件・選択前進捗80%未満を含めて、親にも今回手動にも含まれない未作成箇所だけを`completion_fill`で埋め、progress=100にすること。親と重なる今回手動範囲も`followup`として保持し、手動 > 親 > 完成自動補完の色優先順位になること。snapshotがlocalStorage、FormData、D1、R2、生成PNGへ含まれないこと。
+- 完成版選択時に選択直前のprogressMap、layers/ranges、contributor色、透明ブロック、進捗度、編集中layer状態をメモリ上のdeep copyへ保持し、手動塗り0件・選択前進捗80%未満を含めて、親にも今回手動にも含まれない未作成箇所だけを`completion_fill`で埋め、progress=100にすること。親と重なる今回手動範囲も`followup`として保持し、手動 > 親 > 完成自動補完の描画優先順位になること。今回手動と完成自動補完は追記回に対応する同じ色で、完成補完だけ緑へ戻らないこと。snapshotがlocalStorage、FormData、D1、R2、生成PNGへ含まれないこと。
 - 完成版の送信では今回手動`followup`と自動`completion_fill`が別layerになり、Worker保存後も両layerのversionIdが新version ID、手動rangesが維持、自動rangesが親・手動と重複0であること。旧Pagesの単一`completion_fill`送信も`completionBaseRanges`から同じ形へ正規化されること。
 - 一覧サムネイルと進捗PNGはlayer順に依存せず、`followup`手動 > 親layer > `completion_fill`の優先順位で同じブロック色を決定すること。同優先度は後layerを優先し、没譜面の`rejected_auto_fill`は全体色を維持すること。
 - 完成版選択中は進捗ブロックを編集できず、制作途中へ戻す案内が表示されること。制作途中radioへ切り替えると色、ranges、透明ブロック、進捗度、編集状態が選択直前と同一に復元され、snapshotが破棄されること。
@@ -1120,14 +1120,14 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 - 完成版指定中の送信直前に、追記モード、選択ファイル、解析完了、有効なprogressMap、snapshot、progress=100、非没譜面を再検証し、不整合時はAPIへ送信せず「完成版の状態を確認できません。譜面ファイルを選択し直してください。」と表示すること。
 - 完成版指定の解除後は未完成扱いへ戻り、追記受付がchecked・disabled・trueへ戻ること。同一フォーム内で再度完成版を指定した場合だけ、完成版用の追記受付選択を再利用できること。
 - 追記の選択前進捗0%・79%・80%・100%で完成版radioを選ぶと、今回手動`followup`、未作成箇所だけの`completion_fill`、選択前の今回rangesを表す`completionBaseRanges`を送り、Worker再計算progress=100で保存できること。
-- `completionBaseRanges`が配列でない場合やmap構造が不正なら`INVALID_PROGRESS_MAP`、未完成親から完成版選択なしで100%なら`COMPLETION_ACTION_REQUIRED`になること。
+- `completionBaseRanges`が配列でない場合やmap構造が不正なら`INVALID_PROGRESS_MAP`になること。完成版radioを選ばず手動塗りでunionが100%へ到達した追記は、Pagesが完成版radioを自動選択し、直接APIでもWorkerが完成版として保存すること。
 - 初回通常版と追記未完成版の追記受付はchecked・disabled・true、初回没譜面は初回OFF、追記完成版は初回ONで設定可能になること。
 - 初回没譜面または追記完成版で利用者が選んだ値は同一フォーム内の状態往復で復元され、フォーム初期化、明示reset、投稿成功、追記対象切替、追記キャンセルで破棄されること。
 - 初回・追記のFormDataがdisabled状態でも確定後の`allowAppend=true/false`を明示送信し、投稿失敗後は現在値を維持すること。
 - `allowAppend`がdirty/beforeunload判定に含まれ、作者・パスワード・テーマなどのlocalStorageへ保存されないこと。
 - `allowAppend=true`の未完成・完成・没譜面に追記操作があり、完成非没譜面だけ既存確認dialogを表示すること。
 - `allowAppend=false`はversion情報側の`追記受付停止`バッジと読み上げ可能な理由を表示し、操作列は`DL / 追記停止 / …`の短い並びを維持すること。
-- completion判定は`completed_at`を正とし、完成版指定なしでunionが100%になった通常子を一覧・難易度表で完成版扱いしないこと。
+- completion判定は`completed_at`を正とし、Worker再計算でunionが100%になった追記子は`completed_at`を設定して一覧・難易度表で完成版扱いすること。
 - 投稿管理dialogに`追記受付：許可/停止`が読み取り専用で表示され、編集UI・保存API・新しい`post_logs.action`がないこと。
 - 390/760/1366/1920pxとwhite/default/darkでcheckbox、補足文、追記停止表示が読め、横overflowや既存見出しパネル崩れがないこと。
 - テーマ切替でcheckbox値、touched/dirty状態、選択file、追記対象、フォーム開閉状態が変化しないこと。

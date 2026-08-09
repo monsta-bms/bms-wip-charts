@@ -1,6 +1,7 @@
 import type { BmsAnalysis } from "./bms";
 
-const PROGRESS_MAP_COLOR = "#1f7a5c";
+const PROGRESS_MAP_COLOR = "#2E8B57";
+const FOLLOWUP_PROGRESS_MAP_COLORS = ["#E39D3C", "#4A90E2", "#D96C6C", "#8B6BD6"] as const;
 const MAX_PROGRESS_MAP_BLOCKS = 5000;
 
 type ProgressMapLayerKind = "initial" | "followup" | "completion_fill" | "rejected_auto_fill";
@@ -507,6 +508,16 @@ function normalizeLayerColor(value: unknown): string {
   return color ? color.slice(0, 32) : PROGRESS_MAP_COLOR;
 }
 
+function resolveNextFollowupColor(parentLayers: ProgressMapLayer[]): string {
+  const parentVersionCount = new Set(
+    parentLayers
+      .map((layer) => layer.versionId.trim())
+      .filter(Boolean)
+  ).size;
+  const followupIndex = Math.max(0, parentVersionCount - 1);
+  return FOLLOWUP_PROGRESS_MAP_COLORS[followupIndex % FOLLOWUP_PROGRESS_MAP_COLORS.length];
+}
+
 function normalizeVersionId(value: unknown, fallbackVersionId: string): string {
   if (typeof value !== "string") {
     return fallbackVersionId;
@@ -875,6 +886,7 @@ function normalizeAppendProgressMap(
   if (!parentLayers.ok) {
     return parentLayers;
   }
+  const childColor = resolveNextFollowupColor(parentLayers.layers);
 
   const childLayerIndex = normalizedLayers.layers.length - 1;
   const childLayer = normalizedLayers.layers[childLayerIndex];
@@ -918,7 +930,7 @@ function normalizeAppendProgressMap(
 
   let manualRanges: Array<[number, number]>;
   let completionRanges: Array<[number, number]> | null = null;
-  let manualColor = childLayer?.color ?? PROGRESS_MAP_COLOR;
+  const manualColor = childColor;
   if (childLayer?.kind === "completion_fill") {
     if (!Array.isArray(parsed.value.completionBaseRanges)) {
       return {
@@ -950,11 +962,6 @@ function normalizeAppendProgressMap(
     }
 
     manualRanges = normalizedCompletionBase.ranges;
-    const clientManualLayer = normalizedLayers.layers
-      .slice(parentLayers.layers.length, -1)
-      .reverse()
-      .find((layer) => layer.kind === "followup");
-    manualColor = clientManualLayer?.color ?? childLayer.color;
     const resolvedIndexes = new Set([
       ...parentLayers.paintedIndexes,
       ...collectRangeIndexes(manualRanges)
@@ -1031,7 +1038,7 @@ function normalizeAppendProgressMap(
   if (completionRanges) {
     layers.push({
       versionId,
-      color: PROGRESS_MAP_COLOR,
+      color: childColor,
       kind: "completion_fill",
       ranges: completionRanges
     });

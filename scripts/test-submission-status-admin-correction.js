@@ -67,7 +67,7 @@ check("初回制作途中allowAppend falseをWorkerが拒否", () => assert.matc
 check("初回没譜面はWorkerでprogress100", () => assert.match(files.charts, /storedProgress = isRejected \? 100 : progress\.value/u));
 check("初回没譜面allowAppendを指定可能", () => assert.match(files.charts, /parseAllowAppend\(form, !isRejected\)/u));
 check("追記没譜面を拒否", () => assert.match(files.chartVersions, /FOLLOWUP_REJECTED_NOT_ALLOWED/u));
-check("追記完成指定を維持", () => assert.match(files.chartVersions, /completionRequested/u));
+check("追記はWorker再計算100%で完成版になる", () => assert.match(files.chartVersions, /completionRequested = storedProgress === 100/u));
 check("append mode enables incomplete and completed radio choices", () => {
   assert.match(files.submission, /incomplete\.disabled = false/u);
   assert.match(files.submission, /completed\.disabled = !append/u);
@@ -89,6 +89,15 @@ check("manual paint outranks parent and completion fill in every public renderer
   assert.match(files.progressColors, /kind === "followup"\) return 3[\s\S]*kind === "completion_fill"\) return 1/u);
   assert.match(files.progressThumbnail, /getLayerPaintPriority[\s\S]*paintPriority < blockStates\[index\]\.paintPriority/u);
   assert.match(files.progressPreview, /getLayerPaintPriority[\s\S]*paintPriority < \(blockPriorityByIndex\.get\(index\)/u);
+});
+check("progress layer colors follow green, orange, blue, red, purple", () => {
+  assert.match(files.progressColors, /initial:[\s\S]*#2E8B57[\s\S]*followups:[\s\S]*#E39D3C[\s\S]*#4A90E2[\s\S]*#D96C6C[\s\S]*#8B6BD6/u);
+  assert.match(files.progressColors, /rejected:[\s\S]*#2E8B57/u);
+  assert.match(files.progressMap, /FOLLOWUP_PROGRESS_MAP_COLORS = \["#E39D3C", "#4A90E2", "#D96C6C", "#8B6BD6"\]/u);
+  assert.match(files.progressMap, /color: childColor,[\s\S]*kind: "completion_fill"/u);
+});
+check("manual 100 percent append auto-selects completed", () => {
+  assert.match(files.branchAppend, /appendState\.currentPainted\.size > 0[\s\S]*calculateProgress\(\) === 100[\s\S]*setAppendCompletion\(true\)/u);
 });
 
 check("管理画面sectionを追加", () => assert.ok(files.admin.includes("投稿状態の修正")));

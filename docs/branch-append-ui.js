@@ -1,7 +1,7 @@
 (() => {
-  const appendLayerColor = "#2563eb";
-  const parentLayerColor = "#1f7a5c";
-  const completionLayerColor = "#1f7a5c";
+  const initialLayerColor = "#2E8B57";
+  const parentLayerColor = initialLayerColor;
+  const fallbackFollowupColors = ["#E39D3C", "#4A90E2", "#D96C6C", "#8B6BD6"];
   const thumbnailMaxCells = 96;
   const allowedExtensions = new Set([".bms", ".bme", ".bml", ".zip"]);
 
@@ -221,6 +221,27 @@
     syncAppendPolicyReadiness({
       progress: Number.isFinite(Number(progress)) ? Number(progress) : calculateProgress()
     });
+  }
+
+  function getBranchDepth(branchPath) {
+    const parts = String(branchPath || "root").split("/").filter(Boolean);
+    return Math.max(0, parts[0] === "root" ? parts.length - 1 : parts.length);
+  }
+
+  function getCurrentFollowupIndex() {
+    return getBranchDepth(appendState.parentVersion?.branchPath || "root");
+  }
+
+  function getCurrentLayerColor() {
+    const followupIndex = getCurrentFollowupIndex();
+    return window.BmsProgressLayerColors?.getFollowupColor?.(followupIndex)?.stroke
+      || fallbackFollowupColors[followupIndex % fallbackFollowupColors.length];
+  }
+
+  function syncCurrentLayerColor() {
+    const color = window.BmsProgressLayerColors?.getFollowupColor?.(getCurrentFollowupIndex())?.fill
+      || getCurrentLayerColor();
+    document.documentElement.style.setProperty("--progress-fill-current", color);
   }
 
   function discardCompletionState() {
@@ -656,16 +677,17 @@
       kind: layer.kind || "initial",
       ranges: layer.ranges.map((range) => [range[0], range[1]])
     }));
+    const currentLayerColor = getCurrentLayerColor();
     layers.push({
       versionId: "pending",
-      color: appendLayerColor,
+      color: currentLayerColor,
       kind: "followup",
       ranges: compressRanges(appendState.currentPainted)
     });
     if (appendState.layerKind === "completion_fill") {
       layers.push({
         versionId: "pending",
-        color: completionLayerColor,
+        color: currentLayerColor,
         kind: "completion_fill",
         ranges: compressRanges(appendState.completionPainted)
       });
@@ -809,6 +831,14 @@
     appendState.dragMode = null;
     appendState.originalCurrentPainted = null;
     updateAppendDragHint();
+    if (
+      !restoreOriginal
+      && appendState.layerKind !== "completion_fill"
+      && appendState.currentPainted.size > 0
+      && calculateProgress() === 100
+    ) {
+      setAppendCompletion(true);
+    }
     if (appendState.currentPainted.size > 0 && !appendState.fileGridMismatch) {
       window.BmsPostErrorUi?.clearField?.("progressMap");
     }
@@ -962,6 +992,7 @@
     appendState.song = song;
     appendState.chart = chart;
     appendState.parentVersion = parentVersion;
+    syncCurrentLayerColor();
     appendState.chartId = chartId;
     appendState.parentVersionId = parentVersionId;
     appendState.fileAnalysisStatus = "empty";
@@ -1244,6 +1275,14 @@
       errors.push({ fieldKey, message, code });
     };
     const selectedFile = fileInput?.files?.[0];
+
+    if (
+      appendState.layerKind !== "completion_fill"
+      && appendState.currentPainted.size > 0
+      && calculateProgress() === 100
+    ) {
+      setAppendCompletion(true);
+    }
 
     if (!appendState.chartId || !appendState.parentVersionId) {
       addError("appendContext", "追記元の情報を確認できません。版ツリーから追記先を選び直してください。", "APPEND_CONTEXT_MISSING");

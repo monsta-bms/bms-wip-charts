@@ -1329,6 +1329,9 @@ function buildProgressMapPayload() {
   const paintedIndexes = [...progressMapState.paintedBlockIndexes]
     .filter((index) => Number.isInteger(index) && index >= 0 && index < targetBlockCount);
   const progress = Math.round((new Set(paintedIndexes).size / targetBlockCount) * 100);
+  const layerKind = isRejectedInput.checked ? "rejected_auto_fill" : progressMapState.layerKind;
+  const layerColor = window.BmsProgressLayerColors?.getLayerStorageColor?.({ kind: layerKind }, 0, {})
+    || "#2E8B57";
 
   return {
     schemaVersion: 2,
@@ -1340,8 +1343,8 @@ function buildProgressMapPayload() {
     layers: [
       {
         versionId: "pending",
-        color: "#1f7a5c",
-        kind: isRejectedInput.checked ? "rejected_auto_fill" : progressMapState.layerKind,
+        color: layerColor,
+        kind: layerKind,
         ranges: compressBlockIndexesToRanges(paintedIndexes)
       }
     ],

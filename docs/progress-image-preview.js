@@ -17,8 +17,8 @@
   const fallbackLayerColors = {
     initial: "#2E8B57",
     parent: "rgba(46, 139, 87, 0.32)",
-    current: "#4A90E2",
-    rejected: "#7A4A30",
+    current: "#E39D3C",
+    rejected: "#2E8B57",
     empty: "#CFE3DC",
     emptyRail: "#D8E8E2"
   };
@@ -490,10 +490,10 @@
     }
 
     if (context?.role === "current" || layer?.kind === "followup") {
-      return "#2563eb";
+      return "#E39D3C";
     }
 
-    return "#1f7a5c";
+    return "#2E8B57";
   }
 
   function getAppendParentBranchPath() {
@@ -584,9 +584,14 @@
         ranges: compressRanges(currentIndexes)
       });
       if (completionRequested) {
+        const completionColor = getLayerStorageColor(
+          { kind: "followup", followupIndex },
+          2,
+          { role: "current", followupIndex }
+        );
         layers.push({
           versionId: "preview-completion",
-          color: getLayerStorageColor({ kind: "completion_fill" }, 2, {}),
+          color: completionColor,
           kind: "completion_fill",
           ranges: compressRanges(completionIndexes)
         });

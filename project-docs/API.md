@@ -530,8 +530,8 @@ request:
 - 親versionは公開中、指定chart所属、`file_deleted_at IS NULL`、利用可能なprogressMapあり、`allow_append=1`を必須とする。子孫の完成状態と旧`collapsed_by_completion`は拒否理由にせず、`is_rejected=1`だけでも拒否しない。
 - 公開中の取り下げ、削除申請、通常DL停止は、それだけを理由に追記拒否しない。
 - 追記投稿の `isRejected=true` は `FOLLOWUP_REJECTED_NOT_ALLOWED` で拒否する。
-- 未完成の子versionは `allowAppend=true` 固定とし、falseは `APPEND_POLICY_LOCKED_FOR_INCOMPLETE` で拒否する。明示的な完成版だけtrue/falseを選択できる。項目がない旧Pagesではtrueとして扱う。
-- 完成版は最後の子layerが `completion_fill` で、Worker再計算progressが100の場合だけ成立する。選択前の手動塗り件数や進捗率に下限は設けず、`completionBaseRanges`はflat rangesとして検証する。WorkerはDB上の親layerを正本とし、`completionBaseRanges`を今回の手動`followup`、親と手動のどちらにも含まれない範囲を`completion_fill`として分離保存する。旧Pagesの単一`completion_fill`形式も同じ形へ正規化する。未完成親から完成指定なしで100%を送った場合は `COMPLETION_ACTION_REQUIRED` で拒否する。
+- 未完成の子versionは `allowAppend=true` 固定とし、falseは `APPEND_POLICY_LOCKED_FOR_INCOMPLETE` で拒否する。Worker再計算progressが100の完成版だけtrue/falseを選択できる。項目がない旧Pagesではtrueとして扱う。
+- Worker再計算progressが100の追記版は、最後の子layerが`followup`または`completion_fill`のどちらでも完成版として成立する。完成版radioによる自動補完では、選択前の手動塗り件数や進捗率に下限を設けず、`completionBaseRanges`をflat rangesとして検証する。WorkerはDB上の親layerを正本とし、`completionBaseRanges`を今回の手動`followup`、親と手動のどちらにも含まれない範囲を`completion_fill`として分離保存する。今回の手動layerと自動補完layerは、初回緑・追記1回目オレンジ・以後青・赤・紫の追記回別paletteで同色に正規化する。旧Pagesの単一`completion_fill`形式も同じ形へ正規化する。
 - 親の軽量確認はmultipart解析直後、ファイルhash・BMS/ZIP解析・R2保存より前に行う。D1 INSERT時にも親条件を再確認し、競合で不成立なら子versionを作成せず、先に保存した譜面R2 objectをcleanupする。
 - 未完成の親versionでprogressMap unionが同じ塗り範囲の場合は `PROGRESS_MAP_UNCHANGED` で拒否する。完成済みの親versionは、正規化後の子レイヤーに有効な区間が1件以上ある場合だけ、unionが100%のままでも通常追記できる。通常子の空rangesは `PROGRESS_MAP_UNCHANGED` と「追記する進捗範囲を1つ以上選択してください。」で拒否する。
 - 新versionの`originUrl`は親versionのDB値をコピーする。追記リクエストからのURL入力は受け付けない。
@@ -600,7 +600,7 @@ request:
 | `INITIAL_COMPLETION_NOT_ALLOWED` | 400 | 初回通常投稿がWorker再計算で完成状態になった。 |
 | `FOLLOWUP_REJECTED_NOT_ALLOWED` | 400 | 追記投稿で`isRejected=true`が指定された。 |
 | `COMPLETION_PROGRESS_TOO_LOW` | 400 | 旧Workerが返す互換コード。現行Workerは完成版の選択前進捗に下限を設けない。 |
-| `COMPLETION_ACTION_REQUIRED` | 400 | 未完成親から完成版指定なしでprogress=100が送られた。 |
+| `COMPLETION_ACTION_REQUIRED` | 400 | 旧Workerが完成版の明示操作を要求した互換code。現行Workerは再計算progress=100の追記を完成版として扱う。 |
 | `PASSWORD_REQUIRED` | 400 | 管理パスワードが未入力。 |
 | `INVALID_ORIGIN_URL` | 400 | 原曲配布URLが絶対HTTP/HTTPS URLではない、認証情報・制御文字・未エンコード空白を含むなど不正。 |
 | `ORIGIN_URL_TOO_LONG` | 400 | 原曲配布URLが正規化前または正規化後に2048文字を超える。 |

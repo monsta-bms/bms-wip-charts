@@ -57,7 +57,9 @@ for (const phrase of [
   "追記投稿の入力と進捗色を修正しました",
   "ファイルをドロップしたあと、差分情報以降の入力欄が開かない不具合を修正",
   "制作途中・完成版を直接選べるようにし",
-  "今回手動で塗った箇所の色を保ち"
+  "追記色をオレンジ、青、赤、紫の順",
+  "今回手動で塗った箇所の色を保ち",
+  "手動塗りが100%に達した場合"
 ]) assert.ok(latest.includes(phrase), `最新entryに「${phrase}」を掲載すること`);
 const publicUiTouchup = articles.find((entry) => entry.id === "CHANGELOG_20260807")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
 for (const phrase of [

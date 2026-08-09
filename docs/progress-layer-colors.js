@@ -9,19 +9,18 @@
       fill: "rgba(46, 139, 87, 0.32)"
     },
     followups: [
-      { stroke: "#4A90E2", fill: "#4A90E2" },
-      { stroke: "#8B6BD6", fill: "#8B6BD6" },
       { stroke: "#E39D3C", fill: "#E39D3C" },
+      { stroke: "#4A90E2", fill: "#4A90E2" },
       { stroke: "#D96C6C", fill: "#D96C6C" },
-      { stroke: "#2BA7A0", fill: "#2BA7A0" }
+      { stroke: "#8B6BD6", fill: "#8B6BD6" }
     ],
     completion: {
       stroke: "#2E8B57",
       fill: "#2E8B57"
     },
     rejected: {
-      stroke: "#7A4A30",
-      fill: "#7A4A30"
+      stroke: "#2E8B57",
+      fill: "#2E8B57"
     },
     empty: {
       stroke: "#D8E8E2",
@@ -86,7 +85,7 @@
     }
 
     if (kind === "completion_fill") {
-      return layer?.color ? colorBackedStyle(layer.color, PROGRESS_LAYER_COLORS.completion.fill) : PROGRESS_LAYER_COLORS.completion;
+      return layer?.color ? colorBackedStyle(layer.color, layer.color) : PROGRESS_LAYER_COLORS.completion;
     }
 
     if (isFollowupLayer(layer)) {

@@ -59,7 +59,7 @@ check("model, link, action, pipeline, and app load in contract order", () => {
     "./version-link-ui.js?v=public-ui-refinement-01",
     "./version-action-ui.js?v=comment-action-balance-01",
     "./chart-render-pipeline.js?v=chart-render-pipeline-r4a-01",
-    "./app.js?v=append-completion-radio-01"
+    "./app.js?v=progress-layer-sequence-01"
   ].map((src) => indexSources.indexOf(src));
   assert.ok(ordered.every((index) => index >= 0));
   assert.deepEqual(ordered, [...ordered].sort((left, right) => left - right));
@@ -80,9 +80,9 @@ check("model, link UI, and Action UI precede every index renderer consumer", () 
   const actionIndex = indexSources.indexOf("./version-action-ui.js?v=comment-action-balance-01");
   const consumers = [
     "./chart-render-pipeline.js?v=chart-render-pipeline-r4a-01",
-    "./app.js?v=append-completion-radio-01",
-    "./progress-thumbnail-list.js?v=append-paint-priority-01",
-    "./branch-append-ui.js?v=append-paint-priority-01",
+    "./app.js?v=progress-layer-sequence-01",
+    "./progress-thumbnail-list.js?v=progress-layer-sequence-01",
+    "./branch-append-ui.js?v=progress-layer-sequence-01",
     "./branch-tree-list.js?v=public-ui-touchup-03-patch1",
     "./favorites-list.js?v=completed-parent-access-01",
     "./version-management-ui.js?v=public-ui-refinement-patch-02",
@@ -303,8 +303,8 @@ check("HTML IDs remain unique", () => {
   assert.deepEqual(duplicateIds(listHtml), []);
 });
 check("changed scripts use their reviewed release cache keys", () => {
-  assert.ok(indexSources.includes("./app.js?v=append-completion-radio-01"), "app.js cache key mismatch");
-  assert.ok(indexSources.includes("./progress-thumbnail-list.js?v=append-paint-priority-01"), "progress-thumbnail-list.js cache key mismatch");
+  assert.ok(indexSources.includes("./app.js?v=progress-layer-sequence-01"), "app.js cache key mismatch");
+  assert.ok(indexSources.includes("./progress-thumbnail-list.js?v=progress-layer-sequence-01"), "progress-thumbnail-list.js cache key mismatch");
   const unchangedR4aScripts = [
     "chart-render-pipeline.js",
     "chart-detail-link.js"
@@ -317,7 +317,7 @@ check("changed scripts use their reviewed release cache keys", () => {
   assert.ok(indexSources.includes("./version-link-ui.js?v=public-ui-refinement-01"), "version-link-ui.js cache key mismatch");
   assert.ok(indexSources.includes("./version-management-ui.js?v=public-ui-refinement-patch-02"), "version-management-ui.js cache key mismatch");
   assert.ok(indexSources.includes("./submission-status-ui.js?v=append-completion-radio-01"), "submission-status-ui.js cache key mismatch");
-  assert.ok(indexSources.includes("./branch-append-ui.js?v=append-paint-priority-01"), "branch-append-ui.js cache key mismatch");
+  assert.ok(indexSources.includes("./branch-append-ui.js?v=progress-layer-sequence-01"), "branch-append-ui.js cache key mismatch");
   assert.ok(indexSources.includes("./branch-tree-list.js?v=public-ui-touchup-03-patch1"), "branch-tree-list.js cache key mismatch");
   assert.ok(indexSources.includes("./version-action-ui.js?v=comment-action-balance-01"), "version-action-ui.js cache key mismatch");
   assert.ok(indexSources.includes("./version-ui-model.js?v=public-ui-touchup-03-patch1"), "version-ui-model.js cache key mismatch");
@@ -357,7 +357,7 @@ check("CSS files match the reviewed public UI state", () => {
 check("favorite and progress runtime styles are removed", () => {
   assert.doesNotMatch(favorites, /injectStyles|favoriteListStyles|createElement\(["']style["']\)|style\.textContent/);
   assert.doesNotMatch(progressThumbnail, /ensureProgressImageThumbnailStyle|progress-image-thumbnail-style|createElement\(["']style["']\)|style\.textContent|document\.head\.appendChild\(style\)/);
-  assert.equal(sha256(progressThumbnail), "a7df901c196e98b6aab3fd3b71fbcda61e78a6f29fa97fefa361494767762353");
+  assert.equal(sha256(progressThumbnail), "70adae4375ee4058f94b8de4a7b4b543904c6abd1cdf9a0d3bd836117c8f0309");
 });
 check("R4A keeps DOM traversal growth bounded", () => {
   const r1Baseline = new Map([

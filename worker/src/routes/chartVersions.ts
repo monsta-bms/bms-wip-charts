@@ -884,16 +884,7 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
     }
 
     const storedProgress = preparedProgressMap.progress;
-    const childLayer = preparedProgressMap.progressMap.layers.at(-1);
-    const completionRequested = childLayer?.kind === "completion_fill" && storedProgress === 100;
-    if (storedProgress === 100 && !completionRequested && parent.progress < 100) {
-      return failAppendVersion(request, env, context, {
-        status: 400,
-        code: "COMPLETION_ACTION_REQUIRED",
-        message: "完成版にする操作を使用してください。",
-        detail: "A 100% follow-up must use an explicit completion_fill layer."
-      });
-    }
+    const completionRequested = storedProgress === 100;
     if (!completionRequested && !input.allowAppend) {
       return failAppendVersion(request, env, context, {
         status: 400,

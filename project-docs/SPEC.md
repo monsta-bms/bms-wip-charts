@@ -287,13 +287,13 @@ round(塗られた標準化ブロック数のunion / 標準化ブロック総数
 
 - 初回投稿では完成版radioをdisabledとし、初回通常版を完成版として保存しない。
 - 追記投稿では制作途中と完成版の2つのradioを選択可能にし、完成済み没譜面radioをdisabledとする。独立した「完成版にする」ボタンは表示しない。
-- 完成版を選択した時点で譜面解析が完了していれば、選択直前のprogressMap全体、layers/ranges、色と透明ブロック、進捗度、編集中layer状態をメモリ上のdeep copyとして保持する。今回の手動塗りは`followup` layerのまま維持し、親にも手動にも含まれない未作成ブロックだけを別の`completion_fill` layerで補完して `progress=100` にする。手動の塗り範囲や選択前進捗の下限は要求しない。
+- 完成版を選択した時点で譜面解析が完了していれば、選択直前のprogressMap全体、layers/ranges、色と透明ブロック、進捗度、編集中layer状態をメモリ上のdeep copyとして保持する。今回の手動塗りは`followup` layerのまま維持し、親にも手動にも含まれない未作成ブロックだけを別の`completion_fill` layerで補完して `progress=100` にする。手動の塗り範囲や選択前進捗の下限は要求しない。追記中の手動塗りだけでunionが100%へ到達した場合も完成版radioを自動選択し、完成版として送信する。
 - ファイル解析前に完成版を選んだ場合は選択を維持し、解析成功後に同じ自動全塗り処理を適用する。解析中・解析失敗の状態では投稿を許可しない。
 - 完成版指定中は進捗ブロック編集を無効化し、制作途中へ戻す必要があることを常時表示する。制作途中を選ぶとsnapshotから色、ranges、透明ブロック、進捗度、編集状態を選択直前と同一の状態へ戻してCanvasを再描画し、snapshotを破棄する。
 - ファイル変更/解除、追記対象変更、追記キャンセル、form reset、投稿成功では、完成版指定用snapshotを破棄し、新しいフォーム状態から判定し直す。
-- 追記投稿で完成版を選択した場合は、今回の手動`followup` layerを先に、未作成箇所だけの`completion_fill` layerを最後に送る。選択直前の手動rangesは検証用`completionBaseRanges`としても送る。WorkerはDB上の親mapを正本として親layerを復元し、flat ranges、親mapとの格子一致、送信layerのunionが100%であることを検証したうえで、手動`followup`、自動`completion_fill`を分離して保存し、一時検証値を除外する。旧Pagesが手動分と自動補完分を1つの`completion_fill`へまとめて送った場合も、`completionBaseRanges`から同じ保存形へ正規化する。
+- 追記投稿で完成版を選択した場合は、今回の手動`followup` layerを先に、未作成箇所だけの`completion_fill` layerを最後に送る。選択直前の手動rangesは検証用`completionBaseRanges`としても送る。WorkerはDB上の親mapを正本として親layerを復元し、flat ranges、親mapとの格子一致、送信layerのunionが100%であることを検証したうえで、手動`followup`、自動`completion_fill`を分離して保存し、一時検証値を除外する。手動layerと自動補完layerには同じ追記回の色を保存する。旧Pagesが手動分と自動補完分を1つの`completion_fill`へまとめて送った場合も、`completionBaseRanges`から同じ保存形へ正規化する。
 - 送信直前にも、追記モード、選択ファイル、解析完了、有効なprogressMap、snapshot、`progress=100`、非没譜面を再確認する。不整合時はAPIへ送信せず、ファイルの再選択を案内する。Pages側の追加検証はWorker側の検証を代替しない。
-- 完成版指定を経由せず、未完成親から送られた `progress=100` は完成版として保存しない。
+- Worker再計算で追記版のunionが`progress=100`になった場合は、明示的な`completion_fill`の有無にかかわらず完成版として保存する。初回通常版の100%拒否は維持する。
 
 ### 没譜面との連動
 
@@ -351,13 +351,13 @@ Workerはmultipart解析後かつファイルhash・BMS解析より前に親を�
   "layers": [
     {
       "versionId": "version_xxx",
-      "color": "#1f7a5c",
+      "color": "#2E8B57",
       "kind": "initial",
       "ranges": [[0, 10], [20, 30]]
     },
     {
       "versionId": "pending",
-      "color": "#2563eb",
+      "color": "#E39D3C",
       "kind": "followup",
       "ranges": [[31, 40]]
     }
@@ -444,11 +444,11 @@ DB保存:
 - 棒の高さ = ノーツ密度。
 - 棒の色 = そのblockを最後に塗ったlayer/投稿者。
 - 未着手 = 薄い緑または薄いミント。
-- 初回投稿layer = 緑系。
-- 追記layer 1 = 青系。
-- 追記layer 2 = 紫系。
-- 追記layer 3 = 橙系。
-- 追記layer 4 = 赤系。
+- 初回投稿layerと初回没譜面の自動全塗り = 緑系。
+- 追記layer 1 = オレンジ系。
+- 追記layer 2 = 青系。
+- 追記layer 3 = 赤系。
+- 追記layer 4 = 紫系。
 - 以降の追記layerはパレットを循環する。
 
 密度は色の濃淡ではなく棒の高さで表す。低密度区間や0ノーツ区間も存在が分かるよう、未着手0ノーツblockは2〜3px程度の薄色バー、塗り済み0ノーツblockは4px程度の色付きバーとして描画する。未着手色は `#CFE3DC`、未着手レールは `#D8E8E2` を基準にし、背景へ溶けない範囲で塗り済み色より弱く見せる。

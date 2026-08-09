@@ -1566,6 +1566,15 @@ button.difficulty-change-button {
   text-decoration: underline;
 }
 
+button.progress-map-block.is-current-painted::after,
+button.progress-map-block.is-current-painted:hover::after,
+button.progress-map-block.is-current-painted:focus-visible::after,
+button.progress-map-block.is-completion-painted::after,
+button.progress-map-block.is-completion-painted:hover::after,
+button.progress-map-block.is-completion-painted:focus-visible::after {
+  background: var(--progress-fill-current, #E39D3C);
+}
+
 @media (max-width: 760px) {
   .optional-fields-grid { grid-template-columns: 1fr; }
   .optional-fields-grid .origin-url-field { grid-column: auto; }

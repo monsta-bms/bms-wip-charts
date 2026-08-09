@@ -1620,20 +1620,31 @@ async function captureAppendDropFileRevealRegression(cdp, sessionId) {
     await cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: point.x, y: point.y, button: "left", clickCount: 1 }, sessionId);
   }
   await waitFor(cdp, sessionId, `document.querySelector("#progress")?.value === "75"`, "append manual layer paint");
+  await new Promise((resolve) => setTimeout(resolve, 120));
   const manual = await evaluate(cdp, sessionId, `(() => {
     const blocks = [...document.querySelectorAll("#progressMapBlocks .progress-map-block")];
     return {
       progress: document.querySelector("#progress")?.value,
       parent: blocks.map((block, index) => block.classList.contains("is-parent-painted") ? index : null).filter(Number.isInteger),
       current: blocks.map((block, index) => block.classList.contains("is-current-painted") ? index : null).filter(Number.isInteger),
-      completion: blocks.map((block, index) => block.classList.contains("is-completion-painted") ? index : null).filter(Number.isInteger)
+      completion: blocks.map((block, index) => block.classList.contains("is-completion-painted") ? index : null).filter(Number.isInteger),
+      rootCurrentColor: getComputedStyle(document.documentElement).getPropertyValue("--progress-fill-current").trim(),
+      currentColor: getComputedStyle(blocks[2], "::after").backgroundColor
     };
   })()`);
-  assert.deepEqual(manual, { progress: "75", parent: [0, 1], current: [0, 2], completion: [] });
+  assert.deepEqual(manual, {
+    progress: "75",
+    parent: [0, 1],
+    current: [0, 2],
+    completion: [],
+    rootCurrentColor: "#E39D3C",
+    currentColor: "rgb(227, 157, 60)"
+  });
 
   await evaluate(cdp, sessionId, `document.querySelector("#submissionStateCompleted")?.click()`);
   await waitFor(cdp, sessionId, `document.querySelector("#progress")?.value === "100"
     && window.BmsAppendPolicy?.snapshot?.().isCompleted === true`, "append completion radio auto fill");
+  await new Promise((resolve) => setTimeout(resolve, 120));
   const completed = await evaluate(cdp, sessionId, `(() => {
     const blocks = [...document.querySelectorAll("#progressMapBlocks .progress-map-block")];
     return {
@@ -1647,6 +1658,7 @@ async function captureAppendDropFileRevealRegression(cdp, sessionId) {
       parent: blocks.map((block, index) => block.classList.contains("is-parent-painted") ? index : null).filter(Number.isInteger),
       current: blocks.map((block, index) => block.classList.contains("is-current-painted") ? index : null).filter(Number.isInteger),
       completion: blocks.map((block, index) => block.classList.contains("is-completion-painted") ? index : null).filter(Number.isInteger),
+      completionColor: getComputedStyle(blocks[3], "::after").backgroundColor,
       preview: window.BmsProgressImage?.buildProgressMapFromVisibleEditor?.(),
       priorities: {
         manual: window.BmsProgressLayerColors?.getLayerPaintPriority?.({ kind: "followup" }),
@@ -1665,12 +1677,15 @@ async function captureAppendDropFileRevealRegression(cdp, sessionId) {
   assert.deepEqual(completed.parent, [0, 1]);
   assert.deepEqual(completed.current, [0, 2]);
   assert.deepEqual(completed.completion, [3]);
+  assert.equal(completed.completionColor, "rgb(227, 157, 60)");
   assert.deepEqual(completed.preview.layers.map((layer) => ({ kind: layer.kind, ranges: layer.ranges })), [
     { kind: "parent_preview", ranges: [[0, 1]] },
     { kind: "followup", ranges: [[0, 0], [2, 2]] },
     { kind: "completion_fill", ranges: [[3, 3]] }
   ]);
   assert.deepEqual(completed.priorities, { manual: 3, parent: 2, completion: 1 });
+  assert.equal(completed.preview.layers.at(-2).color, "#E39D3C");
+  assert.equal(completed.preview.layers.at(-1).color, "#E39D3C");
 
   await evaluate(cdp, sessionId, `document.querySelector("#submissionStateIncomplete")?.click()`);
   await waitFor(cdp, sessionId, `document.querySelector("#progress")?.value === "75"
@@ -1699,8 +1714,16 @@ async function captureAppendDropFileRevealRegression(cdp, sessionId) {
     completion: []
   });
 
-  await evaluate(cdp, sessionId, `document.querySelector("#submissionStateCompleted")?.click()`);
-  await waitFor(cdp, sessionId, `document.querySelector("#progress")?.value === "100"`, "append completion radio reselection");
+  const finalBlockPoint = await evaluate(cdp, sessionId, `(() => {
+    const block = [...document.querySelectorAll("#progressMapBlocks .progress-map-block")][3];
+    const rect = block.getBoundingClientRect();
+    return { x: rect.left + (rect.width / 2), y: rect.top + (rect.height / 2) };
+  })()`);
+  await cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", x: finalBlockPoint.x, y: finalBlockPoint.y, button: "left", clickCount: 1 }, sessionId);
+  await cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: finalBlockPoint.x, y: finalBlockPoint.y, button: "left", clickCount: 1 }, sessionId);
+  await waitFor(cdp, sessionId, `document.querySelector("#progress")?.value === "100"
+    && document.querySelector("#submissionStateCompleted")?.checked === true
+    && window.BmsAppendPolicy?.snapshot?.().isCompleted === true`, "manual 100 percent auto completion");
   await evaluate(cdp, sessionId, `document.querySelector("#cancelAppendButton")?.click()`);
   await waitFor(cdp, sessionId, `!document.querySelector(".submit-panel")?.classList.contains("is-append-mode")
     && !document.querySelector("#chartFile")?.files?.length`, "append drop fixture cleanup");

@@ -8,7 +8,7 @@
   const maxProgressImageGenerationWarnings = 5;
   const emptyBarFill = "#D3E5DF";
   const emptyStripFill = "#DCEAE5";
-  const colorLabels = ["青", "紫", "橙", "赤", "水色"];
+  const colorLabels = ["オレンジ", "青", "赤", "紫"];
   const progressBlockRangesByVersionId = new Map();
 
   function html(value) {
@@ -294,10 +294,20 @@
 
   function getLayerColorLabel(layer, index) {
     const kind = String(layer?.kind || "").toLowerCase();
-    if (kind === "initial" || kind === "rejected_auto_fill" || index === 0) {
-      return "緑";
+    const storedColor = String(layer?.color || "").trim().toLowerCase();
+    const palette = window.BmsProgressLayerColors?.PROGRESS_LAYER_COLORS;
+    if (storedColor && palette) {
+      if (storedColor === String(palette.initial?.stroke || "").toLowerCase()) {
+        return "緑";
+      }
+      const followupIndex = palette.followups?.findIndex(
+        (style) => storedColor === String(style?.stroke || "").toLowerCase()
+      ) ?? -1;
+      if (followupIndex >= 0) {
+        return colorLabels[followupIndex % colorLabels.length];
+      }
     }
-    if (kind === "completion_fill") {
+    if (kind === "initial" || kind === "rejected_auto_fill" || index === 0) {
       return "緑";
     }
     return colorLabels[Math.max(0, index - 1) % colorLabels.length];
