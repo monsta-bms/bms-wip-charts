@@ -72,11 +72,11 @@ if (analysisResult?.analysisFailed || miniView?.status !== "ready" || miniView?.
 }
 
 const miniViewJson = JSON.stringify(miniView);
+const currentStateGuard = `((json_extract(measure_notes_json, '$.miniView.status') = 'unsupported'\n    AND json_extract(measure_notes_json, '$.miniView.reasonCode') = 'MINIVIEW_UNSUPPORTED_MODE')\n  OR (json_extract(measure_notes_json, '$.miniView.status') = 'ready'\n    AND json_extract(measure_notes_json, '$.miniView.mode') = '7key-sp'\n    AND json_extract(measure_notes_json, '$.miniView.payload.mineCount') = ${Number(miniView.payload.mineCount)}\n    AND (json_extract(measure_notes_json, '$.miniView.payload.startMeasure') <> ${Number(miniView.payload.startMeasure)}\n      OR json_extract(measure_notes_json, '$.miniView.payload.endMeasure') <> ${Number(miniView.payload.endMeasure)})))`;
 const guard = [
   `id = ${sqlString(versionId)}`,
   "json_extract(measure_notes_json, '$.schemaVersion') = 3",
-  "json_extract(measure_notes_json, '$.miniView.status') = 'unsupported'",
-  "json_extract(measure_notes_json, '$.miniView.reasonCode') = 'MINIVIEW_UNSUPPORTED_MODE'"
+  currentStateGuard
 ].join("\n  AND ");
 const applySql = `UPDATE versions\nSET measure_notes_json = json_set(measure_notes_json, '$.miniView', json(${sqlString(miniViewJson)}))\nWHERE ${guard};\nSELECT changes() AS changed_rows;\n`;
 const originalMiniView = JSON.stringify({
@@ -99,6 +99,8 @@ await writeFile(resultPath, `${JSON.stringify({
   sourceHashVerified: true,
   miniViewStatus: miniView.status,
   mineCount: miniView.payload.mineCount,
+  startMeasure: miniView.payload.startMeasure,
+  endMeasure: miniView.payload.endMeasure,
   payloadBytes: new TextEncoder().encode(miniViewJson).byteLength,
   applyPath,
   rollbackPath
@@ -108,6 +110,8 @@ console.log(JSON.stringify({
   code: "MINIVIEW_REPAIR_CANDIDATE_READY",
   versionId,
   mineCount: miniView.payload.mineCount,
+  startMeasure: miniView.payload.startMeasure,
+  endMeasure: miniView.payload.endMeasure,
   payloadBytes: new TextEncoder().encode(miniViewJson).byteLength,
   outputDirectory
 }));

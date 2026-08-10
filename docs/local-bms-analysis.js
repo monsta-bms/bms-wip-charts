@@ -252,11 +252,13 @@
   }
 
   function buildPayload(taps, longNotes, mines, initialBpm, bpmEvents, measureStarts, measureLengths, analysis) {
-    const startMeasure = analysis.displayFirstMeasure;
-    const endMeasure = analysis.displayLastMeasure;
-    if (!Number.isInteger(startMeasure) || !Number.isInteger(endMeasure) || endMeasure < startMeasure) {
+    const displayStartMeasure = analysis.displayFirstMeasure;
+    const displayEndMeasure = analysis.displayLastMeasure;
+    if (!Number.isInteger(displayStartMeasure) || !Number.isInteger(displayEndMeasure) || displayEndMeasure < displayStartMeasure) {
       return null;
     }
+    const startMeasure = mines.reduce((minimum, event) => Math.min(minimum, event.measure), displayStartMeasure);
+    const endMeasure = mines.reduce((maximum, event) => Math.max(maximum, event.measure), displayEndMeasure);
     const startPosition = measureStarts[startMeasure];
     const endPosition = measureStarts[endMeasure + 1];
     if (!Number.isFinite(startPosition) || !Number.isFinite(endPosition) || endPosition <= startPosition) {

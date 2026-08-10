@@ -73,6 +73,18 @@ vm.runInNewContext(
   { filename: "docs/local-bms-analysis.js" }
 );
 const localAnalyzer = localAnalysisContext.window.BmsLocalChartAnalysis;
+const rendererContext = {
+  window: {},
+  document: { querySelector: () => null },
+  atob: (value) => Buffer.from(value, "base64").toString("binary"),
+  Uint8Array
+};
+const rendererSource = (await readFile(resolve(repositoryRoot, "docs", "chart-miniview.js"), "utf8")).replace(
+  "  if (!listElement) {\n    return;\n  }",
+  "  if (!listElement) {\n    window.__normalizeMiniViewPayloadForTest = normalizePayload;\n    return;\n  }"
+);
+vm.runInNewContext(rendererSource, rendererContext, { filename: "docs/chart-miniview.js" });
+const normalizeRendererPayload = rendererContext.window.__normalizeMiniViewPayloadForTest;
 let passed = 0;
 
 async function check(name, action) {
@@ -132,6 +144,9 @@ await check("Pages and Worker mine parsers produce the same payload", () => {
     JSON.parse(JSON.stringify(localResult.miniView.payload)),
     workerResult.analysis.measureNotesJson.miniView.payload
   );
+  const normalized = normalizeRendererPayload(workerResult.analysis.measureNotesJson.miniView.payload);
+  assert.equal(normalized.mineCount, 8);
+  assert.equal(normalized.mineEvents.length, 8);
 });
 
 await check("a miniview without mines remains compatible with mineCount zero", () => {
@@ -173,6 +188,15 @@ if (targetFileIndex >= 0) {
     assert.equal(result.analysisFailed, false);
     assert.equal(result.analysis.measureNotesJson.miniView.status, "ready");
     assert.ok(result.analysis.measureNotesJson.miniView.payload.mineCount > 0);
+    const payload = result.analysis.measureNotesJson.miniView.payload;
+    const decoded = decodePackedEvents(payload);
+    console.log(JSON.stringify({
+      payloadEndMeasure: payload.endMeasure,
+      maximumEventMeasure: Math.max(...decoded.map((event) => event.measure)),
+      maximumMineMeasure: Math.max(...decoded.filter((event) => event.kind === 3).map((event) => event.measure))
+    }));
+    const normalized = normalizeRendererPayload(payload);
+    assert.equal(normalized.mineCount, result.analysis.measureNotesJson.miniView.payload.mineCount);
     console.log(JSON.stringify({
       targetStatus: result.analysis.measureNotesJson.miniView.status,
       mineCount: result.analysis.measureNotesJson.miniView.payload.mineCount,

@@ -76,7 +76,7 @@
 
 新規の初回投稿・追記投稿について、WorkerがBMS本体を解析して7key SP譜面のコンパクトなミニビューを生成する。単体BMSはアップロードされた本体、ZIPは安全検査で展開済みの唯一のBMS/BME/BMLバイト列を利用する。ブラウザ生成値は保存せず、Worker生成結果を正データとする。R2へ派生画像・JSONは保存しない。
 
-MVPの対応レーンは1P側の通常鍵盤`11-15,18,19`、スクラッチ`16`、LNTYPE 1のLN鍵盤`51-55,58,59`、LNスクラッチ`56`、地雷鍵盤`D1-D5,D8,D9`、地雷スクラッチ`D6`とする。`#LNOBJ`も対応する。地雷は通常ノートやLNと区別したイベントとして保存し、ミニビューでは専用色で描画する。7key判定は`.bme`または6/7鍵チャンネルの実使用を根拠とし、5keyとの区別が曖昧な場合は推測表示しない。2P、10key/14key、PMS、LNTYPE 2、2P側地雷`E1-E9`、割当のない`D7`、特殊配置、RANDOM/IF/SWITCH系、未閉鎖・競合LNはミニビュー未対応とする。
+MVPの対応レーンは1P側の通常鍵盤`11-15,18,19`、スクラッチ`16`、LNTYPE 1のLN鍵盤`51-55,58,59`、LNスクラッチ`56`、地雷鍵盤`D1-D5,D8,D9`、地雷スクラッチ`D6`とする。`#LNOBJ`も対応する。地雷は通常ノートやLNと区別したイベントとして保存し、ミニビューでは専用色で描画する。地雷が通常ノートの表示範囲より前後にある場合は、地雷を含む小節までminiViewの開始・終了範囲を拡張する。7key判定は`.bme`または6/7鍵チャンネルの実使用を根拠とし、5keyとの区別が曖昧な場合は推測表示しない。2P、10key/14key、PMS、LNTYPE 2、2P側地雷`E1-E9`、割当のない`D7`、特殊配置、RANDOM/IF/SWITCH系、未閉鎖・競合LNはミニビュー未対応とする。
 
 `versions.measure_notes_json`は新規解析成功分からschemaVersion 3とし、schemaVersion 2の全フィールドを維持したまま`miniView`を追加する。CHART-MINIVIEW-UX-03以降のminiView payloadはschemaVersion 3とし、通常ノート、LN開始・終了、地雷を`measure / lane / pairIndex / pairCount / kind`単位で保持する。`kind=3`を地雷とし、`mineCount`を保存する。同じ小節・レーン・種別・分母のイベントをまとめたvarint列をBase64保存し、24分・32分・48分を含む元の分数位置を丸めない。初期BPMとchannel 03/08のBPM変化は同じ分数座標のtupleで追加する。保存する`miniView`全体は32KiB以下とし、超過時は`MINIVIEW_TOO_COMPLEX` warningとしてunsupported metadataだけを保存する。D1 migration、R2派生データ、`progressImage`は追加しない。
 

@@ -131,7 +131,7 @@
 - 未閉鎖・重複・競合LNが`MINIVIEW_MALFORMED_LN` warningになること。
 - 1P側地雷`D1-D6,D8,D9`がscratch・key1～key7へ割り当てられ、`mineCount`と種別`3`でready payloadへ保存されること。
 - 2P側地雷`E1-E9`、未割当`D7`、その他の2P側・特殊チャンネル、判定が曖昧な5keyが`MINIVIEW_UNSUPPORTED_MODE` warningになること。
-- 地雷を含む実投稿相当BMSが32KiB上限内のready payloadとなり、一覧Canvas、拡大dialog、アクセシブル名へ地雷件数が反映されること。
+- 地雷を含む実投稿相当BMSが32KiB上限内のready payloadとなり、通常ノートより後の末尾地雷小節まで`endMeasure`に含まれ、実frontend decoderと一覧Canvasがreadyになること。
 - ミニビュー未対応でも投稿、progressMap、progressImage、R2/D1保存が従来通り成功すること。
 - miniView保存値が32KiB以下で、超過時は`MINIVIEW_TOO_COMPLEX`になること。
 - `GET /api/charts`に完全なイベントpayloadが含まれず、available/mode/urlだけが返ること。

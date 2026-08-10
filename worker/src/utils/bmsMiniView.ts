@@ -318,11 +318,13 @@ function buildPayload(
   measureLengths: Map<number, number>,
   analysis: BmsAnalysis
 ): BmsMiniViewPayload | null {
-  const startMeasure = analysis.displayFirstMeasure;
-  const endMeasure = analysis.displayLastMeasure;
-  if (startMeasure === null || endMeasure === null || endMeasure < startMeasure) {
+  const displayStartMeasure = analysis.displayFirstMeasure;
+  const displayEndMeasure = analysis.displayLastMeasure;
+  if (displayStartMeasure === null || displayEndMeasure === null || displayEndMeasure < displayStartMeasure) {
     return null;
   }
+  const startMeasure = mines.reduce((minimum, event) => Math.min(minimum, event.measure), displayStartMeasure);
+  const endMeasure = mines.reduce((maximum, event) => Math.max(maximum, event.measure), displayEndMeasure);
 
   const startPosition = measureStarts[startMeasure];
   const endPosition = measureStarts[endMeasure + 1];

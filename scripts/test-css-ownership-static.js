@@ -172,7 +172,7 @@ check("index stylesheet order remains stable", () => {
     "progress-thumbnail-list.css",
     "version-comment-ui.css"
   ]);
-  const themeIndex = sources.index.indexOf("./theme.css?v=miniview-mine-support-01");
+  const themeIndex = sources.index.indexOf("./theme.css?v=miniview-mine-support-02");
   const favoriteCssIndex = sources.index.indexOf("./favorites-list.css?v=version-comment-progress-01");
   const progressCssIndex = sources.index.indexOf("./progress-thumbnail-list.css?v=progress-style-r4b2f-01");
   const progressScriptIndex = sources.index.indexOf("./progress-thumbnail-list.js?v=progress-layer-sequence-01");
@@ -193,8 +193,9 @@ check("changed public UI, comment, and progress assets use their release cache k
   assert.match(sources.index, /\.\/branch-tree-list\.css\?v=public-ui-touchup-03-patch1/);
   assert.match(sources.index, /\.\/chart-detail-link\.css\?v=detail-theme-r4b2e-01/);
   assert.equal((sources.index.match(/detail-theme-r4b2e-01/g) || []).length, 1);
-  assert.match(sources.index, /\.\/theme\.css\?v=miniview-mine-support-01/);
-  assert.match(sources.index, /\.\/local-bms-analysis\.js\?v=miniview-mine-support-01/);
+  assert.match(sources.index, /\.\/theme\.css\?v=miniview-mine-support-02/);
+  assert.match(sources.index, /\.\/local-bms-analysis\.js\?v=miniview-mine-support-02/);
+  assert.match(sources.index, /\.\/chart-miniview\.js\?v=miniview-mine-support-02/);
   assert.match(sources.index, /\.\/post-form-ui\.css\?v=progress-layer-sequence-01/);
   assert.match(sources.index, /\.\/progress-thumbnail-list\.css\?v=progress-style-r4b2f-01/);
   assert.match(sources.index, /\.\/progress-thumbnail-list\.js\?v=progress-layer-sequence-01/);
@@ -225,7 +226,7 @@ check("changed public UI, comment, and progress assets use their release cache k
   assert.equal((sources.listHtml.match(/version-comment-progress-01/g) || []).length, 0);
   assert.equal((sources.listHtml.match(/completed-parent-access-01/g) || []).length, 0);
   assert.ok((sources.index.match(/public-ui-refinement-patch-02/g) || []).length >= 5);
-  assert.equal((sources.index.match(/miniview-mine-support-01/g) || []).length, 3);
+  assert.equal((sources.index.match(/miniview-mine-support-02/g) || []).length, 3);
   assert.equal((sources.index.match(/append-completion-radio-01/g) || []).length, 1);
   assert.equal((sources.index.match(/progress-layer-sequence-01/g) || []).length, 6);
   assert.ok((sources.listHtml.match(/public-ui-refinement-patch-02/g) || []).length >= 2);
@@ -598,7 +599,7 @@ check("R4B2b does not use clipping or visual workarounds", () => {
 check("reviewed production JavaScript set includes public review, comment, and progress helpers", () => {
   assert.equal(productionJsFiles.length, 35);
   assert.equal(sha256(sources.progressThumbnail), "70adae4375ee4058f94b8de4a7b4b543904c6abd1cdf9a0d3bd836117c8f0309");
-  assert.equal(sha256(productionJsAggregate), "4d22178772589a7053e730367804530e2a766ab6189f4272cf23255fe19e9294");
+  assert.equal(sha256(productionJsAggregate), "4e34522419fefa918fcacf036e034a59375dd652ee677c5ce814a7281d198839");
 });
 
 check("all known CSS issues are documented as resolved", () => {
