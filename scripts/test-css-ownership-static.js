@@ -172,7 +172,7 @@ check("index stylesheet order remains stable", () => {
     "progress-thumbnail-list.css",
     "version-comment-ui.css"
   ]);
-  const themeIndex = sources.index.indexOf("./theme.css?v=public-ui-refinement-patch-02");
+  const themeIndex = sources.index.indexOf("./theme.css?v=miniview-mine-support-01");
   const favoriteCssIndex = sources.index.indexOf("./favorites-list.css?v=version-comment-progress-01");
   const progressCssIndex = sources.index.indexOf("./progress-thumbnail-list.css?v=progress-style-r4b2f-01");
   const progressScriptIndex = sources.index.indexOf("./progress-thumbnail-list.js?v=progress-layer-sequence-01");
@@ -193,7 +193,8 @@ check("changed public UI, comment, and progress assets use their release cache k
   assert.match(sources.index, /\.\/branch-tree-list\.css\?v=public-ui-touchup-03-patch1/);
   assert.match(sources.index, /\.\/chart-detail-link\.css\?v=detail-theme-r4b2e-01/);
   assert.equal((sources.index.match(/detail-theme-r4b2e-01/g) || []).length, 1);
-  assert.match(sources.index, /\.\/theme\.css\?v=public-ui-refinement-patch-02/);
+  assert.match(sources.index, /\.\/theme\.css\?v=miniview-mine-support-01/);
+  assert.match(sources.index, /\.\/local-bms-analysis\.js\?v=miniview-mine-support-01/);
   assert.match(sources.index, /\.\/post-form-ui\.css\?v=progress-layer-sequence-01/);
   assert.match(sources.index, /\.\/progress-thumbnail-list\.css\?v=progress-style-r4b2f-01/);
   assert.match(sources.index, /\.\/progress-thumbnail-list\.js\?v=progress-layer-sequence-01/);
@@ -223,7 +224,8 @@ check("changed public UI, comment, and progress assets use their release cache k
   assert.match(sources.index, /\.\/branch-append-ui\.js\?v=progress-layer-sequence-01/);
   assert.equal((sources.listHtml.match(/version-comment-progress-01/g) || []).length, 0);
   assert.equal((sources.listHtml.match(/completed-parent-access-01/g) || []).length, 0);
-  assert.ok((sources.index.match(/public-ui-refinement-patch-02/g) || []).length >= 6);
+  assert.ok((sources.index.match(/public-ui-refinement-patch-02/g) || []).length >= 5);
+  assert.equal((sources.index.match(/miniview-mine-support-01/g) || []).length, 3);
   assert.equal((sources.index.match(/append-completion-radio-01/g) || []).length, 1);
   assert.equal((sources.index.match(/progress-layer-sequence-01/g) || []).length, 6);
   assert.ok((sources.listHtml.match(/public-ui-refinement-patch-02/g) || []).length >= 2);
@@ -293,7 +295,7 @@ check("version comment component owns its dialog and preview styles", () => {
 check("fixed color counts isolate detail colors in theme tokens", () => {
   const expected = new Map([
     ["style", 68], ["branch", 71], ["refresh", 21], ["treePolish", 17],
-    ["chartMiniview", 40], ["management", 12], ["chartDetail", 4], ["theme", 252],
+    ["chartMiniview", 40], ["management", 12], ["chartDetail", 4], ["theme", 253],
     ["favorites", 0], ["favoriteCss", 0], ["progressThumbnail", 4], ["progressCss", 0]
   ]);
   expected.forEach((count, name) => assert.equal(fixedColorCount(sources[name]), count, name));
@@ -504,7 +506,7 @@ check("appended batch boundary remains outside R4B2e", () => {
 
 check("protected CSS hashes match the reviewed implementation", () => {
   assert.equal(sha256(sources.chartDetail), "c45722a66d547ecb51825e67dc3e65cc31413f7820a5d34db8b45eb23dbe0882");
-  assert.equal(sha256(sources.theme), "83bc78944b289b21d22131af91c7e78deaa04808f1c62628221194566ba1ef34");
+  assert.equal(sha256(sources.theme), "8c16a81cc390f516a8193c1229a22041e3be225ea2445b092a32242d660db606");
   assert.equal(sha256(sources.progressCss), "24d5a258fb4b737584cd54700544f6c496a8065639120d047ccc80135e1e3304");
 });
 
@@ -596,7 +598,7 @@ check("R4B2b does not use clipping or visual workarounds", () => {
 check("reviewed production JavaScript set includes public review, comment, and progress helpers", () => {
   assert.equal(productionJsFiles.length, 35);
   assert.equal(sha256(sources.progressThumbnail), "70adae4375ee4058f94b8de4a7b4b543904c6abd1cdf9a0d3bd836117c8f0309");
-  assert.equal(sha256(productionJsAggregate), "94e56a5769de4d5d1f2ef298394468454af777668ddde0aeb514902ca07d2991");
+  assert.equal(sha256(productionJsAggregate), "4d22178772589a7053e730367804530e2a766ab6189f4272cf23255fe19e9294");
 });
 
 check("all known CSS issues are documented as resolved", () => {

@@ -343,7 +343,7 @@ check("CSS files match the reviewed public UI state", () => {
     ["docs/branch-tree-list.css", "81efc5e0f8ee0cab09e3ee3440cbe32755a0ecbe165d5c9ce645a66b2bdeebed"],
     ["docs/list-ui-refresh.css", "b8da58683c9e52c20e0e01c27b070fbedf768c622be564dc7a42fa5dfd5a06ad"],
     ["docs/list.css", "e8851f3565529ccb0c0d864bdc2b43e9350dd70fb9b3f59edebc14b26da5bd6c"],
-    ["docs/theme.css", "83bc78944b289b21d22131af91c7e78deaa04808f1c62628221194566ba1ef34"],
+    ["docs/theme.css", "8c16a81cc390f516a8193c1229a22041e3be225ea2445b092a32242d660db606"],
     ["docs/chart-detail-link.css", "c45722a66d547ecb51825e67dc3e65cc31413f7820a5d34db8b45eb23dbe0882"],
     ["docs/favorites-list.css", "f9498bc2128e06da0a1de3a41e19949a3ee8afebfc46f266600026288d20cf7b"],
     ["docs/progress-thumbnail-list.css", "24d5a258fb4b737584cd54700544f6c496a8065639120d047ccc80135e1e3304"],

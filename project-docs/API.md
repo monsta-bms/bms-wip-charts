@@ -34,6 +34,7 @@
     "noteCount": 1200,
     "tapCount": 1160,
     "longNoteCount": 40,
+    "mineCount": 8,
     "eventEncoding": "grouped-varint-v1",
     "eventGroupCount": 123,
     "eventData": "...",
@@ -44,7 +45,7 @@
 }
 ```
 
-`eventData`は同じ小節・レーン・種別・分母のイベントをまとめたvarint列で、各イベントの`pairIndex/pairCount`を丸めず復元できる。`measureLengths`は長さ1.0以外の小節だけを`[measure, length]`で保持する。`startPosition/endPosition`とprogressMap blockの同名値は小節長累積の共通座標である。schemaVersion 3の`initialBpm`は宣言された初期値またはNULL、`bpmEvents`は`[measure, numerator, denominator, bpm]`でchannel 03/08の変化を保持する。schemaVersion 2はBPM情報なしで取得可能とし、schemaVersion 1だけを`MINIVIEW_NOT_AVAILABLE`とする。一覧APIには引き続き完全payloadを含めない。
+`eventData`は同じ小節・レーン・種別・分母のイベントをまとめたvarint列で、各イベントの`pairIndex/pairCount`を丸めず復元できる。イベント種別`3`は1P側地雷で、`mineCount`はその件数を表す。`mineCount`がない既存schemaVersion 3 payloadは地雷0件として表示する。`measureLengths`は長さ1.0以外の小節だけを`[measure, length]`で保持する。`startPosition/endPosition`とprogressMap blockの同名値は小節長累積の共通座標である。schemaVersion 3の`initialBpm`は宣言された初期値またはNULL、`bpmEvents`は`[measure, numerator, denominator, bpm]`でchannel 03/08の変化を保持する。schemaVersion 2はBPM情報なしで取得可能とし、schemaVersion 1だけを`MINIVIEW_NOT_AVAILABLE`とする。一覧APIには引き続き完全payloadを含めない。
 
 成功時は`Cache-Control: public, max-age=300, stale-while-revalidate=300`とpayload SHA-256由来の`ETag`を返し、`If-None-Match`一致時は304とする。
 

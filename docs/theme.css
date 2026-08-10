@@ -278,6 +278,7 @@ html {
   --miniview-white-lane: #090909;
   --miniview-white-note: #ededed;
   --miniview-white-ln: #8f999f;
+  --miniview-mine: #ffb347;
   background: var(--bg);
   color: var(--text);
 }

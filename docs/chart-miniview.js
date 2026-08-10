@@ -97,7 +97,7 @@
       const kind = descriptor >> 3;
       const denominator = readVarint(state);
       const count = readVarint(state);
-      if (kind > 2 || denominator <= 0 || count <= 0) {
+      if (kind > 3 || denominator <= 0 || count <= 0) {
         throw new Error("Chart miniview event group is invalid.");
       }
       let numerator = 0;
@@ -199,10 +199,11 @@
       }).sort((left, right) => left.position - right.position)
       : [];
     const tapEvents = events.filter((event) => event.kind === 0);
+    const mineEvents = events.filter((event) => event.kind === 3);
     const longNotes = [];
     for (let lane = 0; lane < 8; lane += 1) {
       const endpoints = events
-        .filter((event) => event.lane === lane && event.kind !== 0)
+        .filter((event) => event.lane === lane && (event.kind === 1 || event.kind === 2))
         .sort((left, right) => left.position - right.position || left.kind - right.kind);
       let start = null;
       for (const event of endpoints) {
@@ -219,7 +220,14 @@
         throw new Error("Chart miniview long-note data is incomplete.");
       }
     }
-    if (tapEvents.length !== Number(value.tapCount) || longNotes.length !== Number(value.longNoteCount)) {
+    const mineCount = value.mineCount === undefined ? 0 : Number(value.mineCount);
+    if (
+      tapEvents.length !== Number(value.tapCount)
+      || longNotes.length !== Number(value.longNoteCount)
+      || !Number.isInteger(mineCount)
+      || mineCount < 0
+      || mineEvents.length !== mineCount
+    ) {
       throw new Error("Chart miniview event counts are inconsistent.");
     }
 
@@ -233,6 +241,8 @@
       measureStarts: geometry.starts,
       tapEvents,
       longNotes,
+      mineCount,
+      mineEvents,
       initialBpm: Number.isFinite(initialBpm) && initialBpm > 0 ? initialBpm : null,
       bpmEvents
     };
@@ -528,6 +538,22 @@
         noteHeight
       );
     }
+    for (const event of payload.mineEvents) {
+      if (event.position < rangeStart || event.position >= rangeEnd) {
+        continue;
+      }
+      const geometry = laneGeometry[event.lane];
+      const mineWidth = Math.max(2, geometry.width * (event.lane === 0 ? 0.88 : 0.74));
+      const mineHeight = large ? 4.8 : 1.8;
+      const y = yForPosition(event.position);
+      context.fillStyle = getThemeColor("--miniview-mine", "#FFB347");
+      context.fillRect(
+        geometry.x + (geometry.width - mineWidth) / 2,
+        topForNote(y, mineHeight),
+        mineWidth,
+        mineHeight
+      );
+    }
     for (const longNote of payload.longNotes) {
       for (const event of [longNote.start, longNote.end]) {
         if (event.position < rangeStart || event.position >= rangeEnd) {
@@ -603,7 +629,7 @@
       button.title = "譜面ミニビューを拡大表示";
       button.setAttribute(
         "aria-label",
-        `譜面ミニビューを開く。7key、通常ノート${payload.tapCount}、LN${payload.longNoteCount}`
+        `譜面ミニビューを開く。7key、通常ノート${payload.tapCount}、LN${payload.longNoteCount}、地雷${payload.mineCount}`
       );
     });
   }
@@ -1119,7 +1145,7 @@
       const payload = await requestPayload(versionId, url, button, true);
       drawPayload(dialogCanvas, payload, true);
       if (dialogSummary) {
-        dialogSummary.textContent = `7key SP / 通常ノート ${payload.tapCount} / LN ${payload.longNoteCount} / 小節 ${payload.startMeasure}-${payload.endMeasure}`;
+        dialogSummary.textContent = `7key SP / 通常ノート ${payload.tapCount} / LN ${payload.longNoteCount} / 地雷 ${payload.mineCount} / 小節 ${payload.startMeasure}-${payload.endMeasure}`;
       }
       paintRowVersion(versionId, payload);
     } catch (error) {

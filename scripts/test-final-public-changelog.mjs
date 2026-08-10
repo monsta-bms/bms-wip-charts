@@ -9,7 +9,7 @@ const articles = [...html.matchAll(/<article\b[^>]*\bdata-copy-entry="([A-Z0-9_]
   .map((match) => ({ id: match[1], html: match[2] }));
 const manifestEntries = manifest.changelogEntries ?? [];
 
-assert.equal(articles.length, 22, "公開changelogは22 entryであること");
+assert.equal(articles.length, 23, "公開changelogは23 entryであること");
 assert.equal(manifestEntries.length, articles.length, "manifest entry数が一致すること");
 assert.equal(new Set(articles.map((entry) => entry.id)).size, articles.length, "ENTRY IDが重複しないこと");
 assert.deepEqual(manifestEntries.map((entry) => entry.id), articles.map((entry) => entry.id), "manifestとHTMLのENTRY順が一致すること");
@@ -52,7 +52,14 @@ for (const phrase of ["正式公開を開始しました", "公開終了の予�
   assert.ok(launch.includes(phrase), `正式公開entryに「${phrase}」が含まれること`);
 }
 
-const latest = articles.find((entry) => entry.id === "CHANGELOG_20260809")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
+const latest = articles.find((entry) => entry.id === "CHANGELOG_20260810")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
+for (const phrase of [
+  "地雷を含む譜面のミニビューを修正しました",
+  "1P側の地雷を含む7key譜面",
+  "地雷を通常ノートやLNと区別",
+  "専用の色でミニビューへ表示"
+]) assert.ok(latest.includes(phrase), `最新entryに「${phrase}」を掲載すること`);
+const appendProgress = articles.find((entry) => entry.id === "CHANGELOG_20260809")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
 for (const phrase of [
   "追記投稿の入力と進捗色を修正しました",
   "ファイルをドロップしたあと、差分情報以降の入力欄が開かない不具合を修正",
@@ -60,7 +67,7 @@ for (const phrase of [
   "追記色をオレンジ、青、赤、紫の順",
   "今回手動で塗った箇所の色を保ち",
   "手動塗りが100%に達した場合"
-]) assert.ok(latest.includes(phrase), `最新entryに「${phrase}」を掲載すること`);
+]) assert.ok(appendProgress.includes(phrase), `2026-08-09 entryに「${phrase}」を掲載すること`);
 const publicUiTouchup = articles.find((entry) => entry.id === "CHANGELOG_20260807")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
 for (const phrase of [
   "コメント・進捗・一覧表示を整えました",

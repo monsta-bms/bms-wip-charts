@@ -3,7 +3,6 @@
   const MINI_VIEW_MAX_EVENTS = 50_000;
   const LANE_COUNT = 8;
   const CONTROL_FLOW_PATTERN = /^#(?:RANDOM|SETRANDOM|ENDRANDOM|IF|ELSEIF|ELSE|ENDIF|SWITCH|SETSWITCH|CASE|SKIP|DEF|ENDSW)\b/i;
-  const MINE_CHANNEL_PATTERN = /^[DE][1-9]$/i;
   const SECOND_PLAYER_CHANNEL_PATTERN = /^(?:2[1-9]|6[1-9])$/;
   const MINI_VIEW_LANE_ORDER = [
     "scratch",
@@ -34,6 +33,16 @@
     ["55", 5],
     ["58", 6],
     ["59", 7]
+  ]);
+  const MINE_LANES = new Map([
+    ["D6", 0],
+    ["D1", 1],
+    ["D2", 2],
+    ["D3", 3],
+    ["D4", 4],
+    ["D5", 5],
+    ["D8", 6],
+    ["D9", 7]
   ]);
   const analysisPromises = new WeakMap();
 
@@ -242,7 +251,7 @@
     return { data: bytesToBase64(Uint8Array.from(bytes)), groupCount: groups.length };
   }
 
-  function buildPayload(taps, longNotes, initialBpm, bpmEvents, measureStarts, measureLengths, analysis) {
+  function buildPayload(taps, longNotes, mines, initialBpm, bpmEvents, measureStarts, measureLengths, analysis) {
     const startMeasure = analysis.displayFirstMeasure;
     const endMeasure = analysis.displayLastMeasure;
     if (!Number.isInteger(startMeasure) || !Number.isInteger(endMeasure) || endMeasure < startMeasure) {
@@ -276,7 +285,14 @@
           denominator: interval.endEvent.pairCount,
           kind: 2
         }
-      ]))
+      ])),
+      ...mines.map((event) => ({
+        lane: event.lane,
+        measure: event.measure,
+        numerator: event.pairIndex,
+        denominator: event.pairCount,
+        kind: 3
+      }))
     ]);
     const lengthOverrides = [...measureLengths.entries()]
       .filter(([measure, length]) => measure >= 0 && measure <= endMeasure && Number.isFinite(length) && length > 0 && length !== 1)
@@ -292,6 +308,7 @@
       noteCount: taps.length + longNotes.length,
       tapCount: taps.length,
       longNoteCount: longNotes.length,
+      mineCount: mines.length,
       eventEncoding: "grouped-varint-v1",
       eventGroupCount: packed.groupCount,
       eventData: packed.data,
@@ -312,6 +329,7 @@
 
       const normalEvents = [];
       const longEvents = [];
+      const mineEvents = [];
       const rawBpmEvents = [];
       const bpmDefinitions = new Map();
       const measureLengths = new Map();
@@ -400,7 +418,7 @@
               }
             }
           }
-          if (normalEvents.length + longEvents.length + rawBpmEvents.length > MINI_VIEW_MAX_EVENTS) {
+          if (normalEvents.length + longEvents.length + mineEvents.length + rawBpmEvents.length > MINI_VIEW_MAX_EVENTS) {
             return unsupported("MINIVIEW_TOO_COMPLEX", "Chart miniview event count exceeds the safe limit.");
           }
           continue;
@@ -408,8 +426,35 @@
         if (!hasNonZeroObject(data)) {
           continue;
         }
-        if (MINE_CHANNEL_PATTERN.test(channel)) {
-          return unsupported("MINIVIEW_UNSUPPORTED_MODE", "Chart miniview does not support mine channels.", `channel=${channel}`);
+        const mineLane = MINE_LANES.get(channel);
+        if (mineLane !== undefined) {
+          const lineKey = `${measure}:${channel}`;
+          if (seenPlayableLines.has(lineKey)) {
+            return unsupported("MINIVIEW_GENERATION_FAILED", "Chart miniview does not support duplicated playable channel lines.", lineKey);
+          }
+          seenPlayableLines.add(lineKey);
+          const objects = splitObjects(data);
+          if (!objects) {
+            return unsupported("MINIVIEW_GENERATION_FAILED", "Chart miniview found malformed playable channel data.", lineKey);
+          }
+          mineEvents.push(...objects.map((object) => ({
+            lane: mineLane,
+            measure,
+            fraction: object.fraction,
+            pairIndex: object.pairIndex,
+            pairCount: object.pairCount,
+            objectId: object.objectId
+          })));
+          if (channel === "D8" || channel === "D9") {
+            usesExtendedKeys = true;
+          }
+          if (normalEvents.length + longEvents.length + mineEvents.length + rawBpmEvents.length > MINI_VIEW_MAX_EVENTS) {
+            return unsupported("MINIVIEW_TOO_COMPLEX", "Chart miniview event count exceeds the safe limit.");
+          }
+          continue;
+        }
+        if (/^E[1-9]$/i.test(channel) || channel === "D7") {
+          return unsupported("MINIVIEW_UNSUPPORTED_MODE", "Chart miniview found an unsupported mine channel.", `channel=${channel}`);
         }
         if (SECOND_PLAYER_CHANNEL_PATTERN.test(channel)) {
           return unsupported("MINIVIEW_UNSUPPORTED_MODE", "Chart miniview supports 7key single play only.");
@@ -448,7 +493,7 @@
             usesExtendedKeys = true;
           }
         }
-        if (normalEvents.length + longEvents.length + rawBpmEvents.length > MINI_VIEW_MAX_EVENTS) {
+        if (normalEvents.length + longEvents.length + mineEvents.length + rawBpmEvents.length > MINI_VIEW_MAX_EVENTS) {
           return unsupported("MINIVIEW_TOO_COMPLEX", "Chart miniview event count exceeds the safe limit.");
         }
       }
@@ -464,7 +509,8 @@
       const maxMeasure = Math.max(
         analysis.displayLastMeasure,
         ...normalEvents.map((event) => event.measure),
-        ...longEvents.map((event) => event.measure)
+        ...longEvents.map((event) => event.measure),
+        ...mineEvents.map((event) => event.measure)
       );
       const measureStarts = buildMeasureStarts(maxMeasure, measureLengths);
       const positionEvent = (event) => ({
@@ -473,6 +519,7 @@
       });
       const positionedNormal = normalEvents.map(positionEvent).sort(compareEvents);
       const positionedLong = longEvents.map(positionEvent).sort(compareEvents);
+      const positionedMines = mineEvents.map(positionEvent).sort(compareEvents);
       const taps = [];
       const longNotes = [];
 
@@ -544,7 +591,7 @@
       }
 
       const bpmEvents = normalizeBpmEvents(rawBpmEvents);
-      const payload = buildPayload(taps, longNotes, initialBpm, bpmEvents, measureStarts, measureLengths, analysis);
+      const payload = buildPayload(taps, longNotes, positionedMines, initialBpm, bpmEvents, measureStarts, measureLengths, analysis);
       if (!payload) {
         return unsupported("MINIVIEW_GENERATION_FAILED", "Chart miniview could not build a display range.");
       }

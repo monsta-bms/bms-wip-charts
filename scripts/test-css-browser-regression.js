@@ -53,6 +53,52 @@ function createProgressMap(progress = 50) {
   };
 }
 
+function appendMiniViewVarint(target, value) {
+  let remaining = value;
+  do {
+    const next = remaining % 128;
+    remaining = Math.floor(remaining / 128);
+    target.push(next | (remaining > 0 ? 0x80 : 0));
+  } while (remaining > 0);
+}
+
+function createMineMiniViewPayload() {
+  const bytes = [];
+  let previousMeasure = 0;
+  for (const event of [
+    { measure: 1, lane: 1, kind: 0, denominator: 4, numerator: 0 },
+    { measure: 1, lane: 2, kind: 3, denominator: 4, numerator: 2 }
+  ]) {
+    appendMiniViewVarint(bytes, event.measure - previousMeasure);
+    previousMeasure = event.measure;
+    bytes.push((event.kind << 3) | event.lane);
+    appendMiniViewVarint(bytes, event.denominator);
+    appendMiniViewVarint(bytes, 1);
+    appendMiniViewVarint(bytes, event.numerator);
+  }
+  return {
+    schemaVersion: 3,
+    mode: "7key-sp",
+    laneOrder: ["scratch", "key1", "key2", "key3", "key4", "key5", "key6", "key7"],
+    startMeasure: 1,
+    endMeasure: 1,
+    startPosition: 1,
+    endPosition: 2,
+    noteCount: 1,
+    tapCount: 1,
+    longNoteCount: 0,
+    mineCount: 1,
+    eventEncoding: "grouped-varint-v1",
+    eventGroupCount: 2,
+    eventData: Buffer.from(bytes).toString("base64"),
+    measureLengths: [],
+    initialBpm: 120,
+    bpmEvents: []
+  };
+}
+
+const mineMiniViewPayload = createMineMiniViewPayload();
+
 function createAppendCompletionParentMap() {
   return {
     schemaVersion: 2,
@@ -120,7 +166,12 @@ const versions = [
       body: "Existing latest public comment",
       createdAt: "2026-07-25T02:30:00.000Z"
     },
-    progressMap: createAppendCompletionParentMap()
+    progressMap: createAppendCompletionParentMap(),
+    miniView: {
+      available: true,
+      mode: "7key-sp",
+      url: "/api/versions/version-active/mini-view"
+    }
   }),
   createVersion("version-append-off", { allowAppend: false, appendAvailable: false, progress: 62 }),
   createVersion("version-download-blocked", {
@@ -351,6 +402,10 @@ function createApiServer() {
     }
     if (request.method === "GET" && request.url === "/api/charts/chart-audit") {
       json(response, 200, { serverTime: "2026-07-25T03:00:00.000Z", charts: [chartEntry] });
+      return;
+    }
+    if (request.method === "GET" && request.url === "/api/versions/version-active/mini-view") {
+      json(response, 200, { versionId: "version-active", miniView: mineMiniViewPayload });
       return;
     }
     if (request.method === "GET" && request.url.startsWith("/api/versions/version-active/comments?")) {
@@ -612,6 +667,12 @@ async function waitFor(cdp, sessionId, expression, label) {
     favoriteRuntimeStyle: Boolean(document.querySelector("#favoriteListStyles")),
     favoriteStylesheet: [...document.styleSheets].some((sheet) => sheet.href && new URL(sheet.href).pathname.endsWith("/favorites-list.css")),
     progressStylesheet: [...document.styleSheets].some((sheet) => sheet.href && new URL(sheet.href).pathname.endsWith("/progress-thumbnail-list.css")),
+    miniViewDebug: window.debugChartMiniViews?.() || null,
+    miniViewButtons: [...document.querySelectorAll(".chart-miniview-button")].slice(0, 5).map((button) => ({
+      versionId: button.dataset.versionId,
+      state: button.dataset.state,
+      label: button.getAttribute("aria-label")
+    })),
     bodyText: document.body?.innerText?.slice(0, 500) || ""
   })`);
   throw new Error(`Timed out waiting for ${label}: ${JSON.stringify(diagnostic)}`);
@@ -2435,6 +2496,61 @@ async function setTheme(cdp, sessionId, theme) {
   await new Promise((resolve) => setTimeout(resolve, 50));
 }
 
+async function captureMineMiniViewRegression(cdp, sessionId) {
+  await waitFor(
+    cdp,
+    sessionId,
+    `document.querySelector('.version-row[data-version-id="version-active"]')?.dataset.miniviewAvailable === "true"
+      && document.querySelector('.version-row[data-version-id="version-active"] .progress-thumbnail-block-navigator')`,
+    "mine miniview navigator"
+  );
+  await evaluate(cdp, sessionId, `(() => {
+    const navigator = document.querySelector('.version-row[data-version-id="version-active"] .progress-thumbnail-block-navigator');
+    const rect = navigator.getBoundingClientRect();
+    navigator.dispatchEvent(new MouseEvent("click", {
+      bubbles: true,
+      clientX: rect.left + rect.width * 0.1,
+      clientY: rect.top + rect.height / 2
+    }));
+  })()`);
+  await waitFor(cdp, sessionId, `document.querySelector("#chartMiniViewRangePreview")?.dataset.state === "ready"`, "mine miniview range preview");
+  const rowState = await evaluate(cdp, sessionId, `(() => {
+    const row = document.querySelector('.version-row[data-version-id="version-active"]');
+    const navigator = row?.querySelector(".progress-thumbnail-block-navigator");
+    const preview = document.querySelector("#chartMiniViewRangePreview");
+    const canvas = preview?.querySelector("canvas");
+    const context = canvas?.getContext("2d");
+    const pixels = context && canvas.width > 0 && canvas.height > 0
+      ? context.getImageData(0, 0, canvas.width, canvas.height).data
+      : [];
+    let minePixels = 0;
+    for (let index = 0; index < pixels.length; index += 4) {
+      if (pixels[index] === 255 && pixels[index + 1] === 179 && pixels[index + 2] === 71 && pixels[index + 3] > 0) {
+        minePixels += 1;
+      }
+    }
+    return {
+      available: row?.dataset.miniviewAvailable,
+      unavailableText: row?.querySelector(".progress-thumbnail-miniview-unavailable")?.textContent || "",
+      ariaLabel: navigator?.getAttribute("aria-label"),
+      previewState: preview?.dataset.state,
+      previewMeta: preview?.querySelector(".chart-miniview-range-meta")?.textContent || "",
+      canvasWidth: canvas?.width || 0,
+      canvasHeight: canvas?.height || 0,
+      minePixels
+    };
+  })()`);
+  assert.equal(rowState.available, "true");
+  assert.equal(rowState.unavailableText, "");
+  assert.equal(rowState.previewState, "ready");
+  assert.match(rowState.ariaLabel, /小節/);
+  assert.match(rowState.previewMeta, /7key SP/);
+  assert.ok(rowState.canvasWidth > 0 && rowState.canvasHeight > 0);
+  assert.ok(rowState.minePixels > 0, "mine color must be painted on the range preview canvas");
+  await evaluate(cdp, sessionId, `document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))`);
+  return rowState;
+}
+
 async function captureMatrix(cdp, sessionId, pageKind) {
   const matrix = [];
   const captureStart = process.hrtime.bigint();
@@ -3360,6 +3476,8 @@ async function run() {
       && [...document.styleSheets].some((sheet) => sheet.href && new URL(sheet.href).pathname.endsWith("/progress-thumbnail-list.css"))`, "detail fixture");
     console.log("css browser phase: detail fixture ready");
     await installControlFixtures(cdp, sessionId);
+    const mineMiniView = await captureMineMiniViewRegression(cdp, sessionId);
+    console.log("css browser phase: mine miniview complete");
     const detailNavigationMs = Number(process.hrtime.bigint() - navigationStart) / 1e6;
     const detail = await captureMatrix(cdp, sessionId, "detail");
     console.log("css browser phase: detail matrix complete");
@@ -3385,6 +3503,7 @@ async function run() {
       format: "bms-css-r4b2a-v1",
       fixture: { chartCount: 1, versionCount: versions.length, compactCount: compactItems.length },
       detail: detail.matrix,
+      mineMiniView,
       progressDragHint,
       versionComments,
       detailRerender,

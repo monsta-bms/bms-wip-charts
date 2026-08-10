@@ -115,7 +115,7 @@
 - 追記元と新ファイルのblock格子が一致する場合だけpreviewが有効になり、不一致時はpreviewが無効かつ既存の投稿拒否表示が維持されること。
 - ファイル変更・解除、初回/追記切替、追記キャンセル、投稿成功後reset、フォームを閉じた場合にpayload、hover、固定状態、吹き出しが破棄されること。
 - 解析中に別ファイルへ変更した場合やZIP解析中にモードを切り替えた場合、古いrevisionの解析結果が後から表示されないこと。
-- RANDOM系、LNTYPE 2、7key判定不能、2P、地雷・特殊レーン、不正LN、重複レーン行、イベント数・payload上限超過は空Canvasではなく「ミニビュー非対応」となり、投稿自体は妨げないこと。
+- RANDOM系、LNTYPE 2、7key判定不能、2P、2P側地雷、未割当・特殊レーン、不正LN、重複レーン行、イベント数・payload上限超過は空Canvasではなく「ミニビュー非対応」となり、投稿自体は妨げないこと。
 - Pages生成payloadとWorker生成payloadで、status、mode、表示小節、音楽位置、tap/LN件数、eventData、measureLengths、BPM情報が同じfixtureに対して一致すること。
 - ローカルminiView payloadがFormDataへ追加されず、Worker API、D1、R2、Secret、Turnstile、投稿レート制限の仕様が変わらないこと。
 - 一覧ミニビュー、初回投稿、追記投稿、検索、ページング、お気に入りの回帰がないこと。
@@ -129,7 +129,9 @@
 - RANDOM/IF/SWITCH系が`MINIVIEW_RANDOM_UNSUPPORTED` warningになること。
 - LNTYPE 2が`MINIVIEW_LNTYPE2_UNSUPPORTED` warningになること。
 - 未閉鎖・重複・競合LNが`MINIVIEW_MALFORMED_LN` warningになること。
-- 2P側、地雷、特殊チャンネル、判定が曖昧な5keyが`MINIVIEW_UNSUPPORTED_MODE` warningになること。
+- 1P側地雷`D1-D6,D8,D9`がscratch・key1～key7へ割り当てられ、`mineCount`と種別`3`でready payloadへ保存されること。
+- 2P側地雷`E1-E9`、未割当`D7`、その他の2P側・特殊チャンネル、判定が曖昧な5keyが`MINIVIEW_UNSUPPORTED_MODE` warningになること。
+- 地雷を含む実投稿相当BMSが32KiB上限内のready payloadとなり、一覧Canvas、拡大dialog、アクセシブル名へ地雷件数が反映されること。
 - ミニビュー未対応でも投稿、progressMap、progressImage、R2/D1保存が従来通り成功すること。
 - miniView保存値が32KiB以下で、超過時は`MINIVIEW_TOO_COMPLEX`になること。
 - `GET /api/charts`に完全なイベントpayloadが含まれず、available/mode/urlだけが返ること。
