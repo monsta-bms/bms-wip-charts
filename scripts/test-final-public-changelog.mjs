@@ -54,9 +54,11 @@ for (const phrase of ["正式公開を開始しました", "公開終了の予�
 
 const latest = articles.find((entry) => entry.id === "CHANGELOG_20260813")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
 for (const phrase of [
-  "完成版のない制作ツリーを探せるようにしました",
-  "起点版自身と派生版のどちらにも完成版がない譜面",
-  "派生版がまだない制作途中の起点譜面"
+  "一覧の絞り込みと難易度表の作者表示を改善しました",
+  "完成版のない譜面",
+  "派生版がまだない制作途中の起点譜面",
+  "投稿フォームで入力された作者名だけ",
+  "譜面ファイル内の補助表記が重複して表示されない"
 ]) assert.ok(latest.includes(phrase), `最新entryに「${phrase}」を掲載すること`);
 const mineMiniView = articles.find((entry) => entry.id === "CHANGELOG_20260810")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
 for (const phrase of [

@@ -557,7 +557,7 @@ MVPではサムネイルクリックによる拡大表示は実装しない。�
 - 検索対象は曲名、サブタイトル、アーティスト、サブアーティスト、対象version自身の差分名、そのversionの作者とする。
 - 並び順は `new`（version投稿日時順）と `updated`（chart更新日時を優先し、その中でversion投稿日時順）を提供する。
 - 状態は `all`, `incomplete`, `complete`, `rejected`, `finished`, `no_completed_tree` を提供する。未完成・完成は非没譜面だけを対象とし、`finished`は完成版と没譜面の和集合を返す。`no_completed_tree`は公開中の起点版だけを候補とし、`parent_version_id`を再帰的に辿った起点版自身を含む公開ツリー内に通常の完成版が1件もないものを返す。子がない制作途中の起点版も対象とし、非公開版・削除処理中以降の版・完成済み没譜面は完成版として数えない。
-- 画面の主要状態は「すべて」「完成済み」「制作途中（すべて）」「完成版のないツリー」の順に表示し、完成済みの内訳として「完成＋没譜面」「通常完成」「没譜面」を維持する。
+- 画面の主要状態は「すべて」「完成済み」「制作途中（すべて）」「完成版のない譜面」の順に表示し、完成済みの内訳として「完成＋没譜面」「通常完成」「没譜面」を維持する。
 - 状態と並び順はネイティブradioのフィルターパネルで選択し、変更時に即再取得する。
 - 期間は`dateFrom`, `dateTo`の片側または両側指定とし、適用操作まで一覧へ反映しない。`sort=new`ではversion投稿日時、`sort=updated`ではchart更新日時を固定JST（UTC+9）の開始含む・翌日開始未満で絞る。
 - 今日・今週・今月・今年のショートカットはAPIの`serverTime`をJSTへ変換して算出し、端末時計や端末timezoneを基準にしない。
@@ -1084,9 +1084,9 @@ RC★★変換:
 - 掲載対象、MD5重複排除、並び順、`classifyDifficulty()`によるRC★/RC★★変換はDIFFICULTY-TABLE-01から変更しない。対象SELECTへversionの親ID・comment・updated_atと元metadataを`LEFT JOIN`で追加するが、metadata行なし、failed、unavailableを除外条件にしない。
 - 元metadataは`status='succeeded'`の場合だけ表示値へ優先採用し、欠けた項目はversionのtitle/subtitle/artist/subartistへ項目単位でfallbackする。metadata行なし、failed、unavailable、`SOURCE_FILE_DELETED`は全項目をversion保存値へfallbackし、内部status/error/encodingを公開しない。source値とversion値は更新・正規化しない。
 - 表示用タイトルはTITLE、SUBTITLE、差分名の順に、各表示用コピーだけtrimと連続空白・改行の単一空白化を行って結合する。TITLE/SUBTITLEのNFKC＋空白正規化後の完全一致は1回にし、末尾の`[]`, `()`, `（ ）`, `- -`, `-- --`, `ー ー`が差分名と同等なら差分名を再追加しない。一般単語の部分一致では省略しない。
-- 表示用アーティストはARTISTとSUBARTISTを` / `で結合し、NFKC＋空白正規化後の完全一致だけを1回にする。単語境界の`obj`（`:：.．;；@`または空白）と`note/notes/chart/charter`（`:：;；`）をASCII大文字小文字を区別せずmarkerとして扱い、marker部分と直前の不要な`/・,，`を表示用コピーから除く。空markerは作者へ追加しない。
-- 作者履歴は選出version ID配列を`json_each(?)`へbindする1回の再帰CTEで取得し、各versionのルート親から現在版へ並べる。親の公開・collapsed状態では絞り込まず、欠落親では取得済み部分を使い、visitedで循環を止め、最大64版とする。作者はtrim後の完全一致だけを除外し、大文字小文字・全半角は区別し、`A & B`を分割しない。履歴作者の後へmarker作者を同じ完全一致規則で追加する。対象0件では作者queryを省略し、通常は対象SELECTと作者CTEの固定2 queryでN+1を行わない。
-- ViewModelは変換後level、`RC★/RC★★`付きlevelLabel、元difficulty、保存title/artist、表示title/artist、採用可能なsource 4項目、差分名、版ラベル、authors配列と全角読点結合、合成comment、曲URL、Worker file URL、completed_at、version/metadataの最大updated_at候補を未escape文字列で保持する。HTML escapeはPhase Dの責任とする。
+- 表示用アーティストはARTISTとSUBARTISTを` / `で結合し、NFKC＋空白正規化後の完全一致だけを1回にする。単語境界の`obj`（`:：.．;；@`または空白）と`note/notes/chart/charter`（`:：;；`）をASCII大文字小文字を区別せずmarkerとして扱い、marker部分と直前の不要な`/・,，`を表示用コピーから除く。譜面ファイル内のmarker由来文字列は作者一覧へ追加しない。
+- 作者履歴は選出version ID配列を`json_each(?)`へbindする1回の再帰CTEで取得し、各versionのルート親から現在版へ並べる。親の公開・collapsed状態では絞り込まず、欠落親では取得済み部分を使い、visitedで循環を止め、最大64版とする。作者一覧は投稿フォームから各versionへ保存された作者だけをルート親から現在版の順に並べ、trim後の完全一致だけを除外する。大文字小文字・全半角は区別し、`A & B`を分割しない。対象0件では作者queryを省略し、通常は対象SELECTと作者CTEの固定2 queryでN+1を行わない。
+- ViewModelは変換後level、`RC★/RC★★`付きlevelLabel、元difficulty、保存title/artist、表示title/artist、採用可能なsource 4項目、差分名、版ラベル、フォーム入力由来のauthors配列と全角読点結合、合成comment、曲URL、Worker file URL、completed_at、version/metadataの最大updated_at候補を未escape文字列で保持する。HTML escapeはPhase Dの責任とする。
 - `comment`はプレーンテキストの`元難易度：{元difficulty}`を必ず先頭にし、投稿コメントがあれば改行して続ける。投稿コメント内の改行を維持し、行末空白と末尾空行だけを整理する。HTMLを解釈せず、本文をログへ出さない。
 - data JSONの標準項目と既存`bms_wip_*`は値・意味を変更しない。`comment`, `bms_wip_display_title`, `bms_wip_display_artist`, `bms_wip_authors`を常時追加し、succeeded metadataの非空sourceだけ`bms_wip_source_title/subtitle/artist/subartist`を追加する。metadata status/error/encoding、R2 key、password hash、BMS-IR URLは追加しない。曲URLは既存`normalizeOriginUrl()`、DL URLは既存Worker `/api/files/{encoded file_id}`を使い、R2操作を行わない。
 

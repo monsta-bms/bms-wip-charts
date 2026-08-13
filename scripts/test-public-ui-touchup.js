@@ -79,7 +79,7 @@ check("all unchanged list assets use the touchup cache key", () => {
   for (const asset of ["style.css", "list.css", "version-management-ui.css", "version-comment-ui.css", "version-ui-model.js", "version-comment-ui.js"]) {
     assert.match(sources.listHtml, new RegExp(`\\./${asset.replaceAll(".", "\\.")}\\?v=public-ui-touchup-03-patch1`, "u"));
   }
-  assert.match(sources.listHtml, /\.\/list\.js\?v=no-completed-tree-filter-01/u);
+  assert.match(sources.listHtml, /\.\/list\.js\?v=rc-author-list-01/u);
 });
 check("changelog records the public touchup without operational details", () => {
   assert.match(sources.changelog, /CHANGELOG_20260807[\s\S]*投稿者コメント[\s\S]*進捗率の色[\s\S]*コメントを広く、操作をコンパクト/u);

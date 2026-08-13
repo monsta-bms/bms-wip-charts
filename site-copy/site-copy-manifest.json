@@ -902,7 +902,7 @@
         },
         {
           "key": "NO_COMPLETED_TREE",
-          "label": "完成版のないツリー",
+          "label": "完成版のない譜面",
           "sourcePath": "docs/list.html",
           "sourceType": "HTML_TEXT",
           "locator": {
@@ -912,7 +912,7 @@
           "allowEmpty": false,
           "deploymentTarget": "PAGES",
           "blockId": "LIST_FILTERS",
-          "sourceValueSha256": "d231219c3ae75454ba3593b10b04bd5657518eee0b168c152dbb438b19174ad2"
+          "sourceValueSha256": "73a9c6a4dba8b8e149e9449b43a7f1713a4e35f3edac971b6092da887a990417"
         },
         {
           "key": "REJECTED",
@@ -1001,7 +1001,7 @@
           "sourceValueSha256": "7059ddf3b1a896a8e8a70cfae9db5f0c039704a2b6f7e92b3705c7cc14f5a51d"
         }
       ],
-      "sourceValueSha256": "662f60f3cd9407e0508c71f55ad11284d0be8745e6cbf77e52c7818d718fb308"
+      "sourceValueSha256": "c138b441271445a41f465bf420f22ffd339c22a84dfe4142073cf988adb3ee5c"
     },
     {
       "id": "LIST_STATUS",
@@ -1464,7 +1464,7 @@
       "sourcePath": "docs/changelog.html",
       "deploymentTarget": "PAGES",
       "allowEmpty": false,
-      "sourceValueSha256": "71578aac295c1b978714a9ecfe0136322ffa6ee54187313c04ffa24c3b8d18dc"
+      "sourceValueSha256": "e4273d232d1db48a086744155043f7d24ff94ccaffd03ceb3ac90043d270e47f"
     },
     {
       "id": "CHANGELOG_20260810",

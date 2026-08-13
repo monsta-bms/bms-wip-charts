@@ -391,13 +391,12 @@ async function testPureDisplayFunctions() {
     }
   });
 
-  await check("author merge uses exact duplicate removal without splitting or case folding", () => {
+  await check("form author history uses exact duplicate removal without splitting or case folding", () => {
     assert.deepEqual(
-      display.mergeDifficultyTableAuthors(
-        [" monsta ", "monsta", "A & B", "Author", "author", "Ａ"],
-        ["A & B", "A", "Ａ", "obj2"]
+      display.buildDifficultyTableAuthors(
+        [" monsta ", "monsta", "A & B", "Author", "author", "Ａ"]
       ),
-      ["monsta", "A & B", "Author", "author", "Ａ", "A", "obj2"]
+      ["monsta", "A & B", "Author", "author", "Ａ"]
     );
   });
 
@@ -449,7 +448,7 @@ async function testPureDisplayFunctions() {
     });
     assert.equal(model.displayTitle, "Source Stored Sub [Chart]");
     assert.equal(model.displayArtist, "Source Artist");
-    assert.deepEqual(model.authors, ["author", "marker"]);
+    assert.deepEqual(model.authors, ["author"]);
     assert.equal(model.updatedAt, "2026-07-24 11:00:00");
     assert.equal(model.levelLabel, "RC★12");
   });
@@ -583,6 +582,53 @@ async function seedIntegrationFixtures() {
     status: "succeeded",
     sourceTitle: "Partial Source",
     sourceArtist: "Source Artist"
+  });
+
+  await check("RC author list ignores BMS marker authors and uses only form author history", () => {
+    const baseInput = {
+      versionId: "v",
+      md5: "0".repeat(32),
+      level: "2",
+      levelLabel: "RC★★2",
+      originalDifficulty: "★22",
+      storedTitle: "Stored",
+      storedSubtitle: "",
+      storedArtist: "Stored Artist",
+      storedSubartist: "",
+      sourceMetadataStatus: "succeeded",
+      sourceTitle: "Source",
+      sourceSubtitle: null,
+      sourceArtist: "Source Artist",
+      chartName: "[Chart]",
+      versionLabel: "1-1",
+      postComment: null,
+      originUrl: null,
+      downloadUrl: "https://example.test/api/files/f",
+      completedAt: "2026-08-13 12:00:00",
+      versionUpdatedAt: "2026-08-13 12:00:00",
+      sourceMetadataUpdatedAt: "2026-08-13 12:00:00"
+    };
+    const cases = [
+      {
+        chainAuthors: ["mukyu--", "餅派"],
+        sourceSubartist: "obj:mukyu-- vs 餅派",
+        expected: "mukyu--、餅派"
+      },
+      {
+        chainAuthors: ["矢口", "餅派"],
+        sourceSubartist: "obj:矢口vs餅派",
+        expected: "矢口、餅派"
+      }
+    ];
+    for (const fixture of cases) {
+      const model = display.buildDifficultyTableViewModel({
+        ...baseInput,
+        chainAuthors: fixture.chainAuthors,
+        sourceSubartist: fixture.sourceSubartist
+      });
+      assert.equal(model.authorsText, fixture.expected);
+      assert.ok(!model.authorsText.includes("vs"));
+    }
   });
 
   const rejectedStar = await insertVersion({
@@ -774,10 +820,10 @@ async function testRouteIntegration(fixtures) {
     });
   });
 
-  await check("succeeded metadata builds title, artist, marker authors, comment, and source JSON fields", () => {
+  await check("succeeded metadata builds display fields while authors use only form history", () => {
     assert.equal(featured.bms_wip_display_title, "Faraway Sky (All I C Is U) [Nebula]");
     assert.equal(featured.bms_wip_display_artist, "BACO / Sobrem");
-    assert.equal(featured.bms_wip_authors, "monsta、potechang、俺、obj2");
+    assert.equal(featured.bms_wip_authors, "monsta、potechang、俺");
     assert.equal(featured.comment, "元難易度：sl7\n制作途中の配置を整理しました。");
     assert.equal(featured.bms_wip_source_title, "Faraway Sky");
     assert.equal(featured.bms_wip_source_subtitle, "(All I C Is U)");

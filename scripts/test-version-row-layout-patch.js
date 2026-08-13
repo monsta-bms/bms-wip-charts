@@ -127,7 +127,7 @@ check("changed list assets share the patch cache key", () => {
     assert.match(listHtml, new RegExp(`\\./${asset.replaceAll(".", "\\.")}\\?v=public-ui-touchup-03-patch1`));
   }
   assert.match(listHtml, /\.\/version-management-ui\.css\?v=public-ui-touchup-03-patch1/);
-  assert.match(listHtml, /\.\/list\.js\?v=no-completed-tree-filter-01/);
+  assert.match(listHtml, /\.\/list\.js\?v=rc-author-list-01/);
 });
 
 check("specification and test plan record the layout patch", () => {

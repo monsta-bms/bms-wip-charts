@@ -149,7 +149,7 @@ check("list has first-stage status options", () => {
     previous = current;
   }
   assert.match(sources.listHtml, /value="incomplete"><span data-copy-key="list-status-incomplete">制作途中（すべて）<\/span>/u);
-  assert.match(sources.listHtml, /value="no_completed_tree"><span data-copy-key="list-status-no-completed-tree">完成版のないツリー<\/span>/u);
+  assert.match(sources.listHtml, /value="no_completed_tree"><span data-copy-key="list-status-no-completed-tree">完成版のない譜面<\/span>/u);
 });
 check("list has completed subtypes", () => {
   for (const value of ["finished", "complete", "rejected"]) assert.match(sources.listHtml, new RegExp(`name="compactFinishedStatus" value="${value}"`, "u"));
@@ -249,7 +249,7 @@ check("comment and action assets share a release cache key", () => {
   assert.match(sources.listHtml, /\.\/version-management-ui\.css\?v=public-ui-touchup-03-patch1/u);
   assert.match(sources.listHtml, /\.\/version-action-ui\.js\?v=comment-action-balance-01/u);
   assert.match(sources.index, /\.\/list-ui-refresh\.css\?v=public-list-density-patch-01/u);
-  assert.match(sources.listHtml, /\.\/list\.js\?v=no-completed-tree-filter-01/u);
+  assert.match(sources.listHtml, /\.\/list\.js\?v=rc-author-list-01/u);
 });
 check("guide and changelog share the widened content measure", () => assert.match(sources.headerCss, /\.content-page \{\s*max-width: min\(100%, 114ch\);/u));
 check("RC header has top, title, switch and theme", () => {

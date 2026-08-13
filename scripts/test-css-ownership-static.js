@@ -215,7 +215,7 @@ check("changed public UI, comment, and progress assets use their release cache k
   assert.match(sources.listHtml, /\.\/version-comment-ui\.css\?v=public-ui-touchup-03-patch1/);
   assert.match(sources.listHtml, /\.\/version-comment-ui\.js\?v=public-ui-touchup-03-patch1/);
   assert.match(sources.listHtml, /\.\/version-ui-model\.js\?v=public-ui-touchup-03-patch1/);
-  assert.match(sources.listHtml, /\.\/list\.js\?v=no-completed-tree-filter-01/);
+  assert.match(sources.listHtml, /\.\/list\.js\?v=rc-author-list-01/);
   assert.match(sources.listHtml, /\.\/version-action-ui\.js\?v=comment-action-balance-01/);
   assert.doesNotMatch(sources.listHtml, /progress-style-r4b2f-01|detail-theme-r4b2e-01|favorite-theme-r4b2d-01|css-cleanup-r4b2a-01/);
   assert.equal((sources.index.match(/version-comment-progress-01/g) || []).length, 2);
@@ -238,7 +238,7 @@ check("changed public UI, comment, and progress assets use their release cache k
   assert.equal((sources.listHtml.match(/public-list-density-patch-01/g) || []).length, 0);
   assert.equal((sources.index.match(/public-ui-touchup-03-patch1/g) || []).length, 7);
   assert.equal((sources.listHtml.match(/public-ui-touchup-03-patch1/g) || []).length, 6);
-  assert.equal((sources.listHtml.match(/no-completed-tree-filter-01/g) || []).length, 1);
+  assert.equal((sources.listHtml.match(/rc-author-list-01/g) || []).length, 1);
 });
 
 check("favorite and progress runtime styles are completely removed", () => {
@@ -600,7 +600,7 @@ check("R4B2b does not use clipping or visual workarounds", () => {
 check("reviewed production JavaScript set includes public review, comment, and progress helpers", () => {
   assert.equal(productionJsFiles.length, 35);
   assert.equal(sha256(sources.progressThumbnail), "70adae4375ee4058f94b8de4a7b4b543904c6abd1cdf9a0d3bd836117c8f0309");
-  assert.equal(sha256(productionJsAggregate), "4c8257bb0935641e634b33fb4b3f8d2d837b9f1ca36bac156bc276f68b4ff7a6");
+  assert.equal(sha256(productionJsAggregate), "393161ff38ed3dcad4d816e3f5744291c980ef20af444b7fa574244f33855dcc");
 });
 
 check("all known CSS issues are documented as resolved", () => {

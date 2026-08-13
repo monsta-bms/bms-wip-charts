@@ -585,7 +585,7 @@
       finished: "完成＋没譜面",
       complete: "通常完成",
       rejected: "没譜面",
-      no_completed_tree: "完成版のないツリー"
+      no_completed_tree: "完成版のない譜面"
     })[status] || "";
   }
 

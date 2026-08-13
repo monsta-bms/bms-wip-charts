@@ -210,10 +210,9 @@ export function buildDifficultyTableDisplayArtist(
   };
 }
 
-export function mergeDifficultyTableAuthors(chainAuthors: string[], markerAuthors: string[]): string[] {
+export function buildDifficultyTableAuthors(chainAuthors: string[]): string[] {
   const authors: string[] = [];
   appendUnique(authors, chainAuthors);
-  appendUnique(authors, markerAuthors);
   return authors;
 }
 
@@ -296,7 +295,7 @@ export function buildDifficultyTableViewModel(
     artist: effectiveDisplayValue(sourceMetadataSucceeded, sourceArtist, input.storedArtist),
     subartist: effectiveDisplayValue(sourceMetadataSucceeded, sourceSubartist, input.storedSubartist)
   });
-  const authors = mergeDifficultyTableAuthors(input.chainAuthors, artist.markerAuthors);
+  const authors = buildDifficultyTableAuthors(input.chainAuthors);
   const postComment = normalizeDifficultyTablePostComment(input.postComment);
 
   return {

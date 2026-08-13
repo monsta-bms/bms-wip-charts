@@ -1307,7 +1307,7 @@ dataは譜面objectの配列を返す。対象なしはHTTP 200の`[]`。
     "comment": "元難易度：st9\n配置を調整しました。",
     "bms_wip_display_title": "元曲名 サブタイトル 差分名",
     "bms_wip_display_artist": "元アーティスト / 元サブアーティスト",
-    "bms_wip_authors": "初版作者、差分作者、obj作者",
+    "bms_wip_authors": "初版作者、差分作者",
     "bms_wip_source_title": "元曲名",
     "bms_wip_source_subtitle": "サブタイトル",
     "bms_wip_source_artist": "元アーティスト",
@@ -1318,7 +1318,7 @@ dataは譜面objectの配列を返す。対象なしはHTTP 200の`[]`。
 
 `md5`, `level`, `title`, `artist`, `url`, `url_diff`, `name_diff`の意味と、既存`bms_wip_original_difficulty`, `bms_wip_chart_name`, `bms_wip_version`, `bms_wip_author`, `bms_wip_completed_at`, `bms_wip_subtitle`, `bms_wip_subartist`の値は変更しない。特に`title`と`artist`は採用versionの保存値であり、表示用合成値へ置換しない。
 
-`comment`は`元難易度：{bms_wip_original_difficulty}`を必ず先頭にし、保存済み投稿コメントがあれば改行して続ける。`bms_wip_display_title`は表示用のTITLE・SUBTITLE・差分名、`bms_wip_display_artist`はmarkerを除いたARTIST・SUBARTIST、`bms_wip_authors`は親版から現在版までの作者と`obj`等のmarker作者を全角読点で結合した値である。
+`comment`は`元難易度：{bms_wip_original_difficulty}`を必ず先頭にし、保存済み投稿コメントがあれば改行して続ける。`bms_wip_display_title`は表示用のTITLE・SUBTITLE・差分名、`bms_wip_display_artist`はmarkerを除いたARTIST・SUBARTIST、`bms_wip_authors`は投稿フォームから親版と現在版へ保存された作者だけを全角読点で結合した値である。譜面ファイル内の`obj`等のmarker作者は含めない。
 
 `version_source_metadata.status='succeeded'`の場合だけ、存在する元値を表示合成へ優先使用し、非空の`bms_wip_source_title`, `bms_wip_source_subtitle`, `bms_wip_source_artist`, `bms_wip_source_subartist`を追加する。metadata行なし、`failed`、`unavailable`（`SOURCE_FILE_DELETED`を含む）はversions側の保存値へfallbackし、metadata status、error code、encodingを公開しない。BMS-IR URLもdataへ追加せず、将来のHTML側が既存`md5`から組み立てる。
 
