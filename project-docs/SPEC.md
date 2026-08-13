@@ -556,7 +556,8 @@ MVPではサムネイルクリックによる拡大表示は実装しない。�
 - `withdrawn`, `deleteRequested`, `downloadBlocked` は公開状態なら小さい状態ラベルを表示する。管理非表示versionは表示しない。子が完成した親versionは通常の公開versionとして表示する。
 - 検索対象は曲名、サブタイトル、アーティスト、サブアーティスト、対象version自身の差分名、そのversionの作者とする。
 - 並び順は `new`（version投稿日時順）と `updated`（chart更新日時を優先し、その中でversion投稿日時順）を提供する。
-- 状態は `all`, `incomplete`, `complete`, `rejected`, `finished` を提供する。未完成・完成は非没譜面だけを対象とし、`finished`は完成版と没譜面の和集合を返す。画面では「完成＆没譜面」と表示する。
+- 状態は `all`, `incomplete`, `complete`, `rejected`, `finished`, `no_completed_tree` を提供する。未完成・完成は非没譜面だけを対象とし、`finished`は完成版と没譜面の和集合を返す。`no_completed_tree`は公開中の起点版だけを候補とし、`parent_version_id`を再帰的に辿った起点版自身を含む公開ツリー内に通常の完成版が1件もないものを返す。子がない制作途中の起点版も対象とし、非公開版・削除処理中以降の版・完成済み没譜面は完成版として数えない。
+- 画面の主要状態は「すべて」「完成済み」「制作途中（すべて）」「完成版のないツリー」の順に表示し、完成済みの内訳として「完成＋没譜面」「通常完成」「没譜面」を維持する。
 - 状態と並び順はネイティブradioのフィルターパネルで選択し、変更時に即再取得する。
 - 期間は`dateFrom`, `dateTo`の片側または両側指定とし、適用操作まで一覧へ反映しない。`sort=new`ではversion投稿日時、`sort=updated`ではchart更新日時を固定JST（UTC+9）の開始含む・翌日開始未満で絞る。
 - 今日・今週・今月・今年のショートカットはAPIの`serverTime`をJSTへ変換して算出し、端末時計や端末timezoneを基準にしない。

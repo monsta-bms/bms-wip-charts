@@ -352,7 +352,7 @@ versionレスポンスには以下を含める。
 | --- | ---: | --- |
 | `q` | 空 | 最大100文字。曲名、サブタイトル、アーティスト、サブアーティスト、差分名、そのversionの作者を部分一致検索する。`%`, `_`, `\\` は文字として扱う。 |
 | `sort` | `new` | `new`: version投稿日時順。`updated`: chart更新日時、version投稿日時順。 |
-| `status` | `all` | `all`, `incomplete`, `complete`, `rejected`, `finished`。`finished`は完成版と没譜面をまとめて返す。 |
+| `status` | `all` | `all`, `incomplete`, `complete`, `rejected`, `finished`, `no_completed_tree`。`finished`は完成版と没譜面をまとめて返す。`no_completed_tree`はツリー内に通常完成版がない公開起点版を返す。 |
 | `dateFrom` | 空 | `YYYY-MM-DD`。指定日のJST 00:00以降を対象にする。片側指定可。 |
 | `dateTo` | 空 | `YYYY-MM-DD`。指定日の翌JST 00:00未満を対象にする。片側指定可。 |
 | `page` | `1` | 1始まりのversionページ番号。 |
@@ -366,6 +366,7 @@ versionレスポンスには以下を含める。
 - `complete`: `completed_at IS NOT NULL AND is_rejected = 0`
 - `rejected`: `is_rejected = 1`
 - `finished`: `completed_at IS NOT NULL OR is_rejected = 1`
+- `no_completed_tree`: 公開中かつ非没の起点版で、`parent_version_id`を再帰的に辿った起点版自身を含む公開ツリー内に`completed_at IS NOT NULL AND is_rejected = 0`の版が存在しない。直接子・子孫が0件でも対象。非公開版と`processing/tombstoned/deleted`は完成版の存在判定から除外する。
 
 レスポンス例:
 

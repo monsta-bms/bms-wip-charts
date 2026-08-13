@@ -9,7 +9,7 @@ const articles = [...html.matchAll(/<article\b[^>]*\bdata-copy-entry="([A-Z0-9_]
   .map((match) => ({ id: match[1], html: match[2] }));
 const manifestEntries = manifest.changelogEntries ?? [];
 
-assert.equal(articles.length, 23, "公開changelogは23 entryであること");
+assert.equal(articles.length, 24, "公開changelogは24 entryであること");
 assert.equal(manifestEntries.length, articles.length, "manifest entry数が一致すること");
 assert.equal(new Set(articles.map((entry) => entry.id)).size, articles.length, "ENTRY IDが重複しないこと");
 assert.deepEqual(manifestEntries.map((entry) => entry.id), articles.map((entry) => entry.id), "manifestとHTMLのENTRY順が一致すること");
@@ -52,13 +52,19 @@ for (const phrase of ["正式公開を開始しました", "公開終了の予�
   assert.ok(launch.includes(phrase), `正式公開entryに「${phrase}」が含まれること`);
 }
 
-const latest = articles.find((entry) => entry.id === "CHANGELOG_20260810")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
+const latest = articles.find((entry) => entry.id === "CHANGELOG_20260813")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
+for (const phrase of [
+  "完成版のない制作ツリーを探せるようにしました",
+  "起点版自身と派生版のどちらにも完成版がない譜面",
+  "派生版がまだない制作途中の起点譜面"
+]) assert.ok(latest.includes(phrase), `最新entryに「${phrase}」を掲載すること`);
+const mineMiniView = articles.find((entry) => entry.id === "CHANGELOG_20260810")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
 for (const phrase of [
   "地雷を含む譜面のミニビューを修正しました",
   "1P側の地雷を含む7key譜面",
   "地雷を通常ノートやLNと区別",
   "専用の色でミニビューへ表示"
-]) assert.ok(latest.includes(phrase), `最新entryに「${phrase}」を掲載すること`);
+]) assert.ok(mineMiniView.includes(phrase), `2026-08-10 entryに「${phrase}」を掲載すること`);
 const appendProgress = articles.find((entry) => entry.id === "CHANGELOG_20260809")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
 for (const phrase of [
   "追記投稿の入力と進捗色を修正しました",

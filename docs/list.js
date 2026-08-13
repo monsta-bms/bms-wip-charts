@@ -10,7 +10,7 @@
   const MAX_QUERY_LENGTH = 100;
   const MAX_FAVORITES = 200;
   const validSorts = new Set(["new", "updated"]);
-  const validStatuses = new Set(["all", "incomplete", "complete", "rejected", "finished"]);
+  const validStatuses = new Set(["all", "incomplete", "complete", "rejected", "finished", "no_completed_tree"]);
 
   const searchForm = document.getElementById("compactSearchForm");
   const searchInput = document.getElementById("compactSearchInput");
@@ -581,15 +581,17 @@
 
   function statusLabel(status) {
     return ({
-      incomplete: "制作途中",
+      incomplete: "制作途中（すべて）",
       finished: "完成＋没譜面",
       complete: "通常完成",
-      rejected: "没譜面"
+      rejected: "没譜面",
+      no_completed_tree: "完成版のないツリー"
     })[status] || "";
   }
 
   function statusGroup(status) {
     if (status === "incomplete") return "incomplete";
+    if (status === "no_completed_tree") return "no_completed_tree";
     if (["finished", "complete", "rejected"].includes(status)) return "finished";
     return "all";
   }

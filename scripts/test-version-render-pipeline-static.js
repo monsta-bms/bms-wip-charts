@@ -72,7 +72,7 @@ check("version model loads before compact list", () => {
   assert.equal(linkIndex, modelIndex + 1);
   assert.equal(actionIndex, linkIndex + 1);
   assert.equal(commentIndex, actionIndex + 1);
-  assert.ok(commentIndex < listSources.indexOf("./list.js?v=public-ui-touchup-03-patch1"));
+  assert.ok(commentIndex < listSources.indexOf("./list.js?v=no-completed-tree-filter-01"));
 });
 check("model, link UI, and Action UI precede every index renderer consumer", () => {
   const modelIndex = indexSources.indexOf("./version-ui-model.js?v=public-ui-touchup-03-patch1");
@@ -330,7 +330,7 @@ check("changed scripts use their reviewed release cache keys", () => {
           : name === "version-comment-ui.js"
           ? "public-ui-touchup-03-patch1"
           : name === "list.js"
-            ? "public-ui-touchup-03-patch1"
+            ? "no-completed-tree-filter-01"
           : name === "version-link-ui.js"
             ? "public-ui-refinement-01"
             : "public-ui-refinement-patch-02";

@@ -16,7 +16,7 @@ const MAX_VERSION_ID_LENGTH = 160;
 const MAX_COMMENT_PREVIEW_CODE_POINTS = 80;
 
 type VersionListSort = "new" | "updated";
-type VersionListStatus = "all" | "incomplete" | "complete" | "rejected" | "finished";
+type VersionListStatus = "all" | "incomplete" | "complete" | "rejected" | "finished" | "no_completed_tree";
 
 type VersionListParams = {
   q: string;
@@ -228,8 +228,8 @@ function parseCommonParams(
   }
 
   const status = String(values.status ?? "all").trim() || "all";
-  if (!["all", "incomplete", "complete", "rejected", "finished"].includes(status)) {
-    return invalidParam("status must be all, incomplete, complete, rejected, or finished.", favoriteQuery);
+  if (!["all", "incomplete", "complete", "rejected", "finished", "no_completed_tree"].includes(status)) {
+    return invalidParam("status must be all, incomplete, complete, rejected, finished, or no_completed_tree.", favoriteQuery);
   }
 
   const dateFrom = parseDateOnly(values.dateFrom, "dateFrom");
@@ -358,6 +358,29 @@ function buildVersionFilter(params: VersionListParams): { sql: string; bindings:
     conditions.push("versions.is_rejected = 1");
   } else if (params.status === "finished") {
     conditions.push("(versions.completed_at IS NOT NULL OR versions.is_rejected = 1)");
+  } else if (params.status === "no_completed_tree") {
+    conditions.push(
+      "versions.parent_version_id IS NULL",
+      "versions.completed_at IS NULL",
+      "versions.is_rejected = 0",
+      `NOT EXISTS (
+        WITH RECURSIVE tree_version_ids(id) AS (
+          SELECT versions.id
+          UNION
+          SELECT descendants.id
+          FROM versions AS descendants
+          INNER JOIN tree_version_ids ON descendants.parent_version_id = tree_version_ids.id
+        )
+        SELECT 1
+        FROM tree_version_ids
+        INNER JOIN versions AS tree_versions ON tree_versions.id = tree_version_ids.id
+        WHERE tree_versions.chart_id = versions.chart_id
+          AND tree_versions.is_hidden = 0
+          AND ${publicWithdrawalExclusionSql("tree_versions")}
+          AND tree_versions.completed_at IS NOT NULL
+          AND tree_versions.is_rejected = 0
+      )`
+    );
   }
 
   const dateColumn = params.sort === "updated" ? "charts.updated_at" : "versions.created_at";

@@ -130,6 +130,45 @@ async function createVersion(options = {}) {
   return { songId, chartId, versionId, fileId };
 }
 
+async function createChildVersion(parent, options = {}) {
+  sequence += 1;
+  const suffix = String(sequence);
+  const versionId = options.versionId ?? `list_child_${suffix}`;
+  const fileId = options.fileId ?? `list_child_file_${suffix}`;
+  const createdAt = options.createdAt ?? `2026-08-${String(Math.min(sequence, 28)).padStart(2, "0")} 00:00:00`;
+  await env.DB.prepare(`
+    INSERT INTO versions (
+      id, chart_id, version_number, branch_path, parent_version_id, author, progress, comment,
+      title, artist, is_rejected, file_id, file_name, file_size, file_sha256,
+      r2_key, password_hash, download_blocked, download_block_reason, is_hidden,
+      created_at, updated_at, completed_at, collapsed_by_completion,
+      origin_url, chart_name, normalized_chart_name, withdrawal_download_blocked
+    ) VALUES (
+      ?, ?, ?, ?, ?, 'Child Tester', ?, '',
+      'Tree Child', 'Tester', ?, ?, 'child.bms', 8, ?,
+      ?, 'isolated-hash', 0, NULL, ?,
+      ?, ?, ?, 0,
+      NULL, 'Tree Child', 'tree child', 0
+    )
+  `).bind(
+    versionId,
+    parent.chartId,
+    options.versionNumber ?? 2,
+    options.branchPath ?? `root/${suffix}`,
+    parent.versionId,
+    options.progress ?? (options.completed ? 100 : 50),
+    options.rejected ? 1 : 0,
+    fileId,
+    `child_sha_${suffix}`,
+    `private/child-${suffix}.bms`,
+    options.hidden ? 1 : 0,
+    createdAt,
+    createdAt,
+    options.completed ? createdAt : null
+  ).run();
+  return { chartId: parent.chartId, versionId, fileId };
+}
+
 async function createProcessingWithdrawal(version) {
   await env.DB.prepare(`
     INSERT INTO version_withdrawals (
@@ -287,6 +326,79 @@ try {
     });
     assert.equal(rejected.response.status, 400);
     assert.equal(rejected.body.code, "INVALID_FAVORITE_QUERY");
+  });
+
+  const unfinishedChildRoot = await createVersion({ versionId: "tree_unfinished_child_root", title: "Tree Unfinished Child" });
+  const unfinishedChild = await createChildVersion(unfinishedChildRoot, { versionId: "tree_unfinished_child" });
+  const completedChildRoot = await createVersion({ versionId: "tree_completed_child_root", title: "Tree Completed Child" });
+  await createChildVersion(completedChildRoot, { versionId: "tree_completed_child", completed: true });
+  const completedGrandchildRoot = await createVersion({ versionId: "tree_completed_grandchild_root", title: "Tree Completed Grandchild" });
+  const grandchildParent = await createChildVersion(completedGrandchildRoot, {
+    versionId: "tree_completed_grandchild_parent",
+    branchPath: "root/a"
+  });
+  await createChildVersion(grandchildParent, {
+    versionId: "tree_completed_grandchild",
+    completed: true,
+    versionNumber: 3,
+    branchPath: "root/a/a"
+  });
+  const rejectedChildRoot = await createVersion({ versionId: "tree_rejected_child_root", title: "Tree Rejected Child" });
+  await createChildVersion(rejectedChildRoot, { versionId: "tree_rejected_child", rejected: true });
+  const hiddenCompletedRoot = await createVersion({ versionId: "tree_hidden_completed_root", title: "Tree Hidden Completed" });
+  await createChildVersion(hiddenCompletedRoot, { versionId: "tree_hidden_completed_child", completed: true, hidden: true });
+  const processingCompletedRoot = await createVersion({ versionId: "tree_processing_completed_root", title: "Tree Processing Completed" });
+  const processingCompletedChild = await createChildVersion(processingCompletedRoot, {
+    versionId: "tree_processing_completed_child",
+    completed: true
+  });
+  await createProcessingWithdrawal(processingCompletedChild);
+
+  await check("no-completed-tree includes childless and unfinished public roots but excludes completed descendants", async () => {
+    const { response, body } = await requestList("/api/versions?status=no_completed_tree&pageSize=100");
+    assert.equal(response.status, 200);
+    const ids = new Set(body.items.map((item) => item.versionId));
+    const expectedIds = [
+      availableWithOrigin.versionId,
+      availableWithoutOrigin.versionId,
+      unfinishedChildRoot.versionId,
+      rejectedChildRoot.versionId,
+      hiddenCompletedRoot.versionId,
+      processingCompletedRoot.versionId
+    ];
+    for (const included of expectedIds) assert.equal(ids.has(included), true, `${included} must be included`);
+    for (const excluded of [
+      unfinishedChild.versionId,
+      blockedWithOrigin.versionId,
+      blockedWithoutOrigin.versionId,
+      completedChildRoot.versionId,
+      completedGrandchildRoot.versionId
+    ]) assert.equal(ids.has(excluded), false, `${excluded} must be excluded`);
+    assert.deepEqual(ids, new Set(expectedIds));
+  });
+
+  await check("favorites POST applies the same no-completed-tree rule to favorite roots", async () => {
+    const { response, body } = await requestList("/api/versions/query", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        favoriteVersionIds: [
+          unfinishedChildRoot.versionId,
+          unfinishedChild.versionId,
+          completedChildRoot.versionId,
+          rejectedChildRoot.versionId,
+          hiddenCompletedRoot.versionId
+        ],
+        status: "no_completed_tree",
+        pageSize: 100
+      })
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(new Set(body.items.map((item) => item.versionId)), new Set([
+      unfinishedChildRoot.versionId,
+      rejectedChildRoot.versionId,
+      hiddenCompletedRoot.versionId
+    ]));
   });
 
   console.log(`version list link tests: ${passed} checks passed`);

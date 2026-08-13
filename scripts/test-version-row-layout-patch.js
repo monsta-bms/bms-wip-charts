@@ -123,10 +123,11 @@ check("changed index assets share the patch cache key", () => {
 });
 
 check("changed list assets share the patch cache key", () => {
-  for (const asset of ["style.css", "list.css", "version-comment-ui.css", "version-ui-model.js", "version-comment-ui.js", "list.js"]) {
+  for (const asset of ["style.css", "list.css", "version-comment-ui.css", "version-ui-model.js", "version-comment-ui.js"]) {
     assert.match(listHtml, new RegExp(`\\./${asset.replaceAll(".", "\\.")}\\?v=public-ui-touchup-03-patch1`));
   }
   assert.match(listHtml, /\.\/version-management-ui\.css\?v=public-ui-touchup-03-patch1/);
+  assert.match(listHtml, /\.\/list\.js\?v=no-completed-tree-filter-01/);
 });
 
 check("specification and test plan record the layout patch", () => {

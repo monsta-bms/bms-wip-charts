@@ -271,7 +271,8 @@ version単位の独立投稿一覧APIとフィルターを確認する:
 - `GET /api/versions`が公開versionを1件1itemで返し、`pageSize=20`でversion単位にページングすること。
 - `charts.is_hidden=1`, `versions.is_hidden=1`のversionが返らないこと。旧`superseded_by_completed_descendant`の`collapsed_by_completion=1`は返り、DL・追記可能として扱われること。
 - 取り下げ、削除申請中、DL停止の公開versionは返り、状態フラグが正しいこと。
-- `status=incomplete`が`progress<100`かつ非没、`complete`が完成かつ非没、`rejected`が没譜面だけ、`finished`が完成と没譜面の和集合をGET／お気に入りPOSTの両方で返すこと。
+- `status=incomplete`が未完成かつ非没、`complete`が完成かつ非没、`rejected`が没譜面だけ、`finished`が完成と没譜面の和集合をGET／お気に入りPOSTの両方で返すこと。
+- `status=no_completed_tree`が公開中の起点版だけを返し、子がない制作途中、未完成の子だけを持つツリー、没譜面の子だけを持つツリーを含むこと。公開中の通常完成版が起点・直接子・子孫のいずれかにあるツリーは除外し、非公開または削除処理中以降の完成版だけがあるツリーは対象に含めること。
 - white／default／dark × 390／760／1366pxで、投稿者コメントpreviewがコメント列を越えず、「曲」「DL」「コメント」と件数がリンク列からはみ出さないこと。
 - `sort=new`が`versions.created_at DESC, versions.id DESC`、`sort=updated`が`charts.updated_at DESC, versions.created_at DESC, versions.id DESC`であること。
 - 曲名、サブタイトル、アーティスト、サブアーティスト、差分名、そのversion作者を検索できること。

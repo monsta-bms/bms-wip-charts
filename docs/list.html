@@ -50,8 +50,9 @@
                   <legend class="visually-hidden">状態</legend>
                   <div class="compact-radio-group compact-status-options">
                     <label class="compact-radio-choice"><input type="radio" name="compactStatusGroup" value="all"><span data-copy-key="list-status-all">すべて</span></label>
-                    <label class="compact-radio-choice"><input type="radio" name="compactStatusGroup" value="incomplete"><span data-copy-key="list-status-incomplete">制作途中</span></label>
                     <label class="compact-radio-choice"><input type="radio" name="compactStatusGroup" value="finished"><span>完成済み</span></label>
+                    <label class="compact-radio-choice"><input type="radio" name="compactStatusGroup" value="incomplete"><span data-copy-key="list-status-incomplete">制作途中（すべて）</span></label>
+                    <label class="compact-radio-choice"><input type="radio" name="compactStatusGroup" value="no_completed_tree"><span data-copy-key="list-status-no-completed-tree">完成版のないツリー</span></label>
                   </div>
                 </fieldset>
               </div>
@@ -186,7 +187,7 @@
     <script src="./version-link-ui.js?v=public-ui-refinement-01"></script>
   <script src="./version-action-ui.js?v=comment-action-balance-01"></script>
     <script src="./version-comment-ui.js?v=public-ui-touchup-03-patch1"></script>
-    <script src="./list.js?v=public-ui-touchup-03-patch1"></script>
+    <script src="./list.js?v=no-completed-tree-filter-01"></script>
     <script src="./version-management-ui.js?v=public-ui-refinement-patch-02"></script>
   </body>
 </html>

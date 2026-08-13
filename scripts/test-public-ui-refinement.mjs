@@ -141,12 +141,20 @@ check("DL label remains unchanged", () => {
   assert.match(sources.rc, />DL<\/a>/u);
 });
 check("list has first-stage status options", () => {
-  for (const value of ["all", "incomplete", "finished"]) assert.match(sources.listHtml, new RegExp(`name="compactStatusGroup" value="${value}"`, "u"));
+  const order = ["all", "finished", "incomplete", "no_completed_tree"];
+  let previous = -1;
+  for (const value of order) {
+    const current = sources.listHtml.indexOf(`name="compactStatusGroup" value="${value}"`);
+    assert.ok(current > previous, `status ${value} is present in order`);
+    previous = current;
+  }
+  assert.match(sources.listHtml, /value="incomplete"><span data-copy-key="list-status-incomplete">制作途中（すべて）<\/span>/u);
+  assert.match(sources.listHtml, /value="no_completed_tree"><span data-copy-key="list-status-no-completed-tree">完成版のないツリー<\/span>/u);
 });
 check("list has completed subtypes", () => {
   for (const value of ["finished", "complete", "rejected"]) assert.match(sources.listHtml, new RegExp(`name="compactFinishedStatus" value="${value}"`, "u"));
 });
-check("list preserves all five API status values", () => assert.match(sources.listJs, /\["all", "incomplete", "complete", "rejected", "finished"\]/u));
+check("list preserves all six API status values", () => assert.match(sources.listJs, /\["all", "incomplete", "complete", "rejected", "finished", "no_completed_tree"\]/u));
 check("date range is an advanced details control", () => assert.match(sources.listHtml, /<details class="compact-date-filter-row"[^>]*>[\s\S]*<summary[^>]*>期間を指定<\/summary>/u));
 check("active filters support individual and all clearing", () => {
   assert.match(sources.listJs, /dataset\.clearFilter = filter\.key/u);
@@ -241,7 +249,7 @@ check("comment and action assets share a release cache key", () => {
   assert.match(sources.listHtml, /\.\/version-management-ui\.css\?v=public-ui-touchup-03-patch1/u);
   assert.match(sources.listHtml, /\.\/version-action-ui\.js\?v=comment-action-balance-01/u);
   assert.match(sources.index, /\.\/list-ui-refresh\.css\?v=public-list-density-patch-01/u);
-  assert.match(sources.listHtml, /\.\/list\.js\?v=public-ui-touchup-03-patch1/u);
+  assert.match(sources.listHtml, /\.\/list\.js\?v=no-completed-tree-filter-01/u);
 });
 check("guide and changelog share the widened content measure", () => assert.match(sources.headerCss, /\.content-page \{\s*max-width: min\(100%, 114ch\);/u));
 check("RC header has top, title, switch and theme", () => {
