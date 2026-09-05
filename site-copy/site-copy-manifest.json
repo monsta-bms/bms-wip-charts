@@ -1460,6 +1460,13 @@
   ],
   "changelogEntries": [
     {
+      "id": "CHANGELOG_20260905",
+      "sourcePath": "docs/changelog.html",
+      "deploymentTarget": "PAGES",
+      "allowEmpty": false,
+      "sourceValueSha256": "fd2f8c32d3028a793d7930be9f91bd1de1c5f8789d0d60e0d3c3c0ae2869372e"
+    },
+    {
       "id": "CHANGELOG_20260813",
       "sourcePath": "docs/changelog.html",
       "deploymentTarget": "PAGES",

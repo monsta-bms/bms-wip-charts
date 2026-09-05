@@ -359,16 +359,16 @@ async function testPureDisplayFunctions() {
   });
 
   const titleCases = [
-    [{ title: "Song", subtitle: "", chartName: "[ANOTHER]" }, "Song [ANOTHER]"],
-    [{ title: "Song [ANOTHER]", subtitle: "", chartName: "[ANOTHER]" }, "Song [ANOTHER]"],
-    [{ title: "Song", subtitle: "[ANOTHER]", chartName: "[ANOTHER]" }, "Song [ANOTHER]"],
-    [{ title: "Song", subtitle: "（Remix）", chartName: "--INSANE--" }, "Song （Remix） --INSANE--"],
-    [{ title: "3.14 (TT mix)", subtitle: "", chartName: "(yumether)" }, "3.14 (TT mix) (yumether)"],
-    [{ title: "Another World", subtitle: "", chartName: "ANOTHER" }, "Another World ANOTHER"],
-    [{ title: "  Song\n  Name ", subtitle: "Song Name", chartName: "" }, "Song Name"],
-    [{ title: "Song （ＡＮＯＴＨＥＲ）", subtitle: "", chartName: "[another]" }, "Song （ＡＮＯＴＨＥＲ）"]
+    [{ title: "Song", chartName: "[ANOTHER]" }, "Song [ANOTHER]"],
+    [{ title: "Song [ANOTHER]", chartName: "[ANOTHER]" }, "Song [ANOTHER]"],
+    [{ title: "Song （Remix）", chartName: "--INSANE--" }, "Song （Remix） --INSANE--"],
+    [{ title: "3.14 (TT mix)", chartName: "(yumether)" }, "3.14 (TT mix) (yumether)"],
+    [{ title: "Another World", chartName: "ANOTHER" }, "Another World ANOTHER"],
+    [{ title: "  Song\n  Name ", chartName: "" }, "Song Name"],
+    [{ title: "Song （ＡＮＯＴＨＥＲ）", chartName: "[another]" }, "Song （ＡＮＯＴＨＥＲ）"],
+    [{ title: "妹 [地力]", chartName: "[地力]" }, "妹 [地力]"]
   ];
-  await check("title composition fixtures, whitespace, NFKC duplicate, and chart-token rules", () => {
+  await check("selected-version title composition, whitespace, NFKC duplicate, and chart-token rules", () => {
     for (const [input, expected] of titleCases) {
       assert.equal(display.buildDifficultyTableDisplayTitle(input), expected);
     }
@@ -420,7 +420,7 @@ async function testPureDisplayFunctions() {
     }
   });
 
-  await check("view model uses succeeded source fields only and keeps an update timestamp candidate", () => {
+  await check("view model keeps the selected-version title while using succeeded source artist fields", () => {
     const model = display.buildDifficultyTableViewModel({
       versionId: "v",
       md5: "0".repeat(32),
@@ -446,7 +446,7 @@ async function testPureDisplayFunctions() {
       versionUpdatedAt: "2026-07-24 10:00:00",
       sourceMetadataUpdatedAt: "2026-07-24 11:00:00"
     });
-    assert.equal(model.displayTitle, "Source Stored Sub [Chart]");
+    assert.equal(model.displayTitle, "Stored [Chart]");
     assert.equal(model.displayArtist, "Source Artist");
     assert.deepEqual(model.authors, ["author"]);
     assert.equal(model.updatedAt, "2026-07-24 11:00:00");
@@ -820,8 +820,8 @@ async function testRouteIntegration(fixtures) {
     });
   });
 
-  await check("succeeded metadata builds display fields while authors use only form history", () => {
-    assert.equal(featured.bms_wip_display_title, "Faraway Sky (All I C Is U) [Nebula]");
+  await check("selected-version title and succeeded source artist build display fields while authors use only form history", () => {
+    assert.equal(featured.bms_wip_display_title, "Stored Song [Nebula]");
     assert.equal(featured.bms_wip_display_artist, "BACO / Sobrem");
     assert.equal(featured.bms_wip_authors, "monsta、potechang、俺");
     assert.equal(featured.comment, "元難易度：sl7\n制作途中の配置を整理しました。");
@@ -831,12 +831,12 @@ async function testRouteIntegration(fixtures) {
     assert.equal(featured.bms_wip_source_subartist, "obj:potechang / chart:obj2");
   });
 
-  await check("partial succeeded metadata falls back field-by-field without mutating stored fields", () => {
+  await check("partial succeeded metadata does not replace the selected-version display title", () => {
     const item = starData.find((candidate) => candidate.md5 === fixtures.partial.md5);
     assert.ok(item);
     assert.equal(item.title, "Partial Stored");
     assert.equal(item.artist, "Fallback Artist");
-    assert.equal(item.bms_wip_display_title, "Partial Source Fallback Subtitle [TEST]");
+    assert.equal(item.bms_wip_display_title, "Partial Stored [TEST]");
     assert.equal(item.bms_wip_display_artist, "Source Artist / Fallback Subartist");
     assert.equal(item.bms_wip_source_title, "Partial Source");
     assert.equal(item.bms_wip_source_artist, "Source Artist");

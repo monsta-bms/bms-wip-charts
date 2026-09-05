@@ -1305,7 +1305,7 @@ dataは譜面objectの配列を返す。対象なしはHTTP 200の`[]`。
     "bms_wip_subtitle": "サブタイトル",
     "bms_wip_subartist": "サブアーティスト",
     "comment": "元難易度：st9\n配置を調整しました。",
-    "bms_wip_display_title": "元曲名 サブタイトル 差分名",
+    "bms_wip_display_title": "曲名 差分名",
     "bms_wip_display_artist": "元アーティスト / 元サブアーティスト",
     "bms_wip_authors": "初版作者、差分作者",
     "bms_wip_source_title": "元曲名",
@@ -1318,9 +1318,9 @@ dataは譜面objectの配列を返す。対象なしはHTTP 200の`[]`。
 
 `md5`, `level`, `title`, `artist`, `url`, `url_diff`, `name_diff`の意味と、既存`bms_wip_original_difficulty`, `bms_wip_chart_name`, `bms_wip_version`, `bms_wip_author`, `bms_wip_completed_at`, `bms_wip_subtitle`, `bms_wip_subartist`の値は変更しない。特に`title`と`artist`は採用versionの保存値であり、表示用合成値へ置換しない。
 
-`comment`は`元難易度：{bms_wip_original_difficulty}`を必ず先頭にし、保存済み投稿コメントがあれば改行して続ける。`bms_wip_display_title`は表示用のTITLE・SUBTITLE・差分名、`bms_wip_display_artist`はmarkerを除いたARTIST・SUBARTIST、`bms_wip_authors`は投稿フォームから親版と現在版へ保存された作者だけを全角読点で結合した値である。譜面ファイル内の`obj`等のmarker作者は含めない。
+`comment`は`元難易度：{bms_wip_original_difficulty}`を必ず先頭にし、保存済み投稿コメントがあれば改行して続ける。`bms_wip_display_title`は採用version自身の保存titleと`bms_wip_chart_name`だけを結合し、title末尾に同じ差分名がある場合は重複させない。前版由来のsubtitleとsource title/subtitleは表示用タイトルへ混在させない。`bms_wip_display_artist`はmarkerを除いたARTIST・SUBARTIST、`bms_wip_authors`は投稿フォームから親版と現在版へ保存された作者だけを全角読点で結合した値である。譜面ファイル内の`obj`等のmarker作者は含めない。
 
-`version_source_metadata.status='succeeded'`の場合だけ、存在する元値を表示合成へ優先使用し、非空の`bms_wip_source_title`, `bms_wip_source_subtitle`, `bms_wip_source_artist`, `bms_wip_source_subartist`を追加する。metadata行なし、`failed`、`unavailable`（`SOURCE_FILE_DELETED`を含む）はversions側の保存値へfallbackし、metadata status、error code、encodingを公開しない。BMS-IR URLもdataへ追加せず、将来のHTML側が既存`md5`から組み立てる。
+`version_source_metadata.status='succeeded'`の場合だけ、非空の`bms_wip_source_title`, `bms_wip_source_subtitle`, `bms_wip_source_artist`, `bms_wip_source_subartist`を追加する。source artist/subartistは表示用アーティストへ優先使用し、欠けた項目はversions側の保存値へfallbackする。表示用タイトルはsource metadataの有無にかかわらず採用version自身の保存titleと差分名から作る。metadata行なし、`failed`、`unavailable`（`SOURCE_FILE_DELETED`を含む）はversions側の保存値へfallbackし、metadata status、error code、encodingを公開しない。BMS-IR URLもdataへ追加せず、将来のHTML側が既存`md5`から組み立てる。
 
 `url`は、MD5重複排除後に採用されたversion自身に有効な`origin_url`がある場合だけ出力し、未登録時はキー自体を省略する。`name_diff`と`bms_wip_chart_name`は採用version自身の`chart_name`を使用し、NULLの既存行だけ`charts.chart_name`へfallbackする。`url_diff`は常に従来どおり出力する。`org_md5`、R2 key、外側ZIPのSHA-256は出力しない。headerは`Cache-Control: public, max-age=3600, must-revalidate`、dataと人間向けHTMLは`public, max-age=60, must-revalidate`とし、すべてETagと`If-None-Match`による304応答に対応する。エラー応答は`Cache-Control: no-store`とする。
 

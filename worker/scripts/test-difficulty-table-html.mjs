@@ -308,7 +308,7 @@ async function seedFixtures() {
   const malicious = await insertVersion({
     id: "html_malicious",
     difficulty: "★3",
-    title: `\"><script>alert(1)</script>`,
+    title: `\"><script>alert(1)</script> ' autofocus onfocus='alert(1)`,
     subtitle: "' autofocus onfocus='alert(1)",
     artist: `\"><script>alert(2)</script>`,
     subartist: "data:text/html,<svg onload=alert(1)>",
@@ -559,7 +559,7 @@ async function runTests(fixtures) {
   });
 
   await check("31 valid MD5 turns the entire display title into BMS-IR link", () => {
-    assert.match(starBody, /href="https:\/\/bms-ir\.org\/new\/song\?songmd5=abcdefabcdefabcdefabcdefabcdefab"[^>]*>Faraway Sky \(All I C Is U\) \[Nebula\]<\/a>/u);
+    assert.match(starBody, /href="https:\/\/bms-ir\.org\/new\/song\?songmd5=abcdefabcdefabcdefabcdefabcdefab"[^>]*>Stored Featured \[Nebula\]<\/a>/u);
   });
   await check("32 uppercase MD5 is lowercased in BMS-IR URL", () => {
     assert.ok(starBody.includes("songmd5=abcdefabcdefabcdefabcdefabcdefab"));
@@ -607,9 +607,9 @@ async function runTests(fixtures) {
     assert.ok(starBody.includes(`/api/files/${fixtures.featured.fileId}`));
   });
   await check("42 all three link roles have accessible names", () => {
-    assert.ok(starBody.includes("Faraway Sky (All I C Is U) [Nebula]をBMS-IRで開く"));
-    assert.ok(starBody.includes("Faraway Sky (All I C Is U) [Nebula]の原曲・本体配布ページを開く"));
-    assert.ok(starBody.includes("Faraway Sky (All I C Is U) [Nebula]の譜面ファイルをダウンロード"));
+    assert.ok(starBody.includes("Stored Featured [Nebula]をBMS-IRで開く"));
+    assert.ok(starBody.includes("Stored Featured [Nebula]の原曲・本体配布ページを開く"));
+    assert.ok(starBody.includes("Stored Featured [Nebula]の譜面ファイルをダウンロード"));
   });
 
   await check("43 original difficulty is always visible", () => {

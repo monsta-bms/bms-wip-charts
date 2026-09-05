@@ -1085,7 +1085,7 @@ async function testWarningInsertAndPublicRegression() {
     assert.equal((await first("SELECT COUNT(*) AS count FROM versions WHERE id = ?", created.versionId)).count, 1);
   });
 
-  await check("difficulty table legacy fields stay unchanged when source metadata becomes the display source", async () => {
+  await check("difficulty table keeps the selected-version title when source metadata becomes available", async () => {
     sequence += 1;
     const suffix = String(sequence);
     const songId = `difficulty_song_${suffix}`;
@@ -1149,7 +1149,7 @@ async function testWarningInsertAndPublicRegression() {
     for (const key of legacyKeys) {
       assert.deepEqual(afterItem[key], beforeItem[key], `legacy difficulty-table field changed: ${key}`);
     }
-    assert.equal(afterItem.bms_wip_display_title, "Internal Snapshot Source Snapshot Chart");
+    assert.equal(afterItem.bms_wip_display_title, "Difficulty Snapshot Snapshot Chart");
     assert.equal(afterItem.bms_wip_display_artist, "Internal Snapshot Artist");
     assert.equal(afterItem.bms_wip_source_title, "Internal Snapshot Source");
     assert.equal(afterItem.bms_wip_source_artist, "Internal Snapshot Artist");

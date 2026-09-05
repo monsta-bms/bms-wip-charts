@@ -1082,8 +1082,8 @@ RC★★変換:
 ## DIFFICULTY-TABLE-VIEW Phase C 難易度表データ・表示用ViewModel
 
 - 掲載対象、MD5重複排除、並び順、`classifyDifficulty()`によるRC★/RC★★変換はDIFFICULTY-TABLE-01から変更しない。対象SELECTへversionの親ID・comment・updated_atと元metadataを`LEFT JOIN`で追加するが、metadata行なし、failed、unavailableを除外条件にしない。
-- 元metadataは`status='succeeded'`の場合だけ表示値へ優先採用し、欠けた項目はversionのtitle/subtitle/artist/subartistへ項目単位でfallbackする。metadata行なし、failed、unavailable、`SOURCE_FILE_DELETED`は全項目をversion保存値へfallbackし、内部status/error/encodingを公開しない。source値とversion値は更新・正規化しない。
-- 表示用タイトルはTITLE、SUBTITLE、差分名の順に、各表示用コピーだけtrimと連続空白・改行の単一空白化を行って結合する。TITLE/SUBTITLEのNFKC＋空白正規化後の完全一致は1回にし、末尾の`[]`, `()`, `（ ）`, `- -`, `-- --`, `ー ー`が差分名と同等なら差分名を再追加しない。一般単語の部分一致では省略しない。
+- 元metadataは`status='succeeded'`の場合だけ非空のsource項目を公開し、表示用アーティストでは欠けた項目をversionのartist/subartistへ項目単位でfallbackする。metadata行なし、failed、unavailable、`SOURCE_FILE_DELETED`は表示用アーティストをversion保存値へfallbackし、内部status/error/encodingを公開しない。source値とversion値は更新・正規化しない。
+- 表示用タイトルは選出version自身の保存titleとchart_nameだけをこの順で結合し、subtitleとsource title/subtitleを混在させない。各表示用コピーだけtrimと連続空白・改行の単一空白化を行う。title末尾の`[]`, `()`, `（ ）`, `- -`, `-- --`, `ー ー`がchart_nameと同等ならchart_nameを再追加せず、一般単語の部分一致では省略しない。
 - 表示用アーティストはARTISTとSUBARTISTを` / `で結合し、NFKC＋空白正規化後の完全一致だけを1回にする。単語境界の`obj`（`:：.．;；@`または空白）と`note/notes/chart/charter`（`:：;；`）をASCII大文字小文字を区別せずmarkerとして扱い、marker部分と直前の不要な`/・,，`を表示用コピーから除く。譜面ファイル内のmarker由来文字列は作者一覧へ追加しない。
 - 作者履歴は選出version ID配列を`json_each(?)`へbindする1回の再帰CTEで取得し、各versionのルート親から現在版へ並べる。親の公開・collapsed状態では絞り込まず、欠落親では取得済み部分を使い、visitedで循環を止め、最大64版とする。作者一覧は投稿フォームから各versionへ保存された作者だけをルート親から現在版の順に並べ、trim後の完全一致だけを除外する。大文字小文字・全半角は区別し、`A & B`を分割しない。対象0件では作者queryを省略し、通常は対象SELECTと作者CTEの固定2 queryでN+1を行わない。
 - ViewModelは変換後level、`RC★/RC★★`付きlevelLabel、元difficulty、保存title/artist、表示title/artist、採用可能なsource 4項目、差分名、版ラベル、フォーム入力由来のauthors配列と全角読点結合、合成comment、曲URL、Worker file URL、completed_at、version/metadataの最大updated_at候補を未escape文字列で保持する。HTML escapeはPhase Dの責任とする。

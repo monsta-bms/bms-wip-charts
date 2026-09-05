@@ -1460,7 +1460,7 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 
 ### 専用隔離テスト
 
-- `node worker/scripts/test-difficulty-table-view-model.mjs`で、TITLE/SUBTITLE/差分名の空値・改行・連続空白・NFKC完全一致・全角括弧・6種の囲み重複回避・一般単語の部分一致を確認する。
+- `node worker/scripts/test-difficulty-table-view-model.mjs`で、選出version自身の保存title＋chart_name、空値・改行・連続空白・NFKC完全一致・全角括弧・6種の囲み重複回避・一般単語の部分一致を確認する。親版のsubtitleが残り、現在版のsource subtitleがNULLでも、前版の差分名を表示用タイトルへ追加しない回帰を含む。
 - ARTIST/SUBARTIST結合、原曲作者間の`/`保持、`obj/note/notes/chart/charter` marker、単語内部と`chart maker`の誤検出なし、空marker、直前separator除去、表示作者重複を確認する。
 - 作者履歴はhidden親、collapsed親、同一作者、欠落親、循環、深さ64/65、`A & B`非分割、大文字小文字・全半角の別作者を確認する。譜面ファイル内のmarker作者は作者一覧へ追加せず、投稿フォーム由来の作者だけを全角読点で列挙する。選出0件では作者query 0件、通常は対象SELECT＋一括再帰CTEの2 queryとする。
 - succeeded全項目・一部NULL、metadata行なし、failed、unavailable、`SOURCE_FILE_DELETED`、sourceとversionの相違を確認する。source D1値が表示生成前後で不変で、status/error/encodingが公開JSONにないことを確認する。
@@ -1470,7 +1470,7 @@ PROG-04Dでは、一覧サムネイルは保存済み `progressImage.url` のPNG
 ### 2026-07-24隔離結果・性能
 
 - 専用20 check成功。対象SELECTは8行、作者祖先は8行、data JSONは3226 bytes、実行約123msだった。実行環境で時間は変動するため、D1 query 2、R2 GET/PUT/DELETE 0、N+1なしを回帰基準にする。
-- succeeded sourceから表示title/artist/source 4項目、投稿フォーム由来の親チェーンだけから`bms_wip_authors`、元difficulty＋投稿commentを生成できた。BMS内の`mukyu-- vs 餅派`、`矢口vs餅派`等のmarker作者を作者一覧へ追加しない。failed/unavailable/metadataなしはversions値へfallbackし、`SOURCE_FILE_DELETED`等の内部codeを返さなかった。
+- 選出version自身の保存title＋chart_nameから表示titleを生成し、succeeded sourceから表示artist/source 4項目、投稿フォーム由来の親チェーンだけから`bms_wip_authors`、元difficulty＋投稿commentを生成できた。前版subtitleと現在版sourceを混在させず、BMS内の`mukyu-- vs 餅派`、`矢口vs餅派`等のmarker作者を作者一覧へ追加しない。failed/unavailable/metadataなしは表示artistをversions値へfallbackし、`SOURCE_FILE_DELETED`等の内部codeを返さなかった。
 - `url`は既存origin validator、`url_diff`はWorker file APIのまま、BMS-IR URL、R2 key、password hash、metadata status/error/encodingは追加されないことを確認した。
 - Phase A metadata、Phase B backfill、canonical schema 0001～0009、difficulty classification/JSON、metadata parser/static、曲・DLリンク、withdrawal active 18件を再実行する。Worker typecheck、Wrangler dry-run、専用scriptの`node --check`、`git diff --check`を通す。
 - Migration、schema、Pages/`docs/**`、`worker/wrangler.toml`、Cron、withdrawal service、Secret、本番D1/R2を変更しない。

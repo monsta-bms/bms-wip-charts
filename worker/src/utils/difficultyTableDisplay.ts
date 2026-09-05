@@ -1,6 +1,5 @@
 export type DifficultyTableDisplayTitleInput = {
   title: string | null | undefined;
-  subtitle: string | null | undefined;
   chartName: string | null | undefined;
 };
 
@@ -124,15 +123,11 @@ function hasEquivalentTerminalChartToken(value: string, chartName: string): bool
 
 export function buildDifficultyTableDisplayTitle(input: DifficultyTableDisplayTitleInput): string {
   const title = normalizeDifficultyTableDisplayText(input.title);
-  const subtitle = normalizeDifficultyTableDisplayText(input.subtitle);
   const chartName = normalizeDifficultyTableDisplayText(input.chartName);
   const parts: string[] = [];
 
   if (title) {
     parts.push(title);
-  }
-  if (subtitle && (!title || comparisonKey(subtitle) !== comparisonKey(title))) {
-    parts.push(subtitle);
   }
   if (
     chartName
@@ -287,8 +282,7 @@ export function buildDifficultyTableViewModel(
   const sourceArtist = sourceMetadataSucceeded ? nonEmptySourceValue(input.sourceArtist) : null;
   const sourceSubartist = sourceMetadataSucceeded ? nonEmptySourceValue(input.sourceSubartist) : null;
   const displayTitle = buildDifficultyTableDisplayTitle({
-    title: effectiveDisplayValue(sourceMetadataSucceeded, sourceTitle, input.storedTitle),
-    subtitle: effectiveDisplayValue(sourceMetadataSucceeded, sourceSubtitle, input.storedSubtitle),
+    title: input.storedTitle,
     chartName: input.chartName
   });
   const artist = buildDifficultyTableDisplayArtist({
