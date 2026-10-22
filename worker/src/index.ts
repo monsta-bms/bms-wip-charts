@@ -18,6 +18,7 @@ import {
 } from "./services/versionWithdrawalObserver";
 import { runActiveDueVersionWithdrawals } from "./services/versionWithdrawalActiveRunner";
 import { enforcePreMultipartPostingProtection } from "./routes/postingProtection";
+import { parseMultipartUpload } from "./utils/multipartUpload";
 import {
   addProgressImagesToChartsResponse,
   attachProgressImageAfterPostSuccess,
@@ -50,15 +51,20 @@ function handleHealth(request: Request, env: Env): Response {
 async function handlePostWithOptionalProgressImage(
   request: Request,
   env: Env,
-  handler: () => Promise<Response> | Response
+  handler: (form: FormData) => Promise<Response> | Response
 ): Promise<Response> {
-  const parsedImage = await parseOptionalProgressImage(request.clone());
+  const parsedForm = await parseMultipartUpload(request);
+  if (!parsedForm.ok) {
+    const failure = parsedForm.failure;
+    return apiError(request, env, failure.status, failure.code, failure.message, failure.detail);
+  }
+  const parsedImage = await parseOptionalProgressImage(parsedForm.form);
   if (!parsedImage.ok) {
     const failure = parsedImage.failure;
     return apiError(request, env, failure.status, failure.code, failure.message, failure.detail);
   }
 
-  const response = await handler();
+  const response = await handler(parsedForm.form);
   return attachProgressImageAfterPostSuccess(request, env, response, parsedImage.value);
 }
 
@@ -105,7 +111,7 @@ async function routeRequest(request: Request, env: Env): Promise<Response> {
       return handlePostWithOptionalProgressImage(
         request,
         env,
-        () => handleChartVersionsRoute(request, env, chartId)
+        (form) => handleChartVersionsRoute(request, env, chartId, form)
       );
     }
 
@@ -125,7 +131,7 @@ async function routeRequest(request: Request, env: Env): Promise<Response> {
       return handlePostWithOptionalProgressImage(
         request,
         env,
-        () => handleChartsRoute(request, env)
+        (form) => handleChartsRoute(request, env, form)
       );
     }
 

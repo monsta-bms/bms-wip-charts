@@ -6,7 +6,8 @@ import {
   ERR_EOCDR_LOCATOR_ZIP64_NOT_FOUND,
   ERR_EOCDR_NOT_FOUND,
   ERR_EXTRAFIELD_ZIP64_NOT_FOUND,
-  ERR_INVALID_SIGNATURE,
+  ERR_INVALID_COMPRESSED_DATA,
+  ERR_INVALID_CRC32,
   ERR_INVALID_UNCOMPRESSED_SIZE,
   ERR_LOCAL_FILE_HEADER_NOT_FOUND,
   ERR_OVERLAPPING_ENTRY,
@@ -50,7 +51,8 @@ const KNOWN_INVALID_ZIP_ERRORS = new Set([
   ERR_EOCDR_LOCATOR_ZIP64_NOT_FOUND,
   ERR_EOCDR_NOT_FOUND,
   ERR_EXTRAFIELD_ZIP64_NOT_FOUND,
-  ERR_INVALID_SIGNATURE,
+  ERR_INVALID_COMPRESSED_DATA,
+  ERR_INVALID_CRC32,
   ERR_INVALID_UNCOMPRESSED_SIZE,
   ERR_LOCAL_FILE_HEADER_NOT_FOUND,
   ERR_OVERLAPPING_ENTRY,
@@ -209,7 +211,7 @@ async function verifyNoOverlappingEntries(entries: FileEntry[]): Promise<void> {
 
 async function extractChartEntry(entry: FileEntry): Promise<ArrayBuffer | null> {
   const bytes = await entry.getData(new Uint8ArrayWriter(), {
-    checkSignature: true,
+    checkCrc32: true,
     checkOverlappingEntry: true
   });
   if (bytes.byteLength > SINGLE_CHART_MAX_BYTES || bytes.byteLength !== entry.uncompressedSize) {

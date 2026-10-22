@@ -2,7 +2,8 @@ import { buildRequestFingerprint } from "../utils/requestFingerprint";
 import { finalizeVersionWithdrawal } from "../services/versionWithdrawalFinalizer";
 import { resolveVersionWithdrawal } from "../services/versionWithdrawalResolution";
 import { apiError, Env, errorDetail, jsonResponse, methodNotAllowed, ok } from "../utils/response";
-import { hashWithdrawalIdempotency, verifyPasswordHash } from "../utils/securityHash";
+import { hashWithdrawalIdempotency } from "../utils/securityHash";
+import { checkManagementPassword, finishManagementPasswordFailure } from "../utils/managementPasswordRateLimit";
 import {
   PublicLifecycleStatus,
   resolvePublicLifecycleStatus,
@@ -16,8 +17,6 @@ import {
   withdrawalHandlingRequiresReason
 } from "../utils/withdrawalHandling";
 
-const INVALID_PASSWORD_LIMIT = 5;
-const INVALID_PASSWORD_WINDOW_MINUTES = 10;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{16,200}$/;
 const MIN_WITHDRAWAL_REASON_LENGTH = 10;
 const MAX_WITHDRAWAL_REASON_LENGTH = 500;
@@ -33,6 +32,7 @@ type Failure = {
 type LogContext = {
   ipHash: string;
   uaHash: string;
+  passwordAttemptId?: string;
   songId: string | null;
   chartId: string | null;
   versionId: string | null;
@@ -129,6 +129,14 @@ async function writeLifecycleLog(
   requestMode: string | null = null,
   handlingMode: string | null = null
 ): Promise<void> {
+  if (result === "rejected" && errorCode === "INVALID_PASSWORD" && context.passwordAttemptId) {
+    await finishManagementPasswordFailure(env, context.passwordAttemptId, [
+      `operation=${operation}`, `requestMode=${requestMode ?? "none"}`,
+      `handlingMode=${handlingMode ?? "none"}`, `outcome=${outcome}`,
+      "errorCode=INVALID_PASSWORD"
+    ].join("; "));
+    return;
+  }
   await env.DB.prepare(`
     INSERT INTO post_logs (
       id, action, song_id, chart_id, version_id, ip_hash, ua_hash, fingerprint_hash_version,
@@ -493,25 +501,6 @@ async function respondFromWithdrawalRow(
   });
 }
 
-async function isRateLimited(env: Env, context: LogContext): Promise<boolean> {
-  const row = await env.DB.prepare(`
-    SELECT COUNT(*) AS failure_count
-    FROM post_logs
-    WHERE ip_hash = ?
-      AND ua_hash = ?
-      AND fingerprint_hash_version = 2
-      AND action IN ('withdraw_version', 'request_delete')
-      AND result = 'rejected'
-      AND error_code = 'INVALID_PASSWORD'
-      AND created_at >= datetime('now', ?)
-  `).bind(
-    context.ipHash,
-    context.uaHash,
-    `-${INVALID_PASSWORD_WINDOW_MINUTES} minutes`
-  ).first<{ failure_count: number }>();
-  return Number(row?.failure_count ?? 0) >= INVALID_PASSWORD_LIMIT;
-}
-
 async function authenticate(
   request: Request,
   env: Env,
@@ -534,12 +523,27 @@ async function authenticate(
   context.versionId = version.id;
   context.fileSha256 = version.file_sha256;
 
-  const passwordResult = await verifyPasswordHash(
+  const passwordCheck = await checkManagementPassword(
+    env,
+    {
+      action: "withdraw_version", ipHash: context.ipHash, uaHash: context.uaHash,
+      versionId: version.id, chartId: version.chart_id,
+      songId: version.song_id, fileSha256: version.file_sha256
+    },
     secret,
     password,
     version.password_hash,
     Number(version.password_hash_version)
   );
+  if (passwordCheck.limited) {
+    return { response: await fail(request, env, context, operation, {
+      status: 429,
+      code: "RATE_LIMITED",
+      message: "管理パスワードの試行回数が上限を超えました。しばらく待ってから再試行してください。"
+    }) };
+  }
+  context.passwordAttemptId = passwordCheck.attemptId;
+  const passwordResult = passwordCheck.result;
   if (passwordResult === "legacy") {
     return { response: await fail(request, env, context, operation, {
       status: 409,
@@ -1020,13 +1024,6 @@ export async function handleVersionWithdrawalRoute(
       }
     }
 
-    if (await isRateLimited(env, context)) {
-      return fail(request, env, context, action === "withdrawal" ? "request" : "cancel", {
-        status: 429,
-        code: "RATE_LIMITED",
-        message: "管理パスワードの試行回数が上限を超えました。しばらく待ってから再試行してください。"
-      });
-    }
     const authenticated = await authenticate(
       request,
       env,

@@ -4,6 +4,7 @@ import { parseAllowAppend } from "../utils/appendPolicy";
 import { validateChartName } from "../utils/chartName";
 import { sanitizeFileName, validateUploadFile } from "../utils/fileValidation";
 import { sha256HexFromBuffer } from "../utils/hash";
+import { parseMultipartUpload } from "../utils/multipartUpload";
 import { hasUsableStoredProgressMap, prepareAppendProgressMap } from "../utils/progressMap";
 import { buildRequestFingerprint } from "../utils/requestFingerprint";
 import { hashPassword } from "../utils/securityHash";
@@ -283,7 +284,8 @@ async function cleanupR2AfterDbFailure(
 async function parseAppendVersionFormInput(
   request: Request,
   env: Env,
-  context: PostLogContext
+  context: PostLogContext,
+  parsedForm?: FormData
 ): Promise<{ ok: true; value: AppendVersionFormInput } | { ok: false; response: Response }> {
   const contentType = request.headers.get("Content-Type") ?? "";
   if (!contentType.toLowerCase().includes("multipart/form-data")) {
@@ -298,25 +300,16 @@ async function parseAppendVersionFormInput(
     };
   }
 
-  let form: FormData;
-  try {
-    form = await request.formData();
-  } catch (error) {
-    console.error("[append-version-form-parse] failed to parse multipart form", {
-      code: "INVALID_FORM",
-      message: errorDetail(error)
-    });
-
+  const parsedUpload = parsedForm
+    ? { ok: true as const, form: parsedForm }
+    : await parseMultipartUpload(request);
+  if (!parsedUpload.ok) {
     return {
       ok: false,
-      response: await failAppendVersion(request, env, context, {
-        status: 400,
-        code: "INVALID_FORM",
-        message: "投稿フォームが不正です。",
-        detail: `Failed to parse multipart/form-data: ${errorDetail(error)}`
-      })
+      response: await failAppendVersion(request, env, context, parsedUpload.failure)
     };
   }
+  const form = parsedUpload.form;
 
   const isRejected = parseBooleanField(getFormText(form, "isRejected"));
   if (isRejected) {
@@ -661,7 +654,7 @@ function buildSafeR2Key(chartId: string, branchPath: string, fileId: string, ext
   return `charts/${chartId}/versions/${safeBranchPath}/${fileId}${extension}`;
 }
 
-async function handleAppendVersion(request: Request, env: Env, chartId: string): Promise<Response> {
+async function handleAppendVersion(request: Request, env: Env, chartId: string, parsedForm?: FormData): Promise<Response> {
   const abuseSecret = env.ABUSE_HASH_SECRET?.trim();
   const passwordSecret = env.PASSWORD_HASH_SECRET?.trim();
   if (!abuseSecret || !passwordSecret) {
@@ -680,7 +673,7 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
   context.chartId = chartId;
 
   try {
-    const parsed = await parseAppendVersionFormInput(request, env, context);
+    const parsed = await parseAppendVersionFormInput(request, env, context, parsedForm);
     if (!parsed.ok) {
       return parsed.response;
     }
@@ -1199,7 +1192,7 @@ async function handleAppendVersion(request: Request, env: Env, chartId: string):
   }
 }
 
-export function handleChartVersionsRoute(request: Request, env: Env, chartId: string): Promise<Response> | Response {
+export function handleChartVersionsRoute(request: Request, env: Env, chartId: string, parsedForm?: FormData): Promise<Response> | Response {
   if (!chartId) {
     return apiError(request, env, 400, "INVALID_CHART_ID", "曲IDが不正です。", "chartId path parameter is empty.");
   }
@@ -1208,5 +1201,5 @@ export function handleChartVersionsRoute(request: Request, env: Env, chartId: st
     return methodNotAllowed(request, env, request.method);
   }
 
-  return handleAppendVersion(request, env, chartId);
+  return handleAppendVersion(request, env, chartId, parsedForm);
 }

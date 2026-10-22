@@ -4,6 +4,7 @@ import { parseAllowAppend } from "../utils/appendPolicy";
 import { validateChartName } from "../utils/chartName";
 import { sanitizeFileName, validateUploadFile } from "../utils/fileValidation";
 import { sha256HexFromBuffer } from "../utils/hash";
+import { parseMultipartUpload } from "../utils/multipartUpload";
 import { normalizeOriginUrl } from "../utils/originUrl";
 import { prepareProgressMap } from "../utils/progressMap";
 import { buildRequestFingerprint } from "../utils/requestFingerprint";
@@ -1040,7 +1041,8 @@ async function parseCreateChartInput(
   request: Request,
   env: Env,
   context: PostLogContext,
-  secret: string
+  secret: string,
+  parsedForm?: FormData
 ): Promise<{ ok: true; value: CreateChartInput } | { ok: false; response: Response }> {
   const contentType = request.headers.get("Content-Type") ?? "";
   if (!contentType.toLowerCase().includes("multipart/form-data")) {
@@ -1055,25 +1057,16 @@ async function parseCreateChartInput(
     };
   }
 
-  let form: FormData;
-  try {
-    form = await request.formData();
-  } catch (error) {
-    console.error("[create-chart-form-parse] failed to parse multipart form", {
-      code: "INVALID_FORM",
-      message: errorDetail(error)
-    });
-
+  const parsedUpload = parsedForm
+    ? { ok: true as const, form: parsedForm }
+    : await parseMultipartUpload(request);
+  if (!parsedUpload.ok) {
     return {
       ok: false,
-      response: await failCreateChart(request, env, context, {
-        status: 400,
-        code: "INVALID_FORM",
-        message: "投稿フォームが不正です。",
-        detail: `Failed to parse multipart/form-data: ${errorDetail(error)}`
-      })
+      response: await failCreateChart(request, env, context, parsedUpload.failure)
     };
   }
+  const form = parsedUpload.form;
 
   const file = form.get("file");
   if (!isFormFile(file) || file.size <= 0) {
@@ -1282,7 +1275,7 @@ async function parseCreateChartInput(
   };
 }
 
-async function handleCreateChart(request: Request, env: Env): Promise<Response> {
+async function handleCreateChart(request: Request, env: Env, parsedForm?: FormData): Promise<Response> {
   const abuseSecret = env.ABUSE_HASH_SECRET?.trim();
   const passwordSecret = env.PASSWORD_HASH_SECRET?.trim();
   if (!abuseSecret || !passwordSecret) {
@@ -1309,7 +1302,7 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
 
   try {
     context = await buildPostLogContext(request, abuseSecret);
-    const parsed = await parseCreateChartInput(request, env, context, passwordSecret);
+    const parsed = await parseCreateChartInput(request, env, context, passwordSecret, parsedForm);
     if (!parsed.ok) {
       return parsed.response;
     }
@@ -1836,13 +1829,13 @@ async function handleCreateChart(request: Request, env: Env): Promise<Response> 
   }
 }
 
-export function handleChartsRoute(request: Request, env: Env): Promise<Response> | Response {
+export function handleChartsRoute(request: Request, env: Env, parsedForm?: FormData): Promise<Response> | Response {
   if (request.method === "GET") {
     return handleChartList(request, env);
   }
 
   if (request.method === "POST") {
-    return handleCreateChart(request, env);
+    return handleCreateChart(request, env, parsedForm);
   }
 
   return methodNotAllowed(request, env, request.method);

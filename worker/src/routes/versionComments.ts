@@ -301,8 +301,7 @@ async function parseCommentBody(
 
 async function readRateLimit(
   env: Env,
-  ipHash: string,
-  uaHash: string
+  ipHash: string
 ): Promise<RateRow> {
   const row = await env.DB.prepare(`
     SELECT
@@ -310,16 +309,26 @@ async function readRateLimit(
       COALESCE(SUM(CASE WHEN created_at >= datetime('now', '-1 hour') THEN 1 ELSE 0 END), 0) AS count_1h
     FROM version_comments
     WHERE ip_hash = ?
-      AND ua_hash = ?
       AND fingerprint_hash_version = ?
       AND created_at >= datetime('now', '-1 hour')
-  `).bind(ipHash, uaHash, FINGERPRINT_HASH_VERSION).first<RateRow>();
+  `).bind(ipHash, FINGERPRINT_HASH_VERSION).first<RateRow>();
   return row ?? { count_10m: 0, count_1h: 0 };
 }
 
 function violatedRateRule(row: RateRow): typeof RATE_RULES[number] | null {
   const counts = [Number(row.count_10m ?? 0), Number(row.count_1h ?? 0)];
   return RATE_RULES.find((rule, index) => counts[index] >= rule.limit) ?? null;
+}
+
+function rateLimitedResponse(request: Request, env: Env, seconds: number): Response {
+  return jsonResponse(request, env, {
+    code: "VERSION_COMMENT_RATE_LIMITED",
+    message: "短時間にコメントが続いています。しばらく待ってから再度お試しください。",
+    detail: "Comment rate limit exceeded."
+  }, {
+    status: 429,
+    headers: { "Cache-Control": "no-store", "Retry-After": String(seconds) }
+  });
 }
 
 async function handlePostComment(
@@ -361,7 +370,7 @@ async function handlePostComment(
           )
         LIMIT 1
       `).bind(FINGERPRINT_HASH_VERSION, fingerprint.ipHash, fingerprint.uaHash).first<{ ban_type: string }>(),
-      readRateLimit(env, fingerprint.ipHash, fingerprint.uaHash)
+      readRateLimit(env, fingerprint.ipHash)
     ]);
 
     if (ban) {
@@ -376,18 +385,7 @@ async function handlePostComment(
     }
     const rateRule = violatedRateRule(rate);
     if (rateRule) {
-      const response = jsonResponse(request, env, {
-        code: "VERSION_COMMENT_RATE_LIMITED",
-        message: "短時間にコメントが続いています。しばらく待ってから再度お試しください。",
-        detail: "Comment rate limit exceeded."
-      }, {
-        status: 429,
-        headers: {
-          "Cache-Control": "no-store",
-          "Retry-After": String(rateRule.seconds)
-        }
-      });
-      return response;
+      return rateLimitedResponse(request, env, rateRule.seconds);
     }
 
     const commentId = `version_comment_${crypto.randomUUID()}`;
@@ -402,16 +400,38 @@ async function handlePostComment(
         AND charts.is_hidden = 0
         AND versions.is_hidden = 0
         AND ${publicWithdrawalExclusionSql("versions")}
+        AND (
+          SELECT COUNT(*) FROM version_comments
+          WHERE ip_hash = ? AND fingerprint_hash_version = ?
+            AND created_at >= datetime('now', ?)
+        ) < ?
+        AND (
+          SELECT COUNT(*) FROM version_comments
+          WHERE ip_hash = ? AND fingerprint_hash_version = ?
+            AND created_at >= datetime('now', ?)
+        ) < ?
     `).bind(
       commentId,
       parsed.body,
       fingerprint.ipHash,
       fingerprint.uaHash,
       FINGERPRINT_HASH_VERSION,
-      versionId
+      versionId,
+      fingerprint.ipHash,
+      FINGERPRINT_HASH_VERSION,
+      RATE_RULES[0].window,
+      RATE_RULES[0].limit,
+      fingerprint.ipHash,
+      FINGERPRINT_HASH_VERSION,
+      RATE_RULES[1].window,
+      RATE_RULES[1].limit
     ).run();
 
     if (Number(insert.meta.changes ?? 0) !== 1) {
+      const unavailableNow = await requirePublicVersion(request, env, versionId);
+      if (unavailableNow) return unavailableNow;
+      const rateNow = violatedRateRule(await readRateLimit(env, fingerprint.ipHash));
+      if (rateNow) return rateLimitedResponse(request, env, rateNow.seconds);
       return fail(
         request,
         env,

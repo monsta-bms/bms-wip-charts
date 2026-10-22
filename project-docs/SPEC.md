@@ -110,6 +110,8 @@ Pagesは初回・追記で同じwidgetを共用し、explicit rendering、`execu
 
 Workerの処理順はCORS、fingerprint生成、BAN、投稿レート制限、Turnstile、multipart解析、file SHA BAN・重複確認、ZIP/BMS解析、R2保存、D1保存とする。BANの`POSTING_BLOCKED`と投稿レート制限の`POST_RATE_LIMITED`をTurnstileより先に判定する。Siteverifyは5秒timeout、同じidempotency keyによる最大1回の再試行、token最大2048文字、hostnameとactionの検証を行う。hostnameはリクエストOriginと`ALLOWED_ORIGINS`の許可hostnameに一致させる。token、Secret、生IP、生UA、生のSiteverifyレスポンスは保存・ログ出力しない。
 
+初回・追記投稿のmultipartは、境界情報と不要partも含めたリクエスト全体を8MiBまでとする。BAN・投稿レート制限・Turnstileを通過したあと、元のbody streamを実測し、multipart解析前に上限を確認する。`Content-Length`が上限超過なら早期拒否し、欠落・過少申告があっても実測超過でHTTP 413 `REQUEST_TOO_LARGE`（`code`, `message`, `detail`）を返して以後の保存へ進まない。FormDataは1回だけ解析し、進捗画像と投稿本体の処理で共有する。bodyのclone/teeと二重パースは行わない。単体BMS/BME/BML 2MiB、ZIP 5MiB、進捗PNG 1MiBの個別上限は維持し、全体上限の残り2MiBを最大5000blockの進捗マップ・その他テキスト・境界情報の余裕とする。この変更にmigrationや追加Secretは不要。
+
 設定はGit管理外のWorker Secret `TURNSTILE_SECRET`と`TURNSTILE_MODE`を使用する。`TURNSTILE_MODE=observe`は旧Pagesとの段階移行専用で、tokenなしや検証失敗を安全な分類だけconsoleへ記録して投稿を許可する。`required`または未設定・不正値ではtokenなし、検証失敗、設定不足、検証不能を拒否する。本番の最終状態は必ず`required`とする。Pagesの公開sitekeyは`meta[name=turnstile-sitekey]`へ設定する。localhostではproduction sitekeyではなくCloudflare公式テストsitekeyを使用する。
 
 required時の拒否は既存`post_logs`へ`result=rejected`、`stage=pre_multipart_turnstile`、error code、再試行有無、判定分類だけを記録する。`TURNSTILE_REQUIRED`と`TURNSTILE_FAILED`は利用者起因の投稿失敗レート制限へ含め、`TURNSTILE_UNAVAILABLE`は含めない。D1 schema、R2保存形式、既存BAN・管理パスワード制限・ZIP安全検査は変更しない。
@@ -642,9 +644,9 @@ MVPではサムネイルクリックによる拡大表示は実装しない。�
 共通仕様:
 
 - request bodyは `application/json` とし、`password` を必須にする。
-- passwordは `hashWithSecret('password:' + password, HASH_SECRET)` で検証する。
-- password、password_hash、HASH_SECRET、生IP、生UA、削除理由本文はログに出さない。
-- 同じIP/UAハッシュで10分以内に5回以上 `INVALID_PASSWORD` が記録された場合は `RATE_LIMITED` とする。
+- passwordは `PASSWORD_HASH_SECRET` と保存済みのhash versionを用いて検証する。
+- password、password_hash、Secret、生IP、生UA、削除理由本文はログに出さない。
+- 管理パスワードの検証はUAに依存せず、同一IPで10分以内5回、同一versionで10分以内20回の不正・検証中試行を上限とし、超過時は `RATE_LIMITED` とする。既存`post_logs`に検証中の予約行を、両制限の照会と同じINSERT文で原子的に確保してから照合する。正常な照合と旧hash失効の判定では予約を解放し、不正値は既存の`INVALID_PASSWORD`監査行へ確定する。ログ更新に失敗した予約も期限内は制限へ含め、並行試行によるすり抜けを防ぐ。migrationや追加Secretは不要。
 - 成功・失敗は `post_logs` の既存action `withdraw_version` / `request_delete` に記録し、detailには `outcome`, `within24Hours`, `hasDescendants`, `visibleChildVersionCount`, `totalChildVersionCount`, ID、理由有無と文字数を残す。
 - 通知、物理削除、復旧、処理済み申請の履歴検索は後続フェーズとする。
 
@@ -1245,7 +1247,7 @@ RC★★変換:
 - 公開中の各versionは投稿者コメント全文、公開コメント件数、最新公開コメントを表示できる。一覧では投稿者コメントを最大2行、最新公開コメントを最大1行にまとめ、長文は小さな「全文を見る」表示を含む共通dialogから確認する。改行と長い連続文字を保持し、本文は常にplain textとして扱う。
 - 共通dialogは曲名、差分名、版、作者、投稿者コメント、公開コメントを表示する。公開コメントは古い順、20件単位で読み込み、500 Unicode code point以内の本文を二重送信なしで投稿する。成功時は再読込せず一覧、件数、最新previewを更新する。
 - `version_comments`はversion、本文、作成日時、version 2のIP／UA fingerprint、非表示状態だけを保持する。公開APIへfingerprint、hash version、非表示理由を返さない。versionの完全削除時は対応コメントも削除し、非表示コメントは件数、最新、一覧のすべてから除外する。
-- 公開コメント投稿は公開可否を書込み直前にも確認し、既存の`ABUSE_HASH_SECRET`によるfingerprint、active BAN、10分／1時間の短時間制限を適用する。設定不足やDB失敗はfail closedとし、本文、IP／UA、hash、Secretをログへ出さない。
+- 公開コメント投稿は公開可否を書込み直前にも確認し、既存の`ABUSE_HASH_SECRET`によるfingerprintとactive BANを適用する。投稿制限は同一IPにつき3件/10分・10件/1時間とし、UAを集計条件に含めない。制限の再確認とコメントINSERTを同じSQL文で原子的に実施し、並行送信時も上限を超えないようにする。設定不足やDB失敗はfail closedとし、本文、IP／UA、hash、Secretをログへ出さない。migrationや追加Secretは不要。
 - `/api/charts`、chart detail、`/api/versions`は既存SQL内で`commentCount`と`latestComment`を集約し、画面からversion単位の追加HTTP requestを行わない。旧Worker payloadで集約値がない場合は件数0、最新なしとして後方互換表示する。
 - 初回投稿と追記投稿の進捗マップは、解析済み・編集可能・今回の塗りが0件の場合だけ中央へ「ここをドラッグ」を表示する。1件以上の塗り、drag中、没譜面、完成版固定、解析中、解析失敗、map利用不可では非表示とし、全消去で0件へ戻ると再表示する。hintは`pointer-events:none`で座標判定へ影響しない。
 ## SUBMISSION-STATUS-ADMIN-CORRECTION-01

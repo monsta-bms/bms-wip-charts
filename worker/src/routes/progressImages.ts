@@ -17,13 +17,6 @@ type ApiFailure = {
   detail: string;
 };
 
-type FormDataReadableRequest = {
-  headers: {
-    get(name: string): string | null;
-  };
-  formData(): Promise<FormData>;
-};
-
 export type ProgressImageUpload = {
   bytes: ArrayBuffer;
   mime: "image/png";
@@ -104,32 +97,8 @@ export function buildProgressImageObject(versionId: string, row: ProgressImageRo
 }
 
 export async function parseOptionalProgressImage(
-  request: FormDataReadableRequest
+  form: FormData
 ): Promise<{ ok: true; value: ProgressImageUpload | null } | { ok: false; failure: ApiFailure }> {
-  const contentType = request.headers.get("Content-Type") ?? "";
-  if (!contentType.toLowerCase().includes("multipart/form-data")) {
-    return { ok: true, value: null };
-  }
-
-  let form: FormData;
-  try {
-    form = await request.formData();
-  } catch (error) {
-    console.error("[progress-image-form-parse] failed to parse multipart form", {
-      code: "INVALID_FORM",
-      message: errorDetail(error)
-    });
-    return {
-      ok: false,
-      failure: makeProgressImageFailure(
-        400,
-        "INVALID_FORM",
-        "投稿フォームが不正です。",
-        `Failed to parse multipart/form-data while reading progressImage: ${errorDetail(error)}`
-      )
-    };
-  }
-
   const value = form.get("progressImage");
   if (value === null) {
     return { ok: true, value: null };

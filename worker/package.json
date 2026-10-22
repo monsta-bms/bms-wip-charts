@@ -7,14 +7,15 @@
     "dev": "wrangler dev --config ./wrangler.toml",
     "deploy": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ../scripts/deploy-worker.ps1 -Deploy",
     "deploy:check": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ../scripts/deploy-worker.ps1",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:security": "node scripts/test-security-rate-limits.mjs && node scripts/test-multipart-upload.mjs && node scripts/test-zip-dependency-compat.mjs"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "latest",
-    "typescript": "latest",
-    "wrangler": "latest"
+    "@cloudflare/workers-types": "^5.20261022.1",
+    "typescript": "^6.0.3",
+    "wrangler": "^4.151.3"
   },
   "dependencies": {
-    "@zip.js/zip.js": "^2.8.26"
+    "@zip.js/zip.js": "^2.24.0"
   }
 }
