@@ -9,7 +9,7 @@ const articles = [...html.matchAll(/<article\b[^>]*\bdata-copy-entry="([A-Z0-9_]
   .map((match) => ({ id: match[1], html: match[2] }));
 const manifestEntries = manifest.changelogEntries ?? [];
 
-assert.equal(articles.length, 26, "公開準備中を含むchangelogは26 entryであること");
+assert.equal(articles.length, 26, "changelogは26 entryであること");
 assert.equal(manifestEntries.length, articles.length, "manifest entry数が一致すること");
 assert.equal(new Set(articles.map((entry) => entry.id)).size, articles.length, "ENTRY IDが重複しないこと");
 assert.deepEqual(manifestEntries.map((entry) => entry.id), articles.map((entry) => entry.id), "manifestとHTMLのENTRY順が一致すること");
@@ -52,12 +52,13 @@ for (const phrase of ["正式公開を開始しました", "公開終了の予�
   assert.ok(launch.includes(phrase), `正式公開entryに「${phrase}」が含まれること`);
 }
 
-const pending = articles.find((entry) => entry.id === "CHANGELOG_20261022")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
-assert.equal(articles[0].id, "CHANGELOG_20261022", "公開準備中entryを先頭へ掲載すること");
-for (const phrase of ["公開前・準備中", "連続操作", "アップロード処理", "公開サイトにはまだ反映していません"]) {
-  assert.ok(pending.includes(phrase), `公開準備中entryに「${phrase}」を掲載すること`);
+const released = articles.find((entry) => entry.id === "CHANGELOG_20261022")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
+assert.equal(articles[0].id, "CHANGELOG_20261022", "最新entryを先頭へ掲載すること");
+for (const phrase of ["安全性と安定性を改善しました", "連続操作", "対策を強化しました", "アップロード処理"]) {
+  assert.ok(released.includes(phrase), `公開済みentryに「${phrase}」を掲載すること`);
 }
-assert.doesNotMatch(pending, /User-Agent|UA|HMAC|sourceHash|versionId|SECRET|(?:[A-Z]:\\)|(?:\d+件\/\d+分)/u, "公開準備中entryへ防御の内部詳細を掲載しないこと");
+assert.doesNotMatch(released, /公開前|準備中|まだ反映していません/u, "公開済みentryに準備中の表現が残っていないこと");
+assert.doesNotMatch(released, /User-Agent|UA|HMAC|sourceHash|versionId|SECRET|(?:[A-Z]:\\)|(?:\d+件\/\d+分)/u, "公開済みentryへ防御の内部詳細を掲載しないこと");
 
 const latest = articles.find((entry) => entry.id === "CHANGELOG_20260905")?.html.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ") || "";
 for (const phrase of [
